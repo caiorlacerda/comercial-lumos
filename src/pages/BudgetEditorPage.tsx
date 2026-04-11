@@ -45,6 +45,8 @@ interface Budget {
   category: 'digital' | 'filme' | 'live';
   status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
   client_id: string;
+  active_version_id?: string;
+  clients?: { name: string };
   is_template?: boolean;
   template_category?: string;
 }

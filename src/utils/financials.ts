@@ -12,6 +12,7 @@ export interface BudgetItem {
 
 export interface BudgetVersion {
   id: string;
+  budget_id?: string;
   margin_pct: number;
   nf_pct: number;
   discount_value: number;
