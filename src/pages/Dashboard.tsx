@@ -33,7 +33,7 @@ interface Budget {
   status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
   updated_at: string;
   active_version_id: string;
-  clients: { name: string };
+  clients: { name: string; agency_name?: string | null };
   versions: any[];
 }
 

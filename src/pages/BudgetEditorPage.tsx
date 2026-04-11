@@ -46,7 +46,7 @@ interface Budget {
   status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
   client_id: string;
   active_version_id?: string;
-  clients?: { name: string };
+  clients?: { name: string; agency_name?: string | null };
   is_template?: boolean;
   template_category?: string;
 }

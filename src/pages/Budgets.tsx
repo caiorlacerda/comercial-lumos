@@ -41,7 +41,7 @@ interface Budget {
   updated_at: string;
   client_id: string;
   active_version_id: string;
-  clients: { name: string };
+  clients: { name: string; agency_name?: string | null };
   versions: any[];
 }
 

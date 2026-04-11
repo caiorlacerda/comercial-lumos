@@ -9,6 +9,7 @@ interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   maxWidth?: string;
+  className?: string;
 }
 
 export default function Modal({ 
@@ -17,7 +18,8 @@ export default function Modal({
   title, 
   children, 
   footer,
-  maxWidth = 'max-w-md'
+  maxWidth = 'max-w-md',
+  className
 }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
@@ -40,7 +42,8 @@ export default function Modal({
       />
       <div className={clsx(
         "bg-lumos-surface w-full rounded-lumos shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300",
-        maxWidth
+        maxWidth,
+        className
       )}>
         <div className="flex items-center justify-between p-6 border-b border-lumos-border">
           <h3 className="text-xl font-black text-lumos-text-primary tracking-tight">
