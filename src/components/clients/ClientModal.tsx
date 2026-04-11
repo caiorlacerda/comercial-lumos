@@ -132,9 +132,9 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       isOpen={isOpen}
       onClose={onClose}
       title={client ? 'Editar Cliente' : 'Novo Cliente'}
-      className="max-w-[640px]"
+      className="max-w-[720px]"
       footer={
-        <>
+        <div className="px-8 flex justify-end gap-3 w-full">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           <button 
             onClick={handleSave} 
@@ -143,11 +143,11 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
           >
             {saving ? 'Gravando...' : 'Salvar Cliente'}
           </button>
-        </>
+        </div>
       }
     >
-      <form onSubmit={handleSave} className="space-y-8 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-1">
+      <form onSubmit={handleSave} className="space-y-8 max-h-[85vh] overflow-y-auto px-8 py-2 custom-scrollbar">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-xs font-black text-lumos-text-secondary uppercase mb-2 tracking-widest">Nome da Empresa</label>
             <input 
@@ -185,10 +185,10 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
             </button>
           </div>
 
-          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
             {contacts.map((contact, idx) => (
-              <div key={idx} className="bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative group/contact">
-                <div className="md:col-span-3">
+              <div key={idx} className="bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border grid grid-cols-1 md:grid-cols-12 gap-3 items-end relative group/contact">
+                <div className="md:col-span-4">
                   <label className="block text-[9px] font-black text-lumos-text-secondary uppercase mb-1">Nome</label>
                   <input 
                     className="input-lumos w-full h-9 text-sm"
@@ -203,16 +203,16 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
                     className="input-lumos w-full h-9 text-sm"
                     value={contact.email}
                     onChange={(e) => updateContact(idx, 'email', e.target.value)}
-                    placeholder="email@exemplo.com"
+                    placeholder="E-mail"
                   />
                 </div>
-                <div className="md:col-span-3">
+                <div className="md:col-span-2">
                   <label className="block text-[9px] font-black text-lumos-text-secondary uppercase mb-1">Telefone</label>
                   <input 
                     className="input-lumos w-full h-9 text-sm"
                     value={contact.phone}
                     onChange={(e) => updateContact(idx, 'phone', e.target.value)}
-                    placeholder="(00) 00000-0000"
+                    placeholder="Telefone"
                   />
                 </div>
                 <div className="md:col-span-2">

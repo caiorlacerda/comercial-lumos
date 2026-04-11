@@ -22,7 +22,8 @@ import {
   Info,
   Library,
   X,
-  FileStack
+  FileStack,
+  ClipboardList
 } from 'lucide-react';
 import { 
   BudgetItem, 
@@ -32,6 +33,7 @@ import {
   formatCurrency 
 } from '@/utils/financials';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
+import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
@@ -1148,28 +1150,51 @@ export default function BudgetEditorPage() {
             </div>
 
             {financials && budget && version && (
-              <PDFDownloadLink 
-                key={`${version.id}-${items.length}`}
-                document={
-                  <BudgetPDF 
-                    budget={budget} 
-                    version={version} 
-                    contact={selectedContact}
-                    items={items} 
-                    financials={financials} 
-                    userName={user?.user_metadata?.full_name || user?.email}
-                  />
-                } 
-                fileName={`${budget.code} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
-                className="btn-secondary w-full mt-6 py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
-              >
-                {({ loading }) => (
-                  <>
-                    <FileDown className="w-4 h-4" />
-                    {loading ? 'Preparando...' : 'Gerar Orçamento PDF'}
-                  </>
-                )}
-              </PDFDownloadLink>
+              <div className="space-y-3 mt-6">
+                <PDFDownloadLink 
+                  key={`budget-${version.id}-${items.length}`}
+                  document={
+                    <BudgetPDF 
+                      budget={budget} 
+                      version={version} 
+                      contact={selectedContact}
+                      items={items} 
+                      financials={financials} 
+                      userName={user?.user_metadata?.full_name || user?.email}
+                    />
+                  } 
+                  fileName={`${budget.code} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
+                  className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
+                >
+                  {({ loading }) => (
+                    <>
+                      <FileDown className="w-4 h-4" />
+                      {loading ? 'Preparando...' : 'Gerar Orçamento PDF'}
+                    </>
+                  )}
+                </PDFDownloadLink>
+
+                <PDFDownloadLink 
+                  key={`os-${version.id}-${items.length}`}
+                  document={
+                    <ServiceOrderPDF 
+                      budget={budget} 
+                      version={version} 
+                      contact={selectedContact}
+                      items={items} 
+                    />
+                  } 
+                  fileName={`OS_${budget.code} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
+                  className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] border-lumos-yellow/20 hover:border-lumos-yellow/40"
+                >
+                  {({ loading }) => (
+                    <>
+                      <ClipboardList className="w-4 h-4" />
+                      {loading ? 'Preparando...' : 'Gerar OS PDF'}
+                    </>
+                  )}
+                </PDFDownloadLink>
+              </div>
             )}
             
             <div className="mt-4 flex flex-col items-center gap-2">
