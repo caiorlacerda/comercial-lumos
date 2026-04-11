@@ -21,6 +21,8 @@ import { formatCurrency } from '@/utils/financials';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
+import { Edit2 } from 'lucide-react';
+import ClientModal from '@/components/clients/ClientModal';
 
 interface Client {
   id: string;
@@ -55,6 +57,7 @@ export default function ClientProfile() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -175,16 +178,25 @@ export default function ClientProfile() {
           <div className="w-20 h-20 rounded-lumos bg-lumos-bg border border-lumos-border flex items-center justify-center text-lumos-yellow shrink-0">
             <Building2 className="w-10 h-10" />
           </div>
-          <div className="flex-1 space-y-4">
-            <div>
-              <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">{client.name}</h1>
-              {client.agency_name && (
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded border border-lumos-yellow/20">Agência</span>
-                  <p className="text-sm font-bold text-lumos-text-secondary">{client.agency_name}</p>
+            <div className="flex-1 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">{client.name}</h1>
+                  {client.agency_name && (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded border border-lumos-yellow/20">Agência</span>
+                      <p className="text-sm font-bold text-lumos-text-secondary">{client.agency_name}</p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+                <button 
+                  onClick={() => setIsModalOpen(true)}
+                  className="btn-secondary flex items-center gap-2 self-start md:self-center"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar Cliente
+                </button>
+              </div>
             
             <div className="flex flex-wrap gap-6 pt-2">
               <div className="flex items-center gap-3">
@@ -324,6 +336,13 @@ export default function ClientProfile() {
           </div>
         </div>
       </div>
+
+      <ClientModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchClientData}
+        client={client}
+      />
     </div>
   );
 }

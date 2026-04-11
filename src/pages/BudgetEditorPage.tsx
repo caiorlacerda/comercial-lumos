@@ -112,6 +112,20 @@ export default function BudgetEditorPage() {
     return calcFinancials(items, version);
   }, [items, version]);
 
+  // Validation logic
+  const validation = useMemo(() => {
+    const missing = [];
+    if (!budget?.code || budget.code === '----') missing.push('Código do orçamento');
+    if (!budget?.project_name || budget.project_name === 'Novo Projeto' || budget.project_name.trim() === '') missing.push('Nome do projeto');
+    if (!budget?.client_id) missing.push('Cliente');
+    if (items.length === 0) missing.push('Pelo menos um item');
+    
+    return {
+      isValid: missing.length === 0,
+      missing
+    };
+  }, [budget, items]);
+
   // Load basic data
   useEffect(() => {
     if (id && id !== 'novo') {
@@ -467,12 +481,12 @@ export default function BudgetEditorPage() {
 
   const debouncedAutoSave = useCallback(
     debounce(() => {
-      if (!isReadOnly && !isDraft && isDirty.current) {
+      if (!isReadOnly && !isDraft && isDirty.current && validation.isValid) {
         setSaveStatus('saving');
         handleSave(true);
       }
     }, 1500),
-    [handleSave, isReadOnly, isDraft]
+    [handleSave, isReadOnly, isDraft, validation.isValid]
   );
 
   useEffect(() => {
@@ -764,10 +778,33 @@ export default function BudgetEditorPage() {
             )}
           </div>
           {!isReadOnly && (
-            <button onClick={() => handleSave()} className="btn-primary flex items-center gap-2 shadow-lg shadow-lumos-yellow/20">
-              <Save className="w-4 h-4" />
-              {saving ? 'Gravando...' : 'Salvar Proposta'}
-            </button>
+            <div className="relative group/save">
+              <button 
+                onClick={() => handleSave()} 
+                disabled={saving || !validation.isValid}
+                className={clsx(
+                  "btn-primary flex items-center gap-2 shadow-lg transition-all",
+                  !validation.isValid ? "opacity-30 grayscale cursor-not-allowed shadow-none" : "shadow-lumos-yellow/20"
+                )}
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Gravando...' : 'Salvar Proposta'}
+              </button>
+              
+              {!validation.isValid && (
+                <div className="absolute top-full mt-2 right-0 w-64 bg-black/90 text-white p-3 rounded-lumos border border-white/10 shadow-2xl opacity-0 group-hover/save:opacity-100 transition-opacity z-[100] pointer-events-none">
+                  <p className="text-[10px] font-black uppercase text-lumos-yellow mb-2 tracking-widest">Requisitos pendentes:</p>
+                  <ul className="space-y-1">
+                    {validation.missing.map(msg => (
+                      <li key={msg} className="text-[10px] flex items-center gap-2 font-bold text-gray-300">
+                        <div className="w-1 h-1 rounded-full bg-red-500" />
+                        {msg}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
 
           <div className="relative" ref={moreMenuRef}>
