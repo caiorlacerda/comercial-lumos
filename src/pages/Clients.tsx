@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { 
-  Users, 
-  Plus, 
-  Search, 
-  Mail, 
-  Phone, 
+import {
+  Users,
+  Plus,
+  Search,
+  Mail,
+  Phone,
   Building2,
   X,
   Edit2,
@@ -18,13 +18,11 @@ import {
   Briefcase,
   UserPlus,
   Trash,
-  Database,
   ArrowRight
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
-import { runClientMigration } from '@/utils/migration_v2';
 
 interface Client {
   id: string;
@@ -52,10 +50,9 @@ export default function Clients() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('lumos-clients-view') as 'grid' | 'list') || 'grid';
   });
-  
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMigrating, setIsMigrating] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -96,12 +93,12 @@ export default function Clients() {
         .order('name');
 
       if (error) throw error;
-      
+
       const processedClients = data?.map(client => {
         const approvedBudgets = (client.budgets || []).filter((b: any) => b.status === 'aprovado');
         const budgetCount = (client.budgets || []).length;
         const contactCount = client.contacts?.[0]?.count || 0;
-        
+
         let totalApproved = 0;
         approvedBudgets.forEach((budget: any) => {
           const version = budget.versions?.[0];
@@ -226,20 +223,7 @@ export default function Clients() {
     }
   };
 
-  const handleMigration = async () => {
-    if (!confirm('Deseja unificar os clientes duplicados e migrar contatos agora? Esta ação é irreversível.')) return;
-    setIsMigrating(true);
-    const result = await runClientMigration();
-    setIsMigrating(false);
-    if (result.success) {
-      alert(result.message);
-      fetchClients();
-    } else {
-      alert('Falha na migração: ' + JSON.stringify(result.error));
-    }
-  };
-
-  const filteredClients = clients.filter(c => 
+  const filteredClients = clients.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (c.agency_name && c.agency_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -253,16 +237,8 @@ export default function Clients() {
           <p className="text-lumos-text-secondary mt-1 font-medium">Empresas e agências cadastradas na plataforma.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={handleMigration}
-            disabled={isMigrating}
-            className="btn-secondary h-10 flex items-center gap-2 group"
-          >
-            <Database className="w-4 h-4 text-lumos-yellow group-hover:animate-pulse" />
-            {isMigrating ? 'Migrando...' : 'Migrar Dados'}
-          </button>
           <div className="flex bg-lumos-surface border border-lumos-border p-1 rounded-lumos">
-            <button 
+            <button
               onClick={() => setViewMode('grid')}
               className={clsx(
                 "p-2 rounded-sm transition-all",
@@ -271,7 +247,7 @@ export default function Clients() {
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('list')}
               className={clsx(
                 "p-2 rounded-sm transition-all",
@@ -281,7 +257,7 @@ export default function Clients() {
               <ListIcon className="w-4 h-4" />
             </button>
           </div>
-          <button 
+          <button
             onClick={() => handleOpenModal()}
             className="btn-primary h-10 flex items-center gap-2"
           >
@@ -294,9 +270,9 @@ export default function Clients() {
       {/* Filter */}
       <div className="relative animate-in fade-in slide-in-from-bottom-2 duration-500">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-        <input 
-          type="text" 
-          placeholder="Buscar clientes por empresa ou agência..." 
+        <input
+          type="text"
+          placeholder="Buscar clientes por empresa ou agência..."
           className="input-lumos w-full pl-10 h-10 font-medium"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -322,13 +298,13 @@ export default function Clients() {
                   <Building2 className="w-6 h-6" />
                 </div>
                 <div className="flex gap-1">
-                  <button 
+                  <button
                     onClick={() => handleOpenModal(client)}
                     className="p-2 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded-full transition-all"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDelete(client.id)}
                     className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all"
                   >
@@ -336,7 +312,7 @@ export default function Clients() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="flex-1">
                 <h3 className="text-xl font-black text-lumos-text-primary tracking-tight">{client.name}</h3>
                 {client.agency_name && (
@@ -345,7 +321,7 @@ export default function Clients() {
                   </p>
                 )}
               </div>
-              
+
               <div className="grid grid-cols-3 gap-2 mt-8 py-4 border-y border-lumos-border">
                 <div>
                   <p className="text-[8px] font-black text-lumos-text-secondary uppercase">Contatos</p>
@@ -364,7 +340,7 @@ export default function Clients() {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={() => navigate(`/clientes/${client.id}`)}
                 className="w-full mt-4 flex items-center justify-between text-[10px] font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-all"
               >
@@ -422,13 +398,13 @@ export default function Clients() {
                   </td>
                   <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
+                      <button
                         onClick={() => handleOpenModal(client)}
                         className="p-2 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded-full transition-all"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDelete(client.id)}
                         className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all"
                       >
@@ -444,7 +420,7 @@ export default function Clients() {
       )}
 
       {/* Modal */}
-      <Modal 
+      <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingClient ? 'Editar Cliente' : 'Novo Cliente'}
@@ -460,21 +436,21 @@ export default function Clients() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-1">
             <div>
               <label className="block text-xs font-black text-lumos-text-secondary uppercase mb-2 tracking-widest">Nome da Empresa</label>
-              <input 
+              <input
                 required
                 className="input-lumos w-full h-11"
                 placeholder="Ex: Coca-Cola"
                 value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
             </div>
             <div>
               <label className="block text-xs font-black text-lumos-text-secondary uppercase mb-2 tracking-widest">Agência (Opcional)</label>
-              <input 
+              <input
                 className="input-lumos w-full h-11"
                 placeholder="Ex: WMcCann"
                 value={formData.agency_name}
-                onChange={(e) => setFormData({...formData, agency_name: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, agency_name: e.target.value })}
               />
             </div>
           </div>
@@ -485,7 +461,7 @@ export default function Clients() {
                 <Users className="w-4 h-4 text-lumos-yellow" />
                 Contatos da Empresa
               </h3>
-              <button 
+              <button
                 type="button"
                 onClick={addContactRow}
                 className="text-[10px] font-black uppercase text-lumos-yellow hover:underline flex items-center gap-1"
@@ -500,7 +476,7 @@ export default function Clients() {
                 <div key={idx} className="bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative group/contact">
                   <div className="md:col-span-3">
                     <label className="block text-[9px] font-black text-lumos-text-secondary uppercase mb-1">Nome</label>
-                    <input 
+                    <input
                       className="input-lumos w-full h-9 text-sm"
                       value={contact.name}
                       onChange={(e) => updateContact(idx, 'name', e.target.value)}
@@ -508,7 +484,7 @@ export default function Clients() {
                   </div>
                   <div className="md:col-span-3">
                     <label className="block text-[9px] font-black text-lumos-text-secondary uppercase mb-1">E-mail</label>
-                    <input 
+                    <input
                       className="input-lumos w-full h-9 text-sm"
                       value={contact.email}
                       onChange={(e) => updateContact(idx, 'email', e.target.value)}
@@ -516,7 +492,7 @@ export default function Clients() {
                   </div>
                   <div className="md:col-span-3">
                     <label className="block text-[9px] font-black text-lumos-text-secondary uppercase mb-1">Telefone</label>
-                    <input 
+                    <input
                       className="input-lumos w-full h-9 text-sm"
                       value={contact.phone}
                       onChange={(e) => updateContact(idx, 'phone', e.target.value)}
@@ -524,7 +500,7 @@ export default function Clients() {
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-[9px] font-black text-lumos-text-secondary uppercase mb-1">Cargo</label>
-                    <input 
+                    <input
                       className="input-lumos w-full h-9 text-sm"
                       value={contact.role}
                       onChange={(e) => updateContact(idx, 'role', e.target.value)}
@@ -532,8 +508,8 @@ export default function Clients() {
                   </div>
                   <div className="md:col-span-1 flex justify-center pb-1">
                     {contacts.length > 1 && (
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => removeContactRow(idx)}
                         className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all"
                       >

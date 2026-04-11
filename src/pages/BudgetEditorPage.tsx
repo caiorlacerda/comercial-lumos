@@ -57,6 +57,7 @@ export default function BudgetEditorPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -308,10 +309,11 @@ export default function BudgetEditorPage() {
         await supabase.rpc('sync_budget_sequence', { new_val: nextVal });
       }
 
-      await supabase.from('budget_items').delete().eq('version_id', currentVersionId);
+      // Final items sync (upsert only)
       if (items.length > 0) {
-        await supabase.from('budget_items').insert(
+        await supabase.from('budget_items').upsert(
           items.map((it, idx) => ({
+            id: it.id,
             version_id: currentVersionId,
             item_group: it.item_group,
             name: it.name,
@@ -325,8 +327,10 @@ export default function BudgetEditorPage() {
       }
 
       isDirty.current = false;
-      if (showNotification) setLastSaved(new Date());
-      fetchBudgetData(currentBudgetId, currentVersionId);
+      if (showNotification) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      }
     } catch (err) {
       console.error('Save error:', err);
     } finally {
@@ -413,10 +417,59 @@ export default function BudgetEditorPage() {
     }
   };
 
+  // Individual Item Sync
+  const syncItem = async (item: BudgetItem) => {
+    if (isReadOnly || isDraft || !version) return;
+    
+    setSaveStatus('saving');
+    try {
+      const { error } = await supabase
+        .from('budget_items')
+        .upsert({
+          id: item.id,
+          version_id: version.id,
+          item_group: item.item_group,
+          name: item.name,
+          unit_cost: item.unit_cost,
+          quantity: item.quantity,
+          unit_label: item.unit_label,
+          sort_order: items.indexOf(item),
+          catalog_item_id: item.catalog_item_id
+        });
+      
+      if (error) throw error;
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Error syncing item:', err);
+      setSaveStatus('error');
+    }
+  };
+
+  const deleteItemFromDb = async (itemId: string) => {
+    if (isReadOnly || isDraft) return;
+    
+    setSaveStatus('saving');
+    try {
+      const { error } = await supabase
+        .from('budget_items')
+        .delete()
+        .eq('id', itemId);
+      
+      if (error) throw error;
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Error deleting item:', err);
+      setSaveStatus('error');
+    }
+  };
+
   const debouncedAutoSave = useCallback(
     debounce(() => {
       if (!isReadOnly && !isDraft && isDirty.current) {
-        handleSave(false);
+        setSaveStatus('saving');
+        handleSave(true);
       }
     }, 1500),
     [handleSave, isReadOnly, isDraft]
@@ -441,7 +494,30 @@ export default function BudgetEditorPage() {
     setCatalogItems(data || []);
   }
 
-  const addCatalogItem = (catItem: any) => {
+  const addManualItem = (group: BudgetItem['item_group'] = activeGroup!) => {
+    if (isReadOnly) return;
+    const newItem: BudgetItem = {
+      id: crypto.randomUUID(),
+      item_group: group,
+      name: '',
+      unit_cost: 0,
+      quantity: 1,
+      unit_label: 'unidade',
+      sort_order: items.length
+    };
+    
+    const updatedItems = [...items, newItem];
+    setItems(updatedItems);
+    
+    // Immediate save for manual adds
+    if (!isDraft && version) {
+      syncItem(newItem);
+    } else {
+      isDirty.current = true;
+    }
+  };
+
+  const addCatalogItem = async (catItem: any) => {
     if (isReadOnly) return;
     const newItem: BudgetItem = {
       id: crypto.randomUUID(),
@@ -451,47 +527,54 @@ export default function BudgetEditorPage() {
       quantity: 1,
       unit_label: catItem.unit_label || 'diaria',
       sort_order: items.length,
-      catalog_item_id: catItem.id,
+      catalog_item_id: catItem.id
     };
-    isDirty.current = true;
-    setItems([...items, newItem]);
-    setIsCatalogOpen(false);
+
+    const updatedItems = [...items, newItem];
+    setItems(updatedItems);
     
-    if (isDraft) {
-      setTimeout(() => handleSave(false), 100);
+    // Immediate save for catalog adds
+    if (!isDraft && version) {
+      await syncItem(newItem);
+    } else {
+      isDirty.current = true;
     }
-  };
-
-  const addManualItem = () => {
-    if (isReadOnly) return;
-    const newItem: BudgetItem = {
-      id: crypto.randomUUID(),
-      item_group: activeGroup!,
-      name: '',
-      unit_cost: 0,
-      quantity: 1,
-      unit_label: 'diaria',
-      sort_order: items.length,
-    };
-    isDirty.current = true;
-    setItems([...items, newItem]);
+    
     setIsCatalogOpen(false);
+  };
 
-    if (isDraft) {
-      setTimeout(() => handleSave(false), 100);
+  const removeItem = (id: string) => {
+    if (isReadOnly) return;
+    setItems(items.filter(i => i.id !== id));
+    
+    if (!isDraft && version) {
+      deleteItemFromDb(id);
+    } else {
+      isDirty.current = true;
     }
   };
 
-  const updateItem = (itemId: string, updates: Partial<BudgetItem>) => {
+  const updateItem = (id: string, updates: Partial<BudgetItem>) => {
     if (isReadOnly) return;
-    isDirty.current = true;
-    setItems(items.map(item => item.id === itemId ? { ...item, ...updates } : item));
-  };
+    const item = items.find(i => i.id === id);
+    if (!item) return;
 
-  const removeItem = (itemId: string) => {
-    if (isReadOnly) return;
-    isDirty.current = true;
-    setItems(items.filter(i => i.id !== itemId));
+    const updatedItem = { ...item, ...updates };
+    setItems(items.map(i => i.id === id ? updatedItem : i));
+    
+    // Decide based on field type if we save immediate or debounced
+    const isTextField = 'name' in updates;
+    
+    if (!isDraft && version) {
+      if (isTextField) {
+        isDirty.current = true;
+        debouncedAutoSave();
+      } else {
+        syncItem(updatedItem);
+      }
+    } else {
+      isDirty.current = true;
+    }
   };
 
   const updateBudget = (updates: Partial<Budget>) => {
@@ -1100,7 +1183,7 @@ export default function BudgetEditorPage() {
 
             <div className="flex-1 overflow-auto p-4 space-y-2">
               <button 
-                onClick={addManualItem}
+                onClick={() => addManualItem()}
                 className="w-full text-left p-6 rounded-lumos hover:bg-lumos-bg border-2 border-dashed border-gray-200 hover:border-lumos-yellow transition-all flex items-center justify-between group"
               >
                 <div className="flex items-center gap-4">
@@ -1145,6 +1228,24 @@ export default function BudgetEditorPage() {
           </div>
         </div>
       )}
+      <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
+        {saveStatus !== 'idle' && (
+          <div className={clsx(
+            "flex items-center gap-2 px-4 py-2 rounded-full shadow-lg border text-[10px] font-black uppercase tracking-widest transition-all duration-300 translate-y-0",
+            saveStatus === 'saving' && "bg-lumos-bg border-lumos-border animate-pulse",
+            saveStatus === 'saved' && "bg-green-500/10 border-green-500/20 text-green-500",
+            saveStatus === 'error' && "bg-red-500/10 border-red-500/20 text-red-500"
+          )}>
+            <div className={clsx(
+              "w-1.5 h-1.5 rounded-full",
+              saveStatus === 'saving' && "bg-lumos-yellow animate-ping",
+              saveStatus === 'saved' && "bg-green-500",
+              saveStatus === 'error' && "bg-red-500"
+            )} />
+            {saveStatus === 'saving' ? 'Salvando...' : saveStatus === 'saved' ? 'Alterações salvas' : 'Erro ao salvar'}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

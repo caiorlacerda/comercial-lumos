@@ -365,7 +365,8 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
           <View style={styles.companyInfo}>
             <Text style={{ fontWeight: 700 }}>Produtora Lumos Audiovisual Ltda.</Text>
             <Text>CNPJ: 51.253.010/0001-70</Text>
-            <Text>Rua Funchal, 573 - Vila Olímpia, São Paulo/SP</Text>
+            <Text>R. Jaceru, 384 - Cj. 1604 - Vila Gertrudes</Text>
+            <Text>São Paulo - SP, 04705-000</Text>
             <Text>comercial@produtoralumos.com.br</Text>
             <Text>+55 (11) 98667-6747</Text>
             <Text>www.produtoralumos.com.br</Text>
@@ -471,7 +472,8 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
           <View style={styles.companyInfo}>
             <Text style={{ fontWeight: 700 }}>Produtora Lumos Audiovisual Ltda.</Text>
             <Text>CNPJ: 51.253.010/0001-70</Text>
-            <Text>Rua Funchal, 573 - Vila Olímpia, São Paulo/SP</Text>
+            <Text>R. Jaceru, 384 - Cj. 1604 - Vila Gertrudes</Text>
+            <Text>São Paulo - SP, 04705-000</Text>
             <Text>comercial@produtoralumos.com.br</Text>
             <Text>+55 (11) 98667-6747</Text>
             <Text>www.produtoralumos.com.br</Text>
