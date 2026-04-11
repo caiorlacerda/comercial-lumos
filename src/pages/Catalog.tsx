@@ -215,8 +215,10 @@ export default function Catalog() {
                             <button 
                               onClick={() => toggleStatus(item)}
                               className={clsx(
-                                "mx-auto flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full",
-                                item.is_active ? "text-green-600 bg-green-50" : "text-gray-400 bg-gray-100"
+                                "mx-auto flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border transition-colors",
+                                item.is_active 
+                                  ? "text-green-500 bg-green-500/10 border-green-500/20" 
+                                  : "text-lumos-text-secondary bg-lumos-text-secondary/10 border-lumos-text-secondary/20"
                               )}
                             >
                               {item.is_active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
@@ -244,8 +246,8 @@ export default function Catalog() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lumos w-full max-w-lg shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-lumos-surface border border-lumos-border rounded-lumos w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-lumos-border flex items-center justify-between">
               <h2 className="text-xl font-bold">{editingItem ? 'Editar Item do Catálogo' : 'Novo Item'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-lumos-text-secondary hover:text-lumos-text-primary">

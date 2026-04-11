@@ -75,6 +75,7 @@ export default function BudgetEditorPage() {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [templateCategory, setTemplateCategory] = useState('');
+  const [availableContacts, setAvailableContacts] = useState<any[]>([]);
   
   // Ref to track dirty state and prevent save loops
   const isDirty = useRef(false);
@@ -98,6 +99,11 @@ export default function BudgetEditorPage() {
     if (!budget || !version) return true;
     return budget.active_version_id !== version.id;
   }, [isDraft, budget, version]);
+
+  const selectedContact = useMemo(() => {
+    if (!version?.contact_id) return null;
+    return availableContacts.find(c => c.id === version.contact_id);
+  }, [availableContacts, version?.contact_id]);
 
   // Calculate financials
   const financials = useMemo(() => {
@@ -198,6 +204,10 @@ export default function BudgetEditorPage() {
       setVersion(targetVersion);
       setItems(itemsData || []);
       
+      if (budgetData.client_id) {
+        fetchContactsForClient(budgetData.client_id);
+      }
+      
       lastLoadedData.current = JSON.stringify({ budgetData, targetVersion, itemsData });
       isDirty.current = false;
     } catch (err) {
@@ -247,6 +257,7 @@ export default function BudgetEditorPage() {
           .from('budget_versions')
           .insert({
             budget_id: currentBudgetId,
+            contact_id: version.contact_id || null,
             version_number: 1,
             margin_pct: version.margin_pct,
             nf_pct: version.nf_pct,
@@ -270,6 +281,7 @@ export default function BudgetEditorPage() {
         await supabase
           .from('budget_versions')
           .update({
+            contact_id: version.contact_id || null,
             margin_pct: version.margin_pct,
             nf_pct: version.nf_pct,
             discount_value: version.discount_value,
@@ -488,6 +500,32 @@ export default function BudgetEditorPage() {
     setBudget(prev => prev ? { ...prev, ...updates } : null);
   };
 
+  const updateVersion = (updates: Partial<BudgetVersion>) => {
+    if (isReadOnly) return;
+    isDirty.current = true;
+    setVersion(prev => prev ? { ...prev, ...updates } : null);
+  };
+
+  async function fetchContactsForClient(clientId: string, autoSelect: boolean = false) {
+    const { data } = await supabase
+      .from('client_contacts')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('is_primary', { ascending: false });
+    
+    setAvailableContacts(data || []);
+    
+    if (autoSelect && data && data.length === 1) {
+      updateVersion({ contact_id: data[0].id });
+    } else if (autoSelect && data && data.length > 1) {
+      // If we don't have a contact already selected, pick the primary
+      if (!version?.contact_id) {
+        const primary = data.find(c => c.is_primary);
+        if (primary) updateVersion({ contact_id: primary.id });
+      }
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -555,15 +593,48 @@ export default function BudgetEditorPage() {
               />
             </div>
             <div className="flex items-center gap-4 text-xs font-semibold">
-              <select 
-                disabled={isReadOnly}
-                className="bg-transparent border-none text-lumos-text-secondary focus:ring-0 p-0 hover:text-lumos-text-primary transition-colors cursor-pointer disabled:cursor-default"
-                value={budget?.client_id || ''}
-                onChange={(e) => updateBudget({ client_id: e.target.value })}
-              >
-                <option value="">Selecionar Cliente</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div className="flex items-center gap-2">
+                <select 
+                  disabled={isReadOnly}
+                  className="bg-transparent border-none text-lumos-text-secondary focus:ring-0 p-0 hover:text-lumos-text-primary transition-colors cursor-pointer disabled:cursor-default max-w-[200px] truncate"
+                  value={budget?.client_id || ''}
+                  onChange={(e) => {
+                    const cid = e.target.value;
+                    updateBudget({ client_id: cid });
+                    // Reset contact when client changes
+                    if (cid) {
+                      fetchContactsForClient(cid, true);
+                    } else {
+                      setAvailableContacts([]);
+                      setVersion(v => v ? { ...v, contact_id: undefined } : null);
+                    }
+                  }}
+                >
+                  <option value="">Selecionar Empresa</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.agency_name ? `${c.agency_name} + ${c.name}` : c.name}
+                    </option>
+                  ))}
+                </select>
+
+                {budget?.client_id && (
+                  <>
+                    <div className="w-px h-3 bg-lumos-border" />
+                    <select
+                      disabled={isReadOnly}
+                      className="bg-transparent border-none text-lumos-text-secondary focus:ring-0 p-0 hover:text-lumos-text-primary transition-colors cursor-pointer disabled:cursor-default max-w-[150px] truncate"
+                      value={version?.contact_id || ''}
+                      onChange={(e) => updateVersion({ contact_id: e.target.value })}
+                    >
+                      <option value="">Contato</option>
+                      {availableContacts.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} {c.role ? `· ${c.role}` : ''}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
               <div className="w-px h-3 bg-lumos-border" />
               <select 
                 disabled={isReadOnly}
@@ -581,7 +652,10 @@ export default function BudgetEditorPage() {
                 <select 
                   className="bg-transparent border-none text-lumos-yellow font-black focus:ring-0 p-0 uppercase hover:text-lumos-yellow transition-colors cursor-pointer"
                   value={version?.id}
-                  onChange={(e) => fetchBudgetData(budget!.id, e.target.value)}
+                  onChange={(e) => {
+                    const selectedVid = e.target.value;
+                    fetchBudgetData(budget!.id, selectedVid);
+                  }}
                 >
                   {versions.map(v => (
                     <option key={v.id} value={v.id}>
@@ -960,12 +1034,13 @@ export default function BudgetEditorPage() {
                   <BudgetPDF 
                     budget={budget} 
                     version={version} 
+                    contact={selectedContact}
                     items={items} 
                     financials={financials} 
                     userName={user?.user_metadata?.full_name || user?.email}
                   />
                 } 
-                fileName={`${budget.code} | Lumos + ${budget.clients?.name || 'Cliente'} | ${budget.project_name}.pdf`}
+                fileName={`${budget.code} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
                 className="btn-secondary w-full mt-6 py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
               >
                 {({ loading }) => (

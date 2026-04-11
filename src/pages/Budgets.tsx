@@ -92,9 +92,11 @@ export default function Budgets() {
         .from('budgets')
         .select(`
           *,
-          clients!client_id (name, contact_name, email),
+          clients!client_id (name, agency_name),
           active_version:budget_versions!budgets_active_version_fkey (
             id,
+            contact_id,
+            contact:client_contacts(id, name, email),
             margin_pct,
             nf_pct,
             discount_value,
@@ -102,6 +104,8 @@ export default function Budgets() {
           ),
           versions:budget_versions!budget_id (
             id,
+            contact_id,
+            contact:client_contacts(id, name, email),
             margin_pct,
             nf_pct,
             discount_value,
@@ -202,12 +206,14 @@ export default function Budgets() {
       setActiveMenu(null);
 
       const financials = calcFinancials(activeVersion.items || [], activeVersion);
-      const fileName = `${budget.code} | Lumos + ${budget.clients?.name || 'Cliente'} | ${budget.project_name}.pdf`;
+      const clientDisplayName = budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente');
+      const fileName = `${budget.code} | Lumos + ${clientDisplayName} | ${budget.project_name}.pdf`;
 
       const blob = await pdf(
         <BudgetPDF 
           budget={budget}
           version={activeVersion}
+          contact={activeVersion.contact}
           items={activeVersion.items || []}
           financials={financials}
           userName={currentUser?.user_metadata?.full_name || 'Equipe Lumos'}
@@ -601,7 +607,9 @@ export default function Budgets() {
                       <span className="text-lumos-text-primary font-bold group-hover:text-lumos-yellow transition-colors">{budget.project_name}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-[10px] text-lumos-text-secondary font-black uppercase tracking-tighter">{budget.clients?.name || 'Cliente Direto'}</span>
+                      <span className="text-[10px] text-lumos-text-secondary font-black uppercase tracking-tighter">
+                        {budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente Direto')}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className="text-[10px] font-black uppercase py-0.5 px-2 bg-lumos-text-secondary/10 border border-lumos-border rounded-full text-lumos-text-primary">

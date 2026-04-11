@@ -321,12 +321,13 @@ const styles = StyleSheet.create({
 interface BudgetPDFProps {
   budget: any;
   version: BudgetVersion;
+  contact?: any;
   items: BudgetItem[];
   financials: VersionFinancials;
   userName?: string;
 }
 
-export const BudgetPDF = ({ budget, version, items, financials, userName }: BudgetPDFProps) => {
+export const BudgetPDF = ({ budget, version, contact, items, financials, userName }: BudgetPDFProps) => {
   if (!budget || !version || !financials) return null;
 
   const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -346,8 +347,12 @@ export const BudgetPDF = ({ budget, version, items, financials, userName }: Budg
 
   const groups = ['equipe', 'equipamentos', 'edicao', 'producao'] as const;
 
-  // Novo padrão de nomenclatura: [CODE] | Lumos + [CLIENTE] | [NOME DO PROJETO]
-  const nomenclatureHeader = `${budget.code} | Lumos + ${budget.clients?.name || 'Cliente'} | ${budget.project_name}`;
+  // Novo padrão de nomenclatura: [CODE] | Lumos + [AGÊNCIA] [CLIENTE] | [NOME DO PROJETO]
+  const clientDisplayName = budget.clients?.agency_name 
+    ? `${budget.clients.agency_name} + ${budget.clients.name}`
+    : (budget.clients?.name || 'Cliente');
+    
+  const nomenclatureHeader = `${budget.code} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
   const proposalTag = nomenclatureHeader;
 
   return (
@@ -382,14 +387,14 @@ export const BudgetPDF = ({ budget, version, items, financials, userName }: Budg
           </View>
           <View style={styles.idRow}>
             <View style={styles.idLabelCol}><Text>Cliente</Text></View>
-            <View style={styles.idValueCol}><Text>{budget.clients?.name || '—'}</Text></View>
+            <View style={styles.idValueCol}><Text>{clientDisplayName}</Text></View>
             <View style={[styles.idLabelCol, { borderLeftWidth: 0.5, borderLeftColor: '#dcdcdc' }]}><Text>Categoria</Text></View>
             <View style={styles.idValueCol}><Text>{categoryFormatted}</Text></View>
           </View>
           <View style={[styles.idRow, { borderBottomWidth: 0 }]}>
             <View style={styles.idLabelCol}><Text>Contato</Text></View>
             <View style={{ width: '85%', padding: 4 }}>
-              <Text>{budget.clients?.contact_name || '—'}  ·  {budget.clients?.email || '—'}</Text>
+              <Text>{contact?.name || '—'}  ·  {contact?.email || '—'}</Text>
             </View>
           </View>
         </View>
@@ -528,8 +533,8 @@ export const BudgetPDF = ({ budget, version, items, financials, userName }: Budg
           <View style={styles.signatureBox}>
             <Text style={styles.signatureTitle}>Aprovado por:</Text>
             <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>{budget.clients?.name || 'NOME DO CLIENTE'}</Text>
-            <Text style={styles.signatureLabel}>{budget.clients?.contact_name || 'NOME DO RESPONSÁVEL'}</Text>
+            <Text style={styles.signatureLabel}>{clientDisplayName}</Text>
+            <Text style={styles.signatureLabel}>{contact?.name || 'NOME DO RESPONSÁVEL'}</Text>
             <Text style={styles.signatureLabel}>DATA: ____/____/____</Text>
           </View>
           <View style={styles.signatureBox}>

@@ -24,14 +24,14 @@ export default function ThemeToggle({ showDescription = false }: ThemeToggleProp
         }}
         className={clsx(
           "relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 outline-none focus:ring-2 focus:ring-lumos-yellow focus:ring-offset-2",
-          theme === 'dark' ? "bg-[#F5D87A]" : "bg-zinc-300 dark:bg-zinc-600"
+          theme === 'dark' ? "bg-lumos-yellow" : "bg-zinc-300 dark:bg-zinc-600"
         )}
         role="switch"
         aria-checked={theme === 'dark'}
       >
         <span
           className={clsx(
-            "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 shadow-sm",
+            "inline-block h-4 w-4 transform rounded-full bg-lumos-surface transition-transform duration-200 shadow-sm",
             theme === 'dark' ? "translate-x-6" : "translate-x-1"
           )}
         />

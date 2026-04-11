@@ -8,6 +8,7 @@ import Settings from '@/pages/Settings';
 import Templates from '@/pages/Templates';
 import BudgetEditorPage from '@/pages/BudgetEditorPage';
 import Sidebar from '@/components/layout/Sidebar';
+import ClientProfile from '@/pages/ClientProfile';
 
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 
@@ -61,6 +62,11 @@ function AppContent() {
           <Route 
             path="/clientes" 
             element={<AuthWrapper><Clients /></AuthWrapper>} 
+          />
+          
+          <Route 
+            path="/clientes/:id" 
+            element={<AuthWrapper><ClientProfile /></AuthWrapper>} 
           />
           
           <Route 
