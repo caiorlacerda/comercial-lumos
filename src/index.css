@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --color-lumos-bg: #F5F5F3;
+  --color-lumos-surface: #FFFFFF;
+  --color-lumos-yellow: #EFC700;
+  --color-lumos-text-primary: #1a1a1a;
+  --color-lumos-text-secondary: #666666;
+  --color-lumos-border: rgba(0,0,0,0.08);
+
+  --font-heading: "Poppins", sans-serif;
+  --font-body: "Work Sans", sans-serif;
+
+  --radius-lumos: 8px;
+}
+
+/* Base values override for Dark Theme */
+.dark {
+  --color-lumos-bg: #222222;
+  --color-lumos-surface: #2a2a2a;
+  --color-lumos-text-primary: #FFFFFF;
+  --color-lumos-text-secondary: #999999;
+  --color-lumos-border: rgba(255,255,255,0.08);
+  
+  :root {
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-lumos-bg text-lumos-text-primary antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-semibold;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-lumos-surface border border-lumos-border rounded-lumos p-4 shadow-sm transition-all;
+  }
+
+  .btn-primary {
+    @apply bg-lumos-yellow text-black font-semibold py-2 px-4 rounded-lumos hover:bg-yellow-400 border border-lumos-yellow transition-all disabled:opacity-50 active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-lumos-surface text-lumos-text-primary border border-lumos-border font-semibold py-2 px-4 rounded-lumos hover:bg-lumos-bg transition-all disabled:opacity-50 active:scale-95;
+  }
+
+  .input-lumos {
+    @apply bg-lumos-bg border border-lumos-border rounded-lumos px-3 py-2 text-lumos-text-primary focus:border-lumos-yellow focus:ring-1 focus:ring-lumos-yellow outline-none transition-all placeholder:text-lumos-text-secondary;
+  }
+}
+
+/* Custom Scrollbar - Themed */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-lumos-bg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-lumos-text-secondary/20 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-lumos-text-secondary/40;
+}

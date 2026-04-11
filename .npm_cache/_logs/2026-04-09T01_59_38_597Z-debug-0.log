@@ -1,0 +1,268 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@11.11.0
+2 info using node@v24.14.1
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npmrc
+5 silly config load:file:/Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npmrc-local
+6 silly config load:file:/usr/local/etc/npmrc
+7 verbose title npm install @tailwindcss/vite
+8 verbose argv "install" "--cache" "./.npm_cache" "--userconfig" "./.npmrc-local" "--save-dev" "@tailwindcss/vite"
+9 verbose logfile logs-max:10 dir:/Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npm_cache/_logs/2026-04-09T01_59_38_597Z-
+10 verbose logfile /Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npm_cache/_logs/2026-04-09T01_59_38_597Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest @tailwindcss/vite@*
+15 silly packumentCache full:https://registry.npmjs.org/@tailwindcss%2fvite cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/@tailwindcss%2fvite 346ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/@tailwindcss%2fvite set size:undefined disposed:false
+18 silly fetch manifest vite@^8.0.7
+19 silly packumentCache full:https://registry.npmjs.org/vite cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/vite 108ms (cache revalidated)
+21 silly packumentCache full:https://registry.npmjs.org/vite set size:38800545 disposed:false
+22 silly fetch manifest @types/node@^20.19.0 || >=22.12.0
+23 silly packumentCache full:https://registry.npmjs.org/@types%2fnode cache-miss
+24 http fetch GET 200 https://registry.npmjs.org/@types%2fnode 597ms (cache revalidated)
+25 silly packumentCache full:https://registry.npmjs.org/@types%2fnode set size:10968423 disposed:false
+26 silly fetch manifest @vitejs/devtools@^0.1.0
+27 silly packumentCache full:https://registry.npmjs.org/@vitejs%2fdevtools cache-miss
+28 http fetch GET 200 https://registry.npmjs.org/@vitejs%2fdevtools 138ms (cache revalidated)
+29 silly packumentCache full:https://registry.npmjs.org/@vitejs%2fdevtools set size:166185 disposed:false
+30 silly fetch manifest esbuild@^0.27.0 || ^0.28.0
+31 silly packumentCache full:https://registry.npmjs.org/esbuild cache-miss
+32 http fetch GET 200 https://registry.npmjs.org/esbuild 36ms (cache revalidated)
+33 silly packumentCache full:https://registry.npmjs.org/esbuild set size:1254708 disposed:false
+34 silly fetch manifest jiti@>=1.21.0
+35 silly packumentCache full:https://registry.npmjs.org/jiti cache-miss
+36 http fetch GET 200 https://registry.npmjs.org/jiti 34ms (cache revalidated)
+37 silly packumentCache full:https://registry.npmjs.org/jiti set size:382310 disposed:false
+38 silly fetch manifest less@^4.0.0
+39 silly packumentCache full:https://registry.npmjs.org/less cache-miss
+40 http fetch GET 200 https://registry.npmjs.org/less 36ms (cache revalidated)
+41 silly packumentCache full:https://registry.npmjs.org/less set size:461684 disposed:false
+42 silly fetch manifest sass@^1.70.0
+43 silly packumentCache full:https://registry.npmjs.org/sass cache-miss
+44 http fetch GET 200 https://registry.npmjs.org/sass 36ms (cache revalidated)
+45 silly packumentCache full:https://registry.npmjs.org/sass set size:726244 disposed:false
+46 silly fetch manifest sass-embedded@^1.70.0
+47 silly packumentCache full:https://registry.npmjs.org/sass-embedded cache-miss
+48 http fetch GET 200 https://registry.npmjs.org/sass-embedded 32ms (cache revalidated)
+49 silly packumentCache full:https://registry.npmjs.org/sass-embedded set size:415594 disposed:false
+50 silly fetch manifest stylus@>=0.54.8
+51 silly packumentCache full:https://registry.npmjs.org/stylus cache-miss
+52 http fetch GET 200 https://registry.npmjs.org/stylus 35ms (cache revalidated)
+53 silly packumentCache full:https://registry.npmjs.org/stylus set size:286766 disposed:false
+54 silly fetch manifest sugarss@^5.0.0
+55 silly packumentCache full:https://registry.npmjs.org/sugarss cache-miss
+56 http fetch GET 200 https://registry.npmjs.org/sugarss 34ms (cache revalidated)
+57 silly packumentCache full:https://registry.npmjs.org/sugarss set size:44975 disposed:false
+58 silly fetch manifest postcss@^8.5.9
+59 silly packumentCache full:https://registry.npmjs.org/postcss cache-miss
+60 http fetch GET 200 https://registry.npmjs.org/postcss 45ms (cache revalidated)
+61 silly packumentCache full:https://registry.npmjs.org/postcss set size:705229 disposed:false
+62 silly fetch manifest terser@^5.16.0
+63 silly packumentCache full:https://registry.npmjs.org/terser cache-miss
+64 http fetch GET 200 https://registry.npmjs.org/terser 32ms (cache revalidated)
+65 silly packumentCache full:https://registry.npmjs.org/terser set size:789927 disposed:false
+66 silly fetch manifest tsx@^4.8.1
+67 silly packumentCache full:https://registry.npmjs.org/tsx cache-miss
+68 http fetch GET 200 https://registry.npmjs.org/tsx 32ms (cache revalidated)
+69 silly packumentCache full:https://registry.npmjs.org/tsx set size:289592 disposed:false
+70 silly fetch manifest yaml@^2.4.2
+71 silly packumentCache full:https://registry.npmjs.org/yaml cache-miss
+72 http fetch GET 200 https://registry.npmjs.org/yaml 122ms (cache revalidated)
+73 silly packumentCache full:https://registry.npmjs.org/yaml set size:375230 disposed:false
+74 silly placeDep ROOT @tailwindcss/vite@4.2.2 OK for: proposta-lumos@1.0.0 want: *
+75 silly reify moves {}
+76 silly audit bulk request {
+76 silly audit   '@alloc/quick-lru': [ '5.2.0' ],
+76 silly audit   '@babel/runtime': [ '7.29.2' ],
+76 silly audit   '@emnapi/core': [ '1.9.1' ],
+76 silly audit   '@emnapi/runtime': [ '1.9.1' ],
+76 silly audit   '@emnapi/wasi-threads': [ '1.2.0' ],
+76 silly audit   '@jridgewell/gen-mapping': [ '0.3.13' ],
+76 silly audit   '@jridgewell/remapping': [ '2.3.5' ],
+76 silly audit   '@jridgewell/resolve-uri': [ '3.1.2' ],
+76 silly audit   '@jridgewell/sourcemap-codec': [ '1.5.5' ],
+76 silly audit   '@jridgewell/trace-mapping': [ '0.3.31' ],
+76 silly audit   '@napi-rs/wasm-runtime': [ '1.1.3' ],
+76 silly audit   '@noble/ciphers': [ '1.3.0' ],
+76 silly audit   '@noble/hashes': [ '1.8.0' ],
+76 silly audit   '@oxc-project/types': [ '0.123.0' ],
+76 silly audit   '@react-pdf/fns': [ '3.1.3' ],
+76 silly audit   '@react-pdf/font': [ '4.0.6' ],
+76 silly audit   '@react-pdf/image': [ '3.0.4' ],
+76 silly audit   '@react-pdf/layout': [ '4.5.0' ],
+76 silly audit   '@react-pdf/pdfkit': [ '5.0.0' ],
+76 silly audit   '@react-pdf/png-js': [ '3.0.0' ],
+76 silly audit   '@react-pdf/primitives': [ '4.2.0' ],
+76 silly audit   '@react-pdf/reconciler': [ '2.0.0' ],
+76 silly audit   '@react-pdf/render': [ '4.4.0' ],
+76 silly audit   '@react-pdf/renderer': [ '4.4.0' ],
+76 silly audit   '@react-pdf/stylesheet': [ '6.1.4' ],
+76 silly audit   '@react-pdf/textkit': [ '6.1.1' ],
+76 silly audit   '@react-pdf/types': [ '2.10.0' ],
+76 silly audit   '@rolldown/binding-android-arm64': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-darwin-arm64': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-darwin-x64': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-freebsd-x64': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-linux-arm-gnueabihf': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-linux-arm64-gnu': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-linux-arm64-musl': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-linux-ppc64-gnu': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-linux-s390x-gnu': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-linux-x64-gnu': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-linux-x64-musl': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-openharmony-arm64': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-wasm32-wasi': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-win32-arm64-msvc': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/binding-win32-x64-msvc': [ '1.0.0-rc.13' ],
+76 silly audit   '@rolldown/pluginutils': [ '1.0.0-rc.7', '1.0.0-rc.13' ],
+76 silly audit   '@supabase/auth-js': [ '2.102.1' ],
+76 silly audit   '@supabase/functions-js': [ '2.102.1' ],
+76 silly audit   '@supabase/phoenix': [ '0.4.0' ],
+76 silly audit   '@supabase/postgrest-js': [ '2.102.1' ],
+76 silly audit   '@supabase/realtime-js': [ '2.102.1' ],
+76 silly audit   '@supabase/storage-js': [ '2.102.1' ],
+76 silly audit   '@supabase/supabase-js': [ '2.102.1' ],
+76 silly audit   '@swc/helpers': [ '0.5.21' ],
+76 silly audit   '@tailwindcss/node': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-android-arm64': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-darwin-arm64': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-darwin-x64': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-freebsd-x64': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-linux-arm-gnueabihf': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-linux-arm64-gnu': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-linux-arm64-musl': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-linux-x64-gnu': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-linux-x64-musl': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-wasm32-wasi': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-win32-arm64-msvc': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/oxide-win32-x64-msvc': [ '4.2.2' ],
+76 silly audit   '@tailwindcss/postcss': [ '4.2.2' ],
+76 silly audit   '@tybys/wasm-util': [ '0.10.1' ],
+76 silly audit   '@types/lodash': [ '4.17.24' ],
+76 silly audit   '@types/node': [ '25.5.2' ],
+76 silly audit   '@types/react': [ '19.2.14' ],
+76 silly audit   '@types/react-dom': [ '19.2.3' ],
+76 silly audit   '@types/ws': [ '8.18.1' ],
+76 silly audit   '@vitejs/plugin-react': [ '6.0.1' ],
+76 silly audit   'abs-svg-path': [ '0.1.1' ],
+76 silly audit   autoprefixer: [ '10.4.27' ],
+76 silly audit   'base64-js': [ '1.5.1', '0.0.8' ],
+76 silly audit   'baseline-browser-mapping': [ '2.10.16' ],
+76 silly audit   'bidi-js': [ '1.0.3' ],
+76 silly audit   brotli: [ '1.3.3' ],
+76 silly audit   'browserify-zlib': [ '0.2.0' ],
+76 silly audit   browserslist: [ '4.28.2' ],
+76 silly audit   'caniuse-lite': [ '1.0.30001787' ],
+76 silly audit   clone: [ '2.1.2' ],
+76 silly audit   clsx: [ '2.1.1' ],
+76 silly audit   'color-name': [ '1.1.4' ],
+76 silly audit   'color-string': [ '1.9.1' ],
+76 silly audit   cookie: [ '1.1.1' ],
+76 silly audit   csstype: [ '3.2.3' ],
+76 silly audit   'date-fns': [ '4.1.0' ],
+76 silly audit   'detect-libc': [ '2.1.2' ],
+76 silly audit   dfa: [ '1.2.0' ],
+76 silly audit   'electron-to-chromium': [ '1.5.334' ],
+76 silly audit   'emoji-regex-xs': [ '1.0.0' ],
+76 silly audit   'enhanced-resolve': [ '5.20.1' ],
+76 silly audit   escalade: [ '3.2.0' ],
+76 silly audit   events: [ '3.3.0' ],
+76 silly audit   'fast-deep-equal': [ '3.1.3' ],
+76 silly audit   fdir: [ '6.5.0' ],
+76 silly audit   fontkit: [ '2.0.4' ],
+76 silly audit   'fraction.js': [ '5.3.4' ],
+76 silly audit   'framer-motion': [ '12.38.0' ],
+76 silly audit   fsevents: [ '2.3.3' ],
+76 silly audit   'graceful-fs': [ '4.2.11' ],
+76 silly audit   'hsl-to-hex': [ '1.0.0' ],
+76 silly audit   'hsl-to-rgb-for-reals': [ '1.1.1' ],
+76 silly audit   hyphen: [ '1.14.1' ],
+76 silly audit   'iceberg-js': [ '0.8.1' ],
+76 silly audit   inherits: [ '2.0.4' ],
+76 silly audit   'is-arrayish': [ '0.3.4' ],
+76 silly audit   'is-url': [ '1.2.4' ],
+76 silly audit   'jay-peg': [ '1.1.1' ],
+76 silly audit   jiti: [ '2.6.1' ],
+76 silly audit   'js-md5': [ '0.8.3' ],
+76 silly audit   'js-tokens': [ '4.0.0' ],
+76 silly audit   lightningcss: [ '1.32.0' ],
+76 silly audit   'lightningcss-android-arm64': [ '1.32.0' ],
+76 silly audit   'lightningcss-darwin-arm64': [ '1.32.0' ],
+76 silly audit   'lightningcss-darwin-x64': [ '1.32.0' ],
+76 silly audit   'lightningcss-freebsd-x64': [ '1.32.0' ],
+76 silly audit   'lightningcss-linux-arm-gnueabihf': [ '1.32.0' ],
+76 silly audit   'lightningcss-linux-arm64-gnu': [ '1.32.0' ],
+76 silly audit   'lightningcss-linux-arm64-musl': [ '1.32.0' ],
+76 silly audit   'lightningcss-linux-x64-gnu': [ '1.32.0' ],
+76 silly audit   'lightningcss-linux-x64-musl': [ '1.32.0' ],
+76 silly audit   'lightningcss-win32-arm64-msvc': [ '1.32.0' ],
+76 silly audit   'lightningcss-win32-x64-msvc': [ '1.32.0' ],
+76 silly audit   linebreak: [ '1.1.0' ],
+76 silly audit   lodash: [ '4.18.1' ],
+76 silly audit   'loose-envify': [ '1.4.0' ],
+76 silly audit   'lucide-react': [ '1.7.0' ],
+76 silly audit   'magic-string': [ '0.30.21' ],
+76 silly audit   'media-engine': [ '1.0.3' ],
+76 silly audit   'motion-dom': [ '12.38.0' ],
+76 silly audit   'motion-utils': [ '12.36.0' ],
+76 silly audit   nanoid: [ '3.3.11' ],
+76 silly audit   'node-releases': [ '2.0.37' ],
+76 silly audit   'normalize-svg-path': [ '1.1.0' ],
+76 silly audit   'object-assign': [ '4.1.1' ],
+76 silly audit   pako: [ '1.0.11', '0.2.9' ],
+76 silly audit   'parse-svg-path': [ '0.1.2' ],
+76 silly audit   picocolors: [ '1.1.1' ],
+76 silly audit   picomatch: [ '4.0.4' ],
+76 silly audit   postcss: [ '8.5.9' ],
+76 silly audit   'postcss-value-parser': [ '4.2.0' ],
+76 silly audit   'prop-types': [ '15.8.1' ],
+76 silly audit   queue: [ '6.0.2' ],
+76 silly audit   react: [ '19.2.5' ],
+76 silly audit   'react-dom': [ '19.2.5' ],
+76 silly audit   scheduler: [ '0.27.0', '0.25.0-rc-603e6108-20241029' ],
+76 silly audit   'react-is': [ '16.13.1' ],
+76 silly audit   'react-router': [ '7.14.0' ],
+76 silly audit   'react-router-dom': [ '7.14.0' ],
+76 silly audit   'require-from-string': [ '2.0.2' ],
+76 silly audit   restructure: [ '3.0.2' ],
+76 silly audit   rolldown: [ '1.0.0-rc.13' ],
+76 silly audit   'safe-buffer': [ '5.2.1' ],
+76 silly audit   'set-cookie-parser': [ '2.7.2' ],
+76 silly audit   'simple-swizzle': [ '0.2.4' ],
+76 silly audit   'source-map-js': [ '1.2.1' ],
+76 silly audit   string_decoder: [ '1.3.0' ],
+76 silly audit   'svg-arc-to-cubic-bezier': [ '3.2.0' ],
+76 silly audit   'tailwind-merge': [ '3.5.0' ],
+76 silly audit   tailwindcss: [ '4.2.2' ],
+76 silly audit   tapable: [ '2.3.2' ],
+76 silly audit   'tiny-inflate': [ '1.0.3' ],
+76 silly audit   tinyglobby: [ '0.2.16' ],
+76 silly audit   tslib: [ '2.8.1' ],
+76 silly audit   typescript: [ '6.0.2' ],
+76 silly audit   'undici-types': [ '7.18.2' ],
+76 silly audit   'unicode-properties': [ '1.4.1' ],
+76 silly audit   'unicode-trie': [ '2.0.0' ],
+76 silly audit   'update-browserslist-db': [ '1.2.3' ],
+76 silly audit   'util-deprecate': [ '1.0.2' ],
+76 silly audit   vite: [ '8.0.7' ],
+76 silly audit   'vite-compatible-readable-stream': [ '3.6.1' ],
+76 silly audit   ws: [ '8.20.0' ],
+76 silly audit   'yoga-layout': [ '3.2.1' ],
+76 silly audit   '@tailwindcss/vite': [ '4.2.2' ]
+76 silly audit }
+77 http cache @tailwindcss/vite@https://registry.npmjs.org/@tailwindcss/vite/-/vite-4.2.2.tgz 0ms (cache hit)
+78 silly tarball no local data for @tailwindcss/vite@https://registry.npmjs.org/@tailwindcss/vite/-/vite-4.2.2.tgz. Extracting by manifest.
+79 http fetch GET 200 https://registry.npmjs.org/@tailwindcss/vite/-/vite-4.2.2.tgz 86ms (cache miss)
+80 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 227ms
+81 silly audit report {}
+82 silly ADD node_modules/@tailwindcss/vite
+83 verbose cwd /Users/edit6/Documents/Caio/LUMOS/proposta-lumos
+84 verbose os Darwin 25.3.0
+85 verbose node v24.14.1
+86 verbose npm  v11.11.0
+87 verbose exit 0
+88 info ok

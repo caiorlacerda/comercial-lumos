@@ -1,0 +1,29 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@11.11.0
+2 info using node@v24.14.1
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npmrc
+5 silly config load:file:/Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npmrc-local
+6 silly config load:file:/usr/local/etc/npmrc
+7 verbose title npm init
+8 verbose argv "init" "--yes" "--cache" "./.npm_cache" "--userconfig" "./.npmrc-local"
+9 verbose logfile logs-max:10 dir:/Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npm_cache/_logs/2026-04-08T22_53_57_241Z-
+10 verbose logfile /Users/edit6/Documents/Caio/LUMOS/proposta-lumos/.npm_cache/_logs/2026-04-08T22_53_57_241Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly package data {
+12 silly package data   name: 'proposta-lumos',
+12 silly package data   version: '1.0.0',
+12 silly package data   description: '',
+12 silly package data   main: 'index.js',
+12 silly package data   scripts: { test: 'echo "Error: no test specified" && exit 1' },
+12 silly package data   keywords: [],
+12 silly package data   author: '',
+12 silly package data   license: 'ISC',
+12 silly package data   type: 'commonjs'
+12 silly package data }
+13 verbose cwd /Users/edit6/Documents/Caio/LUMOS/proposta-lumos
+14 verbose os Darwin 25.3.0
+15 verbose node v24.14.1
+16 verbose npm  v11.11.0
+17 verbose exit 0
+18 info ok
