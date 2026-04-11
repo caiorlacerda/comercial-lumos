@@ -35,6 +35,7 @@ import {
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
 import { PDFDownloadLink } from '@react-pdf/renderer';
+import { formatBudgetCode } from '@/utils/formatters';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
@@ -681,7 +682,7 @@ export default function BudgetEditorPage() {
                     isReadOnly && "cursor-default hover:bg-lumos-yellow/10"
                   )}
                 >
-                  #{budget?.code}
+                  {formatBudgetCode(budget?.code || '')}
                 </span>
               )}
               <input 
@@ -1163,7 +1164,7 @@ export default function BudgetEditorPage() {
                       userName={user?.user_metadata?.full_name || user?.email}
                     />
                   } 
-                  fileName={`${budget.code} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
+                  fileName={`${formatBudgetCode(budget.code)} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
                   className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
                 >
                   {({ loading }) => (
@@ -1184,7 +1185,7 @@ export default function BudgetEditorPage() {
                       items={items} 
                     />
                   } 
-                  fileName={`OS_${budget.code} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
+                  fileName={`OS_${formatBudgetCode(budget.code)} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
                   className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] border-lumos-yellow/20 hover:border-lumos-yellow/40"
                 >
                   {({ loading }) => (

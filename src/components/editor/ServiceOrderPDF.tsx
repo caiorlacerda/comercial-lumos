@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { BudgetItem, BudgetVersion } from '@/utils/financials';
+import { formatBudgetCode } from '@/utils/formatters';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logo from '../../assets/Logotipo-Preto-Alpha.png';
@@ -227,10 +228,11 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
     ? `${budget.clients.agency_name} + ${budget.clients.name}`
     : (budget.clients?.name || 'Cliente');
     
-  const nomenclatureHeader = `${budget.code} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
+  const formattedCode = formatBudgetCode(budget.code);
+  const nomenclatureHeader = `${formattedCode} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
 
   return (
-    <Document title={`OS_LUMOS_${budget.code}`}>
+    <Document title={`OS_LUMOS_${formattedCode.replace('#', '')}`}>
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho */}
         <View style={styles.header}>

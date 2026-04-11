@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { BudgetItem, BudgetVersion, VersionFinancials, formatCurrency } from '@/utils/financials';
+import { formatBudgetCode } from '@/utils/formatters';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logo from '../../assets/Logotipo-Preto-Alpha.png';
@@ -352,11 +353,12 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
     ? `${budget.clients.agency_name} + ${budget.clients.name}`
     : (budget.clients?.name || 'Cliente');
     
-  const nomenclatureHeader = `${budget.code} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
+  const formattedCode = formatBudgetCode(budget.code);
+  const nomenclatureHeader = `${formattedCode} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
   const proposalTag = nomenclatureHeader;
 
   return (
-    <Document title={`PROPOSTA_LUMOS_${budget.code}`}>
+    <Document title={`PROPOSTA_LUMOS_${formattedCode.replace('#', '')}`}>
       {/* PÁGINA 1: PROPOSTA FINANCEIRA */}
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho */}

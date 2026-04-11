@@ -30,6 +30,7 @@ import { pdf } from '@react-pdf/renderer';
 import Modal from '@/components/common/Modal';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
+import { formatBudgetCode } from '@/utils/formatters';
 
 interface Budget {
   id: string;
@@ -602,7 +603,9 @@ export default function Budgets() {
                         {selectedIds.has(budget.id) && <Check className="w-3.5 h-3.5" />}
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-mono text-lumos-yellow text-sm font-black">#{budget.code}</td>
+                    <td className="px-6 py-4 font-mono text-lumos-yellow text-sm font-black whitespace-nowrap">
+                      {formatBudgetCode(budget.code)}
+                    </td>
                     <td className="px-6 py-4">
                       <span className="text-lumos-text-primary font-bold group-hover:text-lumos-yellow transition-colors">{budget.project_name}</span>
                     </td>
