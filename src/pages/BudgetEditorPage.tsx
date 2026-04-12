@@ -1292,7 +1292,7 @@ export default function BudgetEditorPage() {
                   {({ loading }) => (
                     <>
                       <ClipboardList className="w-4 h-4" />
-                      {loading ? 'Preparando...' : 'Gerar OS PDF'}
+                      {loading ? 'Preparando...' : 'Gerar O.S'}
                     </>
                   )}
                 </PDFDownloadLink>
