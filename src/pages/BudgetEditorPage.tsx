@@ -219,7 +219,7 @@ export default function BudgetEditorPage() {
 
       const { data: itemsData, error: itemsError } = await supabase
         .from('budget_items')
-        .select('*')
+        .select('id, version_id, item_group, name, unit_cost, quantity, unit_label, description, sort_order, catalog_item_id')
         .eq('version_id', targetVersion.id)
         .order('sort_order', { ascending: true });
 
@@ -1197,7 +1197,7 @@ export default function BudgetEditorPage() {
             {financials && budget && version && (
               <div className="space-y-3 mt-6">
                 <PDFDownloadLink 
-                  key={`budget-${version.id}-${items.length}`}
+                  key={`budget-${version.id}-${items.length}-${lastSavedTime?.getTime() || 'initial'}`}
                   document={
                     <BudgetPDF 
                       budget={budget} 
