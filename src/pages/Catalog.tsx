@@ -15,7 +15,8 @@ import {
   Trash2,
   AlertTriangle,
   Ban,
-  Trash
+  Trash,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatCurrency } from '@/utils/financials';
@@ -401,14 +402,18 @@ export default function Catalog() {
               </div>
               
               <div className="flex items-center gap-2 py-2">
-                <input 
-                  type="checkbox"
-                  id="is_active"
-                  className="rounded text-lumos-yellow focus:ring-lumos-yellow"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                />
-                <label htmlFor="is_active" className="text-sm text-lumos-text-primary">Item Ativo</label>
+                <div 
+                  onClick={() => setFormData({...formData, is_active: !formData.is_active})}
+                  className={clsx(
+                    "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                    formData.is_active ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg" : "border-lumos-border hover:border-lumos-yellow/50"
+                  )}
+                >
+                  {formData.is_active && <Check className="w-3.5 h-3.5" />}
+                </div>
+                <label className="text-sm font-bold text-lumos-text-primary cursor-pointer select-none" onClick={() => setFormData({...formData, is_active: !formData.is_active})}>
+                  Item Ativo
+                </label>
               </div>
 
               <div className="pt-4 flex gap-3">
@@ -551,16 +556,16 @@ const CatalogRow = memo(({
     isSelected && "bg-lumos-yellow/5"
   )}>
     <td className="px-6 py-4">
-      <input 
-        type="checkbox"
+      <div 
+        onClick={(e) => { e.stopPropagation(); onToggleSelect(item.id); }}
         className={clsx(
-          "checkbox-lumos transition-opacity",
+          "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+          isSelected ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg" : "border-lumos-border group-hover:border-lumos-yellow/50",
           anySelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         )}
-        checked={isSelected}
-        onChange={() => onToggleSelect(item.id)}
-        onClick={(e) => e.stopPropagation()}
-      />
+      >
+        {isSelected && <Check className="w-3.5 h-3.5" />}
+      </div>
     </td>
     <td className="px-6 py-4 truncate">
       <div className="font-medium text-lumos-text-primary whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</div>
@@ -626,13 +631,15 @@ const CatalogGroupHeader = memo(({
   <div className="w-full flex items-center bg-lumos-surface border border-lumos-border rounded-lumos p-3 hover:bg-lumos-surface/80 transition-shadow">
     <div className="flex items-center gap-4 flex-1">
       <div className="pl-1">
-        <input 
-          type="checkbox"
-          className="checkbox-lumos"
-          checked={isAllSelected}
-          onChange={onToggleSelect}
-          onClick={(e) => e.stopPropagation()}
-        />
+        <div 
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+          className={clsx(
+            "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+            isAllSelected ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg" : "border-lumos-border hover:border-lumos-yellow/50"
+          )}
+        >
+          {isAllSelected && <Check className="w-3.5 h-3.5" />}
+        </div>
       </div>
       <button 
         onClick={onToggleExpand}
