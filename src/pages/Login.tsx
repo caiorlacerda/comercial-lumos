@@ -48,11 +48,8 @@ export default function Login() {
           <img 
             src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"} 
             alt="Lumos Logo" 
-            className="h-14 mb-4 transition-all duration-300" 
+            className="h-14 transition-all duration-300" 
           />
-          <p className="text-lumos-text-secondary font-black uppercase tracking-[0.2em] text-[10px]">
-            Proposta — Plataforma Interna
-          </p>
         </div>
 
         {/* Login Card */}

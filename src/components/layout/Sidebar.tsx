@@ -48,11 +48,8 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           <img 
             src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"} 
             alt="Lumos Logo" 
-            className="h-8 mb-2 transition-all duration-300" 
+            className="h-8 transition-all duration-300" 
           />
-          <p className="text-[10px] text-lumos-text-secondary uppercase tracking-widest font-black">
-            Proposta
-          </p>
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4">
