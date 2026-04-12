@@ -62,12 +62,9 @@ export default function Templates() {
   }, []);
 
   async function fetchData() {
-    try {
-      setLoading(true);
-      await Promise.all([fetchTemplates(), fetchBriefingTemplates()]);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    await Promise.allSettled([fetchTemplates(), fetchBriefingTemplates()]);
+    setLoading(false);
   }
 
   async function fetchTemplates() {
@@ -95,10 +92,15 @@ export default function Templates() {
       .from('briefing_templates')
       .select('*')
       .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false })
       .order('name');
 
-    if (error) console.error('Error fetching briefing templates:', error);
-    else setBriefingTemplates(data || []);
+    if (error) {
+      console.error('Error fetching briefing templates:', error);
+    } else {
+      console.log('Briefing templates fetched:', data);
+      setBriefingTemplates(data || []);
+    }
   }
 
   const handleRemoveFromTemplates = async (id: string) => {
@@ -296,7 +298,7 @@ export default function Templates() {
           {activeTab === 'budgets' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-lumos-yellow rounded-t-full shadow-[0_0_10px_rgba(245,216,122,0.5)]" />}
         </button>
         <button 
-          onClick={() => setActiveTab('briefing')}
+          onClick={() => { setActiveTab('briefing'); setSearchTerm(''); }}
           className={clsx(
             "px-6 py-3 text-xs font-black uppercase tracking-widest transition-all relative",
             activeTab === 'briefing' ? "text-lumos-yellow" : "text-lumos-text-secondary hover:text-lumos-text-primary"
@@ -403,46 +405,60 @@ export default function Templates() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredBriefings.map(t => (
-              <div key={t.id} className="card group hover:shadow-xl transition-all border-l-4 border-l-lumos-yellow flex flex-col h-64 overflow-hidden">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-black text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">{t.name}</h3>
-                      {t.is_default && <Check className="w-3 h-3 text-green-500" />}
-                    </div>
-                    <span className={clsx(
-                      "text-[9px] font-black uppercase px-2 py-0.5 rounded border border-current",
-                      t.category === 'digital' ? 'text-blue-500' : t.category === 'filme' ? 'text-purple-500' : 'text-orange-500'
-                    )}>{t.category}</span>
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => handleDuplicateBriefing(t)} className="p-2 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded-full" title="Duplicar">
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleOpenBriefingModal(t)} className="p-2 text-lumos-text-secondary hover:text-blue-500 hover:bg-blue-500/10 rounded-full" title="Editar">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    {!t.is_default && (
-                      <button onClick={() => handleDeleteBriefing(t.id)} className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full" title="Excluir">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
+            {filteredBriefings.length === 0 ? (
+              <div className="col-span-full card text-center py-20 flex flex-col items-center justify-center space-y-4">
+                <div className="w-20 h-20 rounded-full bg-lumos-bg flex items-center justify-center text-lumos-text-secondary/20">
+                  <FileText className="w-10 h-10" />
                 </div>
-                
-                <p className="text-[10px] text-lumos-text-secondary mb-4 line-clamp-6 leading-relaxed bg-lumos-bg/50 p-3 rounded-lumos flex-1 border border-lumos-border/50 italic">
-                  {t.notes_client}
-                </p>
-
-                <div className="flex items-center justify-between mt-auto pt-3 text-[9px] font-bold text-lumos-text-secondary uppercase">
-                  <div className="flex items-center gap-1">
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Última edição: {new Date(t.updated_at).toLocaleDateString()}</span>
-                  </div>
+                <div className="space-y-1">
+                  <h3 className="text-xl font-bold text-lumos-text-primary">Nenhum template de briefing</h3>
+                  <p className="text-lumos-text-secondary max-w-sm">
+                    Crie seu primeiro modelo de briefing clicando em "Novo Template".
+                  </p>
                 </div>
               </div>
-            ))}
+            ) : (
+              filteredBriefings.map(t => (
+                <div key={t.id} className="card group hover:shadow-xl transition-all border-l-4 border-l-lumos-yellow flex flex-col h-64 overflow-hidden">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">{t.name}</h3>
+                        {t.is_default && <Check className="w-3 h-3 text-green-500" />}
+                      </div>
+                      <span className={clsx(
+                        "text-[9px] font-black uppercase px-2 py-0.5 rounded border border-current",
+                        t.category === 'digital' ? 'text-blue-500' : t.category === 'filme' ? 'text-purple-500' : 'text-orange-500'
+                      )}>{t.category}</span>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleDuplicateBriefing(t)} className="p-2 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded-full" title="Duplicar">
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleOpenBriefingModal(t)} className="p-2 text-lumos-text-secondary hover:text-blue-500 hover:bg-blue-500/10 rounded-full" title="Editar">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      {!t.is_default && (
+                        <button onClick={() => handleDeleteBriefing(t.id)} className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full" title="Excluir">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <p className="text-[10px] text-lumos-text-secondary mb-4 line-clamp-6 leading-relaxed bg-lumos-bg/50 p-3 rounded-lumos flex-1 border border-lumos-border/50 italic">
+                    {t.notes_client}
+                  </p>
+
+                  <div className="flex items-center justify-between mt-auto pt-3 text-[9px] font-bold text-lumos-text-secondary uppercase">
+                    <div className="flex items-center gap-1">
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Última edição: {new Date(t.updated_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </>
       )}
