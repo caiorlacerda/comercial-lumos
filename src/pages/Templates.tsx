@@ -35,7 +35,7 @@ interface BriefingTemplate {
   name: string;
   category: 'digital' | 'filme' | 'live';
   notes_client: string;
-  is_default: boolean;
+  created_at: string;
   updated_at: string;
 }
 
@@ -91,14 +91,13 @@ export default function Templates() {
     const { data, error } = await supabase
       .from('briefing_templates')
       .select('*')
-      .order('is_default', { ascending: false })
-      .order('created_at', { ascending: false })
-      .order('name');
+      .order('created_at', { ascending: false });
+
+    console.log('briefing templates result:', data, error);
 
     if (error) {
       console.error('Error fetching briefing templates:', error);
     } else {
-      console.log('Briefing templates fetched:', data);
       setBriefingTemplates(data || []);
     }
   }
@@ -424,7 +423,7 @@ export default function Templates() {
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <h3 className="font-black text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">{t.name}</h3>
-                        {t.is_default && <Check className="w-3 h-3 text-green-500" />}
+                         {/* No default flag */}
                       </div>
                       <span className={clsx(
                         "text-[9px] font-black uppercase px-2 py-0.5 rounded border border-current",
@@ -438,11 +437,9 @@ export default function Templates() {
                       <button onClick={() => handleOpenBriefingModal(t)} className="p-2 text-lumos-text-secondary hover:text-blue-500 hover:bg-blue-500/10 rounded-full" title="Editar">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      {!t.is_default && (
-                        <button onClick={() => handleDeleteBriefing(t.id)} className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full" title="Excluir">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+                    <button onClick={() => handleDeleteBriefing(t.id)} className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-full" title="Excluir">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     </div>
                   </div>
                   
