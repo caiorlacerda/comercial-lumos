@@ -176,7 +176,8 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
   },
   
-  colName: { width: '65%' },
+  colName: { width: '30%' },
+  colDesc: { width: '35%' },
   colQty: { width: '15%', textAlign: 'center' },
   colUnit: { width: '20%', textAlign: 'center' },
 
@@ -289,6 +290,7 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderCell, styles.colName]}>Item / Serviço</Text>
+            <Text style={[styles.tableHeaderCell, styles.colDesc]}>Descrição</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qtd</Text>
             <Text style={[styles.tableHeaderCell, styles.colUnit]}>Unid.</Text>
           </View>
@@ -304,8 +306,11 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
                 </View>
 
                 {groupItems.map((item, index) => (
-                  <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]}>
+                  <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]} wrap={false}>
                     <Text style={[styles.tableCell, styles.colName]}>{item.name}</Text>
+                    <Text style={[styles.tableCell, styles.colDesc, { color: '#888', fontSize: 7, lineHeight: 1.4 }]}>
+                      {item.description || ''}
+                    </Text>
                     <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
                     <Text style={[styles.tableCell, styles.colUnit]}>{item.unit_label}</Text>
                   </View>

@@ -545,6 +545,7 @@ export default function BudgetEditorPage() {
       unit_cost: catItem.default_unit_cost || 0,
       quantity: 1,
       unit_label: catItem.unit_label || 'diaria',
+      description: catItem.description || '',
       sort_order: items.length,
       catalog_item_id: catItem.id
     };

@@ -23,6 +23,7 @@ interface CatalogItem {
   name: string;
   default_unit_cost: number;
   unit_label: string;
+  description: string | null;
   is_active: boolean;
 }
 
@@ -40,6 +41,7 @@ export default function Catalog() {
     item_group: 'equipe',
     default_unit_cost: 0,
     unit_label: 'diaria',
+    description: '',
     is_active: true
   });
 
@@ -78,6 +80,7 @@ export default function Catalog() {
         item_group: 'equipe',
         default_unit_cost: 0,
         unit_label: 'diaria',
+        description: '',
         is_active: true
       });
     }
@@ -209,7 +212,12 @@ export default function Catalog() {
                         </tr>
                       ) : groupItems.map((item) => (
                         <tr key={item.id} className={clsx("hover:bg-lumos-bg/30 transition-colors", !item.is_active && "opacity-50")}>
-                          <td className="px-6 py-4 font-medium text-lumos-text-primary">{item.name}</td>
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-lumos-text-primary">{item.name}</div>
+                            {item.description && (
+                              <div className="text-[11px] text-lumos-text-secondary mt-0.5 line-clamp-1">{item.description}</div>
+                            )}
+                          </td>
                           <td className="px-6 py-4 text-lumos-text-secondary">{item.subcategory}</td>
                           <td className="px-6 py-4 text-right font-mono text-lumos-text-primary">{formatCurrency(item.default_unit_cost)}</td>
                           <td className="px-6 py-4 uppercase text-[10px] font-bold text-lumos-text-primary">{item.unit_label}</td>
@@ -312,6 +320,15 @@ export default function Catalog() {
                     <option value="video">vídeo</option>
                     <option value="hora">hora</option>
                   </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-lumos-text-secondary uppercase mb-1">Descrição</label>
+                  <textarea 
+                    className="input-lumos w-full h-[80px] py-3 resize-none"
+                    value={formData.description || ''}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    placeholder="Descreva o serviço ou item detalhadamente..."
+                  />
                 </div>
               </div>
               
