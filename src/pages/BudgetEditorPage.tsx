@@ -35,7 +35,9 @@ import {
 } from '@/utils/financials';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
-import { PDFDownloadLink } from '@react-pdf/renderer';
+import { pdf, PDFDownloadLink } from '@react-pdf/renderer';
+import { useGoogleDrive } from '@/hooks/useGoogleDrive';
+import GoogleDriveAuthModal from '@/components/editor/GoogleDriveAuthModal';
 import { formatBudgetCode } from '@/utils/formatters';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
@@ -83,6 +85,10 @@ export default function BudgetEditorPage() {
   const [templateCategory, setTemplateCategory] = useState('');
   const [availableContacts, setAvailableContacts] = useState<any[]>([]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const { login, uploadToDrive, isAuthenticated } = useGoogleDrive();
   
   // Ref to track dirty state and prevent save loops
   const isDirty = useRef(false);
@@ -606,6 +612,69 @@ export default function BudgetEditorPage() {
       }
     } else {
       isDirty.current = true;
+    }
+  };
+
+  const handleGenerateAndBackup = async (shouldBackup: boolean = true) => {
+    if (!financials || !budget || !version) return;
+    
+    setIsGeneratingPDF(true);
+    try {
+      const fileName = `${formatBudgetCode(budget.code)} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`;
+      
+      const blob = await pdf(
+        <BudgetPDF 
+          budget={budget} 
+          version={version} 
+          contact={selectedContact}
+          items={items} 
+          financials={financials} 
+          userName={user?.user_metadata?.full_name || user?.email}
+        />
+      ).toBlob();
+
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Backup if needed
+      if (shouldBackup && budget.status === 'em_negociacao') {
+        try {
+          await uploadToDrive(blob, fileName);
+          // Toast-like notification
+          const toast = document.createElement('div');
+          toast.className = 'fixed bottom-6 right-6 bg-green-600 text-white px-6 py-3 rounded-lumos shadow-2xl z-[100] animate-in slide-in-from-bottom-4 duration-300 font-bold flex items-center gap-2';
+          toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> PDF salvo no Google Drive ✓';
+          document.body.appendChild(toast);
+          setTimeout(() => {
+            toast.classList.add('animate-out', 'fade-out', 'slide-out-to-bottom-4');
+            setTimeout(() => {
+              if (document.body.contains(toast)) document.body.removeChild(toast);
+            }, 300);
+          }, 4000);
+        } catch (uploadErr) {
+          console.error('Drive upload failed:', uploadErr);
+        }
+      }
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      alert('Erro ao gerar o PDF da proposta.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const onPDFClick = () => {
+    if (budget?.status === 'em_negociacao' && !isAuthenticated()) {
+      setIsDriveModalOpen(true);
+    } else {
+      handleGenerateAndBackup(isAuthenticated());
     }
   };
 
@@ -1196,28 +1265,14 @@ export default function BudgetEditorPage() {
 
             {financials && budget && version && (
               <div className="space-y-3 mt-6">
-                <PDFDownloadLink 
-                  key={`budget-${version.id}-${items.length}-${lastSavedTime?.getTime() || 'initial'}`}
-                  document={
-                    <BudgetPDF 
-                      budget={budget} 
-                      version={version} 
-                      contact={selectedContact}
-                      items={items} 
-                      financials={financials} 
-                      userName={user?.user_metadata?.full_name || user?.email}
-                    />
-                  } 
-                  fileName={`${formatBudgetCode(budget.code)} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
+                <button 
+                  onClick={onPDFClick}
+                  disabled={isGeneratingPDF}
                   className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
                 >
-                  {({ loading }) => (
-                    <>
-                      <FileDown className="w-4 h-4" />
-                      {loading ? 'Preparando...' : 'Gerar Orçamento PDF'}
-                    </>
-                  )}
-                </PDFDownloadLink>
+                  <FileDown className="w-4 h-4" />
+                  {isGeneratingPDF ? 'Preparando...' : 'Gerar Orçamento PDF'}
+                </button>
 
                 <PDFDownloadLink 
                   key={`os-${version.id}-${items.length}`}
@@ -1335,6 +1390,12 @@ export default function BudgetEditorPage() {
           </div>
         </div>
       )}
+      <GoogleDriveAuthModal 
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        onAuthorize={login}
+        onSkip={() => handleGenerateAndBackup(false)}
+      />
     </div>
   );
 }
