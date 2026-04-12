@@ -1,2 +1,7 @@
 node_modules
 dist
+# L for Agent
+.env
+.env.local
+.env.production
+client_secret_*.json
