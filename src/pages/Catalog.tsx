@@ -168,27 +168,37 @@ export default function Catalog() {
     }
   };
 
-  const handleDeleteItems = async () => {
+  const handleDeleteItems = useCallback(async () => {
     try {
       const idsToDelete = deletingType === 'single' && itemToDelete 
         ? [itemToDelete.id] 
         : Array.from(selectedItems);
+
+      if (idsToDelete.length === 0) return;
 
       const { error } = await supabase
         .from('item_catalog')
         .delete()
         .in('id', idsToDelete);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase Delete Error:', error);
+        if (error.code === '23503') {
+          alert('Não é possível excluir este item pois ele está sendo usado em orçamentos existentes. Tente desativá-lo em vez de excluir.');
+        } else {
+          alert('Ocorreu um erro ao tentar excluir o item. Verifique o console para mais detalhes.');
+        }
+        return;
+      }
       
       setIsDeleteModalOpen(false);
       setItemToDelete(null);
       setSelectedItems(new Set());
       fetchCatalog();
     } catch (err) {
-      console.error('Error deleting items:', err);
+      console.error('Unexpected error during deletion:', err);
     }
-  };
+  }, [deletingType, itemToDelete, selectedItems, fetchCatalog]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
