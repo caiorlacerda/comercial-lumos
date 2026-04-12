@@ -78,12 +78,20 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           <ThemeToggle />
 
           <div className="flex items-center gap-3 px-3 py-4 border-t border-lumos-border/50">
-            <div className="w-8 h-8 rounded-full bg-lumos-yellow flex items-center justify-center text-black font-black text-xs shadow-sm">
-              {user?.email?.charAt(0).toUpperCase()}
+            <div className="w-8 h-8 rounded-full bg-lumos-yellow flex items-center justify-center text-black font-black text-xs shadow-sm overflow-hidden">
+              {user?.user_metadata?.avatar_url ? (
+                <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span>
+                  {user?.user_metadata?.full_name 
+                    ? user.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+                    : user?.email?.charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
             <div className="flex flex-col overflow-hidden">
               <span className="text-sm font-bold text-lumos-text-primary truncate">
-                {user?.email?.split('@')[0]}
+                {user?.user_metadata?.full_name || user?.email?.split('@')[0]}
               </span>
               <span className="text-[10px] text-lumos-text-secondary truncate font-medium">
                 Produtora Lumos

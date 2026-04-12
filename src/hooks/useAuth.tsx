@@ -8,12 +8,14 @@ const AuthContext = createContext<{
   error: string | null;
   signOut: () => Promise<void>;
   updateProfile: (fullName: string) => Promise<void>;
+  updateAvatar: (url: string) => Promise<void>;
 }>({
   user: null,
   loading: true,
   error: null,
   signOut: async () => {},
   updateProfile: async () => {},
+  updateAvatar: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -64,8 +66,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(updatedUser);
   };
 
+  const updateAvatar = async (url: string) => {
+    const { error: updateError } = await supabase.auth.updateUser({
+      data: { avatar_url: url }
+    });
+    if (updateError) throw updateError;
+    
+    // Refresh user state
+    const { data: { user: updatedUser } } = await supabase.auth.getUser();
+    setUser(updatedUser);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, error, signOut, updateProfile }}>
+    <AuthContext.Provider value={{ user, loading, error, signOut, updateProfile, updateAvatar }}>
       {children}
     </AuthContext.Provider>
   );

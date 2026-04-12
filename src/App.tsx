@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { throttle } from 'lodash';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Clients from '@/pages/Clients';
@@ -13,8 +15,57 @@ import ClientProfile from '@/pages/ClientProfile';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 
 function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading, error } = useAuth();
+  const { user, loading, error, signOut } = useAuth();
+  const lastActivityRef = useRef<number>(Date.now());
   
+  useEffect(() => {
+    if (!user) return;
+
+    const STORAGE_KEY = 'lumos_last_activity';
+    const TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
+    const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+    // Initialize/sync last activity
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      lastActivityRef.current = parseInt(stored, 10);
+    } else {
+      localStorage.setItem(STORAGE_KEY, Date.now().toString());
+    }
+
+    const updateActivity = throttle(() => {
+      const now = Date.now();
+      lastActivityRef.current = now;
+      localStorage.setItem(STORAGE_KEY, now.toString());
+    }, 60000); // 1 minute throttle
+
+    const checkInactivity = () => {
+      const storedActivity = localStorage.getItem(STORAGE_KEY);
+      const lastActivity = storedActivity ? parseInt(storedActivity, 10) : lastActivityRef.current;
+      
+      if (Date.now() - lastActivity > TIMEOUT_MS) {
+        console.log('Session expired due to inactivity');
+        signOut();
+        window.location.href = '/login?timeout=true';
+      }
+    };
+
+    // Listen for activity
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+
+    // Check periodically
+    const interval = setInterval(checkInactivity, CHECK_INTERVAL);
+
+    return () => {
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      clearInterval(interval);
+    };
+  }, [user, signOut]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-lumos-bg">

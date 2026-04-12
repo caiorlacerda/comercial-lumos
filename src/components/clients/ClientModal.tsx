@@ -252,7 +252,9 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
                     )}
                   </div>
                   {idx === 0 && (
-                    <span className="absolute -top-2 -left-2 bg-lumos-yellow text-black text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-sm">Primário</span>
+                    <span className="absolute -top-2 -left-2 bg-lumos-yellow text-black text-[9px] font-black px-[10px] py-[3px] rounded uppercase whitespace-nowrap shadow-sm z-20">
+                      Primário
+                    </span>
                   )}
                 </div>
               ))}

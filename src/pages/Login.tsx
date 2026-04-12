@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { clsx } from 'clsx';
@@ -10,8 +10,17 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [timeoutMessage, setTimeoutMessage] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme } = useTheme();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('timeout') === 'true') {
+      setTimeoutMessage(true);
+    }
+  }, [location]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +63,12 @@ export default function Login() {
             <LogIn className="w-6 h-6 text-lumos-yellow" />
             Entrar
           </h2>
+
+          {timeoutMessage && (
+            <div className="mb-6 p-4 bg-lumos-yellow/10 border border-lumos-yellow/30 rounded-lumos text-lumos-yellow text-xs font-bold animate-in fade-in slide-in-from-top-2">
+              Sua sessão expirou por inatividade. Por favor, faça login novamente.
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>

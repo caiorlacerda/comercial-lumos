@@ -6,27 +6,92 @@ import {
   CheckCircle2, 
   AlertCircle,
   ArrowLeft,
-  Moon
+  Moon,
+  Plus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/context/ThemeContext';
 import { clsx } from 'clsx';
 import ThemeToggle from '@/components/common/ThemeToggle';
+import { supabase } from '@/lib/supabase';
 
 export default function Settings() {
-  const { user, updateProfile } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { user, updateProfile, updateAvatar } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (user?.user_metadata?.full_name) {
       setFullName(user.user_metadata.full_name);
     }
   }, [user]);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validation
+    if (file.size > 2 * 1024 * 1024) {
+      setError('A imagem deve ter no máximo 2MB.');
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Formato inválido. Use JPG, PNG ou WEBP.');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user?.id}/avatar.${fileExt}`;
+      const filePath = fileName;
+
+      // 1. Upload to Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { 
+          upsert: true,
+          contentType: file.type
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // 3. Update User metadata
+      await updateAvatar(publicUrl);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Avatar upload error:', err);
+      setError(err.message || 'Erro ao carregar avatar.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const getInitials = () => {
+    if (user?.user_metadata?.full_name) {
+      return user.user_metadata.full_name
+        .split(' ')
+        .map((n: string) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    return user?.email?.charAt(0).toUpperCase() || 'U';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,13 +126,73 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Profile Photo Section */}
+      <div className="card space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex items-start gap-8">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative group">
+              <div className="w-24 h-24 rounded-full border-4 border-lumos-surface shadow-2xl overflow-hidden bg-lumos-bg flex items-center justify-center">
+                {user?.user_metadata?.avatar_url ? (
+                  <img 
+                    src={user.user_metadata.avatar_url} 
+                    alt="Avatar" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-3xl font-black text-lumos-yellow">{getInitials()}</span>
+                )}
+                {uploading && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-lumos-yellow border-t-transparent animate-spin rounded-full" />
+                  </div>
+                )}
+              </div>
+              <label 
+                className={clsx(
+                  "absolute -bottom-1 -right-1 p-2 rounded-full cursor-pointer shadow-lg transition-all",
+                  "bg-lumos-yellow text-black hover:scale-110",
+                  uploading && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <Plus className="w-4 h-4" />
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleAvatarUpload}
+                  disabled={uploading}
+                />
+              </label>
+            </div>
+            <p className="text-[10px] font-black text-lumos-text-secondary uppercase">Foto de Perfil</p>
+          </div>
+
+          <div className="flex-1 space-y-4 pt-1">
+            <h3 className="text-xl font-black text-lumos-text-primary tracking-tight uppercase">Seu Avatar</h3>
+            <p className="text-sm text-lumos-text-secondary leading-relaxed font-medium">
+              A foto de perfil é exibida na barra lateral e nas atividades da plataforma. 
+              Use uma imagem quadrada de pelo menos 200px para melhor qualidade. Max 2MB.
+            </p>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => document.querySelector<HTMLInputElement>('label input[type="file"]')?.click()}
+                className="text-xs font-black uppercase text-lumos-yellow hover:underline flex items-center gap-1"
+                disabled={uploading}
+              >
+                {uploading ? 'Enviando...' : 'Alterar Foto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="card space-y-6">
         <div className="flex items-center gap-4 pb-6 border-b border-lumos-border">
           <div className="w-16 h-16 rounded-full bg-lumos-yellow/20 flex items-center justify-center text-lumos-yellow">
             <User className="w-8 h-8" />
           </div>
           <div>
-            <h3 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight">Perfil do Usuário</h3>
+            <h3 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight">Informações de Perfil</h3>
             <p className="text-sm text-lumos-text-secondary font-medium">{user?.email}</p>
           </div>
         </div>
