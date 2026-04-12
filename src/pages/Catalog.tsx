@@ -271,16 +271,18 @@ export default function Catalog() {
               
               {isExpanded && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                      <tr className="text-left text-xs uppercase text-lumos-text-secondary bg-lumos-bg/30">
-                        <th className="px-6 py-3 w-10"></th>
-                        <th className="px-6 py-3 font-bold">Item</th>
-                        <th className="px-6 py-3 font-bold">Subcategoria</th>
-                        <th className="px-6 py-3 font-bold text-right">Valor Padrão</th>
-                        <th className="px-6 py-3 font-bold">Unidade</th>
-                        <th className="px-6 py-3 font-bold text-center">Status</th>
-                        <th className="px-6 py-3 font-bold text-right">Ações</th>
+                  <table className="w-full text-sm table-fixed">
+                    <thead>
+                      <tr className="text-left text-xs uppercase text-lumos-text-secondary bg-lumos-bg/30 border-b border-lumos-border">
+                        <th className="px-6 py-3" style={{ width: '40px' }}></th>
+                        <th className="px-6 py-3 font-bold" style={{ width: '35%' }}>Item</th>
+                        <th className="px-6 py-3 font-bold" style={{ width: '20%' }}>Subcategoria</th>
+                        <th className="px-6 py-3 font-bold text-right" style={{ width: '15%' }}>Valor Padrão</th>
+                        <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Unidade</th>
+                        <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Status</th>
+                        <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Ações</th>
                       </tr>
+                    </thead>
                     <tbody className="divide-y divide-lumos-border">
                       {groupItems.length === 0 ? (
                         <tr>
@@ -305,15 +307,19 @@ export default function Catalog() {
                               onChange={() => toggleSelectItem(item.id)}
                             />
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="font-medium text-lumos-text-primary">{item.name}</div>
+                          <td className="px-6 py-4 truncate">
+                            <div className="font-medium text-lumos-text-primary whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</div>
                             {item.description && (
                               <div className="text-[11px] text-lumos-text-secondary mt-0.5 line-clamp-1">{item.description}</div>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-lumos-text-secondary">{item.subcategory}</td>
-                          <td className="px-6 py-4 text-right font-mono text-lumos-text-primary">{formatCurrency(item.default_unit_cost)}</td>
-                          <td className="px-6 py-4 uppercase text-[10px] font-bold text-lumos-text-primary">{item.unit_label}</td>
+                          <td className="px-6 py-4 text-lumos-text-secondary whitespace-nowrap overflow-hidden text-ellipsis">{item.subcategory}</td>
+                          <td className="px-6 py-4 text-right font-mono text-lumos-text-primary whitespace-nowrap">{formatCurrency(item.default_unit_cost)}</td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="uppercase text-[10px] font-bold text-lumos-text-primary bg-lumos-bg/50 px-2 py-0.5 rounded-full border border-lumos-border">
+                              {item.unit_label}
+                            </span>
+                          </td>
                           <td className="px-6 py-4 text-center">
                             <button 
                               onClick={() => toggleStatus(item)}
@@ -328,8 +334,8 @@ export default function Catalog() {
                               {item.is_active ? 'Ativo' : 'Inativo'}
                             </button>
                           </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center gap-2">
                               <button 
                                 onClick={() => handleOpenModal(item)}
                                 className="p-2 text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
