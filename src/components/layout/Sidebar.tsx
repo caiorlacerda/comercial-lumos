@@ -41,7 +41,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-lumos-bg overflow-hidden transition-colors duration-300">
+    <div className="flex min-h-screen bg-lumos-bg overflow-visible transition-colors duration-300">
       {/* Sidebar */}
       <aside className="w-64 bg-lumos-surface border-r border-lumos-border flex flex-col fixed inset-y-0 shadow-sm z-30 transition-colors duration-300">
         <div className="p-6">

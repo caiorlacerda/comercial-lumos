@@ -562,10 +562,9 @@ export default function Budgets() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-visible !p-0 shadow-sm border-lumos-border animate-in fade-in slide-in-from-bottom-6 duration-700">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+      {/* Table Container with minimum height to prevent clipping when few items exist */}
+      <div className="card !p-0 shadow-sm border-lumos-border animate-in fade-in slide-in-from-bottom-6 duration-700 min-h-[200px] overflow-visible">
+        <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-lumos-bg/50 border-b border-lumos-border">
                 <th className="px-6 py-4 w-10">
@@ -704,7 +703,7 @@ export default function Budgets() {
                         </button>
 
                         {statusMenuOpen === budget.id && (
-                          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[9999] py-1 overflow-visible animate-in fade-in zoom-in-95 duration-200">
                             {statusOptions.map((opt) => (
                               <button
                                 key={opt.value}
@@ -751,7 +750,7 @@ export default function Budgets() {
                         
                         {/* Dropdown menu */}
                         {activeMenu === budget.id && (
-                          <div className="absolute top-10 right-0 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-40 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                          <div className="absolute top-10 right-0 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[9999] py-1 overflow-visible animate-in fade-in zoom-in-95 duration-200">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -804,7 +803,6 @@ export default function Budgets() {
               ))}
             </tbody>
           </table>
-        </div>
       </div>
 
       {/* Individual Delete Confirmation Modal */}
@@ -892,7 +890,7 @@ export default function Budgets() {
                 </button>
 
                 {batchStatusMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-3 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  <div className="absolute bottom-full left-0 mb-3 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[9999] py-1 overflow-visible animate-in fade-in slide-in-from-bottom-2 duration-200">
                     <p className="px-4 py-2 text-[9px] font-black text-lumos-text-secondary uppercase tracking-widest border-b border-lumos-border">Novo Status:</p>
                     {statusOptions.map((opt) => (
                       <button
