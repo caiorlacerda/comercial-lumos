@@ -263,26 +263,54 @@ export default function Budgets() {
   };
 
   const handleExportPDF = async (budget: Budget, showAlerts = true) => {
-    const activeVersion = budget.versions?.find((v: any) => v.id === budget.active_version_id) || budget.versions?.[0];
-    if (!activeVersion) {
-      if (showAlerts) alert('Nenhuma versão encontrada para este orçamento.');
-      return;
-    }
-
     try {
       if (showAlerts) setExportingId(budget.id);
       setActiveMenu(null);
 
-      const financials = calcFinancials(activeVersion.items || [], activeVersion);
-      const clientDisplayName = budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente');
-      const fileName = `${budget.code} | Lumos + ${clientDisplayName} | ${budget.project_name}.pdf`;
+      // Fetch full budget data with all items details (just like the editor does)
+      const { data: fullBudget, error } = await supabase
+        .from('budgets')
+        .select(`
+          *,
+          clients(name, agency_name, contact_name, email),
+          active_version:budget_versions!budgets_active_version_fkey(
+            *,
+            contact:client_contacts(name, email, role),
+            budget_items(
+              id,
+              item_group,
+              name,
+              description,
+              unit_cost,
+              quantity,
+              unit_label,
+              sort_order
+            )
+          )
+        `)
+        .eq('id', budget.id)
+        .single();
+
+      if (error) throw error;
+      if (!fullBudget) throw new Error('Budget not found');
+
+      const activeVersion = (fullBudget as any).active_version;
+      if (!activeVersion) {
+        if (showAlerts) alert('Nenhuma versão encontrada para este orçamento.');
+        return;
+      }
+
+      const items = activeVersion.budget_items || [];
+      const financials = calcFinancials(items, activeVersion);
+      const clientDisplayName = fullBudget.clients?.agency_name ? `${fullBudget.clients.agency_name} + ${fullBudget.clients.name}` : (fullBudget.clients?.name || 'Cliente');
+      const fileName = `${fullBudget.code} | Lumos + ${clientDisplayName} | ${fullBudget.project_name}.pdf`;
 
       const blob = await pdf(
         <BudgetPDF 
-          budget={budget}
+          budget={fullBudget as any}
           version={activeVersion}
           contact={activeVersion.contact}
-          items={activeVersion.items || []}
+          items={items}
           financials={financials}
           userName={currentUser?.user_metadata?.full_name || 'Equipe Lumos'}
         />
@@ -292,11 +320,13 @@ export default function Budgets() {
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error exporting PDF:', err);
-      if (showAlerts) alert('Erro ao gerar PDF.');
+      if (showAlerts) alert('Erro ao gerar PDF: ' + (err as any).message);
     } finally {
       if (showAlerts) setExportingId(null);
     }
