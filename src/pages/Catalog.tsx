@@ -58,7 +58,9 @@ export default function Catalog() {
 
   useEffect(() => {
     fetchCatalog();
-    
+  }, []);
+
+  useEffect(() => {
     // Esc key listener to clear selection
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && selectedItems.size > 0) {
@@ -547,6 +549,7 @@ const CatalogRow = memo(({
         )}
         checked={isSelected}
         onChange={() => onToggleSelect(item.id)}
+        onClick={(e) => e.stopPropagation()}
       />
     </td>
     <td className="px-6 py-4 truncate">
@@ -618,6 +621,7 @@ const CatalogGroupHeader = memo(({
           className="checkbox-lumos"
           checked={isAllSelected}
           onChange={onToggleSelect}
+          onClick={(e) => e.stopPropagation()}
         />
       </div>
       <button 
