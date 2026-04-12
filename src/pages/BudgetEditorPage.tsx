@@ -445,24 +445,96 @@ export default function BudgetEditorPage() {
     setIsMoreMenuOpen(false);
     notifySaveStatus('saving');
     try {
-      const { error } = await supabase
-        .from('budgets')
-        .update({ 
-          is_template: true, 
-          template_category: templateCategory.trim() 
-        })
-        .eq('id', budget.id);
+      let budgetId = budget.id;
 
-      if (error) throw error;
-      
-      setBudget(prev => prev ? { ...prev, is_template: true, template_category: templateCategory.trim() } : null);
+      if (isDraft) {
+        // If it's a draft, we need to create the budget first
+        let finalCode = budget.code;
+        if (finalCode === '----') {
+          const { data: newCode, error: codeError } = await supabase.rpc('next_budget_code');
+          if (codeError) throw codeError;
+          finalCode = newCode || 'AUTO';
+        }
+
+        const { data: bData, error: bError } = await supabase
+          .from('budgets')
+          .insert({
+            code: finalCode,
+            project_name: budget.project_name === 'Novo Orçamento' || !budget.project_name ? `Template: ${templateCategory.trim()}` : budget.project_name,
+            category: budget.category,
+            status: budget.status,
+            client_id: budget.client_id || null, // Templates don't need clients
+            is_template: true,
+            template_category: templateCategory.trim()
+          })
+          .select()
+          .single();
+        
+        if (bError) throw bError;
+        budgetId = bData.id;
+
+        // Create initial version
+        const { data: vData, error: vError } = await supabase
+          .from('budget_versions')
+          .insert({
+            budget_id: budgetId,
+            contact_id: version?.contact_id || null,
+            version_number: 1,
+            margin_pct: version?.margin_pct || 0.4,
+            nf_pct: version?.nf_pct || 0.18,
+            discount_value: version?.discount_value || 0,
+            notes_internal: version?.notes_internal,
+            notes_client: version?.notes_client,
+            payment_terms: version?.payment_terms,
+            validity_days: version?.validity_days || 7
+          })
+          .select()
+          .single();
+        
+        if (vError) throw vError;
+
+        // Insert items
+        if (items.length > 0) {
+          const itemsToInsert = items.map((it, idx) => ({
+            version_id: vData.id,
+            item_group: it.item_group,
+            name: it.name,
+            unit_cost: it.unit_cost,
+            quantity: it.quantity,
+            unit_label: it.unit_label,
+            description: it.description,
+            sort_order: idx,
+            catalog_item_id: it.catalog_item_id
+          }));
+          await supabase.from('budget_items').insert(itemsToInsert);
+        }
+
+        await supabase.from('budgets').update({ active_version_id: vData.id }).eq('id', budgetId);
+        
+        setIsDraft(false);
+        setBudget({ ...bData, is_template: true, template_category: templateCategory.trim() });
+        navigate(`/orcamentos/${budgetId}`, { replace: true });
+      } else {
+        // Just update existing budget
+        const { error } = await supabase
+          .from('budgets')
+          .update({ 
+            is_template: true, 
+            template_category: templateCategory.trim() 
+          })
+          .eq('id', budgetId);
+
+        if (error) throw error;
+        setBudget(prev => prev ? { ...prev, is_template: true, template_category: templateCategory.trim() } : null);
+      }
+
       setIsTemplateModalOpen(false);
       notifySaveStatus('saved');
       alert('Orçamento salvo como padrão com sucesso!');
     } catch (err) {
       console.error('Error saving as template:', err);
       notifySaveStatus('error');
-      alert('Erro ao salvar como template.');
+      alert('Erro ao salvar como template: ' + (err as any).message);
     }
   };
 
