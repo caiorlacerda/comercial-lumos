@@ -8,6 +8,7 @@ export interface BudgetItem {
   override_margin?: number | null;
   sort_order: number;
   catalog_item_id?: string | null;
+  description?: string | null;
 }
 
 export interface ClientContact {

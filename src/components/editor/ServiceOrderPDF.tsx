@@ -218,11 +218,11 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
   const groupLabels: Record<string, string> = {
     'equipe': 'Equipe',
     'equipamentos': 'Equipamentos',
-    'edicao': 'Edição',
-    'producao': 'Produção'
+    'producao': 'Produção',
+    'edicao': 'Pós-produção'
   };
 
-  const groups = ['equipe', 'equipamentos', 'edicao', 'producao'] as const;
+  const groups = ['equipe', 'equipamentos', 'producao', 'edicao'] as const;
 
   const clientDisplayName = budget.clients?.agency_name 
     ? `${budget.clients.agency_name} + ${budget.clients.name}`

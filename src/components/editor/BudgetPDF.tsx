@@ -182,11 +182,11 @@ const styles = StyleSheet.create({
   },
   
   // Specific Columns
-  colName: { width: '45%' },
-  colQty: { width: '8%', textAlign: 'center' },
-  colUnit: { width: '12%', textAlign: 'center' },
-  colUnitVal: { width: '17%', textAlign: 'right' },
-  colTotalVal: { width: '18%', textAlign: 'right' },
+  colName: { width: '25%' },
+  colDesc: { width: '30%' },
+  colQty: { width: '10%', textAlign: 'center' },
+  colUnit: { width: '15%', textAlign: 'center' },
+  colTotalVal: { width: '20%', textAlign: 'right' },
 
   // Group Subtotal
   groupSubtotalRow: {
@@ -342,11 +342,11 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
   const groupLabels: Record<string, string> = {
     'equipe': 'Equipe',
     'equipamentos': 'Equipamentos',
-    'edicao': 'Edição',
-    'producao': 'Produção'
+    'producao': 'Produção',
+    'edicao': 'Pós-produção'
   };
 
-  const groups = ['equipe', 'equipamentos', 'edicao', 'producao'] as const;
+  const groups = ['equipe', 'equipamentos', 'producao', 'edicao'] as const;
 
   // Novo padrão de nomenclatura: [CODE] | Lumos + [AGÊNCIA] [CLIENTE] | [NOME DO PROJETO]
   const clientDisplayName = budget.clients?.agency_name 
@@ -416,9 +416,9 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderCell, styles.colName]}>Item / Serviço</Text>
+            <Text style={[styles.tableHeaderCell, styles.colDesc]}>Descrição</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qtd</Text>
             <Text style={[styles.tableHeaderCell, styles.colUnit]}>Unid.</Text>
-            <Text style={[styles.tableHeaderCell, styles.colUnitVal]}>Vlr. Unitário</Text>
             <Text style={[styles.tableHeaderCell, styles.colTotalVal]}>Subtotal</Text>
           </View>
 
@@ -440,11 +440,13 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
                   groupSum += finalTotalItem;
 
                   return (
-                    <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]}>
+                    <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]} wrap={false}>
                       <Text style={[styles.tableCell, styles.colName]}>{item.name}</Text>
+                      <Text style={[styles.tableCell, styles.colDesc, { color: '#888', fontSize: 7, lineHeight: 1.4 }]}>
+                        {item.description || ''}
+                      </Text>
                       <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
                       <Text style={[styles.tableCell, styles.colUnit]}>{item.unit_label}</Text>
-                      <Text style={[styles.tableCell, styles.colUnitVal]}>{formatCurrency(finalUnitPrice)}</Text>
                       <Text style={[styles.tableCell, styles.colTotalVal]}>{formatCurrency(finalTotalItem)}</Text>
                     </View>
                   );

@@ -43,7 +43,7 @@ export default function Catalog() {
     is_active: true
   });
 
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(['equipe', 'equipamentos', 'edicao', 'producao']);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(['equipe', 'equipamentos', 'producao', 'edicao']);
 
   useEffect(() => {
     fetchCatalog();
@@ -131,7 +131,7 @@ export default function Catalog() {
     i.subcategory.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const groups = ['equipe', 'equipamentos', 'edicao', 'producao'] as const;
+  const groups = ['equipe', 'equipamentos', 'producao', 'edicao'] as const;
 
   return (
     <div className="space-y-8 p-8">
@@ -177,7 +177,9 @@ export default function Catalog() {
                 className="w-full flex items-center justify-between px-6 py-4 bg-lumos-bg/50 border-b border-lumos-border hover:bg-lumos-bg transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold uppercase tracking-widest text-lumos-text-secondary">{group}</h2>
+                  <h2 className="text-sm font-bold uppercase tracking-widest text-lumos-text-secondary">
+                    {group === 'edicao' ? 'Pós-produção' : group}
+                  </h2>
                   <span className="bg-lumos-bg text-[10px] px-2 py-0.5 rounded-full font-bold">
                     {groupItems.length} itens
                   </span>
@@ -275,7 +277,7 @@ export default function Catalog() {
                   >
                     <option value="equipe">Equipe</option>
                     <option value="equipamentos">Equipamentos</option>
-                    <option value="edicao">Edição</option>
+                    <option value="edicao">Pós-produção</option>
                     <option value="producao">Produção</option>
                   </select>
                 </div>

@@ -23,7 +23,8 @@ import {
   Library,
   X,
   FileStack,
-  ClipboardList
+  ClipboardList,
+  StickyNote
 } from 'lucide-react';
 import { 
   BudgetItem, 
@@ -80,6 +81,7 @@ export default function BudgetEditorPage() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [templateCategory, setTemplateCategory] = useState('');
   const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   
   // Ref to track dirty state and prevent save loops
   const isDirty = useRef(false);
@@ -949,10 +951,12 @@ export default function BudgetEditorPage() {
             </div>
           </div>
 
-          {(['equipe', 'equipamentos', 'edicao', 'producao'] as const).map(group => (
+          {(['equipe', 'equipamentos', 'producao', 'edicao'] as const).map(group => (
             <div key={group} className="card !p-0 overflow-hidden shadow-sm border-lumos-border">
               <div className="bg-lumos-bg/50 px-6 py-4 flex items-center justify-between border-b border-lumos-border">
-                <h3 className="uppercase tracking-widest text-[10px] font-black text-lumos-text-secondary">{group}</h3>
+                <h3 className="uppercase tracking-widest text-[10px] font-black text-lumos-text-secondary">
+                  {group === 'edicao' ? 'Pós-produção' : group}
+                </h3>
                 {!isReadOnly && (
                   <button 
                     onClick={() => {
@@ -971,65 +975,100 @@ export default function BudgetEditorPage() {
                     Nenhum item adicionado a este grupo.
                   </div>
                 ) : items.filter(i => i.item_group === group).map(item => (
-                  <div key={item.id} className="p-4 flex items-center gap-4 group hover:bg-lumos-bg/30 transition-colors">
-                    <div className="flex-1">
-                      <input 
-                        disabled={isReadOnly}
-                        className="bg-transparent border-none w-full p-0 font-medium text-lumos-text-primary focus:ring-0 placeholder:text-lumos-text-secondary/30 disabled:opacity-70" 
-                        value={item.name} 
-                        onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                        placeholder="Nome do item..."
-                      />
-                    </div>
-                    <div className="w-32">
-                      <div className="flex items-center gap-1 border-b border-transparent group-hover:border-lumos-border transition-colors">
-                        <span className="text-xs text-lumos-text-secondary">R$</span>
+                  <div key={item.id} className="p-4 flex flex-col gap-3 group hover:bg-lumos-bg/30 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <input 
+                          disabled={isReadOnly}
+                          className="bg-transparent border-none w-full p-0 font-medium text-lumos-text-primary focus:ring-0 placeholder:text-lumos-text-secondary/30 disabled:opacity-70" 
+                          value={item.name} 
+                          onChange={(e) => updateItem(item.id, { name: e.target.value })}
+                          placeholder="Nome do item..."
+                        />
+                      </div>
+                      <div className="w-32">
+                        <div className="flex items-center gap-1 border-b border-transparent group-hover:border-lumos-border transition-colors">
+                          <span className="text-xs text-lumos-text-secondary">R$</span>
+                          <input 
+                            disabled={isReadOnly}
+                            type="number"
+                            className="bg-transparent border-none w-full p-0 text-right text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70" 
+                            value={item.unit_cost} 
+                            onChange={(e) => updateItem(item.id, { unit_cost: Number(e.target.value) })}
+                          />
+                        </div>
+                      </div>
+                      <div className="w-16">
                         <input 
                           disabled={isReadOnly}
                           type="number"
-                          className="bg-transparent border-none w-full p-0 text-right text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70" 
-                          value={item.unit_cost} 
-                          onChange={(e) => updateItem(item.id, { unit_cost: Number(e.target.value) })}
+                          className="bg-transparent border-none w-full p-0 text-center text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70" 
+                          value={item.quantity} 
+                          onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
                         />
                       </div>
+                      <div className="w-24">
+                        <select 
+                          disabled={isReadOnly}
+                          className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary focus:ring-0 cursor-pointer disabled:cursor-default disabled:opacity-70"
+                          value={item.unit_label}
+                          onChange={(e) => updateItem(item.id, { unit_label: e.target.value })}
+                        >
+                          <option value="diaria">diária</option>
+                          <option value="hora">hora</option>
+                          <option value="video">vídeo</option>
+                          <option value="unidade">unidade</option>
+                          <option value="pacote">pacote</option>
+                        </select>
+                      </div>
+                      <div className="w-32 text-right font-mono text-sm font-bold text-lumos-text-primary">
+                        {formatCurrency(item.unit_cost * item.quantity)}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => {
+                            const newSet = new Set(expandedDescriptions);
+                            if (newSet.has(item.id)) newSet.delete(item.id);
+                            else newSet.add(item.id);
+                            setExpandedDescriptions(newSet);
+                          }}
+                          className={clsx(
+                            "p-2 transition-colors rounded-full",
+                            expandedDescriptions.has(item.id) || item.description
+                              ? "text-lumos-yellow bg-lumos-yellow/10"
+                              : "text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/5"
+                          )}
+                          title="Descrição/Notas"
+                        >
+                          <StickyNote className="w-4 h-4" />
+                        </button>
+                        {!isReadOnly && (
+                          <button 
+                            onClick={() => removeItem(item.id)}
+                            className="text-red-400 hover:text-red-600 p-2 transition-colors"
+                            title="Remover Item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="w-16">
-                      <input 
-                        disabled={isReadOnly}
-                        type="number"
-                        className="bg-transparent border-none w-full p-0 text-center text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70" 
-                        value={item.quantity} 
-                        onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="w-24">
-                      <select 
-                        disabled={isReadOnly}
-                        className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary focus:ring-0 cursor-pointer disabled:cursor-default disabled:opacity-70"
-                        value={item.unit_label}
-                        onChange={(e) => updateItem(item.id, { unit_label: e.target.value })}
-                      >
-                        <option value="diaria">diária</option>
-                        <option value="hora">hora</option>
-                        <option value="video">vídeo</option>
-                        <option value="unidade">unidade</option>
-                        <option value="pacote">pacote</option>
-                      </select>
-                    </div>
-                    <div className="w-32 text-right font-mono text-sm font-bold text-lumos-text-primary">
-                      {formatCurrency(item.unit_cost * item.quantity)}
-                    </div>
-                    {!isReadOnly && (
-                      <button 
-                        onClick={() => removeItem(item.id)}
-                        className="text-red-400 hover:text-red-600 p-2 transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    
+                    {(expandedDescriptions.has(item.id) || item.description) && (
+                      <div className="animate-in slide-in-from-top-1 duration-200">
+                        <textarea
+                          disabled={isReadOnly}
+                          className="w-full bg-lumos-bg/50 border border-lumos-border/50 rounded-lumos p-3 text-xs text-lumos-text-primary focus:border-lumos-yellow/50 focus:ring-0 resize-none h-[60px] placeholder:text-lumos-text-secondary/30"
+                          placeholder="Adicione uma descrição opcional para este item..."
+                          value={item.description || ''}
+                          onChange={(e) => updateItem(item.id, { description: e.target.value })}
+                        />
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
+                 ))
+               }
+               </div>
             </div>
           ))}
         </div>
