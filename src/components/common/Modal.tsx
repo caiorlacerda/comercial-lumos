@@ -10,6 +10,7 @@ interface ModalProps {
   footer?: React.ReactNode;
   maxWidth?: string;
   className?: string;
+  padding?: string;
 }
 
 export default function Modal({ 
@@ -18,8 +19,9 @@ export default function Modal({
   title, 
   children, 
   footer,
-  maxWidth = 'max-w-md',
-  className
+  maxWidth = '',
+  className,
+  padding = 'p-6'
 }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
@@ -42,11 +44,11 @@ export default function Modal({
       />
       <div className={clsx(
         "bg-lumos-surface w-full rounded-lumos shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300",
-        maxWidth,
+        maxWidth || 'max-w-md',
         className
       )}>
-        <div className="flex items-center justify-between p-6 border-b border-lumos-border">
-          <h3 className="text-xl font-black text-lumos-text-primary tracking-tight">
+        <div className={clsx("flex items-center justify-between border-b border-lumos-border", padding)}>
+          <h3 id="modal-title" className="text-xl font-black text-lumos-text-primary tracking-tight">
             {title}
           </h3>
           <button 
@@ -57,12 +59,12 @@ export default function Modal({
           </button>
         </div>
         
-        <div className="p-6">
+        <div className={padding}>
           {children}
         </div>
 
         {footer && (
-          <div className="px-6 py-4 bg-lumos-bg/50 border-t border-lumos-border flex justify-end gap-3">
+          <div className={clsx("bg-lumos-bg/50 border-t border-lumos-border flex justify-end gap-3", padding, "py-4")}>
             {footer}
           </div>
         )}

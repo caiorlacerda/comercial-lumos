@@ -133,31 +133,31 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       isOpen={isOpen}
       onClose={onClose}
       title={client ? 'Editar Cliente' : 'Novo Cliente'}
-      className="max-w-[min(95vw,1000px)] min-h-[600px]"
+      maxWidth="max-w-[min(95vw,1000px)]"
+      padding="p-12"
       footer={
-        <div className="px-12 py-6 flex justify-end gap-4 w-full bg-lumos-bg/50">
+        <div className="flex justify-end gap-4 w-full">
           <button 
             onClick={onClose} 
-            className="btn-secondary h-[52px] min-width-[160px] text-base"
+            className="btn-secondary h-[52px] min-w-[160px] text-base"
           >
             Cancelar
           </button>
           <button 
             onClick={handleSave} 
             disabled={saving || !formData.name.trim()} 
-            className="btn-primary px-8 h-[52px] min-width-[160px] text-base"
+            className="btn-primary px-8 h-[52px] min-w-[160px] text-base"
           >
             {saving ? 'Gravando...' : 'Salvar Cliente'}
           </button>
         </div>
       }
     >
-      <div className="px-12 py-8 flex flex-col gap-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div className="flex flex-col gap-8 max-h-[75vh] min-h-[400px] overflow-y-auto custom-scrollbar pr-2">
         <div className="flex flex-col gap-8">
           {/* Header overrides */}
           <style dangerouslySetInnerHTML={{ __html: `
-            #modal-title { font-size: 22px !important; margin-bottom: 32px !important; }
-            .modal-content-padding { padding: 48px !important; }
+            #modal-title { font-size: 22px !important; margin-bottom: 0 !important; font-weight: 900 !important; }
           `}} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
