@@ -182,11 +182,10 @@ const styles = StyleSheet.create({
   },
   
   // Specific Columns
-  colName: { width: '25%' },
-  colDesc: { width: '30%' },
-  colQty: { width: '10%', textAlign: 'center' },
+  colName: { width: '30%' },
+  colDesc: { width: '40%' },
+  colQty: { width: '15%', textAlign: 'center' },
   colUnit: { width: '15%', textAlign: 'center' },
-  colTotalVal: { width: '20%', textAlign: 'right' },
 
   // Group Subtotal
   groupSubtotalRow: {
@@ -419,13 +418,11 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
             <Text style={[styles.tableHeaderCell, styles.colDesc]}>Descrição</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qtd</Text>
             <Text style={[styles.tableHeaderCell, styles.colUnit]}>Unid.</Text>
-            <Text style={[styles.tableHeaderCell, styles.colTotalVal]}>Subtotal</Text>
           </View>
 
-          {groups.map(group => {
+          {groups.filter(g => (items || []).some(i => i.item_group === g)).map((group, groupIdx, activeGroups) => {
             const groupItems = (items || []).filter(i => i.item_group === group);
-            if (groupItems.length === 0) return null;
-
+            const isLastGroup = groupIdx === activeGroups.length - 1;
             let groupSum = 0;
 
             return (
@@ -447,7 +444,6 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
                       </Text>
                       <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
                       <Text style={[styles.tableCell, styles.colUnit]}>{item.unit_label}</Text>
-                      <Text style={[styles.tableCell, styles.colTotalVal]}>{formatCurrency(finalTotalItem)}</Text>
                     </View>
                   );
                 })}
@@ -456,16 +452,19 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
                    <Text style={styles.groupSubtotalText}>Subtotal {groupLabels[group]}</Text>
                    <Text style={styles.groupSubtotalValue}>{formatCurrency(groupSum)}</Text>
                 </View>
+
+                {isLastGroup && (
+                  /* Investimento Total Linked to last group to avoid orphan */
+                  <View style={styles.totalContainer} wrap={false} minPresenceAhead={80}>
+                    <Text style={styles.totalLabel}>Investimento Total do Projeto</Text>
+                    <Text style={styles.totalValue}>{formatCurrency(financials.valorFinal)}</Text>
+                  </View>
+                )}
               </View>
             );
           })}
         </View>
 
-        {/* Investimento Total */}
-        <View style={styles.totalContainer} wrap={false}>
-          <Text style={styles.totalLabel}>Investimento Total do Projeto</Text>
-          <Text style={styles.totalValue}>{formatCurrency(financials.valorFinal)}</Text>
-        </View>
       </Page>
 
       {/* PÁGINA 2: CONDIÇÕES E ASSINATURAS */}
