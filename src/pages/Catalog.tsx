@@ -245,32 +245,39 @@ export default function Catalog() {
           const isExpanded = expandedGroups.includes(group);
           
           return (
-              <div className="w-full flex items-center bg-lumos-bg/50 border-b border-lumos-border hover:bg-lumos-bg transition-colors">
-                <div className="pl-6 py-4">
-                  <input 
-                    type="checkbox"
-                    className="checkbox-lumos"
-                    checked={groupItems.length > 0 && groupItems.every(i => selectedItems.has(i.id))}
-                    onChange={() => toggleSelectGroup(groupItems, groupItems.every(i => selectedItems.has(i.id)))}
-                  />
+            <div key={group} className="space-y-2">
+              <div className="w-full flex items-center bg-lumos-surface border border-lumos-border rounded-lumos p-3 hover:bg-lumos-surface/80 transition-shadow">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="pl-1">
+                    <input 
+                      type="checkbox"
+                      className="checkbox-lumos"
+                      checked={groupItems.length > 0 && groupItems.every(i => selectedItems.has(i.id))}
+                      onChange={() => toggleSelectGroup(groupItems, groupItems.every(i => selectedItems.has(i.id)))}
+                    />
+                  </div>
+                  <button 
+                    onClick={() => toggleGroup(group)}
+                    className="flex-1 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary">
+                        {group === 'edicao' ? 'Pós-produção' : group}
+                      </h2>
+                      <span className="text-[10px] font-bold text-lumos-text-secondary uppercase">
+                        {groupItems.length} itens
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       {isExpanded ? <ChevronUp className="w-4 h-4 text-lumos-text-secondary" /> : <ChevronDown className="w-4 h-4 text-lumos-text-secondary" />}
+                    </div>
+                  </button>
                 </div>
-                <button 
-                  onClick={() => toggleGroup(group)}
-                  className="flex-1 flex items-center justify-between px-6 py-4"
-                >
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold uppercase tracking-widest text-lumos-text-secondary">
-                    {group === 'edicao' ? 'Pós-produção' : group}
-                  </h2>
-                  <span className="bg-lumos-bg text-[10px] px-2 py-0.5 rounded-full font-bold">
-                    {groupItems.length} itens
-                  </span>
-                </div>
-                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
+              </div>
               
               {isExpanded && (
-                <div className="overflow-x-auto">
+                <div className="card !p-0 overflow-hidden border-lumos-yellow/10">
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm table-fixed">
                     <thead>
                       <tr className="text-left text-xs uppercase text-lumos-text-secondary bg-lumos-bg/30 border-b border-lumos-border">
@@ -359,11 +366,12 @@ export default function Catalog() {
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
 
       {/* Modal */}
       {isModalOpen && (
