@@ -331,6 +331,7 @@ export default function BudgetEditorPage() {
             unit_cost: it.unit_cost,
             quantity: it.quantity,
             unit_label: it.unit_label,
+            description: it.description,
             sort_order: idx,
             catalog_item_id: it.catalog_item_id
           }))
@@ -411,6 +412,7 @@ export default function BudgetEditorPage() {
         unit_cost: item.unit_cost,
         quantity: item.quantity,
         unit_label: item.unit_label,
+        description: item.description,
         sort_order: item.sort_order,
         catalog_item_id: item.catalog_item_id
       }));
@@ -471,6 +473,7 @@ export default function BudgetEditorPage() {
           unit_cost: item.unit_cost,
           quantity: item.quantity,
           unit_label: item.unit_label,
+          description: item.description,
           sort_order: items.indexOf(item),
           catalog_item_id: item.catalog_item_id
         });
