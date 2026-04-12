@@ -11,8 +11,13 @@ import {
   X,
   Save,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Trash2,
+  AlertTriangle,
+  Ban,
+  Trash
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
 
@@ -31,6 +36,10 @@ export default function Catalog() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingType, setDeletingType] = useState<'single' | 'bulk'>('single');
+  const [itemToDelete, setItemToDelete] = useState<CatalogItem | null>(null);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,7 +58,16 @@ export default function Catalog() {
 
   useEffect(() => {
     fetchCatalog();
-  }, []);
+    
+    // Esc key listener to clear selection
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedItems.size > 0) {
+        setSelectedItems(new Set());
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItems.size]);
 
   async function fetchCatalog() {
     try {
@@ -129,6 +147,59 @@ export default function Catalog() {
     );
   };
 
+  const toggleSelectItem = (id: string) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(id)) newSelected.delete(id);
+    else newSelected.add(id);
+    setSelectedItems(newSelected);
+  };
+
+  const toggleSelectGroup = (groupTotal: CatalogItem[], isAllGroupSelected: boolean) => {
+    const newSelected = new Set(selectedItems);
+    groupTotal.forEach(item => {
+      if (isAllGroupSelected) newSelected.delete(item.id);
+      else newSelected.add(item.id);
+    });
+    setSelectedItems(newSelected);
+  };
+
+  const handleBulkDeactivate = async () => {
+    try {
+      const { error } = await supabase
+        .from('item_catalog')
+        .update({ is_active: false })
+        .in('id', Array.from(selectedItems));
+      
+      if (error) throw error;
+      setSelectedItems(new Set());
+      fetchCatalog();
+    } catch (err) {
+      console.error('Error deactivating items:', err);
+    }
+  };
+
+  const handleDeleteItems = async () => {
+    try {
+      const idsToDelete = deletingType === 'single' && itemToDelete 
+        ? [itemToDelete.id] 
+        : Array.from(selectedItems);
+
+      const { error } = await supabase
+        .from('item_catalog')
+        .delete()
+        .in('id', idsToDelete);
+      
+      if (error) throw error;
+      
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
+      setSelectedItems(new Set());
+      fetchCatalog();
+    } catch (err) {
+      console.error('Error deleting items:', err);
+    }
+  };
+
   const filteredItems = items.filter(i => 
     i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     i.subcategory.toLowerCase().includes(searchTerm.toLowerCase())
@@ -174,11 +245,19 @@ export default function Catalog() {
           const isExpanded = expandedGroups.includes(group);
           
           return (
-            <div key={group} className="card !p-0 overflow-hidden">
-              <button 
-                onClick={() => toggleGroup(group)}
-                className="w-full flex items-center justify-between px-6 py-4 bg-lumos-bg/50 border-b border-lumos-border hover:bg-lumos-bg transition-colors"
-              >
+              <div className="w-full flex items-center bg-lumos-bg/50 border-b border-lumos-border hover:bg-lumos-bg transition-colors">
+                <div className="pl-6 py-4">
+                  <input 
+                    type="checkbox"
+                    className="checkbox-lumos"
+                    checked={groupItems.length > 0 && groupItems.every(i => selectedItems.has(i.id))}
+                    onChange={() => toggleSelectGroup(groupItems, groupItems.every(i => selectedItems.has(i.id)))}
+                  />
+                </div>
+                <button 
+                  onClick={() => toggleGroup(group)}
+                  className="flex-1 flex items-center justify-between px-6 py-4"
+                >
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-bold uppercase tracking-widest text-lumos-text-secondary">
                     {group === 'edicao' ? 'Pós-produção' : group}
@@ -193,8 +272,8 @@ export default function Catalog() {
               {isExpanded && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
                       <tr className="text-left text-xs uppercase text-lumos-text-secondary bg-lumos-bg/30">
+                        <th className="px-6 py-3 w-10"></th>
                         <th className="px-6 py-3 font-bold">Item</th>
                         <th className="px-6 py-3 font-bold">Subcategoria</th>
                         <th className="px-6 py-3 font-bold text-right">Valor Padrão</th>
@@ -202,16 +281,30 @@ export default function Catalog() {
                         <th className="px-6 py-3 font-bold text-center">Status</th>
                         <th className="px-6 py-3 font-bold text-right">Ações</th>
                       </tr>
-                    </thead>
                     <tbody className="divide-y divide-lumos-border">
                       {groupItems.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-8 text-center text-lumos-text-secondary italic">
+                          <td colSpan={7} className="px-6 py-8 text-center text-lumos-text-secondary italic">
                             Nenhum item encontrado neste grupo.
                           </td>
                         </tr>
                       ) : groupItems.map((item) => (
-                        <tr key={item.id} className={clsx("hover:bg-lumos-bg/30 transition-colors", !item.is_active && "opacity-50")}>
+                        <tr key={item.id} className={clsx(
+                          "hover:bg-lumos-bg/30 transition-colors group",
+                          !item.is_active && "opacity-60",
+                          selectedItems.has(item.id) && "bg-lumos-yellow/5"
+                        )}>
+                          <td className="px-6 py-4">
+                            <input 
+                              type="checkbox"
+                              className={clsx(
+                                "checkbox-lumos transition-opacity",
+                                selectedItems.size > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                              )}
+                              checked={selectedItems.has(item.id)}
+                              onChange={() => toggleSelectItem(item.id)}
+                            />
+                          </td>
                           <td className="px-6 py-4">
                             <div className="font-medium text-lumos-text-primary">{item.name}</div>
                             {item.description && (
@@ -225,7 +318,7 @@ export default function Catalog() {
                             <button 
                               onClick={() => toggleStatus(item)}
                               className={clsx(
-                                "mx-auto flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border transition-colors",
+                                "mx-auto flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border transition-colors hover:scale-105",
                                 item.is_active 
                                   ? "text-green-500 bg-green-500/10 border-green-500/20" 
                                   : "text-lumos-text-secondary bg-lumos-text-secondary/10 border-lumos-text-secondary/20"
@@ -236,12 +329,24 @@ export default function Catalog() {
                             </button>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <button 
-                              onClick={() => handleOpenModal(item)}
-                              className="p-2 text-lumos-text-secondary hover:text-lumos-yellow"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button 
+                                onClick={() => handleOpenModal(item)}
+                                className="p-2 text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setDeletingType('single');
+                                  setItemToDelete(item);
+                                  setIsDeleteModalOpen(true);
+                                }}
+                                className="p-2 text-lumos-text-secondary hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -354,6 +459,107 @@ export default function Catalog() {
           </div>
         </div>
       )}
+      {/* Modal Deleção */}
+      <AnimatePresence>
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-lumos-surface border border-lumos-border rounded-lumos w-full max-w-md shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-lumos-border bg-red-500/5 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-lumos-text-primary">Confirmar Deleção</h2>
+                  <p className="text-sm text-red-500/80 font-medium">Esta ação é irreversível.</p>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div className="text-lumos-text-secondary text-sm">
+                  {deletingType === 'single' ? (
+                    <p>Tem certeza que deseja excluir permanentemente o item <span className="text-lumos-text-primary font-bold">"{itemToDelete?.name}"</span> do catálogo?</p>
+                  ) : (
+                    <p>Tem certeza que deseja excluir permanentemente os <span className="text-lumos-text-primary font-bold">{selectedItems.size} itens selecionados</span> do catálogo?</p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button 
+                    onClick={() => {
+                      setIsDeleteModalOpen(false);
+                      setItemToDelete(null);
+                    }} 
+                    className="btn-secondary flex-1"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={handleDeleteItems} 
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash className="w-4 h-4" />
+                    Deletar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Barra de Ações Flutuante */}
+      <AnimatePresence>
+        {selectedItems.size > 0 && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-lumos-surface/80 backdrop-blur-xl border border-lumos-yellow/20 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6 min-w-[500px]"
+          >
+            <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
+              <div className="w-8 h-8 rounded-full bg-lumos-yellow flex items-center justify-center text-lumos-bg font-black text-sm">
+                {selectedItems.size}
+              </div>
+              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">
+                {selectedItems.size === 1 ? 'Item Selecionado' : 'Itens Selecionados'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleBulkDeactivate}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
+              >
+                <Ban className="w-4 h-4" />
+                Desativar
+              </button>
+              <button 
+                onClick={() => {
+                  setDeletingType('bulk');
+                  setIsDeleteModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase text-red-400 hover:text-red-500 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Deletar
+              </button>
+            </div>
+
+            <button 
+              onClick={() => setSelectedItems(new Set())}
+              className="ml-auto flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Cancelar
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
