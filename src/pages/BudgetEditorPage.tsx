@@ -616,11 +616,18 @@ export default function BudgetEditorPage() {
   };
 
   const handleGenerateAndBackup = async (shouldBackup: boolean = true) => {
-    if (!financials || !budget || !version) return;
+    if (!financials || !budget || !version) {
+      console.log('Generate & Backup aborted: Missing data', { financials: !!financials, budget: !!budget, version: !!version });
+      return;
+    }
+    
+    console.log('Generate & Backup Triggered', { shouldBackup, status: budget.status });
     
     setIsGeneratingPDF(true);
     try {
       const fileName = `${formatBudgetCode(budget.code)} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`;
+      
+      console.log('Generating PDF Blob with name:', fileName);
       
       const blob = await pdf(
         <BudgetPDF 
@@ -633,6 +640,8 @@ export default function BudgetEditorPage() {
         />
       ).toBlob();
 
+      console.log('PDF Blob generated:', { size: blob.size, type: blob.type });
+
       // Trigger download
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -644,7 +653,11 @@ export default function BudgetEditorPage() {
       URL.revokeObjectURL(url);
 
       // Backup if needed
-      if (shouldBackup && budget.status === 'em_negociacao') {
+      const isNegotiating = budget.status === 'em_negociacao';
+      console.log('Backup condition check:', { shouldBackup, isNegotiating, actualStatus: budget.status });
+
+      if (shouldBackup && isNegotiating) {
+        console.log('Initiating Google Drive backup for negotiating budget...');
         try {
           await uploadToDrive(blob, fileName);
           // Toast-like notification
@@ -659,8 +672,10 @@ export default function BudgetEditorPage() {
             }, 300);
           }, 4000);
         } catch (uploadErr) {
-          console.error('Drive upload failed:', uploadErr);
+          console.error('Drive upload failed in handler catch:', uploadErr);
         }
+      } else {
+        console.log('Backup skipped: condition not met.');
       }
     } catch (err) {
       console.error('PDF generation error:', err);
