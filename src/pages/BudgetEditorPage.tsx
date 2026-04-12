@@ -60,14 +60,15 @@ export default function BudgetEditorPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  
   const [budget, setBudget] = useState<Budget | null>(null);
   const [version, setVersion] = useState<BudgetVersion | null>(null);
   const [items, setItems] = useState<BudgetItem[]>([]);
   const [versions, setVersions] = useState<BudgetVersion[]>([]);
+  
+  // Internal refs for non-re-rendering save state
+  const saveTimers = useRef<Record<string, any>>({});
+  const lastSavedRef = useRef<Date | null>(null);
+  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
   const [isDraft, setIsDraft] = useState(false);
   
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
@@ -139,6 +140,11 @@ export default function BudgetEditorPage() {
       initNewBudget();
     }
     fetchClients();
+
+    // Cleanup timers on unmount
+    return () => {
+      Object.values(saveTimers.current).forEach(clearTimeout);
+    };
   }, [id]);
 
   async function fetchClients() {
@@ -239,22 +245,19 @@ export default function BudgetEditorPage() {
 
   // Persistent Save Logic
   const handleSave = async (showNotification: boolean = true) => {
-    if (!budget || !version || saving || !isDirty.current) return;
+    if (!budget || !version || !isDirty.current) return;
     
-    setSaving(true);
+    if (showNotification) notifySaveStatus('saving');
     try {
       let currentBudgetId = budget.id;
       let currentVersionId = version.id;
 
       if (isDraft) {
         let finalCode = budget.code;
-        
-        // Generate automatic code only if it's still the placeholder
         if (finalCode === '----') {
           const { data: newCode, error: codeError } = await supabase.rpc('next_budget_code');
           if (codeError) throw codeError;
           finalCode = newCode || 'AUTO';
-          // Update local state so UI reflects the generated code immediately
           setBudget(prev => prev ? { ...prev, code: finalCode } : null);
         }
 
@@ -265,7 +268,7 @@ export default function BudgetEditorPage() {
             project_name: budget.project_name,
             category: budget.category,
             status: budget.status,
-            client_id: budget.client_id || null // Fix UUID "" empty string error
+            client_id: budget.client_id || null
           })
           .select()
           .single();
@@ -294,13 +297,11 @@ export default function BudgetEditorPage() {
         currentVersionId = vData.id;
 
         await supabase.from('budgets').update({ active_version_id: currentVersionId }).eq('id', currentBudgetId);
-        
         setIsDraft(false);
         navigate(`/orcamentos/${currentBudgetId}`, { replace: true });
       } else {
-        await supabase
-          .from('budget_versions')
-          .update({
+        await Promise.all([
+          supabase.from('budget_versions').update({
             contact_id: version.contact_id || null,
             margin_pct: version.margin_pct,
             nf_pct: version.nf_pct,
@@ -309,26 +310,17 @@ export default function BudgetEditorPage() {
             notes_client: version.notes_client,
             payment_terms: version.payment_terms,
             validity_days: version.validity_days
-          })
-          .eq('id', version.id);
-        
-        await supabase.from('budgets').update({
-          code: budget.code,
-          project_name: budget.project_name,
-          category: budget.category,
-          status: budget.status,
-          client_id: budget.client_id || null // Fix UUID "" empty string error
-        }).eq('id', budget.id);
+          }).eq('id', version.id),
+          supabase.from('budgets').update({
+            code: budget.code,
+            project_name: budget.project_name,
+            category: budget.category,
+            status: budget.status,
+            client_id: budget.client_id || null
+          }).eq('id', budget.id)
+        ]);
       }
 
-      // Sync sequence using the code currently in state (which includes manual edits)
-      const numericSuffix = budget.code.match(/\d+$/);
-      if (numericSuffix) {
-        const nextVal = parseInt(numericSuffix[0], 10);
-        await supabase.rpc('sync_budget_sequence', { new_val: nextVal });
-      }
-
-      // Final items sync (upsert only)
       if (items.length > 0) {
         await supabase.from('budget_items').upsert(
           items.map((it, idx) => ({
@@ -346,22 +338,51 @@ export default function BudgetEditorPage() {
       }
 
       isDirty.current = false;
-      if (showNotification) {
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 3000);
-      }
+      lastSavedRef.current = new Date();
+      setLastSavedTime(new Date());
+      if (showNotification) notifySaveStatus('saved');
     } catch (err) {
       console.error('Save error:', err);
-    } finally {
-      setSaving(false);
+      if (showNotification) notifySaveStatus('error');
+    }
+  };
+
+  // Optimized Partial Saves
+  const savePartialBudget = async (updates: Partial<Budget>) => {
+    if (isDraft || !budget) return;
+    notifySaveStatus('saving');
+    try {
+      const { error } = await supabase.from('budgets').update(updates).eq('id', budget.id);
+      if (error) throw error;
+      lastSavedRef.current = new Date();
+      setLastSavedTime(new Date());
+      notifySaveStatus('saved');
+    } catch (err) {
+      console.error('Partial budget save error:', err);
+      notifySaveStatus('error');
+    }
+  };
+
+  const savePartialVersion = async (updates: Partial<BudgetVersion>) => {
+    if (isDraft || !version) return;
+    notifySaveStatus('saving');
+    try {
+      const { error } = await supabase.from('budget_versions').update(updates).eq('id', version.id);
+      if (error) throw error;
+      lastSavedRef.current = new Date();
+      setLastSavedTime(new Date());
+      notifySaveStatus('saved');
+    } catch (err) {
+      console.error('Partial version save error:', err);
+      notifySaveStatus('error');
     }
   };
 
   const handleNewVersion = async () => {
-    if (!budget || !version || isDraft || saving) return;
+    if (!budget || !version || isDraft) return;
     if (!confirm('Deseja criar uma NOVA VERSÃO baseada na atual?')) return;
 
-    setSaving(true);
+    notifySaveStatus('saving');
     try {
       const nextNumber = versions.length > 0 ? Math.max(...versions.map(v => v.version_number)) + 1 : version.version_number + 1;
       
@@ -401,11 +422,11 @@ export default function BudgetEditorPage() {
       await supabase.from('budgets').update({ active_version_id: newV.id }).eq('id', budget.id);
       
       isDirty.current = false;
+      notifySaveStatus('saved');
       await fetchBudgetData(budget.id, newV.id);
     } catch (err) {
       console.error('Error creating new version:', err);
-    } finally {
-      setSaving(false);
+      notifySaveStatus('error');
     }
   };
 
@@ -413,7 +434,7 @@ export default function BudgetEditorPage() {
     if (!budget || !templateCategory.trim()) return;
     
     setIsMoreMenuOpen(false);
-    setSaving(true);
+    notifySaveStatus('saving');
     try {
       const { error } = await supabase
         .from('budgets')
@@ -427,20 +448,18 @@ export default function BudgetEditorPage() {
       
       setBudget(prev => prev ? { ...prev, is_template: true, template_category: templateCategory.trim() } : null);
       setIsTemplateModalOpen(false);
+      notifySaveStatus('saved');
       alert('Orçamento salvo como padrão com sucesso!');
     } catch (err) {
       console.error('Error saving as template:', err);
+      notifySaveStatus('error');
       alert('Erro ao salvar como template.');
-    } finally {
-      setSaving(false);
     }
   };
 
-  // Individual Item Sync
   const syncItem = async (item: BudgetItem) => {
     if (isReadOnly || isDraft || !version) return;
-    
-    setSaveStatus('saving');
+    notifySaveStatus('saving');
     try {
       const { error } = await supabase
         .from('budget_items')
@@ -457,49 +476,36 @@ export default function BudgetEditorPage() {
         });
       
       if (error) throw error;
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      notifySaveStatus('saved');
     } catch (err) {
       console.error('Error syncing item:', err);
-      setSaveStatus('error');
+      notifySaveStatus('error');
     }
   };
 
   const deleteItemFromDb = async (itemId: string) => {
     if (isReadOnly || isDraft) return;
-    
-    setSaveStatus('saving');
+    notifySaveStatus('saving');
     try {
-      const { error } = await supabase
-        .from('budget_items')
-        .delete()
-        .eq('id', itemId);
-      
+      const { error } = await supabase.from('budget_items').delete().eq('id', itemId);
       if (error) throw error;
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      notifySaveStatus('saved');
     } catch (err) {
       console.error('Error deleting item:', err);
-      setSaveStatus('error');
+      notifySaveStatus('error');
     }
   };
 
-  const debouncedAutoSave = useCallback(
-    debounce(() => {
-      if (!isReadOnly && !isDraft && isDirty.current && validation.isValid) {
-        setSaveStatus('saving');
-        handleSave(true);
-      }
-    }, 1500),
-    [handleSave, isReadOnly, isDraft, validation.isValid]
-  );
-
-  useEffect(() => {
-    if (!loading && !isReadOnly && !isDraft && isDirty.current && budget && (budget.status === 'rascunho' || budget.status === 'reprovado')) {
-      debouncedAutoSave();
-    }
-    return () => debouncedAutoSave.cancel();
-  }, [items, version, budget?.project_name, budget?.status, budget?.client_id, budget?.category]);
+  const triggerSave = (type: 'budget' | 'version', updates: any) => {
+    const key = `${type}-${Object.keys(updates).join('-')}`;
+    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+    
+    saveTimers.current[key] = setTimeout(() => {
+      if (type === 'budget') savePartialBudget(updates);
+      else savePartialVersion(updates);
+      delete saveTimers.current[key];
+    }, 5000);
+  };
 
   // Catalog Logic
   useEffect(() => {
@@ -582,15 +588,18 @@ export default function BudgetEditorPage() {
     const updatedItem = { ...item, ...updates };
     setItems(items.map(i => i.id === id ? updatedItem : i));
     
-    // Decide based on field type if we save immediate or debounced
-    const isTextField = 'name' in updates;
+    const isTextField = 'name' in updates || 'description' in updates;
     
     if (!isDraft && version) {
       if (isTextField) {
-        isDirty.current = true;
-        debouncedAutoSave();
+        const key = `item-${id}`;
+        if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+        saveTimers.current[key] = setTimeout(() => {
+          syncItem(updatedItem);
+          delete saveTimers.current[key];
+        }, 5000);
       } else {
-        syncItem(updatedItem);
+        setTimeout(() => syncItem(updatedItem), 0);
       }
     } else {
       isDirty.current = true;
@@ -599,14 +608,16 @@ export default function BudgetEditorPage() {
 
   const updateBudget = (updates: Partial<Budget>) => {
     if (isReadOnly) return;
-    isDirty.current = true;
     setBudget(prev => prev ? { ...prev, ...updates } : null);
+    if (!isDraft) triggerSave('budget', updates);
+    else isDirty.current = true;
   };
 
   const updateVersion = (updates: Partial<BudgetVersion>) => {
     if (isReadOnly) return;
-    isDirty.current = true;
     setVersion(prev => prev ? { ...prev, ...updates } : null);
+    if (!isDraft) triggerSave('version', updates);
+    else isDirty.current = true;
   };
 
   async function fetchContactsForClient(clientId: string, autoSelect: boolean = false) {
@@ -772,30 +783,20 @@ export default function BudgetEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden md:flex flex-col items-end mr-2 text-[10px] uppercase font-bold text-lumos-text-secondary">
-            {isReadOnly ? (
-              <span className="flex items-center gap-1 text-blue-500 uppercase"><Info className="w-3 h-3" /> Modo Visualização</span>
-            ) : saving ? (
-              <span className="flex items-center gap-1 text-lumos-yellow animate-pulse"><Clock className="w-3 h-3" /> Salvando...</span>
-            ) : lastSaved ? (
-              <span className="flex items-center gap-1 text-green-600"><CheckCircle className="w-3 h-3" /> Salvo às {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            ) : (
-              <span className="flex items-center gap-1">Pronto para salvar</span>
+          <div className="hidden md:flex flex-col items-end mr-2">
+            <SavingIndicator />
+            {lastSavedTime && (
+              <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-green-600">
+                <CheckCircle className="w-3 h-3" /> Salvo às {lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
             )}
           </div>
           {!isReadOnly && (
             <div className="relative group/save">
-              <button 
-                onClick={() => handleSave()} 
-                disabled={saving || !validation.isValid}
-                className={clsx(
-                  "btn-primary flex items-center gap-2 shadow-lg transition-all",
-                  !validation.isValid ? "opacity-30 grayscale cursor-not-allowed shadow-none" : "shadow-lumos-yellow/20"
-                )}
-              >
-                <Save className="w-4 h-4" />
-                {saving ? 'Gravando...' : 'Salvar Proposta'}
-              </button>
+              <MainSaveButton 
+                onSave={() => handleSave()} 
+                disabled={!isDirty.current || !validation.isValid}
+              />
               
               {!validation.isValid && (
                 <div className="absolute top-full mt-2 right-0 w-64 bg-black/90 text-white p-3 rounded-lumos border border-white/10 shadow-2xl opacity-0 group-hover/save:opacity-100 transition-opacity z-[100] pointer-events-none">
@@ -849,10 +850,10 @@ export default function BudgetEditorPage() {
             <button onClick={() => setIsTemplateModalOpen(false)} className="btn-secondary">Cancelar</button>
             <button 
               onClick={handleSaveAsTemplate}
-              disabled={!templateCategory.trim() || saving}
+              disabled={!templateCategory.trim()}
               className="btn-primary px-6"
             >
-              {saving ? 'Salvando...' : 'Confirmar'}
+              Confirmar
             </button>
           </>
         }
@@ -1240,7 +1241,7 @@ export default function BudgetEditorPage() {
             
             <div className="mt-4 flex flex-col items-center gap-2">
                <button 
-                disabled={isDraft || saving}
+                disabled={isDraft}
                 onClick={handleNewVersion}
                 className="text-[9px] font-bold text-lumos-text-secondary hover:text-lumos-yellow transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
               >
@@ -1331,24 +1332,72 @@ export default function BudgetEditorPage() {
           </div>
         </div>
       )}
-      <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
-        {saveStatus !== 'idle' && (
-          <div className={clsx(
-            "flex items-center gap-2 px-4 py-2 rounded-full shadow-lg border text-[10px] font-black uppercase tracking-widest transition-all duration-300 translate-y-0",
-            saveStatus === 'saving' && "bg-lumos-bg border-lumos-border animate-pulse",
-            saveStatus === 'saved' && "bg-green-500/10 border-green-500/20 text-green-500",
-            saveStatus === 'error' && "bg-red-500/10 border-red-500/20 text-red-500"
-          )}>
-            <div className={clsx(
-              "w-1.5 h-1.5 rounded-full",
-              saveStatus === 'saving' && "bg-lumos-yellow animate-ping",
-              saveStatus === 'saved' && "bg-green-500",
-              saveStatus === 'error' && "bg-red-500"
-            )} />
-            {saveStatus === 'saving' ? 'Salvando...' : saveStatus === 'saved' ? 'Alterações salvas' : 'Erro ao salvar'}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
+
+// Low-level Save Status Event Bridge
+const notifySaveStatus = (status: 'idle' | 'saving' | 'saved' | 'error') => {
+  window.dispatchEvent(new CustomEvent('budget-save-status', { detail: status }));
+  if (status === 'saved' || status === 'error') {
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('budget-save-status', { detail: 'idle' }));
+    }, 3000);
+  }
+};
+
+const SavingIndicator = () => {
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  
+  useEffect(() => {
+    const handleStatus = (e: any) => setStatus(e.detail);
+    window.addEventListener('budget-save-status', handleStatus);
+    return () => window.removeEventListener('budget-save-status', handleStatus);
+  }, []);
+
+  if (status === 'idle') return null;
+
+  return (
+    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider mb-1">
+      <div className={clsx(
+        "w-2 h-2 rounded-full",
+        status === 'saving' && "bg-lumos-yellow animate-pulse",
+        status === 'saved' && "bg-green-500",
+        status === 'error' && "bg-red-500"
+      )} />
+      <span className={clsx(
+        status === 'saving' && "text-lumos-yellow",
+        status === 'saved' && "text-green-600",
+        status === 'error' && "text-red-500"
+      )}>
+        {status === 'saving' ? 'Salvando...' : status === 'saved' ? 'Alterações salvas' : 'Erro ao salvar'}
+      </span>
+    </div>
+  );
+};
+
+const MainSaveButton = ({ onSave, disabled }: { onSave: () => void, disabled: boolean }) => {
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  
+  useEffect(() => {
+    const handleStatus = (e: any) => setStatus(e.detail);
+    window.addEventListener('budget-save-status', handleStatus);
+    return () => window.removeEventListener('budget-save-status', handleStatus);
+  }, []);
+
+  return (
+    <div className="relative group/save">
+      <button 
+        onClick={onSave} 
+        disabled={disabled || status === 'saving'}
+        className={clsx(
+          "btn-primary flex items-center gap-2 shadow-lg transition-all",
+          (disabled || status === 'saving') ? "opacity-30 grayscale cursor-not-allowed shadow-none" : "shadow-lumos-yellow/20"
+        )}
+      >
+        <Save className="w-4 h-4" />
+        {status === 'saving' ? 'Gravando...' : 'Salvar Proposta'}
+      </button>
+    </div>
+  );
+};
