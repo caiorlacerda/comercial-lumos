@@ -33,6 +33,9 @@ export interface BudgetVersion {
   notes_client?: string | null;
   payment_terms?: string | null;
   validity_days?: number | null;
+  logistics_date?: string | null;
+  logistics_time?: string | null;
+  logistics_location?: string | null;
 }
 
 export interface VersionFinancials {

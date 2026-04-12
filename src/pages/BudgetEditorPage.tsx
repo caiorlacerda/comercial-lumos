@@ -24,7 +24,10 @@ import {
   X,
   FileStack,
   ClipboardList,
-  StickyNote
+  StickyNote,
+  RotateCcw,
+  Calendar,
+  MapPin
 } from 'lucide-react';
 import { 
   BudgetItem, 
@@ -91,22 +94,79 @@ export default function BudgetEditorPage() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const { login, uploadToDrive, isAuthenticated } = useGoogleDrive();
   
+  const [briefingTemplates, setBriefingTemplates] = useState<any[]>([]);
+  const [isBriefingPopoverOpen, setIsBriefingPopoverOpen] = useState(false);
+  const [showBriefingSuggestion, setShowBriefingSuggestion] = useState(false);
+  
   // Ref to track dirty state and prevent save loops
   const isDirty = useRef(false);
   const lastLoadedData = useRef<string>('');
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const catalogSearchRef = useRef<HTMLInputElement>(null);
+  const briefingPopoverRef = useRef<HTMLDivElement>(null);
 
-  // Close menu on click outside
+  // Close briefing popover on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
         setIsMoreMenuOpen(false);
       }
+      if (briefingPopoverRef.current && !briefingPopoverRef.current.contains(event.target as Node)) {
+        setIsBriefingPopoverOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Fetch briefing templates
+  useEffect(() => {
+    async function fetchBriefingTemplates() {
+      const { data } = await supabase
+        .from('briefing_templates')
+        .select('*')
+        .order('name');
+      setBriefingTemplates(data || []);
+    }
+    fetchBriefingTemplates();
+  }, []);
+
+  // Show suggestion for new budgets with empty briefing
+  useEffect(() => {
+    if (isDraft && budget?.category && (!version?.notes_client || version.notes_client.trim() === '')) {
+      setShowBriefingSuggestion(true);
+    } else {
+      setShowBriefingSuggestion(false);
+    }
+  }, [isDraft, budget?.category, version?.notes_client]);
+
+  // Briefing placeholders mapping
+  const briefingPlaceholders: Record<string, string> = {
+    digital: "Descreva o que o cliente quer comunicar, produto/serviço, público-alvo, tom da marca e se há roteiro fornecido ou a Lumos cria...",
+    filme: "Descreva o conceito da peça, o que ela precisa fazer sentir, onde vai veicular, se há agência envolvida e se há roteiro aprovado...",
+    live: "Descreva a natureza do evento, audiência esperada, se é público ou privado, e se haverá gravação para edição posterior..."
+  };
+
+  const handleLoadBriefingTemplate = (content: string) => {
+    if (version?.notes_client && version.notes_client.trim() !== '') {
+      if (!confirm('Substituir o briefing atual pelo template?')) return;
+    }
+    setVersion(v => v ? { ...v, notes_client: content } : null);
+    isDirty.current = true;
+    setIsBriefingPopoverOpen(false);
+    setShowBriefingSuggestion(false);
+  };
+
+  const handleQuickLoadTemplate = () => {
+    const defaultTemplate = briefingTemplates.find(t => t.category === budget?.category && t.is_default);
+    const templateToUse = defaultTemplate || briefingTemplates.find(t => t.category === budget?.category);
+    
+    if (templateToUse) {
+      handleLoadBriefingTemplate(templateToUse.notes_client);
+    } else {
+      alert(`Nenhum template padrão encontrado para a categoria ${budget?.category}`);
+    }
+  };
 
   // Read-only logic: only allow editing if it's a draft OR the current version is the active one
   const isReadOnly = useMemo(() => {
@@ -1040,10 +1100,70 @@ export default function BudgetEditorPage() {
           
           {/* Briefing Section */}
           <div className="card space-y-4">
-            <div className="flex items-center gap-2 text-lumos-text-primary border-b border-lumos-border pb-4">
-              <FileText className="w-5 h-5" />
-              <h3 className="font-bold">Briefing & Condições</h3>
+            <div className="flex items-center justify-between border-b border-lumos-border pb-4">
+              <div className="flex items-center gap-2 text-lumos-text-primary">
+                <FileText className="w-5 h-5" />
+                <h3 className="font-bold">Briefing & Condições</h3>
+              </div>
+              
+              {!isReadOnly && (
+                <div className="relative" ref={briefingPopoverRef}>
+                  <button 
+                    onClick={() => setIsBriefingPopoverOpen(!isBriefingPopoverOpen)}
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-colors group"
+                  >
+                    <RotateCcw className={clsx("w-3 h-3 transition-transform duration-500", isBriefingPopoverOpen && "rotate-180")} />
+                    Carregar Template
+                  </button>
+
+                  {isBriefingPopoverOpen && (
+                    <div className="absolute right-0 mt-2 w-64 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-50 py-2 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="px-4 py-2 border-b border-lumos-border mb-1">
+                        <span className="text-[9px] font-bold text-lumos-text-secondary uppercase tracking-widest">Templates de Briefing</span>
+                      </div>
+                      <div className="max-h-60 overflow-auto">
+                        {briefingTemplates.length === 0 ? (
+                          <div className="px-4 py-3 text-xs text-lumos-text-secondary italic">Nenhum template cadastrado</div>
+                        ) : (
+                          briefingTemplates
+                            .filter(t => t.category === budget?.category || !budget?.category)
+                            .map(template => (
+                              <button
+                                key={template.id}
+                                onClick={() => handleLoadBriefingTemplate(template.notes_client)}
+                                className="w-full text-left px-4 py-2.5 hover:bg-lumos-bg transition-colors space-y-0.5 group"
+                              >
+                                <div className="text-[11px] font-bold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">{template.name}</div>
+                                <div className="text-[9px] text-lumos-text-secondary uppercase">{template.category}</div>
+                              </button>
+                            ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+
+            {showBriefingSuggestion && !isReadOnly && (
+              <div className="bg-lumos-yellow/10 border border-lumos-yellow/20 rounded-lumos p-3 flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-lumos-yellow flex items-center justify-center text-lumos-bg">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-xs font-bold text-lumos-text-primary">
+                    Template disponível para <span className="uppercase">{budget?.category}</span>. Deseja carregar?
+                  </p>
+                </div>
+                <button 
+                  onClick={handleQuickLoadTemplate}
+                  className="px-3 py-1 bg-lumos-yellow text-lumos-bg text-[10px] font-black uppercase rounded-full hover:scale-105 active:scale-95 transition-all shadow-sm"
+                >
+                  Carregar
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div>
@@ -1052,14 +1172,63 @@ export default function BudgetEditorPage() {
                   </label>
                   <textarea 
                     disabled={isReadOnly}
-                    className="input-lumos w-full min-h-[160px] text-sm leading-relaxed disabled:opacity-70"
-                    placeholder="Descreva o projeto, entregas, produção e prazos..."
+                    className="input-lumos w-full min-h-[160px] text-sm leading-relaxed disabled:opacity-70 scrollbar-thin"
+                    placeholder={version && budget?.category ? briefingPlaceholders[budget.category] : "Descreva o projeto, entregas, produção e prazos..."}
                     value={version?.notes_client || ''}
                     onChange={(e) => {
                       setVersion(v => v ? { ...v, notes_client: e.target.value } : null);
                       isDirty.current = true;
                     }}
                   />
+                  
+                  {/* Logistics Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 animate-in fade-in duration-500">
+                    <div>
+                      <label className="text-[9px] font-bold text-lumos-text-secondary uppercase mb-1.5 block flex items-center gap-1">
+                        <Calendar className="w-2.5 h-2.5" /> Data(s)
+                      </label>
+                      <input 
+                        disabled={isReadOnly}
+                        className="input-lumos w-full text-xs py-2 placeholder:text-gray-300 disabled:opacity-70"
+                        placeholder="A definir"
+                        value={version?.logistics_date || ''}
+                        onChange={(e) => {
+                          setVersion(v => v ? { ...v, logistics_date: e.target.value } : null);
+                          isDirty.current = true;
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-lumos-text-secondary uppercase mb-1.5 block flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" /> Horário
+                      </label>
+                      <input 
+                        disabled={isReadOnly}
+                        className="input-lumos w-full text-xs py-2 placeholder:text-gray-300 disabled:opacity-70"
+                        placeholder="A definir"
+                        value={version?.logistics_time || ''}
+                        onChange={(e) => {
+                          setVersion(v => v ? { ...v, logistics_time: e.target.value } : null);
+                          isDirty.current = true;
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-lumos-text-secondary uppercase mb-1.5 block flex items-center gap-1">
+                        <MapPin className="w-2.5 h-2.5" /> Local
+                      </label>
+                      <input 
+                        disabled={isReadOnly}
+                        className="input-lumos w-full text-xs py-2 placeholder:text-gray-300 disabled:opacity-70"
+                        placeholder="A definir"
+                        value={version?.logistics_location || ''}
+                        onChange={(e) => {
+                          setVersion(v => v ? { ...v, logistics_location: e.target.value } : null);
+                          isDirty.current = true;
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="space-y-4">
@@ -1069,7 +1238,7 @@ export default function BudgetEditorPage() {
                   </label>
                   <textarea 
                     disabled={isReadOnly}
-                    className="input-lumos w-full min-h-[80px] text-sm bg-blue-50/10 disabled:opacity-70"
+                    className="input-lumos w-full min-h-[80px] text-sm bg-blue-50/10 disabled:opacity-70 scrollbar-thin"
                     placeholder="Notas para a equipe Lumos..."
                     value={version?.notes_internal || ''}
                     onChange={(e) => {

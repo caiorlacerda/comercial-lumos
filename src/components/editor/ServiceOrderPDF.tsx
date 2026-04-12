@@ -130,6 +130,33 @@ const styles = StyleSheet.create({
     fontSize: 8,
   },
 
+  // Logistics Block
+  logisticsBlock: {
+    backgroundColor: 'rgba(245, 216, 122, 0.05)',
+    borderWidth: 0.5,
+    borderColor: '#F5D87A',
+    borderRadius: 2,
+    padding: 8,
+    marginBottom: 10,
+    flexDirection: 'row',
+  },
+  logisticsItem: {
+    flex: 1,
+  },
+  logisticsLabel: {
+    fontFamily: 'Poppins',
+    fontWeight: 700,
+    fontSize: 6,
+    color: '#888',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  logisticsValue: {
+    fontSize: 7.5,
+    color: '#1a1a1a',
+    fontWeight: 600,
+  },
+
   table: {
     marginTop: 10,
     marginBottom: 12,
@@ -277,10 +304,37 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
         </View>
 
         {/* Escopo e Briefing */}
-        {version.notes_client && (
+        {(version.notes_client || version.logistics_date || version.logistics_time || version.logistics_location) && (
           <View>
             <Text style={styles.sectionTitle}>Escopo e Briefing</Text>
-            <Text style={styles.briefingText}>{version.notes_client}</Text>
+            
+            {/* Bloco de Logística se preenchido */}
+            {(version.logistics_date || version.logistics_time || version.logistics_location) && (
+              <View style={styles.logisticsBlock}>
+                {version.logistics_date && (
+                  <View style={styles.logisticsItem}>
+                    <Text style={styles.logisticsLabel}>Data(s)</Text>
+                    <Text style={styles.logisticsValue}>{version.logistics_date}</Text>
+                  </View>
+                )}
+                {version.logistics_time && (
+                  <View style={styles.logisticsItem}>
+                    <Text style={styles.logisticsLabel}>Horário</Text>
+                    <Text style={styles.logisticsValue}>{version.logistics_time}</Text>
+                  </View>
+                )}
+                {version.logistics_location && (
+                  <View style={[styles.logisticsItem, { flex: 2 }]}>
+                    <Text style={styles.logisticsLabel}>Local / Endereço</Text>
+                    <Text style={styles.logisticsValue}>{version.logistics_location}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {version.notes_client && (
+              <Text style={styles.briefingText}>{version.notes_client}</Text>
+            )}
           </View>
         )}
 
