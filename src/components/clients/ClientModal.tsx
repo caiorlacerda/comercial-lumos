@@ -198,7 +198,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
               </button>
             </div>
 
-            <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-4 max-h-[450px] overflow-y-auto pt-3 pl-3 pr-2 custom-scrollbar">
               {contacts.map((contact, idx) => (
                 <div key={idx} className={clsx(
                   "bg-lumos-bg/30 p-6 rounded-lumos border border-lumos-border grid grid-cols-1 md:grid-cols-12 gap-3 items-end relative group/contact",
@@ -252,7 +252,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
                     )}
                   </div>
                   {idx === 0 && (
-                    <span className="absolute -top-2 -left-2 bg-lumos-yellow text-black text-[9px] font-black px-[10px] py-[3px] rounded uppercase whitespace-nowrap shadow-sm z-20">
+                    <span className="absolute -top-2 -left-2 bg-lumos-yellow text-black text-[9px] font-black px-[12px] py-[4px] rounded uppercase whitespace-nowrap shadow-sm z-20 inline-flex items-center justify-center">
                       Primário
                     </span>
                   )}
