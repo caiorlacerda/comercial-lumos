@@ -95,6 +95,7 @@ export default function BudgetEditorPage() {
   const isDirty = useRef(false);
   const lastLoadedData = useRef<string>('');
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const catalogSearchRef = useRef<HTMLInputElement>(null);
 
   // Close menu on click outside
   useEffect(() => {
@@ -592,7 +593,10 @@ export default function BudgetEditorPage() {
   // Catalog Logic
   useEffect(() => {
     if (isCatalogOpen) {
+      setCatalogSearch('');
       fetchCatalogItems();
+      // Short delay to ensure modal is rendered before focusing
+      setTimeout(() => catalogSearchRef.current?.focus(), 100);
     }
   }, [isCatalogOpen]);
 
@@ -1420,6 +1424,7 @@ export default function BudgetEditorPage() {
               <div className="relative group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-lumos-text-secondary group-focus-within:text-lumos-yellow transition-colors" />
                 <input 
+                  ref={catalogSearchRef}
                   autoFocus
                   className="input-lumos w-full pl-12 py-4 text-base font-medium" 
                   placeholder="Pesquisar por nome ou cargo no catálogo..."
