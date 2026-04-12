@@ -56,6 +56,8 @@ export default function Budgets() {
   
   // Menu & Modal state
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  const [batchStatusMenuOpen, setBatchStatusMenuOpen] = useState(false);
   const [budgetToDelete, setBudgetToDelete] = useState<Budget | null>(null);
   const [budgetsToDelete, setBudgetsToDelete] = useState<Budget[]>([]);
   const [isDuplicating, setIsDuplicating] = useState(false);
@@ -72,18 +74,45 @@ export default function Budgets() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
+  const batchStatusRef = useRef<HTMLDivElement>(null);
+
+  const statusOptions = [
+    { value: 'rascunho', label: 'Rascunho', color: 'text-lumos-text-secondary bg-lumos-bg border-lumos-border' },
+    { value: 'em_negociacao', label: 'Em Negociação', color: 'text-[#F5D87A] bg-[#F5D87A]/10 border-[#F5D87A]/20' },
+    { value: 'aprovado', label: 'Aprovado', color: 'text-green-600 bg-green-500/10 border-green-500/20' },
+    { value: 'reprovado', label: 'Reprovado', color: 'text-red-500 bg-red-500/10 border-red-500/20' }
+  ];
 
   useEffect(() => {
     fetchBudgets();
     fetchClients();
     supabase.auth.getUser().then(({ data }) => setCurrentUser(data.user));
     
+    // Click outside listener
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setActiveMenu(null);
+      }
+      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
+        setStatusMenuOpen(null);
+      }
+      if (batchStatusRef.current && !batchStatusRef.current.contains(e.target as Node)) {
+        setBatchStatusMenuOpen(false);
+      }
+    };
+
     // Esc to deselect
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setSelectedIds(new Set());
     };
+
+    window.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   async function fetchBudgets() {
@@ -144,6 +173,44 @@ export default function Budgets() {
       console.error('Error fetching clients:', err);
     }
   }
+
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('budgets')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setBudgets(prev => prev.map(b => b.id === id ? { ...b, status: newStatus as any } : b));
+      setStatusMenuOpen(null);
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Erro ao atualizar status.');
+    }
+  };
+
+  const handleBatchStatusUpdate = async (newStatus: string) => {
+    if (selectedIds.size === 0) return;
+
+    try {
+      const idsToUpdate = Array.from(selectedIds);
+      const { error } = await supabase
+        .from('budgets')
+        .update({ status: newStatus })
+        .in('id', idsToUpdate);
+
+      if (error) throw error;
+
+      setBudgets(prev => prev.map(b => idsToUpdate.includes(b.id) ? { ...b, status: newStatus as any } : b));
+      setSelectedIds(new Set());
+      setBatchStatusMenuOpen(false);
+    } catch (err) {
+      console.error('Error in batch status update:', err);
+      alert('Erro ao atualizar status em lote.');
+    }
+  };
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -620,14 +687,40 @@ export default function Budgets() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={clsx(
-                        "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                        budget.status === 'aprovado' ? 'text-green-600 bg-green-500/10' : 
-                        budget.status === 'em_negociacao' ? 'text-lumos-yellow bg-lumos-yellow/10' : 
-                        budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10' : 'text-lumos-text-secondary bg-lumos-bg'
-                      )}>
-                        {budget.status.replace('_', ' ')}
-                      </span>
+                      <div className="flex justify-center relative" ref={statusMenuOpen === budget.id ? statusMenuRef : null}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusMenuOpen(statusMenuOpen === budget.id ? null : budget.id);
+                          }}
+                          className={clsx(
+                            "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all hover:scale-105 active:scale-95",
+                            budget.status === 'aprovado' ? 'text-green-600 bg-green-500/10 border-green-500/20' : 
+                            budget.status === 'em_negociacao' ? 'text-[#F5D87A] bg-[#F5D87A]/10 border-[#F5D87A]/20' : 
+                            budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10 border-red-500/20' : 'text-lumos-text-secondary bg-lumos-bg border-lumos-border'
+                          )}
+                        >
+                          {budget.status.replace('_', ' ')}
+                        </button>
+
+                        {statusMenuOpen === budget.id && (
+                          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            {statusOptions.map((opt) => (
+                              <button
+                                key={opt.value}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(budget.id, opt.value);
+                                }}
+                                className="w-full flex items-center justify-between px-4 py-2.5 text-[10px] font-black uppercase tracking-widest hover:bg-lumos-bg transition-colors"
+                              >
+                                <span className={opt.color + " px-2 py-0.5 rounded-full"}>{opt.label}</span>
+                                {budget.status === opt.value && <Check className="w-3.5 h-3.5 text-lumos-yellow" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-right font-black text-lumos-text-primary text-sm font-mono">
                       {formatCurrency((budget as any).valorFinal || 0)}
@@ -788,6 +881,31 @@ export default function Budgets() {
                 <Trash2 className="w-3.5 h-3.5" />
                 Deletar
               </button>
+
+              <div className="relative" ref={batchStatusRef}>
+                <button 
+                  onClick={() => setBatchStatusMenuOpen(!batchStatusMenuOpen)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-lumos-bg border border-lumos-border text-lumos-text-primary font-black text-xs uppercase hover:border-lumos-yellow transition-all active:scale-95"
+                >
+                  Alterar Status
+                  <ChevronUp className={clsx("w-3.5 h-3.5 transition-transform", batchStatusMenuOpen && "rotate-180")} />
+                </button>
+
+                {batchStatusMenuOpen && (
+                  <div className="absolute bottom-full left-0 mb-3 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                    <p className="px-4 py-2 text-[9px] font-black text-lumos-text-secondary uppercase tracking-widest border-b border-lumos-border">Novo Status:</p>
+                    {statusOptions.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleBatchStatusUpdate(opt.value)}
+                        className="w-full flex items-center px-4 py-2.5 text-[10px] font-black uppercase tracking-widest hover:bg-lumos-bg transition-colors"
+                      >
+                        <span className={opt.color + " px-2 py-0.5 rounded-full"}>{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <button 
                 onClick={() => setSelectedIds(new Set())}
