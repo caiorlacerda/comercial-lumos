@@ -31,6 +31,7 @@ import Modal from '@/components/common/Modal';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
+import { getPdfFileName } from '@/utils/pdfFileName';
 
 interface Budget {
   id: string;
@@ -302,8 +303,13 @@ export default function Budgets() {
 
       const items = activeVersion.budget_items || [];
       const financials = calcFinancials(items, activeVersion);
-      const clientDisplayName = fullBudget.clients?.agency_name ? `${fullBudget.clients.agency_name} + ${fullBudget.clients.name}` : (fullBudget.clients?.name || 'Cliente');
-      const fileName = `${fullBudget.code} | Lumos + ${clientDisplayName} | ${fullBudget.project_name}.pdf`;
+      
+      const fileName = getPdfFileName(
+        fullBudget.code,
+        fullBudget.clients?.name || 'Cliente',
+        fullBudget.clients?.agency_name,
+        fullBudget.project_name
+      );
 
       const blob = await pdf(
         <BudgetPDF 

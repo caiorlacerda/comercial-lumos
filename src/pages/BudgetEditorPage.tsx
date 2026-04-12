@@ -39,6 +39,7 @@ import { pdf, PDFDownloadLink } from '@react-pdf/renderer';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import GoogleDriveAuthModal from '@/components/editor/GoogleDriveAuthModal';
 import { formatBudgetCode } from '@/utils/formatters';
+import { getPdfFileName } from '@/utils/pdfFileName';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
@@ -620,7 +621,12 @@ export default function BudgetEditorPage() {
     
     setIsGeneratingPDF(true);
     try {
-      const fileName = `${formatBudgetCode(budget.code)} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`;
+      const fileName = getPdfFileName(
+        budget.code,
+        budget.clients?.name || 'Cliente',
+        budget.clients?.agency_name,
+        budget.project_name
+      );
       
       const blob = await pdf(
         <BudgetPDF 
@@ -1286,7 +1292,13 @@ export default function BudgetEditorPage() {
                       items={items} 
                     />
                   } 
-                  fileName={`OS_${formatBudgetCode(budget.code)} | Lumos + ${budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente')} | ${budget.project_name}.pdf`}
+                  fileName={getPdfFileName(
+                    budget.code,
+                    budget.clients?.name || 'Cliente',
+                    budget.clients?.agency_name,
+                    budget.project_name,
+                    'OS_'
+                  )}
                   className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] border-lumos-yellow/20 hover:border-lumos-yellow/40"
                 >
                   {({ loading }) => (
