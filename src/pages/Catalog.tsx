@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   Plus, 
@@ -86,7 +86,7 @@ export default function Catalog() {
     }
   }
 
-  const handleOpenModal = (item?: CatalogItem) => {
+  const handleOpenModal = useCallback((item?: CatalogItem) => {
     if (item) {
       setEditingItem(item);
       setFormData(item);
@@ -103,31 +103,9 @@ export default function Catalog() {
       });
     }
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingItem) {
-        const { error } = await supabase
-          .from('item_catalog')
-          .update(formData)
-          .eq('id', editingItem.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('item_catalog')
-          .insert(formData);
-        if (error) throw error;
-      }
-      setIsModalOpen(false);
-      fetchCatalog();
-    } catch (err) {
-      console.error('Error saving item:', err);
-    }
-  };
-
-  const toggleStatus = async (item: CatalogItem) => {
+  const toggleStatus = useCallback(async (item: CatalogItem) => {
     try {
       const { error } = await supabase
         .from('item_catalog')
@@ -139,29 +117,39 @@ export default function Catalog() {
     } catch (err) {
       console.error('Error toggling status:', err);
     }
-  };
+  }, []);
 
-  const toggleGroup = (group: string) => {
+  const toggleGroup = useCallback((group: string) => {
     setExpandedGroups(prev => 
       prev.includes(group) ? prev.filter(g => g !== group) : [...prev, group]
     );
-  };
+  }, []);
 
-  const toggleSelectItem = (id: string) => {
-    const newSelected = new Set(selectedItems);
-    if (newSelected.has(id)) newSelected.delete(id);
-    else newSelected.add(id);
-    setSelectedItems(newSelected);
-  };
-
-  const toggleSelectGroup = (groupTotal: CatalogItem[], isAllGroupSelected: boolean) => {
-    const newSelected = new Set(selectedItems);
-    groupTotal.forEach(item => {
-      if (isAllGroupSelected) newSelected.delete(item.id);
-      else newSelected.add(item.id);
+  const toggleSelectItem = useCallback((id: string) => {
+    setSelectedItems(prev => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(id)) newSelected.delete(id);
+      else newSelected.add(id);
+      return newSelected;
     });
-    setSelectedItems(newSelected);
-  };
+  }, []);
+
+  const toggleSelectGroup = useCallback((groupTotal: CatalogItem[], isAllGroupSelected: boolean) => {
+    setSelectedItems(prev => {
+      const newSelected = new Set(prev);
+      groupTotal.forEach(item => {
+        if (isAllGroupSelected) newSelected.delete(item.id);
+        else newSelected.add(item.id);
+      });
+      return newSelected;
+    });
+  }, []);
+
+  const triggerSingleDelete = useCallback((item: CatalogItem) => {
+    setDeletingType('single');
+    setItemToDelete(item);
+    setIsDeleteModalOpen(true);
+  }, []);
 
   const handleBulkDeactivate = async () => {
     try {
@@ -197,6 +185,28 @@ export default function Catalog() {
       fetchCatalog();
     } catch (err) {
       console.error('Error deleting items:', err);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingItem) {
+        const { error } = await supabase
+          .from('item_catalog')
+          .update(formData)
+          .eq('id', editingItem.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('item_catalog')
+          .insert(formData);
+        if (error) throw error;
+      }
+      setIsModalOpen(false);
+      fetchCatalog();
+    } catch (err) {
+      console.error('Error saving item:', err);
     }
   };
 
@@ -243,135 +253,62 @@ export default function Catalog() {
         ) : groups.map(group => {
           const groupItems = filteredItems.filter(i => i.item_group === group);
           const isExpanded = expandedGroups.includes(group);
+          const isAllGroupSelected = groupItems.length > 0 && groupItems.every(i => selectedItems.has(i.id));
           
           return (
             <div key={group} className="space-y-2">
-              <div className="w-full flex items-center bg-lumos-surface border border-lumos-border rounded-lumos p-3 hover:bg-lumos-surface/80 transition-shadow">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="pl-1">
-                    <input 
-                      type="checkbox"
-                      className="checkbox-lumos"
-                      checked={groupItems.length > 0 && groupItems.every(i => selectedItems.has(i.id))}
-                      onChange={() => toggleSelectGroup(groupItems, groupItems.every(i => selectedItems.has(i.id)))}
-                    />
-                  </div>
-                  <button 
-                    onClick={() => toggleGroup(group)}
-                    className="flex-1 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary">
-                        {group === 'edicao' ? 'Pós-produção' : group}
-                      </h2>
-                      <span className="text-[10px] font-bold text-lumos-text-secondary uppercase">
-                        {groupItems.length} itens
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       {isExpanded ? <ChevronUp className="w-4 h-4 text-lumos-text-secondary" /> : <ChevronDown className="w-4 h-4 text-lumos-text-secondary" />}
-                    </div>
-                  </button>
-                </div>
-              </div>
+              <CatalogGroupHeader 
+                group={group}
+                count={groupItems.length}
+                isExpanded={isExpanded}
+                isAllSelected={isAllGroupSelected}
+                onToggleExpand={() => toggleGroup(group)}
+                onToggleSelect={() => toggleSelectGroup(groupItems, isAllGroupSelected)}
+              />
               
               {isExpanded && (
                 <div className="card !p-0 overflow-hidden border-lumos-yellow/10">
                   <div className="overflow-x-auto">
-                  <table className="w-full text-sm table-fixed">
-                    <thead>
-                      <tr className="text-left text-xs uppercase text-lumos-text-secondary bg-lumos-bg/30 border-b border-lumos-border">
-                        <th className="px-6 py-3" style={{ width: '40px' }}></th>
-                        <th className="px-6 py-3 font-bold" style={{ width: '35%' }}>Item</th>
-                        <th className="px-6 py-3 font-bold" style={{ width: '20%' }}>Subcategoria</th>
-                        <th className="px-6 py-3 font-bold text-right" style={{ width: '15%' }}>Valor Padrão</th>
-                        <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Unidade</th>
-                        <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Status</th>
-                        <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-lumos-border">
-                      {groupItems.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-8 text-center text-lumos-text-secondary italic">
-                            Nenhum item encontrado neste grupo.
-                          </td>
+                    <table className="w-full text-sm table-fixed">
+                      <thead>
+                        <tr className="text-left text-xs uppercase text-lumos-text-secondary bg-lumos-bg/30 border-b border-lumos-border">
+                          <th className="px-6 py-3" style={{ width: '40px' }}></th>
+                          <th className="px-6 py-3 font-bold" style={{ width: '35%' }}>Item</th>
+                          <th className="px-6 py-3 font-bold" style={{ width: '20%' }}>Subcategoria</th>
+                          <th className="px-6 py-3 font-bold text-right" style={{ width: '15%' }}>Valor Padrão</th>
+                          <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Unidade</th>
+                          <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Status</th>
+                          <th className="px-6 py-3 font-bold text-center" style={{ width: '10%' }}>Ações</th>
                         </tr>
-                      ) : groupItems.map((item) => (
-                        <tr key={item.id} className={clsx(
-                          "hover:bg-lumos-bg/30 transition-colors group",
-                          !item.is_active && "opacity-60",
-                          selectedItems.has(item.id) && "bg-lumos-yellow/5"
-                        )}>
-                          <td className="px-6 py-4">
-                            <input 
-                              type="checkbox"
-                              className={clsx(
-                                "checkbox-lumos transition-opacity",
-                                selectedItems.size > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                              )}
-                              checked={selectedItems.has(item.id)}
-                              onChange={() => toggleSelectItem(item.id)}
-                            />
-                          </td>
-                          <td className="px-6 py-4 truncate">
-                            <div className="font-medium text-lumos-text-primary whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</div>
-                            {item.description && (
-                              <div className="text-[11px] text-lumos-text-secondary mt-0.5 line-clamp-1">{item.description}</div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-lumos-text-secondary whitespace-nowrap overflow-hidden text-ellipsis">{item.subcategory}</td>
-                          <td className="px-6 py-4 text-right font-mono text-lumos-text-primary whitespace-nowrap">{formatCurrency(item.default_unit_cost)}</td>
-                          <td className="px-6 py-4 text-center">
-                            <span className="uppercase text-[10px] font-bold text-lumos-text-primary bg-lumos-bg/50 px-2 py-0.5 rounded-full border border-lumos-border">
-                              {item.unit_label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <button 
-                              onClick={() => toggleStatus(item)}
-                              className={clsx(
-                                "mx-auto flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border transition-colors hover:scale-105",
-                                item.is_active 
-                                  ? "text-green-500 bg-green-500/10 border-green-500/20" 
-                                  : "text-lumos-text-secondary bg-lumos-text-secondary/10 border-lumos-text-secondary/20"
-                              )}
-                            >
-                              {item.is_active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                              {item.is_active ? 'Ativo' : 'Inativo'}
-                            </button>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-center gap-2">
-                              <button 
-                                onClick={() => handleOpenModal(item)}
-                                className="p-2 text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  setDeletingType('single');
-                                  setItemToDelete(item);
-                                  setIsDeleteModalOpen(true);
-                                }}
-                                className="p-2 text-lumos-text-secondary hover:text-red-500 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-lumos-border">
+                        {groupItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-6 py-8 text-center text-lumos-text-secondary italic">
+                              Nenhum item encontrado neste grupo.
+                            </td>
+                          </tr>
+                        ) : groupItems.map((item) => (
+                          <CatalogRow 
+                            key={item.id}
+                            item={item}
+                            isSelected={selectedItems.has(item.id)}
+                            anySelected={selectedItems.size > 0}
+                            onToggleSelect={toggleSelectItem}
+                            onToggleStatus={toggleStatus}
+                            onEdit={handleOpenModal}
+                            onDelete={triggerSingleDelete}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       {/* Modal */}
       {isModalOpen && (
@@ -577,3 +514,128 @@ export default function Catalog() {
     </div>
   );
 }
+
+// Optimized Sub-components
+const CatalogRow = memo(({ 
+  item, 
+  isSelected, 
+  anySelected,
+  onToggleSelect, 
+  onToggleStatus, 
+  onEdit, 
+  onDelete 
+}: {
+  item: CatalogItem;
+  isSelected: boolean;
+  anySelected: boolean;
+  onToggleSelect: (id: string) => void;
+  onToggleStatus: (item: CatalogItem) => void;
+  onEdit: (item: CatalogItem) => void;
+  onDelete: (item: CatalogItem) => void;
+}) => (
+  <tr className={clsx(
+    "hover:bg-lumos-bg/30 transition-colors group",
+    !item.is_active && "opacity-60",
+    isSelected && "bg-lumos-yellow/5"
+  )}>
+    <td className="px-6 py-4">
+      <input 
+        type="checkbox"
+        className={clsx(
+          "checkbox-lumos transition-opacity",
+          anySelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        )}
+        checked={isSelected}
+        onChange={() => onToggleSelect(item.id)}
+      />
+    </td>
+    <td className="px-6 py-4 truncate">
+      <div className="font-medium text-lumos-text-primary whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</div>
+      {item.description && (
+        <div className="text-[11px] text-lumos-text-secondary mt-0.5 line-clamp-1">{item.description}</div>
+      )}
+    </td>
+    <td className="px-6 py-4 text-lumos-text-secondary whitespace-nowrap overflow-hidden text-ellipsis">{item.subcategory}</td>
+    <td className="px-6 py-4 text-right font-mono text-lumos-text-primary whitespace-nowrap">{formatCurrency(item.default_unit_cost)}</td>
+    <td className="px-6 py-4 text-center">
+      <span className="uppercase text-[10px] font-bold text-lumos-text-primary bg-lumos-bg/50 px-2 py-0.5 rounded-full border border-lumos-border">
+        {item.unit_label}
+      </span>
+    </td>
+    <td className="px-6 py-4 text-center">
+      <button 
+        onClick={() => onToggleStatus(item)}
+        className={clsx(
+          "mx-auto flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border transition-colors hover:scale-105",
+          item.is_active 
+            ? "text-green-500 bg-green-500/10 border-green-500/20" 
+            : "text-lumos-text-secondary bg-lumos-text-secondary/10 border-lumos-text-secondary/20"
+        )}
+      >
+        {item.is_active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+        {item.is_active ? 'Ativo' : 'Inativo'}
+      </button>
+    </td>
+    <td className="px-6 py-4">
+      <div className="flex items-center justify-center gap-2">
+        <button 
+          onClick={() => onEdit(item)}
+          className="p-2 text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
+        <button 
+          onClick={() => onDelete(item)}
+          className="p-2 text-lumos-text-secondary hover:text-red-500 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </td>
+  </tr>
+));
+
+const CatalogGroupHeader = memo(({ 
+  group, 
+  count, 
+  isExpanded, 
+  isAllSelected, 
+  onToggleExpand, 
+  onToggleSelect 
+}: {
+  group: string;
+  count: number;
+  isExpanded: boolean;
+  isAllSelected: boolean;
+  onToggleExpand: () => void;
+  onToggleSelect: () => void;
+}) => (
+  <div className="w-full flex items-center bg-lumos-surface border border-lumos-border rounded-lumos p-3 hover:bg-lumos-surface/80 transition-shadow">
+    <div className="flex items-center gap-4 flex-1">
+      <div className="pl-1">
+        <input 
+          type="checkbox"
+          className="checkbox-lumos"
+          checked={isAllSelected}
+          onChange={onToggleSelect}
+        />
+      </div>
+      <button 
+        onClick={onToggleExpand}
+        className="flex-1 flex items-center justify-between"
+      >
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary">
+            {group === 'edicao' ? 'Pós-produção' : group}
+          </h2>
+          <span className="text-[10px] font-bold text-lumos-text-secondary uppercase">
+            {count} itens
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+           {isExpanded ? <ChevronUp className="w-4 h-4 text-lumos-text-secondary" /> : <ChevronDown className="w-4 h-4 text-lumos-text-secondary" />}
+        </div>
+      </button>
+    </div>
+  </div>
+));
