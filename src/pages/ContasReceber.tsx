@@ -8,8 +8,11 @@ import {
   FileText,
   DollarSign,
   Plus,
-  Trash2
+  Trash2,
+  Check,
+  AlertTriangle
 } from 'lucide-react';
+import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
@@ -43,6 +46,8 @@ export default function ContasReceber() {
     due_date: new Date().toISOString().split('T')[0],
     notes: ''
   });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
   const [paymentData, setPaymentData] = useState({
     amount: 0,
     received_at: new Date().toISOString().split('T')[0],
@@ -123,6 +128,57 @@ export default function ContasReceber() {
     } catch (error: any) { alert(error.message); }
   };
 
+  const handleBatchReceive = async () => {
+    const toReceive = filtered.filter(r => selectedIds.has(r.id) && r.status !== 'recebido');
+    if (toReceive.length === 0) return;
+
+    try {
+      const updates = toReceive.map(r => 
+        supabase.from('receivables').update({
+          status: 'recebido',
+          received_amount: r.total_amount,
+          received_at: new Date().toISOString().split('T')[0],
+          updated_at: new Date().toISOString()
+        }).eq('id', r.id)
+      );
+
+      await Promise.all(updates);
+      setSelectedIds(new Set());
+      fetchReceivables();
+    } catch (error: any) { alert(error.message); }
+  };
+
+  const handleBatchDelete = async () => {
+    const toDelete = filtered.filter(r => selectedIds.has(r.id));
+    if (toDelete.length === 0) return;
+
+    try {
+      const ids = toDelete.map(r => r.id);
+      const { error } = await supabase.from('receivables').delete().in('id', ids);
+      if (error) throw error;
+      
+      setIsBatchDeleteModalOpen(false);
+      setSelectedIds(new Set());
+      fetchReceivables();
+    } catch (error: any) { alert(error.message); }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(r => r.id)));
+    }
+  };
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
   const stats = {
     toReceive: receivables.filter(r => r.status !== 'recebido').reduce((acc, r) => acc + (r.total_amount - r.received_amount), 0),
     receivedMonth: receivables.filter(r => r.received_at && new Date(r.received_at).getMonth() === new Date().getMonth()).reduce((acc, r) => acc + r.received_amount, 0),
@@ -173,6 +229,19 @@ export default function ContasReceber() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+                <th className="px-6 py-4 w-10">
+                  <div 
+                    onClick={toggleSelectAll}
+                    className={clsx(
+                      "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                      selectedIds.size === filtered.length && filtered.length > 0
+                        ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                        : "border-lumos-border hover:border-lumos-yellow/50"
+                    )}
+                  >
+                    {selectedIds.size === filtered.length && filtered.length > 0 && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                </th>
                 <th className="px-6 py-4">Projeto / Cliente</th>
                 <th className="px-6 py-4">Vencimento</th>
                 <th className="px-6 py-4 text-right">Valor Total</th>
@@ -183,12 +252,33 @@ export default function ContasReceber() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={6} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <tr><td colSpan={7} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível registrado.</td></tr>
+                <tr><td colSpan={7} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível registrado.</td></tr>
               ) : (
                 filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-lumos-text-primary/5 transition-colors">
+                  <tr 
+                    key={r.id} 
+                    className={clsx(
+                      "hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group",
+                      selectedIds.has(r.id) && "bg-lumos-yellow/[0.03]"
+                    )}
+                    onClick={() => r.status !== 'recebido' ? (setSelectedReceivable(r), setPaymentData({...paymentData, amount: r.total_amount - r.received_amount}), setIsPayModalOpen(true)) : null}
+                  >
+                    <td className="px-6 py-4">
+                      <div 
+                        onClick={(e) => toggleSelect(r.id, e)}
+                        className={clsx(
+                          "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                          selectedIds.has(r.id)
+                            ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                            : "border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100",
+                          selectedIds.size > 0 && "opacity-100"
+                        )}
+                      >
+                        {selectedIds.has(r.id) && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
@@ -222,6 +312,70 @@ export default function ContasReceber() {
           </table>
         </div>
       </div>
+
+      {/* Batch Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
+            <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
+              <div className="w-8 h-8 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-sm">
+                {selectedIds.size}
+              </div>
+              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-tight">
+                {selectedIds.size === 1 ? 'Item selecionado' : 'Itens selecionados'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleBatchReceive}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-lumos-yellow text-lumos-bg font-black text-xs uppercase hover:scale-105 active:scale-95 transition-all"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Marcar Recebido
+              </button>
+              
+              <button 
+                onClick={() => setIsBatchDeleteModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/10 text-red-500 font-black text-xs uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir
+              </button>
+
+              <button 
+                onClick={() => setSelectedIds(new Set())}
+                className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary transition-colors text-xs font-bold uppercase"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      <Modal
+        isOpen={isBatchDeleteModalOpen}
+        onClose={() => setIsBatchDeleteModalOpen(false)}
+        title="Excluir Recebíveis"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-red-500/10 rounded-full flex-shrink-0">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lumos-text-primary font-bold">Confirma a exclusão em lote?</p>
+              <p className="text-xs text-lumos-text-secondary">Você selecionou {selectedIds.size} recebíveis para exclusão permanente. Esta ação não pode ser desfeita.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setIsBatchDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={handleBatchDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Sim, Excluir</button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={isPayModalOpen} onClose={() => setIsPayModalOpen(false)} title="Registrar Recebimento">
         <form onSubmit={handleRegisterPayment} className="space-y-4">
