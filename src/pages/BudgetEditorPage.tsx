@@ -406,6 +406,10 @@ export default function BudgetEditorPage() {
         );
       }
 
+      if (budget.status === 'aprovado' && financials) {
+        await syncReceivable(currentBudgetId, currentVersionId, budget.project_name, budget.client_id || '', financials.valorFinal);
+      }
+
       isDirty.current = false;
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
@@ -416,6 +420,38 @@ export default function BudgetEditorPage() {
     }
   };
 
+  const syncReceivable = async (budgetId: string, versionId: string, projectName: string, clientId: string, totalAmount: number) => {
+    try {
+      const { data: existing } = await supabase
+        .from('receivables')
+        .select('id, total_amount')
+        .eq('budget_id', budgetId)
+        .maybeSingle();
+
+      if (existing) {
+        if (existing.total_amount === 0) {
+          await supabase.from('receivables').update({
+            total_amount: totalAmount,
+            budget_version_id: versionId,
+            updated_at: new Date().toISOString()
+          }).eq('id', existing.id);
+        }
+      } else {
+        await supabase.from('receivables').insert([{
+          budget_id: budgetId,
+          budget_version_id: versionId,
+          description: projectName,
+          client_id: clientId,
+          total_amount: totalAmount,
+          status: 'aguardando',
+          created_by: user?.id
+        }]);
+      }
+    } catch (err) {
+      console.error('Error syncing receivable:', err);
+    }
+  };
+
   // Optimized Partial Saves
   const savePartialBudget = async (updates: Partial<Budget>) => {
     if (isDraft || !budget) return;
@@ -423,6 +459,18 @@ export default function BudgetEditorPage() {
     try {
       const { error } = await supabase.from('budgets').update(updates).eq('id', budget.id);
       if (error) throw error;
+      
+      // Sync to Receivables if approved
+      if (updates.status === 'aprovado' && financials) {
+        await syncReceivable(
+          budget.id, 
+          version?.id || '', 
+          budget.project_name, 
+          budget.client_id, 
+          financials.valorFinal
+        );
+      }
+
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       notifySaveStatus('saved');
