@@ -32,10 +32,10 @@ export default function ContasReceber() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [clients, setClients] = useState<any[]>([]);
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newReceivableData, setNewReceivableData] = useState({
     description: '',
     client_id: '',
@@ -206,8 +206,13 @@ export default function ContasReceber() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({...paymentData, amount: r.total_amount - r.received_amount}); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
-                        {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded transition-colors" title="Ver Orçamento"><FileText className="w-4 h-4" /></Link>}
-                        <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                        {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
+                        <button 
+                          onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }}
+                          className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -279,12 +284,12 @@ export default function ContasReceber() {
         </form>
       </Modal>
 
-      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Confirmar Exclusão">
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Excluir Recebível">
         <div className="space-y-4">
-          <p className="text-sm text-lumos-text-secondary">Tem certeza que deseja excluir este recebível? Esta ação não pode ser desfeita e removerá o registro financeiro.</p>
+          <p className="text-sm text-lumos-text-secondary">Tem certeza que deseja excluir este recebível? Esta ação não pode ser desfeita.</p>
           <div className="flex gap-3 pt-2">
             <button onClick={() => setIsDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-            <button onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Excluir permanentemente</button>
+            <button onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Confirmar Exclusão</button>
           </div>
         </div>
       </Modal>
