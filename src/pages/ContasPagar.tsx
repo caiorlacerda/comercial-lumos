@@ -7,7 +7,9 @@ import {
   Calendar, 
   MoreVertical,
   Edit2,
-  Trash2
+  Trash2,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -36,6 +38,7 @@ export default function ContasPagar() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'due_date', direction: 'desc' });
 
   const [formData, setFormData] = useState({
     description: '',
@@ -160,15 +163,41 @@ export default function ContasPagar() {
   const stats = {
     pending: payables.filter(p => !p.paid_at).reduce((acc, p) => acc + p.amount, 0),
     paidMonth: payables.filter(p => p.paid_at && new Date(p.paid_at).getMonth() === new Date().getMonth()).reduce((acc, p) => acc + p.amount, 0),
-    overdueCount: payables.filter(p => !p.paid_at && new Date(p.due_date) < new Date()).length
+    overdueCount: payables.filter(p => !p.paid_at && p.due_date && new Date(p.due_date) < new Date()).length
   };
 
-  const filtered = payables.filter(p => {
-    const matchesSearch = p.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (p.supplier && p.supplier.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
-    return matchesSearch && matchesCategory;
-  });
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const filtered = payables
+    .filter(p => {
+      const matchesSearch = p.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (p.supplier && p.supplier.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+
+      if (sortConfig.key === 'status') {
+        aVal = a.paid_at ? 'pago' : 'pendente';
+        bVal = b.paid_at ? 'pago' : 'pendente';
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig.key !== column) return null;
+    return sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />;
+  };
 
   return (
     <div className="space-y-6 font-work-sans">
@@ -217,11 +246,21 @@ export default function ContasPagar() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
-                <th className="px-6 py-4">Vencimento</th>
-                <th className="px-6 py-4">Descrição</th>
-                <th className="px-6 py-4">Fornecedor</th>
-                <th className="px-6 py-4 text-right">Valor</th>
-                <th className="px-6 py-4 text-center">Status</th>
+                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('due_date')}>
+                  <div className="flex items-center gap-1">Vencimento <SortIcon column="due_date" /></div>
+                </th>
+                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('description')}>
+                  <div className="flex items-center gap-1">Descrição <SortIcon column="description" /></div>
+                </th>
+                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('supplier')}>
+                  <div className="flex items-center gap-1">Fornecedor <SortIcon column="supplier" /></div>
+                </th>
+                <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('amount')}>
+                  <div className="flex items-center justify-end gap-1">Valor <SortIcon column="amount" /></div>
+                </th>
+                <th className="px-6 py-4 text-center cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('status')}>
+                  <div className="flex items-center justify-center gap-1">Status <SortIcon column="status" /></div>
+                </th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
