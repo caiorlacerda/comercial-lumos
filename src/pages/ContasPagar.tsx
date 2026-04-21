@@ -9,8 +9,10 @@ import {
   Edit2,
   Trash2,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  FileText
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
@@ -162,12 +164,13 @@ export default function ContasPagar() {
     } catch (error: any) { alert(error.message); }
   };
 
-  const markAsPaid = async (id: string) => {
+  const markAsPaid = async (item: any) => {
     try {
-      const { error } = await supabase.from('payables').update({ 
+      const table = item._type === 'project_cost' ? 'project_costs' : 'payables';
+      const { error } = await supabase.from(table).update({ 
         paid_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }).eq('id', id);
+      }).eq('id', item.id);
       if (error) throw error;
       fetchData();
     } catch (error: any) { alert(error.message); }
@@ -325,7 +328,13 @@ export default function ContasPagar() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-lumos-text-primary">{p.description}</span>
+                          {p._type === 'project_cost' ? (
+                            <Link to={`/financeiro/custos-projeto/${p.budget_id}`} className="text-sm font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors flex items-center gap-1.5 group/link">
+                              {p.description} <FileText className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-bold text-lumos-text-primary">{p.description}</span>
+                          )}
                           {p._type === 'project_cost' && (
                             <span className="bg-blue-500/10 text-blue-500 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter border border-blue-500/20">Projeto</span>
                           )}
@@ -347,9 +356,9 @@ export default function ContasPagar() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {p._type === 'payable' ? (
-                        <div className="flex justify-end gap-2 relative">
-                          {!p.paid_at && <button onClick={() => markAsPaid(p.id)} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Pagar</button>}
+                      <div className="flex justify-end gap-2 relative">
+                        {!p.paid_at && <button onClick={() => markAsPaid(p)} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Pagar</button>}
+                        {p._type === 'payable' ? (
                           <div className="relative">
                             <button 
                               onClick={(e) => {
@@ -385,10 +394,10 @@ export default function ContasPagar() {
                               </>
                             )}
                           </div>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-lumos-text-secondary italic">Somente leitura</span>
-                      )}
+                        ) : (
+                          <span className="text-[10px] text-lumos-text-secondary italic">Somente leitura</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
