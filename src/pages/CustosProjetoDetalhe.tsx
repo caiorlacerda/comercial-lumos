@@ -37,7 +37,14 @@ export default function CustosProjetoDetalhe() {
     try {
       setLoading(true);
       const [projectRes, costsRes, usersRes] = await Promise.all([
-        supabase.from('budgets').select('id, project_name, client:clients(name), receivable:receivables(total_amount)').eq('id', id).single(),
+        supabase.from('budgets').select(`
+          id, 
+          project_name, 
+          active_version_id,
+          client:clients(name), 
+          receivable:receivables(total_amount),
+          budget_items(unit_cost, quantity, version_id)
+        `).eq('id', id).single(),
         supabase.from('project_costs').select('*, responsible:app_users!responsible_id(full_name)').eq('budget_id', id).order('cost_date', { ascending: false }),
         supabase.from('app_users').select('id, full_name').eq('status', 'ativo')
       ]);
@@ -124,11 +131,15 @@ export default function CustosProjetoDetalhe() {
   };
 
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-lumos-bg"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-lumos-yellow"></div></div>;
+  if (!project) return <div className="flex items-center justify-center min-h-screen bg-lumos-bg text-lumos-text-secondary">Projeto não encontrado.</div>;
 
-  const totalAmount = project?.receivable?.[0]?.total_amount || 0;
+  const totalProductionValue = (project.budget_items || [])
+    .filter((item: any) => item.version_id === project.active_version_id)
+    .reduce((acc: number, item: any) => acc + (item.unit_cost * item.quantity), 0);
+
   const totalCosts = costs.reduce((acc, c) => acc + c.amount, 0);
-  const margin = totalAmount - totalCosts;
-  const consumptionPercent = totalAmount > 0 ? (totalCosts / totalAmount) * 100 : 0;
+  const margin = totalProductionValue - totalCosts;
+  const consumptionPercent = totalProductionValue > 0 ? (totalCosts / totalProductionValue) * 100 : 0;
 
   return (
     <div className="space-y-6 font-work-sans">
@@ -152,14 +163,14 @@ export default function CustosProjetoDetalhe() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-6">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Valor Disponível para Produção</p>
-          <p className="text-2xl font-black text-lumos-text-primary tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAmount)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProductionValue)}</p>
         </div>
         <div className="card p-6">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Total de Custos</p>
           <p className="text-2xl font-black text-lumos-text-primary tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}</p>
         </div>
         <div className="card p-6">
-          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Margem Real</p>
+          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Margem Real (Produção)</p>
           <p className={`text-2xl font-black tracking-tight ${margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(margin)}</p>
         </div>
       </div>

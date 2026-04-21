@@ -24,13 +24,25 @@ export default function CustosProjeto() {
   async function fetchProjects() {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('budgets').select('id, project_name, client:clients(name), status, receivable:receivables(total_amount), costs:project_costs(amount)').eq('status', 'aprovado');
+      const { data, error } = await supabase.from('budgets').select(`
+        id, 
+        project_name, 
+        active_version_id,
+        client:clients(name), 
+        status, 
+        receivable:receivables(total_amount), 
+        costs:project_costs(amount),
+        budget_items(unit_cost, quantity, version_id)
+      `).eq('status', 'aprovado');
       const processed = (data || []).map(p => {
-        const totalAmount = p.receivable?.[0]?.total_amount || 0;
+        const totalProductionValue = (p.budget_items || [])
+          .filter((item: any) => item.version_id === p.active_version_id)
+          .reduce((acc: number, item: any) => acc + (item.unit_cost * item.quantity), 0);
+          
         const totalCosts = p.costs?.reduce((acc: number, c: any) => acc + c.amount, 0) || 0;
-        const margin = totalAmount - totalCosts;
-        const marginPercent = totalAmount > 0 ? (margin / totalAmount) * 100 : 0;
-        return { ...p, totalAmount, totalCosts, margin, marginPercent };
+        const margin = totalProductionValue - totalCosts;
+        const marginPercent = totalProductionValue > 0 ? (margin / totalProductionValue) * 100 : 0;
+        return { ...p, totalProductionValue, totalCosts, margin, marginPercent };
       });
       setProjects(processed);
     } catch (error) { console.error(error); } finally { setLoading(false); }
@@ -90,9 +102,9 @@ export default function CustosProjeto() {
                 <p className="text-xs text-lumos-text-secondary flex items-center gap-1"><Target className="w-3 h-3" /> {p.client?.name}</p>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
-                <div><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Venda</p><p className="text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalAmount)}</p></div>
-                <div><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos</p><p className="text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}</p></div>
-                <div><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Margem</p><p className={`text-sm font-black ${p.margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.margin)}</p></div>
+                <div><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custo Base</p><p className="text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalProductionValue)}</p></div>
+                <div><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Reais</p><p className="text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}</p></div>
+                <div><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Margem Prod.</p><p className={`text-sm font-black ${p.margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.margin)}</p></div>
                 <div className="flex items-center justify-end"><div className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black ${p.marginPercent > 30 ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>{p.marginPercent.toFixed(1)}%</div><ChevronRight className="w-5 h-5 text-lumos-text-secondary ml-4 group-hover:translate-x-1 transition-transform" /></div>
               </div>
             </div>
