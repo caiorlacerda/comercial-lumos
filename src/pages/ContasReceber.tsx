@@ -81,38 +81,38 @@ export default function ContasReceber() {
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Contas a Receber</h1>
+          <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Contas a Receber</h1>
           <p className="text-lumos-text-secondary text-sm">Controle de faturamento e entradas de projetos.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-6 border-l-4 border-blue-500 bg-[#2a2a2a] shadow-lg">
+        <div className="card p-6 border-l-4 border-blue-500 shadow-lg">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Total a Receber</p>
-          <p className="text-2xl font-black text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.toReceive)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.toReceive)}</p>
         </div>
-        <div className="card p-6 border-l-4 border-green-500 bg-[#2a2a2a] shadow-lg">
+        <div className="card p-6 border-l-4 border-green-500 shadow-lg">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Recebido no Mês</p>
-          <p className="text-2xl font-black text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.receivedMonth)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.receivedMonth)}</p>
         </div>
-        <div className="card p-6 border-l-4 border-red-500 bg-[#2a2a2a] shadow-lg">
+        <div className="card p-6 border-l-4 border-red-500 shadow-lg">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Títulos em Atraso</p>
           <p className="text-2xl font-black text-red-500">{stats.overdue}</p>
         </div>
       </div>
 
-      <div className="card p-4 bg-[#2a2a2a]">
+      <div className="card p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
           <input type="text" placeholder="Buscar por projeto ou cliente..." className="input-lumos pl-10 w-full h-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
       </div>
 
-      <div className="card overflow-hidden bg-[#2a2a2a]">
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-white/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+              <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
                 <th className="px-6 py-4">Projeto / Cliente</th>
                 <th className="px-6 py-4">Vencimento</th>
                 <th className="px-6 py-4 text-right">Valor Total</th>
@@ -128,15 +128,15 @@ export default function ContasReceber() {
                 <tr><td colSpan={6} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível registrado.</td></tr>
               ) : (
                 filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-white/5 transition-colors">
+                  <tr key={r.id} className="hover:bg-lumos-text-primary/5 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white">{r.description}</span>
+                        <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
                         <span className="text-[10px] text-lumos-text-secondary flex items-center gap-1 uppercase"><Building2 className="w-2.5 h-2.5" /> {r.client?.name}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{r.due_date ? new Date(r.due_date).toLocaleDateString('pt-BR') : 'A definir'}</td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.total_amount)}</td>
+                    <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.total_amount)}</td>
                     <td className="px-6 py-4 text-right">
                       <span className="text-sm font-bold text-green-500">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.received_amount)}</span>
                     </td>
@@ -146,7 +146,7 @@ export default function ContasReceber() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({...paymentData, amount: r.total_amount - r.received_amount}); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
-                        <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-white rounded"><FileText className="w-4 h-4" /></Link>
+                        <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>
                       </div>
                     </td>
                   </tr>
