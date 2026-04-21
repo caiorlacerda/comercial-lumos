@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
-import { throttle } from 'lodash';
+import throttle from 'lodash/throttle';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Clients from '@/pages/Clients';
@@ -172,12 +172,12 @@ function AppContent() {
             path="/catalogo" 
             element={<AuthWrapper><Catalog /></AuthWrapper>} 
           />
-
+          
           <Route 
             path="/templates" 
             element={<AuthWrapper><Templates /></AuthWrapper>} 
           />
-
+          
           <Route 
             path="/configuracoes" 
             element={<AuthWrapper><Settings /></AuthWrapper>} 
