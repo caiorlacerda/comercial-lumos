@@ -80,7 +80,7 @@ export default function CustosProjetoDetalhe() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-6">
-          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Valor Contratado</p>
+          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Valor Disponível para Produção</p>
           <p className="text-2xl font-black text-lumos-text-primary tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAmount)}</p>
         </div>
         <div className="card p-6">
