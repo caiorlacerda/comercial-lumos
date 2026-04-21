@@ -40,7 +40,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       title: 'COMERCIAL',
       visible: isAdmin,
       items: [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/', end: true },
         { icon: Users, label: 'Clientes', path: '/clientes' },
         { icon: BookOpen, label: 'Orçamentos', path: '/orcamentos' },
         { icon: FileText, label: 'Catálogo', path: '/catalogo' },
@@ -51,7 +51,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       title: 'FINANCEIRO',
       visible: true,
       items: [
-        { icon: BarChart3, label: 'Dashboard Fin.', path: '/financeiro', permission: 'financeiro_dashboard' },
+        { icon: BarChart3, label: 'Dashboard Fin.', path: '/financeiro', permission: 'financeiro_dashboard', end: true },
         { icon: ArrowUpCircle, label: 'Contas a Pagar', path: '/financeiro/contas-pagar', permission: 'financeiro_admin' },
         { icon: ArrowDownCircle, label: 'Contas a Receber', path: '/financeiro/contas-receber', permission: 'financeiro_admin' },
         { icon: Receipt, label: 'Reembolso', path: '/financeiro/reembolso', permission: 'reembolso' },
@@ -93,6 +93,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  end={item.end}
                   className={({ isActive }) => cn(
                     "flex items-center gap-3 px-3 py-2 rounded-lumos text-sm font-bold transition-all group",
                     isActive 
