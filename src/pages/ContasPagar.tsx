@@ -48,7 +48,9 @@ export default function ContasPagar() {
     supplier: '',
     responsible_id: '',
     payment_method: 'pix',
-    notes: ''
+    notes: '',
+    isRecurring: false,
+    frequency: 'mensal'
   });
 
   useEffect(() => {
@@ -88,16 +90,57 @@ export default function ContasPagar() {
     try {
       if (editingId) {
         const { error } = await supabase.from('payables').update({
-          ...formData,
+          description: formData.description,
+          amount: formData.amount,
+          due_date: formData.due_date,
+          category: formData.category,
+          supplier: formData.supplier,
           responsible_id: formData.responsible_id || null,
+          payment_method: formData.payment_method,
+          notes: formData.notes,
           updated_at: new Date().toISOString()
         }).eq('id', editingId);
         if (error) throw error;
+      } else if (formData.isRecurring) {
+        const occurrences = [];
+        let currentDate = new Date(formData.due_date + 'T12:00:00'); // Use noon to avoid TZ issues
+        const endDate = new Date();
+        endDate.setFullYear(endDate.getFullYear() + 1);
+
+        while (currentDate <= endDate) {
+          occurrences.push({
+            description: formData.description,
+            amount: formData.amount,
+            due_date: currentDate.toISOString().split('T')[0],
+            category: formData.category,
+            supplier: formData.supplier,
+            responsible_id: formData.responsible_id || null,
+            payment_method: formData.payment_method,
+            notes: formData.notes,
+            created_by: profile?.id
+          });
+          
+          if (formData.frequency === 'semanal') currentDate.setDate(currentDate.getDate() + 7);
+          else if (formData.frequency === 'mensal') currentDate.setMonth(currentDate.getMonth() + 1);
+          else if (formData.frequency === 'bimestral') currentDate.setMonth(currentDate.getMonth() + 2);
+          else if (formData.frequency === 'trimestral') currentDate.setMonth(currentDate.getMonth() + 3);
+          else if (formData.frequency === 'semestral') currentDate.setMonth(currentDate.getMonth() + 6);
+          else if (formData.frequency === 'anual') currentDate.setFullYear(currentDate.getFullYear() + 1);
+          else break;
+        }
+        const { error } = await supabase.from('payables').insert(occurrences);
+        if (error) throw error;
       } else {
         const { error } = await supabase.from('payables').insert([{
-          ...formData,
-          created_by: profile?.id,
-          responsible_id: formData.responsible_id || null
+          description: formData.description,
+          amount: formData.amount,
+          due_date: formData.due_date,
+          category: formData.category,
+          supplier: formData.supplier,
+          responsible_id: formData.responsible_id || null,
+          payment_method: formData.payment_method,
+          notes: formData.notes,
+          created_by: profile?.id
         }]);
         if (error) throw error;
       }
@@ -140,7 +183,9 @@ export default function ContasPagar() {
       supplier: '',
       responsible_id: '',
       payment_method: 'pix',
-      notes: ''
+      notes: '',
+      isRecurring: false,
+      frequency: 'mensal'
     });
   };
 
@@ -154,7 +199,9 @@ export default function ContasPagar() {
       supplier: p.supplier || '',
       responsible_id: p.responsible_id || '',
       payment_method: p.payment_method || 'pix',
-      notes: p.notes || ''
+      notes: p.notes || '',
+      isRecurring: false,
+      frequency: 'mensal'
     });
     setIsModalOpen(true);
     setActiveMenuId(null);
@@ -390,6 +437,40 @@ export default function ContasPagar() {
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Fornecedor</label>
             <input type="text" className="input-lumos w-full" placeholder="Ex: Adobe Systems" value={formData.supplier} onChange={e => setFormData({...formData, supplier: e.target.value})} />
           </div>
+          {!editingId && (
+            <div className="p-4 bg-lumos-text-primary/5 rounded-lumos border border-lumos-border space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-lumos-text-primary uppercase tracking-widest">Despesa recorrente</p>
+                  <p className="text-[10px] text-lumos-text-secondary italic">Repetir automaticamente nos próximos 12 meses</p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setFormData({ ...formData, isRecurring: !formData.isRecurring })}
+                  className={`w-10 h-5 rounded-full transition-all relative ${formData.isRecurring ? 'bg-lumos-yellow' : 'bg-lumos-text-primary/20'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.isRecurring ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              {formData.isRecurring && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Frequência</label>
+                  <select 
+                    className="input-lumos w-full h-8 text-xs" 
+                    value={formData.frequency} 
+                    onChange={e => setFormData({...formData, frequency: e.target.value})}
+                  >
+                    <option value="semanal">Semanal</option>
+                    <option value="mensal">Mensal</option>
+                    <option value="bimestral">Bimestral (A cada 2 meses)</option>
+                    <option value="trimestral">Trimestral (A cada 3 meses)</option>
+                    <option value="semestral">Semestral (A cada 6 meses)</option>
+                    <option value="anual">Anual</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" className="btn-primary flex-1 h-10">{editingId ? 'Salvar Alterações' : 'Cadastrar Despesa'}</button>
