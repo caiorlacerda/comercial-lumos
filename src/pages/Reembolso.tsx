@@ -8,7 +8,8 @@ import {
   DollarSign,
   Upload,
   ChevronRight,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -60,6 +61,8 @@ export default function Reembolso() {
     attachment: null as File | null
   });
   const [uploading, setUploading] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
 
   useEffect(() => {
     fetchReimbursements();
@@ -67,7 +70,7 @@ export default function Reembolso() {
   }, [profile, isAdmin]);
 
   async function fetchBudgets() {
-    const { data } = await supabase.from('budgets').select('id, project_name').eq('status', 'aprovado').order('project_name');
+    const { data } = await supabase.from('budgets').select('id, project_name, code').eq('status', 'aprovado').order('code', { ascending: false });
     setBudgets(data || []);
   }
 
@@ -190,6 +193,7 @@ export default function Reembolso() {
 
   const resetForm = () => {
     setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], budget_id: '', payment_method: 'pix', notes: '', attachment: null });
+    setProjectSearch('');
   };
 
   return (
@@ -274,13 +278,63 @@ export default function Reembolso() {
             <label className="text-xs font-bold text-lumos-text-secondary uppercase">Descrição</label>
             <input required type="text" className="input-lumos w-full" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 relative">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto (Opcional)</label>
-            <select className="input-lumos w-full" value={formData.budget_id} onChange={e => setFormData({...formData, budget_id: e.target.value})}>
-              <option value="">Nenhum projeto selecionado</option>
-              <option value="interno" className="text-lumos-yellow font-bold">Lumos — Gasto Interno</option>
-              {budgets.map(b => <option key={b.id} value={b.id}>{b.project_name}</option>)}
-            </select>
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
+                <input 
+                  type="text" 
+                  className="input-lumos w-full pl-9 h-10 text-sm" 
+                  placeholder="Pesquisar por código ou nome..."
+                  value={projectSearch}
+                  onFocus={() => setShowProjectDropdown(true)}
+                  onChange={(e) => {
+                    setProjectSearch(e.target.value);
+                    setShowProjectDropdown(true);
+                  }}
+                />
+              </div>
+
+              {showProjectDropdown && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowProjectDropdown(false)}></div>
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-20 max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, budget_id: 'interno' });
+                        setProjectSearch('#000 — Produtora Lumos');
+                        setShowProjectDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-lumos-yellow/10 border-b border-lumos-border transition-colors group"
+                    >
+                      <p className="text-xs font-black text-lumos-yellow uppercase tracking-tighter">#000 — Produtora Lumos</p>
+                      <p className="text-[10px] text-lumos-text-secondary italic group-hover:text-lumos-yellow/70 transition-colors">Gasto interno administrativo</p>
+                    </button>
+                    {budgets
+                      .filter(b => 
+                        b.project_name.toLowerCase().includes(projectSearch.toLowerCase()) || 
+                        (b.code && b.code.toLowerCase().includes(projectSearch.toLowerCase()))
+                      )
+                      .map(b => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, budget_id: b.id });
+                            setProjectSearch(`#${b.code || 'S/N'} — ${b.project_name}`);
+                            setShowProjectDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-lumos-text-primary/5 transition-colors border-b border-lumos-border/50 last:border-0"
+                        >
+                          <p className="text-xs font-bold text-lumos-text-primary">#{b.code || 'S/N'} — {b.project_name}</p>
+                        </button>
+                      ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
