@@ -104,9 +104,11 @@ export default function Reembolso() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">{isAdmin ? 'Gestão de Reembolsos' : 'Meus Reembolsos'}</h1>
-          <p className="text-lumos-text-secondary text-sm">{isAdmin ? 'Autorize as solicitações da equipe.' : 'Solicite e acompanhe seus pedidos.'}</p>
+          <p className="text-lumos-text-secondary text-sm">{isAdmin ? 'Autorize as solicitações da equipe ou crie seus próprios pedidos.' : 'Solicite e acompanhe seus pedidos.'}</p>
         </div>
-        {!isAdmin && <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-primary h-10 px-6 flex items-center gap-2"><Plus className="w-4 h-4" /> Novo Pedido</button>}
+        <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-primary h-10 px-6 flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Nova Solicitação
+        </button>
       </div>
 
       <div className="card overflow-hidden">
