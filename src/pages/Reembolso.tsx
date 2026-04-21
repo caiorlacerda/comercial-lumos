@@ -158,6 +158,21 @@ export default function Reembolso() {
     try {
       const { error } = await supabase.from('reimbursements').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
+      
+      if (status === 'aprovado') {
+        const item = reimbursements.find(r => r.id === id);
+        if (item) {
+          await supabase.from('payables').insert([{
+            description: `Reembolso — ${item.requester?.full_name || 'Funcionário'}`,
+            amount: item.amount,
+            due_date: new Date().toISOString().split('T')[0],
+            category: 'outro',
+            notes: item.description,
+            created_by: profile?.id
+          }]);
+        }
+      }
+
       fetchReimbursements();
     } catch (error: any) { alert(error.message); }
   };
