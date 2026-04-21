@@ -63,10 +63,10 @@ export default function CustosProjetoDetalhe() {
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/financeiro/custos-projeto')} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all"><ArrowLeft className="w-5 h-5 text-white" /></button>
+          <button onClick={() => navigate('/financeiro/custos-projeto')} className="p-2 bg-lumos-text-primary/5 rounded-full hover:bg-lumos-text-primary/10 transition-all"><ArrowLeft className="w-5 h-5 text-lumos-text-primary" /></button>
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">{project?.project_name}</h1>
-            <p className="text-lumos-text-secondary text-sm">Cliente: <span className="text-white font-bold">{project?.client?.name}</span></p>
+            <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">{project?.project_name}</h1>
+            <p className="text-lumos-text-secondary text-sm">Cliente: <span className="text-lumos-text-primary font-bold">{project?.client?.name}</span></p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -79,32 +79,32 @@ export default function CustosProjetoDetalhe() {
       {consumptionPercent > 70 && consumptionPercent <= 90 && <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lumos flex items-center gap-3"><AlertTriangle className="w-5 h-5 text-yellow-500" /><p className="text-sm font-bold text-yellow-500 uppercase">Aviso: Consumo de {consumptionPercent.toFixed(1)}%.</p></div>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-6 bg-[#2a2a2a]">
+        <div className="card p-6">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Valor Contratado</p>
-          <p className="text-2xl font-black text-white tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAmount)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAmount)}</p>
         </div>
-        <div className="card p-6 bg-[#2a2a2a]">
+        <div className="card p-6">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Total de Custos</p>
-          <p className="text-2xl font-black text-white tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}</p>
         </div>
-        <div className="card p-6 bg-[#2a2a2a]">
+        <div className="card p-6">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Margem Real</p>
           <p className={`text-2xl font-black tracking-tight ${margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(margin)}</p>
         </div>
       </div>
 
-      <div className="card p-6 space-y-4 bg-[#2a2a2a]">
-        <div className="flex justify-between items-end"><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Saúde do Orçamento</p><p className="text-xs font-black text-white">{consumptionPercent.toFixed(1)}%</p></div>
-        <div className="w-full h-4 bg-white/5 rounded-full overflow-hidden border border-white/10 p-0.5">
+      <div className="card p-6 space-y-4">
+        <div className="flex justify-between items-end"><p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Saúde do Orçamento</p><p className="text-xs font-black text-lumos-text-primary">{consumptionPercent.toFixed(1)}%</p></div>
+        <div className="w-full h-4 bg-lumos-text-primary/5 rounded-full overflow-hidden border border-lumos-border p-0.5">
           <div className={`h-full rounded-full transition-all duration-1000 ${consumptionPercent > 90 ? 'bg-red-500' : consumptionPercent > 70 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${Math.min(consumptionPercent, 100)}%` }} />
         </div>
       </div>
 
-      <div className="card overflow-hidden bg-[#2a2a2a]">
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-white/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+              <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Categoria</th>
@@ -113,11 +113,11 @@ export default function CustosProjetoDetalhe() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {costs.map((c) => (
-                <tr key={c.id} className="hover:bg-white/5 transition-colors">
+                <tr key={c.id} className="hover:bg-lumos-text-primary/5 transition-colors">
                   <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(c.cost_date).toLocaleDateString('pt-BR')}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-white">{c.description}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{c.description}</td>
                   <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">{c.category}</td>
-                  <td className="px-6 py-4 text-right text-sm font-bold text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}</td>
+                  <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}</td>
                 </tr>
               ))}
             </tbody>
