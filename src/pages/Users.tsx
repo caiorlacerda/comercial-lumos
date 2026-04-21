@@ -7,8 +7,12 @@ import {
   CheckCircle2, 
   XCircle, 
   Mail, 
-  Briefcase 
+  Briefcase,
+  Check,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
+import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth, AppUserProfile } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
@@ -41,6 +45,8 @@ export default function UsersPage() {
     job_title: '',
     status: 'ativo' as UserStatus
   });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -182,6 +188,59 @@ export default function UsersPage() {
     }
   };
 
+  const handleBatchStatus = async (status: UserStatus) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    try {
+      const { error } = await supabase
+        .from('app_users')
+        .update({ status })
+        .in('id', ids);
+
+      if (error) throw error;
+      setSelectedIds(new Set());
+      fetchUsers();
+    } catch (error: any) {
+      alert(`Erro ao atualizar status: ${error.message}`);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    try {
+      const { error } = await supabase
+        .from('app_users')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+      setIsBatchDeleteModalOpen(false);
+      setSelectedIds(new Set());
+      fetchUsers();
+    } catch (error: any) {
+      alert(`Erro ao excluir: ${error.message}`);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredUsers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredUsers.map(u => u.id)));
+    }
+  };
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
   const openEditModal = (user: AppUserProfile) => {
     setSelectedUser(user);
     setFormData({
@@ -275,6 +334,19 @@ export default function UsersPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border">
+                <th className="px-6 py-4 w-10">
+                  <div 
+                    onClick={toggleSelectAll}
+                    className={clsx(
+                      "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                      selectedIds.size === filteredUsers.length && filteredUsers.length > 0
+                        ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                        : "border-lumos-border hover:border-lumos-yellow/50"
+                    )}
+                  >
+                    {selectedIds.size === filteredUsers.length && filteredUsers.length > 0 && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                </th>
                 <th className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Usuário</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Cargo / Nível</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Status</th>
@@ -284,19 +356,40 @@ export default function UsersPage() {
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center">
+                  <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow mx-auto"></div>
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-lumos-text-secondary text-sm italic">
+                  <td colSpan={5} className="px-6 py-12 text-center text-lumos-text-secondary text-sm italic">
                     Nenhum usuário encontrado.
                   </td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-lumos-text-primary/5 transition-colors group">
+                  <tr 
+                    key={user.id} 
+                    className={clsx(
+                      "hover:bg-lumos-text-primary/5 transition-colors group cursor-pointer",
+                      selectedIds.has(user.id) && "bg-lumos-yellow/[0.03]"
+                    )}
+                    onClick={() => openEditModal(user)}
+                  >
+                    <td className="px-6 py-4">
+                      <div 
+                        onClick={(e) => toggleSelect(user.id, e)}
+                        className={clsx(
+                          "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                          selectedIds.has(user.id)
+                            ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                            : "border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100",
+                          selectedIds.size > 0 && "opacity-100"
+                        )}
+                      >
+                        {selectedIds.has(user.id) && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lumos bg-lumos-yellow/10 flex items-center justify-center text-lumos-yellow font-bold text-sm border border-lumos-yellow/20">
@@ -344,6 +437,78 @@ export default function UsersPage() {
           </table>
         </div>
       </div>
+
+      {/* Batch Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
+            <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
+              <div className="w-8 h-8 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-sm">
+                {selectedIds.size}
+              </div>
+              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-tight">
+                {selectedIds.size === 1 ? 'Usuário selecionado' : 'Usuários selecionados'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => handleBatchStatus('ativo')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 text-green-500 font-black text-[10px] uppercase hover:bg-green-500 hover:text-white transition-all active:scale-95"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Ativar
+              </button>
+
+              <button 
+                onClick={() => handleBatchStatus('inativo')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 text-yellow-500 font-black text-[10px] uppercase hover:bg-yellow-500 hover:text-white transition-all active:scale-95"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                Desativar
+              </button>
+              
+              <button 
+                onClick={() => setIsBatchDeleteModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/10 text-red-500 font-black text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir
+              </button>
+
+              <button 
+                onClick={() => setSelectedIds(new Set())}
+                className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary transition-colors text-xs font-bold uppercase"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      <Modal
+        isOpen={isBatchDeleteModalOpen}
+        onClose={() => setIsBatchDeleteModalOpen(false)}
+        title="Excluir Usuários"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-red-500/10 rounded-full flex-shrink-0">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lumos-text-primary font-bold">Confirma a exclusão em lote?</p>
+              <p className="text-xs text-lumos-text-secondary">Você selecionou {selectedIds.size} usuários para exclusão permanente. O acesso deles será revogado imediatamente. Esta ação não pode ser desfeita.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setIsBatchDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={handleBatchDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Sim, Excluir</button>
+          </div>
+        </div>
+      </Modal>
 
       {(pendingUsers.length > 0 || loadingPending) && (
         <div className="space-y-4 pt-8 border-t border-lumos-border">
