@@ -6,7 +6,8 @@ import {
   Calendar, 
   Building2, 
   FileText,
-  DollarSign
+  DollarSign,
+  Plus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
@@ -17,6 +18,20 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
     const rawValue = e.target.value.replace(/\D/g, "");
     const numberValue = rawValue ? parseInt(rawValue) / 100 : 0;
     onChange(numberValue);
+  const handleCreateManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { error } = await supabase.from('receivables').insert([{
+        ...newReceivableData,
+        status: 'aguardando',
+        received_amount: 0,
+        budget_id: null
+      }]);
+      if (error) throw error;
+      setIsNewModalOpen(false);
+      setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: new Date().toISOString().split('T')[0], notes: '' });
+      fetchReceivables();
+    } catch (error: any) { alert(error.message); }
   };
   const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   return <input type="text" className={className} value={formattedValue} onChange={handleChange} />;
@@ -27,7 +42,16 @@ export default function ContasReceber() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [clients, setClients] = useState<any[]>([]);
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
+  const [newReceivableData, setNewReceivableData] = useState({
+    description: '',
+    client_id: '',
+    total_amount: 0,
+    due_date: new Date().toISOString().split('T')[0],
+    notes: ''
+  });
   const [paymentData, setPaymentData] = useState({
     amount: 0,
     received_at: new Date().toISOString().split('T')[0],
@@ -36,7 +60,13 @@ export default function ContasReceber() {
 
   useEffect(() => {
     fetchReceivables();
+    fetchClients();
   }, []);
+
+  async function fetchClients() {
+    const { data } = await supabase.from('clients').select('id, name').order('name');
+    setClients(data || []);
+  }
 
   async function fetchReceivables() {
     try {
@@ -67,12 +97,40 @@ export default function ContasReceber() {
       setIsPayModalOpen(false);
       fetchReceivables();
     } catch (error: any) { alert(error.message); }
+  const handleCreateManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { error } = await supabase.from('receivables').insert([{
+        ...newReceivableData,
+        status: 'aguardando',
+        received_amount: 0,
+        budget_id: null
+      }]);
+      if (error) throw error;
+      setIsNewModalOpen(false);
+      setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: new Date().toISOString().split('T')[0], notes: '' });
+      fetchReceivables();
+    } catch (error: any) { alert(error.message); }
   };
 
   const stats = {
     toReceive: receivables.filter(r => r.status !== 'recebido').reduce((acc, r) => acc + (r.total_amount - r.received_amount), 0),
     receivedMonth: receivables.filter(r => r.received_at && new Date(r.received_at).getMonth() === new Date().getMonth()).reduce((acc, r) => acc + r.received_amount, 0),
     overdue: receivables.filter(r => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date()).length
+  const handleCreateManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { error } = await supabase.from('receivables').insert([{
+        ...newReceivableData,
+        status: 'aguardando',
+        received_amount: 0,
+        budget_id: null
+      }]);
+      if (error) throw error;
+      setIsNewModalOpen(false);
+      setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: new Date().toISOString().split('T')[0], notes: '' });
+      fetchReceivables();
+    } catch (error: any) { alert(error.message); }
   };
 
   const filtered = receivables.filter(r => r.description?.toLowerCase().includes(searchTerm.toLowerCase()) || r.client?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -84,6 +142,9 @@ export default function ContasReceber() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Contas a Receber</h1>
           <p className="text-lumos-text-secondary text-sm">Controle de faturamento e entradas de projetos.</p>
         </div>
+        <button onClick={() => setIsNewModalOpen(true)} className="btn-primary h-10 px-6 flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Novo Recebível
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -146,7 +207,7 @@ export default function ContasReceber() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({...paymentData, amount: r.total_amount - r.received_amount}); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
-                        <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>
+                        {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
                       </div>
                     </td>
                   </tr>
@@ -180,6 +241,40 @@ export default function ContasReceber() {
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={() => setIsPayModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" className="btn-primary flex-1 h-10">Confirmar</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isNewModalOpen} onClose={() => setIsNewModalOpen(false)} title="Novo Recebível Manual">
+        <form onSubmit={handleCreateManual} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Descrição</label>
+            <input required type="text" className="input-lumos w-full" placeholder="Ex: Adiantamento Projeto X" value={newReceivableData.description} onChange={e => setNewReceivableData({...newReceivableData, description: e.target.value})} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
+            <select required className="input-lumos w-full" value={newReceivableData.client_id} onChange={e => setNewReceivableData({...newReceivableData, client_id: e.target.value})}>
+              <option value="">Selecione um cliente</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Valor Total (R$)</label>
+              <CurrencyInput className="input-lumos w-full font-bold" value={newReceivableData.total_amount} onChange={(val: number) => setNewReceivableData({...newReceivableData, total_amount: val})} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Vencimento</label>
+              <input required type="date" className="input-lumos w-full" value={newReceivableData.due_date} onChange={e => setNewReceivableData({...newReceivableData, due_date: e.target.value})} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Observações</label>
+            <textarea className="input-lumos w-full h-20 py-2" value={newReceivableData.notes} onChange={e => setNewReceivableData({...newReceivableData, notes: e.target.value})} />
+          </div>
+          <div className="pt-4 flex gap-3">
+            <button type="button" onClick={() => setIsNewModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button type="submit" className="btn-primary flex-1 h-10">Cadastrar Recebível</button>
           </div>
         </form>
       </Modal>
