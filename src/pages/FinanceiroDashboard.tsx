@@ -91,47 +91,47 @@ export default function FinanceiroDashboard() {
   return (
     <div className="space-y-8 font-work-sans">
       <div>
-        <h1 className="text-3xl font-black text-white tracking-tight">Dashboard Financeiro</h1>
+        <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">Dashboard Financeiro</h1>
         <p className="text-lumos-text-secondary font-medium mt-1">Visão geral da saúde econômica da Lumos.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-6 border-t-4 border-lumos-yellow shadow-lg bg-[#2a2a2a]">
+        <div className="card p-6 border-t-4 border-lumos-yellow shadow-lg">
           <div className="p-2 bg-lumos-yellow/10 rounded-lumos text-lumos-yellow w-fit mb-4">
             <Wallet className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Saldo Geral em Conta</p>
-          <p className="text-2xl font-black text-white mt-1 tracking-tight">{formatBRL(stats.saldoGeral)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">{formatBRL(stats.saldoGeral)}</p>
         </div>
 
-        <div className="card p-6 border-t-4 border-green-500 shadow-lg bg-[#2a2a2a]">
+        <div className="card p-6 border-t-4 border-green-500 shadow-lg">
           <div className="p-2 bg-green-500/10 rounded-lumos text-green-500 w-fit mb-4">
             <TrendingUp className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Faturamento do Mês</p>
-          <p className="text-2xl font-black text-white mt-1 tracking-tight">{formatBRL(stats.faturamentoMes)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">{formatBRL(stats.faturamentoMes)}</p>
         </div>
 
-        <div className="card p-6 border-t-4 border-red-500 shadow-lg bg-[#2a2a2a]">
+        <div className="card p-6 border-t-4 border-red-500 shadow-lg">
           <div className="p-2 bg-red-500/10 rounded-lumos text-red-500 w-fit mb-4">
             <ArrowDownRight className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">A Pagar (7 dias)</p>
-          <p className="text-2xl font-black text-white mt-1 tracking-tight">{formatBRL(stats.pagarSemana)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">{formatBRL(stats.pagarSemana)}</p>
         </div>
 
-        <div className="card p-6 border-t-4 border-blue-500 shadow-lg bg-[#2a2a2a]">
+        <div className="card p-6 border-t-4 border-blue-500 shadow-lg">
           <div className="p-2 bg-blue-500/10 rounded-lumos text-blue-500 w-fit mb-4">
             <ArrowUpRight className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">A Receber (7 dias)</p>
-          <p className="text-2xl font-black text-white mt-1 tracking-tight">{formatBRL(stats.receberSemana)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">{formatBRL(stats.receberSemana)}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-8 bg-[#2a2a2a]">
-          <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-8 flex items-center gap-2">
+        <div className="card p-8">
+          <h3 className="text-sm font-bold text-lumos-text-primary uppercase tracking-widest mb-8 flex items-center gap-2">
             <Activity className="w-4 h-4 text-lumos-yellow" /> Balanço do Mês Atual
           </h3>
           <div className="space-y-8">
@@ -140,7 +140,7 @@ export default function FinanceiroDashboard() {
                 <span className="text-lumos-text-secondary uppercase tracking-wider">Entradas (Recebido)</span>
                 <span className="text-green-500">{formatBRL(stats.recebidoMes)}</span>
               </div>
-              <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div className="w-full h-2 bg-lumos-text-primary/5 rounded-full overflow-hidden border border-lumos-border">
                 <div className="h-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.3)]" style={{ width: stats.recebidoMes > 0 ? '100%' : '0%' }} />
               </div>
             </div>
@@ -149,12 +149,12 @@ export default function FinanceiroDashboard() {
                 <span className="text-lumos-text-secondary uppercase tracking-wider">Saídas (Pago)</span>
                 <span className="text-red-500">{formatBRL(stats.despesasMes)}</span>
               </div>
-              <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div className="w-full h-2 bg-lumos-text-primary/5 rounded-full overflow-hidden border border-lumos-border">
                 <div className="h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]" style={{ width: Math.min((stats.despesasMes / (stats.recebidoMes || 1)) * 100, 100) + '%' }} />
               </div>
             </div>
             <div className="pt-6 border-t border-lumos-border flex justify-between items-center">
-              <span className="text-sm font-bold text-white uppercase tracking-widest opacity-80">Resultado Líquido</span>
+              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-widest opacity-80">Resultado Líquido</span>
               <span className={`text-xl font-black tracking-tight ${stats.recebidoMes - stats.despesasMes >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {formatBRL(stats.recebidoMes - stats.despesasMes)}
               </span>
@@ -162,8 +162,8 @@ export default function FinanceiroDashboard() {
           </div>
         </div>
 
-        <div className="card p-8 bg-[#2a2a2a]">
-          <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-8 flex items-center gap-2">
+        <div className="card p-8">
+          <h3 className="text-sm font-bold text-lumos-text-primary uppercase tracking-widest mb-8 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-lumos-yellow" /> Atenção Necessária
           </h3>
           <div className="space-y-4">
@@ -173,7 +173,7 @@ export default function FinanceiroDashboard() {
                   <Calendar className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white tracking-tight">Contas vencendo esta semana</p>
+                  <p className="text-sm font-bold text-lumos-text-primary tracking-tight">Contas vencendo esta semana</p>
                   <p className="text-xs text-lumos-text-secondary mt-1 leading-relaxed">Você possui {formatBRL(stats.pagarSemana)} em compromissos com vencimento nos próximos 7 dias.</p>
                 </div>
               </div>
@@ -184,7 +184,7 @@ export default function FinanceiroDashboard() {
                   <DollarSign className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white tracking-tight">Faturamento a confirmar</p>
+                  <p className="text-sm font-bold text-lumos-text-primary tracking-tight">Faturamento a confirmar</p>
                   <p className="text-xs text-lumos-text-secondary mt-1 leading-relaxed">Existem {formatBRL(stats.receberSemana)} aguardando recebimento previsto para esta semana.</p>
                 </div>
               </div>
