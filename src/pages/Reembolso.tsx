@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import Modal from '@/components/common/Modal';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
@@ -42,6 +43,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export default function Reembolso() {
   const { profile, isAdmin } = useAuth();
+  const { login, isAuthenticated, uploadToDrive, listFiles, createFolder } = useGoogleDrive();
   const [reimbursements, setReimbursements] = useState<any[]>([]);
   const [budgets, setBudgets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,7 @@ export default function Reembolso() {
     notes: '',
     attachment: null as File | null
   });
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchReimbursements();
@@ -78,10 +81,54 @@ export default function Reembolso() {
     } catch (error) { console.error(error); } finally { setLoading(false); }
   }
 
+  const getOrCreatePath = async (employeeName: string) => {
+    const rootId = '1-Q38vOIfw-CoDxYtBa82-tvhKa1-Xiks';
+    const month = new Date().toISOString().split('-').slice(0, 2).join('-');
+
+    const findFolder = async (name: string, parentId: string) => {
+      const res = await listFiles(`name = '${name}' and '${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+      return res.files[0]?.id;
+    };
+
+    let reembolsosId = await findFolder('Reembolsos', rootId);
+    if (!reembolsosId) reembolsosId = (await createFolder('Reembolsos', rootId)).id;
+
+    let employeeId = await findFolder(employeeName, reembolsosId);
+    if (!employeeId) employeeId = (await createFolder(employeeName, reembolsosId)).id;
+
+    let monthId = await findFolder(month, employeeId);
+    if (!monthId) monthId = (await createFolder(month, employeeId)).id;
+
+    return monthId;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
+    
     try {
+      setUploading(true);
+      let attachmentData = null;
+
+      if (formData.attachment) {
+        if (!isAuthenticated()) {
+          login();
+          setUploading(false);
+          return;
+        }
+
+        const folderId = await getOrCreatePath(profile.full_name || 'Desconhecido');
+        const file = formData.attachment;
+        const uploadRes = await uploadToDrive(file, file.name, file.type, folderId);
+        
+        attachmentData = [{
+          name: file.name,
+          drive_file_id: uploadRes.id,
+          url: `https://drive.google.com/file/d/${uploadRes.id}/view`,
+          uploaded_at: new Date().toISOString()
+        }];
+      }
+
       const { error } = await supabase.from('reimbursements').insert([{
         requester_id: profile.id,
         description: formData.description,
@@ -90,13 +137,19 @@ export default function Reembolso() {
         budget_id: formData.budget_id || null,
         payment_method: formData.payment_method,
         notes: formData.notes,
+        attachments: attachmentData,
         status: 'pendente'
       }]);
       if (error) throw error;
       setIsModalOpen(false);
       fetchReimbursements();
       resetForm();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { 
+      console.error(error);
+      alert(error.message); 
+    } finally {
+      setUploading(false);
+    }
   };
 
   const updateStatus = async (id: string, status: string) => {
@@ -221,9 +274,44 @@ export default function Reembolso() {
               <input required type="date" className="input-lumos w-full" value={formData.expense_date} onChange={e => setFormData({...formData, expense_date: e.target.value})} />
             </div>
           </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Comprovante</label>
+            <div className="relative group">
+              <input 
+                type="file" 
+                className="hidden" 
+                id="receipt-upload" 
+                onChange={e => setFormData({...formData, attachment: e.target.files?.[0] || null})}
+                accept="image/*,application/pdf"
+              />
+              <label 
+                htmlFor="receipt-upload" 
+                className={`flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lumos cursor-pointer transition-all ${formData.attachment ? 'border-green-500/50 bg-green-500/5' : 'border-lumos-border hover:border-lumos-yellow/50 hover:bg-lumos-yellow/5'}`}
+              >
+                {formData.attachment ? (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    <span className="text-xs font-bold text-lumos-text-primary truncate max-w-[200px]">{formData.attachment.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-5 h-5 text-lumos-text-secondary" />
+                    <span className="text-xs font-bold text-lumos-text-secondary">Selecione o comprovante (PDF ou Imagem)</span>
+                  </>
+                )}
+              </label>
+            </div>
+            {isAuthenticated() ? (
+              <p className="text-[10px] text-green-500 flex items-center gap-1"><CheckCircle2 className="w-2 h-2" /> Google Drive Conectado</p>
+            ) : (
+              <p className="text-[10px] text-lumos-text-secondary italic">Você precisará autorizar o Google Drive ao enviar.</p>
+            )}
+          </div>
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-            <button type="submit" className="btn-primary flex-1 h-10">Enviar</button>
+            <button type="submit" disabled={uploading} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2">
+              {uploading ? <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white"></div> Enviando...</> : 'Enviar'}
+            </button>
           </div>
         </form>
       </Modal>

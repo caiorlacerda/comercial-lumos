@@ -24,29 +24,60 @@ export function useGoogleDrive() {
     return !!accessToken;
   }, [accessToken]);
 
-  const uploadToDrive = useCallback(async (pdfBlob: Blob, fileName: string) => {
+  const listFiles = useCallback(async (query: string) => {
+    if (!accessToken) throw new Error('Not authenticated with Google Drive');
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!response.ok) throw new Error('Failed to list files');
+    return await response.json();
+  }, [accessToken]);
+
+  const createFolder = useCallback(async (name: string, parentId?: string) => {
+    if (!accessToken) throw new Error('Not authenticated with Google Drive');
+    const metadata = {
+      name,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: parentId ? [parentId] : []
+    };
+    const response = await fetch(
+      'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(metadata)
+      }
+    );
+    if (!response.ok) throw new Error('Failed to create folder');
+    return await response.json();
+  }, [accessToken]);
+
+  const uploadToDrive = useCallback(async (fileBlob: Blob, fileName: string, mimeType: string = 'application/pdf', folderId?: string) => {
     if (!accessToken) throw new Error('Not authenticated with Google Drive');
 
-    // Multipart/related construction according to Google Drive API v3 documentation
     const boundary = '-------lumos_boundary_';
     const delimiter = `\r\n--${boundary}\r\n`;
     const closeDelimiter = `\r\n--${boundary}--`;
 
     const metadata = JSON.stringify({
       name: fileName,
-      parents: [FOLDER_ID]
+      parents: [folderId || FOLDER_ID]
     });
 
     try {
       const metadataPart = `Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}`;
-      const filePartHeader = `Content-Type: application/pdf\r\n\r\n`;
+      const filePartHeader = `Content-Type: ${mimeType}\r\n\r\n`;
       
       const body = new Blob([
         delimiter,
         metadataPart,
         delimiter,
         filePartHeader,
-        pdfBlob,
+        fileBlob,
         closeDelimiter
       ], { type: `multipart/related; boundary=${boundary}` });
 
@@ -88,6 +119,8 @@ export function useGoogleDrive() {
     login,
     uploadToDrive,
     isAuthenticated,
-    accessToken
+    accessToken,
+    listFiles,
+    createFolder
   };
 }
