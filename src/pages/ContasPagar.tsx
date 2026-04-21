@@ -55,11 +55,23 @@ export default function ContasPagar() {
   async function fetchData() {
     try {
       setLoading(true);
-      const [payablesRes, usersRes] = await Promise.all([
+      const [payablesRes, costsRes, usersRes] = await Promise.all([
         supabase.from('payables').select('*, responsible:app_users!responsible_id(full_name)').order('due_date', { ascending: true }),
+        supabase.from('project_costs').select('*, budget:budgets(project_name), responsible:app_users!responsible_id(full_name)').order('cost_date', { ascending: true }),
         supabase.from('app_users').select('id, full_name').eq('status', 'ativo')
       ]);
-      setPayables(payablesRes.data || []);
+
+      const unifiedPayables = [
+        ...(payablesRes.data || []).map(p => ({ ...p, _type: 'payable' })),
+        ...(costsRes.data || []).map(c => ({ 
+          ...c, 
+          _type: 'project_cost', 
+          due_date: c.cost_date,
+          paid_at: c.paid_at || null // project_costs pode ter paid_at? Assumindo que não por enquanto ou mapeando
+        }))
+      ].sort((a, b) => new Date(b.due_date || b.created_at).getTime() - new Date(a.due_date || a.created_at).getTime());
+
+      setPayables(unifiedPayables);
       setAppUsers(usersRes.data || []);
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
@@ -221,11 +233,20 @@ export default function ContasPagar() {
               ) : (
                 filtered.map((p) => (
                   <tr key={p.id} className="hover:bg-lumos-text-primary/5 transition-colors group">
-                    <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{new Date(p.due_date).toLocaleDateString('pt-BR')}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">
+                      {p.due_date ? new Date(p.due_date).toLocaleDateString('pt-BR') : '—'}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-lumos-text-primary">{p.description}</span>
-                        <span className="text-[10px] text-lumos-text-secondary uppercase tracking-tighter">{p.category}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-lumos-text-primary">{p.description}</span>
+                          {p._type === 'project_cost' && (
+                            <span className="bg-blue-500/10 text-blue-500 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter border border-blue-500/20">Projeto</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-lumos-text-secondary uppercase tracking-tighter">
+                          {p._type === 'project_cost' ? `PROJETO: ${p.budget?.project_name}` : p.category}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{p.supplier || '—'}</td>
@@ -233,49 +254,55 @@ export default function ContasPagar() {
                     <td className="px-6 py-4 text-center">
                       {p.paid_at ? (
                         <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full"><CheckCircle2 className="w-2.5 h-2.5 mr-1" /> Pago</span>
-                      ) : (
+                      ) : p._type === 'payable' ? (
                         <span className="inline-flex items-center text-[10px] font-bold text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full"><Calendar className="w-2.5 h-2.5 mr-1" /> Pendente</span>
+                      ) : (
+                        <span className="text-[10px] text-lumos-text-secondary italic">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 relative">
-                        {!p.paid_at && <button onClick={() => markAsPaid(p.id)} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Pagar</button>}
-                        <div className="relative">
-                          <button 
-                            onClick={(e) => {
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setMenuPosition({ top: rect.bottom + 8, left: rect.right - 128 });
-                              setActiveMenuId(activeMenuId === p.id ? null : p.id);
-                            }}
-                            className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded hover:bg-lumos-text-primary/5 transition-all"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-                          
-                          {activeMenuId === p.id && (
-                            <>
-                              <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)}></div>
-                              <div 
-                                className="fixed w-32 bg-lumos-surface border border-lumos-border rounded-lumos shadow-xl z-20 py-1 animate-in fade-in zoom-in-95 duration-100"
-                                style={{ top: menuPosition.top, left: menuPosition.left }}
-                              >
-                                <button 
-                                  onClick={() => handleEdit(p)}
-                                  className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 flex items-center gap-2"
+                      {p._type === 'payable' ? (
+                        <div className="flex justify-end gap-2 relative">
+                          {!p.paid_at && <button onClick={() => markAsPaid(p.id)} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Pagar</button>}
+                          <div className="relative">
+                            <button 
+                              onClick={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setMenuPosition({ top: rect.bottom + 8, left: rect.right - 128 });
+                                setActiveMenuId(activeMenuId === p.id ? null : p.id);
+                              }}
+                              className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded hover:bg-lumos-text-primary/5 transition-all"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                            
+                            {activeMenuId === p.id && (
+                              <>
+                                <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)}></div>
+                                <div 
+                                  className="fixed w-32 bg-lumos-surface border border-lumos-border rounded-lumos shadow-xl z-20 py-1 animate-in fade-in zoom-in-95 duration-100"
+                                  style={{ top: menuPosition.top, left: menuPosition.left }}
                                 >
-                                  <Edit2 className="w-3 h-3 text-blue-500" /> Editar
-                                </button>
-                                <button 
-                                  onClick={() => { setDeletingId(p.id); setIsDeleteModalOpen(true); setActiveMenuId(null); }}
-                                  className="w-full text-left px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500/5 flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-3 h-3" /> Excluir
-                                </button>
-                              </div>
-                            </>
-                          )}
+                                  <button 
+                                    onClick={() => handleEdit(p)}
+                                    className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 flex items-center gap-2"
+                                  >
+                                    <Edit2 className="w-3 h-3 text-blue-500" /> Editar
+                                  </button>
+                                  <button 
+                                    onClick={() => { setDeletingId(p.id); setIsDeleteModalOpen(true); setActiveMenuId(null); }}
+                                    className="w-full text-left px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500/5 flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Excluir
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <span className="text-[10px] text-lumos-text-secondary italic">Somente leitura</span>
+                      )}
                     </td>
                   </tr>
                 ))
