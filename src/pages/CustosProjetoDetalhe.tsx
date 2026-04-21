@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
@@ -23,6 +23,9 @@ export default function CustosProjetoDetalhe() {
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ description: '', amount: 0, cost_date: new Date().toISOString().split('T')[0], category: 'equipe', supplier: '', responsible_id: '', notes: '' });
 
   useEffect(() => { fetchProjectData(); }, [id]);
@@ -44,12 +47,48 @@ export default function CustosProjetoDetalhe() {
   const handleAddCost = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { error } = await supabase.from('project_costs').insert([{ ...formData, budget_id: id, created_by: profile?.id }]);
-      if (error) throw error;
+      if (editingId) {
+        const { error } = await supabase.from('project_costs').update({ ...formData, updated_at: new Date().toISOString() }).eq('id', editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('project_costs').insert([{ ...formData, budget_id: id, created_by: profile?.id }]);
+        if (error) throw error;
+      }
       setIsModalOpen(false);
+      setEditingId(null);
       fetchProjectData();
-      setFormData({...formData, description: '', amount: 0});
+      resetForm();
     } catch (error: any) { alert(error.message); }
+  };
+
+  const handleDeleteCost = async () => {
+    if (!deletingId) return;
+    try {
+      const { error } = await supabase.from('project_costs').delete().eq('id', deletingId);
+      if (error) throw error;
+      setIsDeleteModalOpen(false);
+      setDeletingId(null);
+      fetchProjectData();
+    } catch (error: any) { alert(error.message); }
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setFormData({ description: '', amount: 0, cost_date: new Date().toISOString().split('T')[0], category: 'equipe', supplier: '', responsible_id: '', notes: '' });
+  };
+
+  const handleEdit = (c: any) => {
+    setEditingId(c.id);
+    setFormData({
+      description: c.description,
+      amount: c.amount,
+      cost_date: c.cost_date,
+      category: c.category,
+      supplier: c.supplier || '',
+      responsible_id: c.responsible_id || '',
+      notes: c.notes || ''
+    });
+    setIsModalOpen(true);
   };
 
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-lumos-bg"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-lumos-yellow"></div></div>;
@@ -71,7 +110,7 @@ export default function CustosProjetoDetalhe() {
         </div>
         <div className="flex items-center gap-3">
           <Link to={`/orcamentos/${project?.id}`} className="btn-secondary flex items-center gap-2 h-10 px-4 text-xs"><ExternalLink className="w-4 h-4" /> Ver Orçamento</Link>
-          <button onClick={() => setIsModalOpen(true)} className="btn-primary h-10 px-6 flex items-center gap-2"><Plus className="w-4 h-4" /> Registrar Custo</button>
+          <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-primary h-10 px-6 flex items-center gap-2"><Plus className="w-4 h-4" /> Registrar Custo</button>
         </div>
       </div>
 
@@ -108,7 +147,8 @@ export default function CustosProjetoDetalhe() {
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Categoria</th>
-                <th className="px-6 py-4 text-right">Valor</th>
+                 <th className="px-6 py-4 text-right">Valor</th>
+                {profile?.role === 'admin' && <th className="px-6 py-4 text-right">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-lumos-border">
@@ -117,7 +157,15 @@ export default function CustosProjetoDetalhe() {
                   <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(c.cost_date).toLocaleDateString('pt-BR')}</td>
                   <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{c.description}</td>
                   <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">{c.category}</td>
-                  <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}</td>
+                   <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}</td>
+                  {profile?.role === 'admin' && (
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => handleEdit(c)} className="p-1.5 text-lumos-text-secondary hover:text-blue-500 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => { setDeletingId(c.id); setIsDeleteModalOpen(true); }} className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -125,7 +173,7 @@ export default function CustosProjetoDetalhe() {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Custo">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Editar Custo' : 'Registrar Custo'}>
         <form onSubmit={handleAddCost} className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Descrição</label>
@@ -160,9 +208,19 @@ export default function CustosProjetoDetalhe() {
           </div>
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-            <button type="submit" className="btn-primary flex-1 h-10">Salvar</button>
+            <button type="submit" className="btn-primary flex-1 h-10">{editingId ? 'Salvar Alterações' : 'Salvar'}</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Confirmar Exclusão">
+        <div className="space-y-4">
+          <p className="text-sm text-lumos-text-secondary">Tem certeza que deseja excluir este custo? Esta ação não pode ser desfeita.</p>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setIsDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={handleDeleteCost} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Excluir permanentemente</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
