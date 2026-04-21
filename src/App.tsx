@@ -13,9 +13,19 @@ import Sidebar from '@/components/layout/Sidebar';
 import ClientProfile from '@/pages/ClientProfile';
 
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { PermissionGuard } from '@/components/auth/PermissionGuard';
+
+// Novas Páginas Financeiras
+import UsersPage from '@/pages/Users';
+import FinanceiroDashboard from '@/pages/FinanceiroDashboard';
+import ContasPagar from '@/pages/ContasPagar';
+import ContasReceber from '@/pages/ContasReceber';
+import Reembolso from '@/pages/Reembolso';
+import CustosProjeto from '@/pages/CustosProjeto';
+import CustosProjetoDetalhe from '@/pages/CustosProjetoDetalhe';
 
 function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading, error, signOut } = useAuth();
+  const { user, profile, loading, error, signOut } = useAuth();
   const lastActivityRef = useRef<number>(Date.now());
   
   useEffect(() => {
@@ -25,7 +35,6 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     const TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
     const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
-    // Initialize/sync last activity
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       lastActivityRef.current = parseInt(stored, 10);
@@ -37,25 +46,22 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       lastActivityRef.current = now;
       localStorage.setItem(STORAGE_KEY, now.toString());
-    }, 60000); // 1 minute throttle
+    }, 60000);
 
     const checkInactivity = () => {
       const storedActivity = localStorage.getItem(STORAGE_KEY);
       const lastActivity = storedActivity ? parseInt(storedActivity, 10) : lastActivityRef.current;
       
       if (Date.now() - lastActivity > TIMEOUT_MS) {
-        console.log('Session expired due to inactivity');
         signOut();
         window.location.href = '/login?timeout=true';
       }
     };
 
-    // Listen for activity
     window.addEventListener('mousemove', updateActivity);
     window.addEventListener('keydown', updateActivity);
     window.addEventListener('click', updateActivity);
 
-    // Check periodically
     const interval = setInterval(checkInactivity, CHECK_INTERVAL);
 
     return () => {
@@ -80,7 +86,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
         <div className="bg-red-500/10 border border-red-500 p-6 rounded-lumos max-w-md">
           <h2 className="text-xl font-bold mb-2">Erro de Configuração</h2>
           <p className="text-lumos-text-secondary text-sm mb-4">
-            Não foi possível inicializar a conexão com o banco de dados. Verifique se as credenciais do Supabase no arquivo .env estão corretas.
+            Não foi possível inicializar a conexão com o banco de dados.
           </p>
           <code className="block bg-black/50 p-2 rounded text-xs text-left overflow-auto">
             {error}
@@ -90,7 +96,39 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     );
   }
   
-  return user ? <Sidebar>{children}</Sidebar> : <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" />;
+
+  // VALIDAÇÃO DE PERFIL LUMOS
+  if (!profile) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
+        <div className="bg-yellow-500/10 border border-yellow-500 p-8 rounded-lumos max-w-md">
+          <h2 className="text-xl font-bold mb-2">Acesso Pendente</h2>
+          <p className="text-lumos-text-secondary text-sm mb-6">
+            Sua conta Supabase foi criada, mas você ainda não possui um perfil autorizado na plataforma. 
+            Contate um administrador para habilitar seu acesso.
+          </p>
+          <button onClick={() => signOut()} className="btn-primary w-full">Sair</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile.status === 'inativo') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
+        <div className="bg-red-500/10 border border-red-500 p-8 rounded-lumos max-w-md">
+          <h2 className="text-xl font-bold mb-2">Acesso Bloqueado</h2>
+          <p className="text-lumos-text-secondary text-sm mb-6">
+            Sua conta está inativa. Se acredita que isso é um erro, procure a administração.
+          </p>
+          <button onClick={() => signOut()} className="btn-primary w-full">Sair</button>
+        </div>
+      </div>
+    );
+  }
+
+  return <Sidebar>{children}</Sidebar>;
 }
 
 function AppContent() {
@@ -143,6 +181,78 @@ function AppContent() {
           <Route 
             path="/configuracoes" 
             element={<AuthWrapper><Settings /></AuthWrapper>} 
+          />
+
+          {/* NOVAS ROTAS FINANCEIRAS */}
+          <Route 
+            path="/financeiro" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_dashboard">
+                  <FinanceiroDashboard />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          <Route 
+            path="/financeiro/contas-pagar" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <ContasPagar />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          <Route 
+            path="/financeiro/contas-receber" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <ContasReceber />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          <Route 
+            path="/financeiro/reembolso" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="reembolso">
+                  <Reembolso />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          <Route 
+            path="/financeiro/custos-projeto" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="custos_projeto">
+                  <CustosProjeto />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          <Route 
+            path="/financeiro/custos-projeto/:id" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="custos_projeto">
+                  <CustosProjetoDetalhe />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          <Route 
+            path="/usuarios" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <UsersPage />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
         </Routes>
       </div>
