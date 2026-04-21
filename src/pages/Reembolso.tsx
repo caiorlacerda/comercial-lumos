@@ -43,6 +43,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 export default function Reembolso() {
   const { profile, isAdmin } = useAuth();
   const [reimbursements, setReimbursements] = useState<any[]>([]);
+  const [budgets, setBudgets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -51,6 +52,7 @@ export default function Reembolso() {
     description: '',
     amount: 0,
     expense_date: new Date().toISOString().split('T')[0],
+    budget_id: '',
     payment_method: 'pix',
     notes: '',
     attachment: null as File | null
@@ -58,12 +60,18 @@ export default function Reembolso() {
 
   useEffect(() => {
     fetchReimbursements();
+    fetchBudgets();
   }, [profile, isAdmin]);
+
+  async function fetchBudgets() {
+    const { data } = await supabase.from('budgets').select('id, project_name').eq('status', 'aprovado').order('project_name');
+    setBudgets(data || []);
+  }
 
   async function fetchReimbursements() {
     try {
       setLoading(true);
-      let query = supabase.from('reimbursements').select('*, requester:app_users!requester_id(full_name)');
+      let query = supabase.from('reimbursements').select('*, requester:app_users!requester_id(full_name), budget:budgets(project_name)');
       if (!isAdmin) query = query.eq('requester_id', profile?.id);
       const { data, error } = await query.order('created_at', { ascending: false });
       setReimbursements(data || []);
@@ -79,6 +87,7 @@ export default function Reembolso() {
         description: formData.description,
         amount: formData.amount,
         expense_date: formData.expense_date,
+        budget_id: formData.budget_id || null,
         payment_method: formData.payment_method,
         notes: formData.notes,
         status: 'pendente'
@@ -110,7 +119,7 @@ export default function Reembolso() {
   };
 
   const resetForm = () => {
-    setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], payment_method: 'pix', notes: '', attachment: null });
+    setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], budget_id: '', payment_method: 'pix', notes: '', attachment: null });
   };
 
   return (
@@ -148,7 +157,14 @@ export default function Reembolso() {
                   <tr key={r.id} className="hover:bg-lumos-text-primary/5 transition-colors">
                     {isAdmin && <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.requester?.full_name}</td>}
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(r.expense_date).toLocaleDateString('pt-BR')}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.description}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
+                        {r.budget && (
+                          <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest">Projeto: {r.budget.project_name}</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}</td>
                     <td className="px-6 py-4 text-center"><StatusBadge status={r.status} /></td>
                     <td className="px-6 py-4 text-right">
@@ -187,6 +203,13 @@ export default function Reembolso() {
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase">Descrição</label>
             <input required type="text" className="input-lumos w-full" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto (Opcional)</label>
+            <select className="input-lumos w-full" value={formData.budget_id} onChange={e => setFormData({...formData, budget_id: e.target.value})}>
+              <option value="">Nenhum projeto selecionado</option>
+              {budgets.map(b => <option key={b.id} value={b.id}>{b.project_name}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
