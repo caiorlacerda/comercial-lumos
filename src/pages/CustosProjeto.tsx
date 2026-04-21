@@ -24,28 +24,52 @@ export default function CustosProjeto() {
   async function fetchProjects() {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('budgets').select(`
-        id, 
-        project_name, 
-        active_version_id,
-        client:clients(name), 
-        status, 
-        receivable:receivables(total_amount), 
-        costs:project_costs(amount),
-        budget_items(unit_cost, quantity, version_id)
-      `).eq('status', 'aprovado');
-      const processed = (data || []).map(p => {
-        const totalProductionValue = (p.budget_items || [])
-          .filter((item: any) => item.version_id === p.active_version_id)
-          .reduce((acc: number, item: any) => acc + (item.unit_cost * item.quantity), 0);
+      
+      // 1. Busca orçamentos aprovados
+      const { data: budgetsData, error: budgetsError } = await supabase
+        .from('budgets')
+        .select(`
+          id, 
+          project_name, 
+          active_version_id,
+          client:clients(name), 
+          status, 
+          receivable:receivables(total_amount), 
+          costs:project_costs(amount)
+        `)
+        .eq('status', 'aprovado');
+
+      if (budgetsError) throw budgetsError;
+
+      // 2. Busca todos os itens das versões ativas desses projetos
+      const activeVersionIds = (budgetsData || [])
+        .map(b => b.active_version_id)
+        .filter(Boolean);
+
+      let allItems: any[] = [];
+      if (activeVersionIds.length > 0) {
+        const { data: itemsData } = await supabase
+          .from('budget_items')
+          .select('unit_cost, quantity, version_id')
+          .in('version_id', activeVersionIds);
+        allItems = itemsData || [];
+      }
+
+      // 3. Processa os dados
+      const processed = (budgetsData || []).map(p => {
+        const projectItems = allItems.filter(item => item.version_id === p.active_version_id);
+        const totalProductionValue = projectItems.reduce((acc: number, item: any) => acc + (item.unit_cost * item.quantity), 0);
           
         const totalCosts = p.costs?.reduce((acc: number, c: any) => acc + c.amount, 0) || 0;
         const margin = totalProductionValue - totalCosts;
         const marginPercent = totalProductionValue > 0 ? (margin / totalProductionValue) * 100 : 0;
         return { ...p, totalProductionValue, totalCosts, margin, marginPercent };
       });
+
       setProjects(processed);
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+    } catch (error) { 
+      console.error('Erro ao buscar projetos:', error); 
+    } finally { setLoading(false); }
   }
 
   const filtered = projects.filter(p => p.project_name.toLowerCase().includes(searchTerm.toLowerCase()) || p.client?.name?.toLowerCase().includes(searchTerm.toLowerCase()));

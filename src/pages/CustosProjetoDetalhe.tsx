@@ -36,22 +36,39 @@ export default function CustosProjetoDetalhe() {
   async function fetchProjectData() {
     try {
       setLoading(true);
-      const [projectRes, costsRes, usersRes] = await Promise.all([
-        supabase.from('budgets').select(`
+      
+      // 1. Busca dados básicos do projeto
+      const { data: budgetData, error: budgetError } = await supabase
+        .from('budgets')
+        .select(`
           id, 
           project_name, 
           active_version_id,
           client:clients(name), 
-          receivable:receivables(total_amount),
-          budget_items(unit_cost, quantity, version_id)
-        `).eq('id', id).single(),
+          receivable:receivables(total_amount)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (budgetError) throw budgetError;
+
+      // 2. Busca itens do orçamento da versão ativa e custos/usuários em paralelo
+      const [itemsRes, costsRes, usersRes] = await Promise.all([
+        supabase
+          .from('budget_items')
+          .select('unit_cost, quantity, version_id')
+          .eq('version_id', budgetData.active_version_id),
         supabase.from('project_costs').select('*, responsible:app_users!responsible_id(full_name)').eq('budget_id', id).order('cost_date', { ascending: false }),
         supabase.from('app_users').select('id, full_name').eq('status', 'ativo')
       ]);
-      setProject(projectRes.data);
+
+      setProject({ ...budgetData, budget_items: itemsRes.data || [] });
       setCosts(costsRes.data || []);
       setAppUsers(usersRes.data || []);
-    } catch (error) { navigate('/financeiro/custos-projeto'); } finally { setLoading(false); }
+    } catch (error) { 
+      console.error('Erro ao carregar projeto:', error);
+      navigate('/financeiro/custos-projeto'); 
+    } finally { setLoading(false); }
   }
 
   const handleAddCost = async (e: React.FormEvent) => {
@@ -134,7 +151,6 @@ export default function CustosProjetoDetalhe() {
   if (!project) return <div className="flex items-center justify-center min-h-screen bg-lumos-bg text-lumos-text-secondary">Projeto não encontrado.</div>;
 
   const totalProductionValue = (project.budget_items || [])
-    .filter((item: any) => item.version_id === project.active_version_id)
     .reduce((acc: number, item: any) => acc + (item.unit_cost * item.quantity), 0);
 
   const totalCosts = costs.reduce((acc, c) => acc + c.amount, 0);
