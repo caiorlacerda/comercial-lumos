@@ -117,7 +117,7 @@ export default function ContasPagar() {
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Contas a Pagar</h1>
+          <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Contas a Pagar</h1>
           <p className="text-lumos-text-secondary text-sm">Gestão de despesas fixas, fornecedores e equipe.</p>
         </div>
         <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-primary h-10 px-6 flex items-center gap-2">
@@ -126,21 +126,21 @@ export default function ContasPagar() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-5 border-l-4 border-lumos-yellow/50 bg-[#2a2a2a]">
+        <div className="card p-5 border-l-4 border-lumos-yellow/50">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest mb-1">Total Pendente</p>
-          <p className="text-2xl font-black text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.pending)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.pending)}</p>
         </div>
-        <div className="card p-5 border-l-4 border-green-500/50 bg-[#2a2a2a]">
+        <div className="card p-5 border-l-4 border-green-500/50">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest mb-1">Pago no Mês</p>
-          <p className="text-2xl font-black text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.paidMonth)}</p>
+          <p className="text-2xl font-black text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.paidMonth)}</p>
         </div>
-        <div className="card p-5 border-l-4 border-red-500/50 bg-[#2a2a2a]">
+        <div className="card p-5 border-l-4 border-red-500/50">
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest mb-1">Contas Atrasadas</p>
           <p className="text-2xl font-black text-red-500">{stats.overdueCount}</p>
         </div>
       </div>
 
-      <div className="card p-4 flex flex-col md:flex-row gap-4 items-center bg-[#2a2a2a]">
+      <div className="card p-4 flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
           <input type="text" placeholder="Buscar por descrição ou fornecedor..." className="input-lumos pl-10 w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -155,11 +155,11 @@ export default function ContasPagar() {
         </select>
       </div>
 
-      <div className="card overflow-hidden bg-[#2a2a2a]">
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-white/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+              <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
                 <th className="px-6 py-4">Vencimento</th>
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Fornecedor</th>
@@ -175,16 +175,16 @@ export default function ContasPagar() {
                 <tr><td colSpan={6} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhuma conta encontrada.</td></tr>
               ) : (
                 filtered.map((p) => (
-                  <tr key={p.id} className="hover:bg-white/5 transition-colors group">
-                    <td className="px-6 py-4 text-sm font-bold text-white">{new Date(p.due_date).toLocaleDateString('pt-BR')}</td>
+                  <tr key={p.id} className="hover:bg-lumos-text-primary/5 transition-colors group">
+                    <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{new Date(p.due_date).toLocaleDateString('pt-BR')}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white">{p.description}</span>
+                        <span className="text-sm font-bold text-lumos-text-primary">{p.description}</span>
                         <span className="text-[10px] text-lumos-text-secondary uppercase tracking-tighter">{p.category}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{p.supplier || '—'}</td>
-                    <td className="px-6 py-4 text-right text-sm font-black text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.amount)}</td>
+                    <td className="px-6 py-4 text-right text-sm font-black text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.amount)}</td>
                     <td className="px-6 py-4 text-center">
                       {p.paid_at ? (
                         <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full"><CheckCircle2 className="w-2.5 h-2.5 mr-1" /> Pago</span>
@@ -195,7 +195,7 @@ export default function ContasPagar() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         {!p.paid_at && <button onClick={() => markAsPaid(p.id)} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Pagar</button>}
-                        <button className="p-2 text-lumos-text-secondary hover:text-white rounded"><MoreVertical className="w-4 h-4" /></button>
+                        <button className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><MoreVertical className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
