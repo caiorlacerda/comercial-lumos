@@ -5,7 +5,6 @@ import {
   Search, 
   CheckCircle2, 
   Calendar, 
-  Calendar, 
   MoreVertical,
   Edit2,
   Trash2
@@ -31,6 +30,7 @@ export default function ContasPagar() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
