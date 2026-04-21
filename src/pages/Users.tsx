@@ -29,6 +29,11 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<AppUserProfile | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   
+  const [pendingUsers, setPendingUsers] = useState<any[]>([]);
+  const [loadingPending, setLoadingPending] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [selectedPendingUser, setSelectedPendingUser] = useState<any | null>(null);
+  
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -39,7 +44,21 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    fetchPendingUsers();
   }, []);
+
+  async function fetchPendingUsers() {
+    try {
+      setLoadingPending(true);
+      const { data, error } = await supabase.functions.invoke('list-pending-users');
+      if (error) throw error;
+      setPendingUsers(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar usuários pendentes:', error);
+    } finally {
+      setLoadingPending(false);
+    }
+  }
 
   async function fetchUsers() {
     try {
@@ -127,6 +146,37 @@ export default function UsersPage() {
       fetchUsers();
     } catch (error: any) {
       alert(`Erro ao atualizar: ${error.message}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleAuthorize = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPendingUser) return;
+
+    try {
+      setFormLoading(true);
+      const { error } = await supabase
+        .from('app_users')
+        .insert([{
+          auth_user_id: selectedPendingUser.id,
+          full_name: formData.full_name,
+          email: selectedPendingUser.email,
+          role: formData.role,
+          job_title: formData.job_title,
+          status: 'ativo'
+        }]);
+
+      if (error) throw error;
+
+      alert('Usuário autorizado com sucesso!');
+      setIsAuthModalOpen(false);
+      fetchUsers();
+      fetchPendingUsers();
+      resetForm();
+    } catch (error: any) {
+      alert(`Erro ao autorizar: ${error.message}`);
     } finally {
       setFormLoading(false);
     }
@@ -295,6 +345,69 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {(pendingUsers.length > 0 || loadingPending) && (
+        <div className="space-y-4 pt-8 border-t border-lumos-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-lumos-yellow animate-pulse"></div>
+              <h2 className="text-lg font-bold text-lumos-text-primary tracking-tight">Aguardando Autorização</h2>
+              <span className="bg-lumos-yellow/10 text-lumos-yellow text-[10px] font-black px-1.5 py-0.5 rounded uppercase border border-lumos-yellow/20">
+                {pendingUsers.length} Pendente{pendingUsers.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+          
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+                    <th className="px-6 py-4">E-mail</th>
+                    <th className="px-6 py-4">Data de Cadastro</th>
+                    <th className="px-6 py-4 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-lumos-border">
+                  {loadingPending ? (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-8 text-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-lumos-yellow mx-auto"></div>
+                      </td>
+                    </tr>
+                  ) : (
+                    pendingUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-lumos-text-primary/5 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 text-sm font-bold text-lumos-text-primary">
+                            <Mail className="w-3.5 h-3.5 text-lumos-text-secondary" />
+                            {user.email}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-lumos-text-secondary">
+                          {new Date(user.created_at).toLocaleDateString('pt-BR')} às {new Date(user.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => {
+                              setSelectedPendingUser(user);
+                              resetForm();
+                              setIsAuthModalOpen(true);
+                            }}
+                            className="btn-primary text-[10px] px-3 py-1.5 h-auto uppercase tracking-wider font-black"
+                          >
+                            Autorizar Acesso
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Modal 
         isOpen={isInviteModalOpen} 
         onClose={() => !formLoading && setIsInviteModalOpen(false)}
@@ -425,6 +538,69 @@ export default function UsersPage() {
             <button type="button" disabled={formLoading} onClick={() => setIsEditModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" disabled={formLoading} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2">
               {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Salvar Alterações'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => !formLoading && setIsAuthModalOpen(false)}
+        title="Autorizar Novo Usuário"
+      >
+        <form onSubmit={handleAuthorize} className="space-y-4">
+          <div className="p-3 bg-lumos-yellow/5 border border-lumos-yellow/20 rounded-lumos flex items-center gap-3">
+            <Mail className="w-4 h-4 text-lumos-yellow" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-lumos-yellow uppercase tracking-tighter">E-mail Detectado</span>
+              <span className="text-sm font-bold text-lumos-text-primary">{selectedPendingUser?.email}</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase">Nome Completo</label>
+            <input 
+              required
+              type="text" 
+              className="input-lumos w-full"
+              placeholder="Ex: João Silva"
+              value={formData.full_name}
+              onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase">Nível de Acesso</label>
+              <select 
+                className="input-lumos w-full"
+                value={formData.role}
+                onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
+              >
+                <option value="basico">Básico</option>
+                <option value="producao">Produção</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase">Cargo</label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+                <input 
+                  type="text" 
+                  className="input-lumos pl-10 w-full"
+                  placeholder="Ex: Editor Sênior"
+                  value={formData.job_title}
+                  onChange={(e) => setFormData({...formData, job_title: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button type="button" disabled={formLoading} onClick={() => setIsAuthModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button type="submit" disabled={formLoading} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2">
+              {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Confirmar Acesso'}
             </button>
           </div>
         </form>
