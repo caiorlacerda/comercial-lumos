@@ -12,32 +12,20 @@ import {
 import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
+import { useAuth } from '@/hooks/useAuth';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, "");
     const numberValue = rawValue ? parseInt(rawValue) / 100 : 0;
     onChange(numberValue);
-  const handleCreateManual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const { error } = await supabase.from('receivables').insert([{
-        ...newReceivableData,
-        status: 'aguardando',
-        received_amount: 0,
-        budget_id: null
-      }]);
-      if (error) throw error;
-      setIsNewModalOpen(false);
-      setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: new Date().toISOString().split('T')[0], notes: '' });
-      fetchReceivables();
-    } catch (error: any) { alert(error.message); }
   };
   const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   return <input type="text" className={className} value={formattedValue} onChange={handleChange} />;
 };
 
 export default function ContasReceber() {
+  const { user } = useAuth();
   const [receivables, setReceivables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,6 +60,7 @@ export default function ContasReceber() {
     try {
       setLoading(true);
       const { data, error } = await supabase.from('receivables').select('*, client:clients(name), budget:budgets(id, project_name)').order('due_date', { ascending: true });
+      if (error) throw error;
       setReceivables(data || []);
     } catch (error) {
       console.error('Erro ao buscar recebíveis:', error);
@@ -97,6 +86,8 @@ export default function ContasReceber() {
       setIsPayModalOpen(false);
       fetchReceivables();
     } catch (error: any) { alert(error.message); }
+  };
+
   const handleCreateManual = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -104,7 +95,8 @@ export default function ContasReceber() {
         ...newReceivableData,
         status: 'aguardando',
         received_amount: 0,
-        budget_id: null
+        budget_id: null,
+        created_by: user?.id
       }]);
       if (error) throw error;
       setIsNewModalOpen(false);
@@ -117,23 +109,12 @@ export default function ContasReceber() {
     toReceive: receivables.filter(r => r.status !== 'recebido').reduce((acc, r) => acc + (r.total_amount - r.received_amount), 0),
     receivedMonth: receivables.filter(r => r.received_at && new Date(r.received_at).getMonth() === new Date().getMonth()).reduce((acc, r) => acc + r.received_amount, 0),
     overdue: receivables.filter(r => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date()).length
-  const handleCreateManual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const { error } = await supabase.from('receivables').insert([{
-        ...newReceivableData,
-        status: 'aguardando',
-        received_amount: 0,
-        budget_id: null
-      }]);
-      if (error) throw error;
-      setIsNewModalOpen(false);
-      setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: new Date().toISOString().split('T')[0], notes: '' });
-      fetchReceivables();
-    } catch (error: any) { alert(error.message); }
   };
 
-  const filtered = receivables.filter(r => r.description?.toLowerCase().includes(searchTerm.toLowerCase()) || r.client?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered = receivables.filter(r => 
+    r.description?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    r.client?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 font-work-sans">
