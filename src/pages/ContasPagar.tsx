@@ -5,7 +5,10 @@ import {
   Search, 
   CheckCircle2, 
   Calendar, 
-  MoreVertical
+  Calendar, 
+  MoreVertical,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,9 +29,12 @@ export default function ContasPagar() {
   const [payables, setPayables] = useState<any[]>([]);
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     description: '',
@@ -64,15 +70,36 @@ export default function ContasPagar() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { error } = await supabase.from('payables').insert([{
-        ...formData,
-        created_by: profile?.id,
-        responsible_id: formData.responsible_id || null
-      }]);
-      if (error) throw error;
+      if (editingId) {
+        const { error } = await supabase.from('payables').update({
+          ...formData,
+          responsible_id: formData.responsible_id || null,
+          updated_at: new Date().toISOString()
+        }).eq('id', editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('payables').insert([{
+          ...formData,
+          created_by: profile?.id,
+          responsible_id: formData.responsible_id || null
+        }]);
+        if (error) throw error;
+      }
       setIsModalOpen(false);
+      setEditingId(null);
       fetchData();
       resetForm();
+    } catch (error: any) { alert(error.message); }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingId) return;
+    try {
+      const { error } = await supabase.from('payables').delete().eq('id', deletingId);
+      if (error) throw error;
+      setIsDeleteModalOpen(false);
+      setDeletingId(null);
+      fetchData();
     } catch (error: any) { alert(error.message); }
   };
 
@@ -88,6 +115,7 @@ export default function ContasPagar() {
   };
 
   const resetForm = () => {
+    setEditingId(null);
     setFormData({
       description: '',
       amount: 0,
@@ -98,6 +126,22 @@ export default function ContasPagar() {
       payment_method: 'pix',
       notes: ''
     });
+  };
+
+  const handleEdit = (p: any) => {
+    setEditingId(p.id);
+    setFormData({
+      description: p.description,
+      amount: p.amount,
+      due_date: p.due_date,
+      category: p.category,
+      supplier: p.supplier || '',
+      responsible_id: p.responsible_id || '',
+      payment_method: p.payment_method || 'pix',
+      notes: p.notes || ''
+    });
+    setIsModalOpen(true);
+    setActiveMenuId(null);
   };
 
   const stats = {
@@ -193,9 +237,36 @@ export default function ContasPagar() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 relative">
                         {!p.paid_at && <button onClick={() => markAsPaid(p.id)} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Pagar</button>}
-                        <button className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><MoreVertical className="w-4 h-4" /></button>
+                        <div className="relative">
+                          <button 
+                            onClick={() => setActiveMenuId(activeMenuId === p.id ? null : p.id)}
+                            className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded hover:bg-lumos-text-primary/5 transition-all"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          
+                          {activeMenuId === p.id && (
+                            <>
+                              <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)}></div>
+                              <div className="absolute right-0 mt-2 w-32 bg-lumos-surface border border-lumos-border rounded-lumos shadow-xl z-20 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                <button 
+                                  onClick={() => handleEdit(p)}
+                                  className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 flex items-center gap-2"
+                                >
+                                  <Edit2 className="w-3 h-3 text-blue-500" /> Editar
+                                </button>
+                                <button 
+                                  onClick={() => { setDeletingId(p.id); setIsDeleteModalOpen(true); setActiveMenuId(null); }}
+                                  className="w-full text-left px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-500/5 flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-3 h-3" /> Excluir
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -247,9 +318,19 @@ export default function ContasPagar() {
           </div>
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-            <button type="submit" className="btn-primary flex-1 h-10">Cadastrar Despesa</button>
+            <button type="submit" className="btn-primary flex-1 h-10">{editingId ? 'Salvar Alterações' : 'Cadastrar Despesa'}</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Confirmar Exclusão">
+        <div className="space-y-4">
+          <p className="text-sm text-lumos-text-secondary">Tem certeza que deseja excluir esta despesa? Esta ação não pode ser desfeita.</p>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setIsDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Excluir permanentemente</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
