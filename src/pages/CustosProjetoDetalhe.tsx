@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check } from 'lucide-react';
+import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
@@ -27,6 +28,8 @@ export default function CustosProjetoDetalhe() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ description: '', amount: 0, cost_date: new Date().toISOString().split('T')[0], category: 'equipe', supplier: '', responsible_id: '', notes: '' });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
   useEffect(() => { fetchProjectData(); }, [id]);
 
@@ -70,6 +73,35 @@ export default function CustosProjetoDetalhe() {
       setDeletingId(null);
       fetchProjectData();
     } catch (error: any) { alert(error.message); }
+  };
+
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    try {
+      const { error } = await supabase.from('project_costs').delete().in('id', ids);
+      if (error) throw error;
+      setIsBatchDeleteModalOpen(false);
+      setSelectedIds(new Set());
+      fetchProjectData();
+    } catch (error: any) { alert(error.message); }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === costs.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(costs.map(c => c.id)));
+    }
+  };
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
   };
 
   const resetForm = () => {
@@ -144,6 +176,21 @@ export default function CustosProjetoDetalhe() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+                {profile?.role === 'admin' && (
+                  <th className="px-6 py-4 w-10">
+                    <div 
+                      onClick={toggleSelectAll}
+                      className={clsx(
+                        "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                        selectedIds.size === costs.length && costs.length > 0
+                          ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                          : "border-lumos-border hover:border-lumos-yellow/50"
+                      )}
+                    >
+                      {selectedIds.size === costs.length && costs.length > 0 && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </th>
+                )}
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Categoria</th>
@@ -153,7 +200,30 @@ export default function CustosProjetoDetalhe() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {costs.map((c) => (
-                <tr key={c.id} className="hover:bg-lumos-text-primary/5 transition-colors">
+                <tr 
+                  key={c.id} 
+                  className={clsx(
+                    "hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group",
+                    selectedIds.has(c.id) && "bg-lumos-yellow/[0.03]"
+                  )}
+                  onClick={() => profile?.role === 'admin' ? handleEdit(c) : null}
+                >
+                  {profile?.role === 'admin' && (
+                    <td className="px-6 py-4">
+                      <div 
+                        onClick={(e) => toggleSelect(c.id, e)}
+                        className={clsx(
+                          "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                          selectedIds.has(c.id)
+                            ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                            : "border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100",
+                          selectedIds.size > 0 && "opacity-100"
+                        )}
+                      >
+                        {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(c.cost_date).toLocaleDateString('pt-BR')}</td>
                   <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{c.description}</td>
                   <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">{c.category}</td>
@@ -172,6 +242,62 @@ export default function CustosProjetoDetalhe() {
           </table>
         </div>
       </div>
+
+      {/* Batch Action Bar */}
+      {profile?.role === 'admin' && selectedIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
+            <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
+              <div className="w-8 h-8 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-sm">
+                {selectedIds.size}
+              </div>
+              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-tight">
+                {selectedIds.size === 1 ? 'Item selecionado' : 'Itens selecionados'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsBatchDeleteModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/10 text-red-500 font-black text-xs uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir
+              </button>
+
+              <button 
+                onClick={() => setSelectedIds(new Set())}
+                className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary transition-colors text-xs font-bold uppercase"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      <Modal
+        isOpen={isBatchDeleteModalOpen}
+        onClose={() => setIsBatchDeleteModalOpen(false)}
+        title="Excluir Itens"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-red-500/10 rounded-full flex-shrink-0">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lumos-text-primary font-bold">Confirma a exclusão em lote?</p>
+              <p className="text-xs text-lumos-text-secondary">Você selecionou {selectedIds.size} custos para exclusão permanente deste projeto. Esta ação não pode ser desfeita.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setIsBatchDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={handleBatchDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Sim, Excluir</button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Editar Custo' : 'Registrar Custo'}>
         <form onSubmit={handleAddCost} className="space-y-4">
