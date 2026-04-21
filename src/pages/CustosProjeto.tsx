@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target } from 'lucide-react';
+import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check } from 'lucide-react';
+import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 
 export default function CustosProjeto() {
@@ -8,6 +9,15 @@ export default function CustosProjeto() {
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
 
   useEffect(() => { fetchProjects(); }, []);
 
@@ -51,10 +61,30 @@ export default function CustosProjeto() {
           <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">Nenhum projeto.</div>
         ) : (
           filtered.map((p) => (
-            <div key={p.id} onClick={() => navigate(`/financeiro/custos-projeto/${p.id}`)} className="card p-6 flex flex-col md:flex-row items-center gap-6 hover:border-lumos-yellow/30 cursor-pointer group">
+            <div 
+              key={p.id} 
+              onClick={() => navigate(`/financeiro/custos-projeto/${p.id}`)} 
+              className={clsx(
+                "card p-6 flex flex-col md:flex-row items-center gap-6 hover:border-lumos-yellow/30 cursor-pointer group relative transition-all",
+                selectedIds.has(p.id) && "border-lumos-yellow/50 bg-lumos-yellow/[0.02]"
+              )}
+            >
+              <div 
+                onClick={(e) => toggleSelect(p.id, e)}
+                className={clsx(
+                  "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0",
+                  selectedIds.has(p.id)
+                    ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                    : "border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100",
+                  selectedIds.size > 0 && "opacity-100"
+                )}
+              >
+                {selectedIds.has(p.id) && <Check className="w-3.5 h-3.5" />}
+              </div>
+
               <div className="flex-1 w-full">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase">Projeto</span>
+                  <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tighter">Projeto</span>
                   <h3 className="text-lg font-bold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">{p.project_name}</h3>
                 </div>
                 <p className="text-xs text-lumos-text-secondary flex items-center gap-1"><Target className="w-3 h-3" /> {p.client?.name}</p>
@@ -69,6 +99,29 @@ export default function CustosProjeto() {
           ))
         )}
       </div>
+
+      {/* Batch Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-sm">
+                {selectedIds.size}
+              </div>
+              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-tight">
+                {selectedIds.size === 1 ? 'Projeto selecionado' : 'Projetos selecionados'}
+              </span>
+            </div>
+            
+            <button 
+              onClick={() => setSelectedIds(new Set())}
+              className="px-4 py-2 rounded-full bg-lumos-bg border border-lumos-border text-lumos-text-primary font-black text-xs uppercase hover:border-lumos-yellow transition-all active:scale-95 ml-4"
+            >
+              Cancelar Seleção
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
