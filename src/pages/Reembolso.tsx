@@ -103,17 +103,17 @@ export default function Reembolso() {
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">{isAdmin ? 'Gestão de Reembolsos' : 'Meus Reembolsos'}</h1>
+          <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">{isAdmin ? 'Gestão de Reembolsos' : 'Meus Reembolsos'}</h1>
           <p className="text-lumos-text-secondary text-sm">{isAdmin ? 'Autorize as solicitações da equipe.' : 'Solicite e acompanhe seus pedidos.'}</p>
         </div>
         {!isAdmin && <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-primary h-10 px-6 flex items-center gap-2"><Plus className="w-4 h-4" /> Novo Pedido</button>}
       </div>
 
-      <div className="card overflow-hidden bg-[#2a2a2a]">
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-white/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+              <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
                 {isAdmin && <th className="px-6 py-4">Funcionário</th>}
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
@@ -129,11 +129,11 @@ export default function Reembolso() {
                 <tr><td colSpan={6} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
               ) : (
                 reimbursements.map((r) => (
-                  <tr key={r.id} className="hover:bg-white/5 transition-colors">
-                    {isAdmin && <td className="px-6 py-4 text-sm font-bold text-white">{r.requester?.full_name}</td>}
+                  <tr key={r.id} className="hover:bg-lumos-text-primary/5 transition-colors">
+                    {isAdmin && <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.requester?.full_name}</td>}
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(r.expense_date).toLocaleDateString('pt-BR')}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-white">{r.description}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}</td>
+                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.description}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}</td>
                     <td className="px-6 py-4 text-center"><StatusBadge status={r.status} /></td>
                     <td className="px-6 py-4 text-right">
                       {isAdmin ? (
