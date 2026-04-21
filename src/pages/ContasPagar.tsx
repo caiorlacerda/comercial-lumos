@@ -35,6 +35,7 @@ export default function ContasPagar() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const [formData, setFormData] = useState({
     description: '',
@@ -241,7 +242,11 @@ export default function ContasPagar() {
                         {!p.paid_at && <button onClick={() => markAsPaid(p.id)} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Pagar</button>}
                         <div className="relative">
                           <button 
-                            onClick={() => setActiveMenuId(activeMenuId === p.id ? null : p.id)}
+                            onClick={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setMenuPosition({ top: rect.bottom + 8, left: rect.right - 128 });
+                              setActiveMenuId(activeMenuId === p.id ? null : p.id);
+                            }}
                             className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded hover:bg-lumos-text-primary/5 transition-all"
                           >
                             <MoreVertical className="w-4 h-4" />
@@ -250,7 +255,10 @@ export default function ContasPagar() {
                           {activeMenuId === p.id && (
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)}></div>
-                              <div className="absolute right-0 mt-2 w-32 bg-lumos-surface border border-lumos-border rounded-lumos shadow-xl z-20 py-1 animate-in fade-in zoom-in-95 duration-100">
+                              <div 
+                                className="fixed w-32 bg-lumos-surface border border-lumos-border rounded-lumos shadow-xl z-20 py-1 animate-in fade-in zoom-in-95 duration-100"
+                                style={{ top: menuPosition.top, left: menuPosition.left }}
+                              >
                                 <button 
                                   onClick={() => handleEdit(p)}
                                   className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 flex items-center gap-2"

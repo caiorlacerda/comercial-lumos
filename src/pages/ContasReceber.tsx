@@ -25,7 +25,7 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
 };
 
 export default function ContasReceber() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [receivables, setReceivables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -90,13 +90,17 @@ export default function ContasReceber() {
 
   const handleCreateManual = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!profile) {
+      alert("Você precisa estar logado para realizar esta ação.");
+      return;
+    }
     try {
       const { error } = await supabase.from('receivables').insert([{
         ...newReceivableData,
         status: 'aguardando',
         received_amount: 0,
         budget_id: null,
-        created_by: user?.id
+        created_by: profile.id
       }]);
       if (error) throw error;
       setIsNewModalOpen(false);
