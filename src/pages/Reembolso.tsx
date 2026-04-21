@@ -7,7 +7,8 @@ import {
   Clock, 
   DollarSign,
   Upload,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -44,6 +45,8 @@ export default function Reembolso() {
   const [reimbursements, setReimbursements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     description: '',
     amount: 0,
@@ -95,6 +98,17 @@ export default function Reembolso() {
     } catch (error: any) { alert(error.message); }
   };
 
+  const handleDelete = async () => {
+    if (!deletingId) return;
+    try {
+      const { error } = await supabase.from('reimbursements').delete().eq('id', deletingId);
+      if (error) throw error;
+      setIsDeleteModalOpen(false);
+      setDeletingId(null);
+      fetchReimbursements();
+    } catch (error: any) { alert(error.message); }
+  };
+
   const resetForm = () => {
     setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], payment_method: 'pix', notes: '', attachment: null });
   };
@@ -126,24 +140,39 @@ export default function Reembolso() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={6} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <tr><td colSpan={isAdmin ? 6 : 5} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : reimbursements.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
+                <tr><td colSpan={isAdmin ? 6 : 5} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
               ) : (
                 reimbursements.map((r) => (
                   <tr key={r.id} className="hover:bg-lumos-text-primary/5 transition-colors">
                     {isAdmin && <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.requester?.full_name}</td>}
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(r.expense_date).toLocaleDateString('pt-BR')}</td>
-                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.description}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.description}</td>
                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}</td>
                     <td className="px-6 py-4 text-center"><StatusBadge status={r.status} /></td>
                     <td className="px-6 py-4 text-right">
-                      {isAdmin ? (
-                        <div className="flex justify-end gap-2">
-                          {r.status === 'pendente' && <><button onClick={() => updateStatus(r.id, 'aprovado')} className="p-1.5 text-green-500"><CheckCircle2 className="w-4 h-4" /></button><button onClick={() => updateStatus(r.id, 'rejeitado')} className="p-1.5 text-red-500"><XCircle className="w-4 h-4" /></button></>}
-                          {r.status === 'aprovado' && <button onClick={() => updateStatus(r.id, 'pago')} className="btn-primary text-[10px] px-2 py-1 h-auto">Pagar</button>}
-                        </div>
-                      ) : <button className="p-1.5 text-lumos-text-secondary"><ChevronRight className="w-4 h-4" /></button>}
+                      <div className="flex justify-end gap-2">
+                        {isAdmin ? (
+                          <>
+                            {r.status === 'pendente' && (
+                              <>
+                                <button onClick={() => updateStatus(r.id, 'aprovado')} title="Aprovar" className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-colors"><CheckCircle2 className="w-4 h-4" /></button>
+                                <button onClick={() => updateStatus(r.id, 'rejeitado')} title="Rejeitar" className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors"><XCircle className="w-4 h-4" /></button>
+                              </>
+                            )}
+                            {r.status === 'aprovado' && <button onClick={() => updateStatus(r.id, 'pago')} className="btn-primary text-[10px] px-2 py-1 h-auto">Pagar</button>}
+                            <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} title="Excluir" className="p-1.5 text-lumos-text-secondary hover:text-red-500 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          </>
+                        ) : (
+                          <>
+                            {r.status === 'pendente' && (
+                              <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} title="Excluir" className="p-1.5 text-lumos-text-secondary hover:text-red-500 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                            )}
+                            <button className="p-1.5 text-lumos-text-secondary"><ChevronRight className="w-4 h-4" /></button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -174,6 +203,16 @@ export default function Reembolso() {
             <button type="submit" className="btn-primary flex-1 h-10">Enviar</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Excluir Solicitação">
+        <div className="space-y-4">
+          <p className="text-sm text-lumos-text-secondary">Tem certeza que deseja excluir esta solicitação de reembolso? Esta ação não pode ser desfeita.</p>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setIsDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Confirmar Exclusão</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

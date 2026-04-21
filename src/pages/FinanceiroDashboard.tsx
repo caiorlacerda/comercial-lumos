@@ -34,8 +34,8 @@ export default function FinanceiroDashboard() {
       const nextWeek = new Date();
       nextWeek.setDate(now.getDate() + 7);
       
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
       const nextWeekStr = nextWeek.toISOString().split('T')[0];
 
       const [payablesRes, receivablesRes, reimbursementsRes] = await Promise.all([
@@ -50,7 +50,7 @@ export default function FinanceiroDashboard() {
       const saldoGeral = totalRecebido - (totalPagoDespesas + totalPagoReembolsos);
 
       const faturamentoMes = (receivablesRes.data || [])
-        .filter(r => r.due_date >= firstDayOfMonth && r.due_date <= lastDayOfMonth)
+        .filter(r => r.due_date && r.due_date >= firstDayOfMonth && r.due_date <= lastDayOfMonth)
         .reduce((acc, r) => acc + r.total_amount, 0);
 
       const pagarSemana = (payablesRes.data || [])
@@ -62,11 +62,11 @@ export default function FinanceiroDashboard() {
         .reduce((acc, r) => acc + (r.total_amount - r.received_amount), 0);
 
       const recebidoMes = (receivablesRes.data || [])
-        .filter(r => r.received_at && r.received_at >= firstDayOfMonth)
+        .filter(r => r.received_at && r.received_at.split('T')[0] >= firstDayOfMonth)
         .reduce((acc, r) => acc + r.received_amount, 0);
       
       const despesasMes = (payablesRes.data || [])
-        .filter(p => p.paid_at && p.paid_at >= firstDayOfMonth)
+        .filter(p => p.paid_at && p.paid_at.split('T')[0] >= firstDayOfMonth)
         .reduce((acc, p) => acc + p.amount, 0);
 
       setStats({
