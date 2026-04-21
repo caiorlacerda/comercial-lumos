@@ -166,7 +166,7 @@ export default function UsersPage() {
     switch (role) {
       case 'admin': return 'bg-lumos-yellow/20 text-lumos-yellow border-lumos-yellow/30';
       case 'producao': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      default: return 'bg-white/10 text-lumos-text-secondary border-white/10';
+      default: return 'bg-lumos-text-primary/10 text-lumos-text-secondary border-lumos-border';
     }
   };
 
@@ -174,7 +174,7 @@ export default function UsersPage() {
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Gerenciamento de Usuários</h1>
+          <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Gerenciamento de Usuários</h1>
           <p className="text-lumos-text-secondary text-sm">Controle quem acessa a plataforma e seus níveis de permissão.</p>
         </div>
         <button 
@@ -224,7 +224,7 @@ export default function UsersPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-white/5 border-b border-lumos-border">
+              <tr className="bg-lumos-text-primary/5 border-b border-lumos-border">
                 <th className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Usuário</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Cargo / Nível</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Status</th>
@@ -246,21 +246,21 @@ export default function UsersPage() {
                 </tr>
               ) : (
                 filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-white/5 transition-colors group">
+                  <tr key={user.id} className="hover:bg-lumos-text-primary/5 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lumos bg-lumos-yellow/10 flex items-center justify-center text-lumos-yellow font-bold text-sm border border-lumos-yellow/20">
                           {user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-white tracking-tight">{user.full_name}</span>
+                          <span className="text-sm font-bold text-lumos-text-primary tracking-tight">{user.full_name}</span>
                           <span className="text-xs text-lumos-text-secondary">{user.email}</span>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-xs font-medium text-white">{user.job_title || 'Não definido'}</span>
+                        <span className="text-xs font-medium text-lumos-text-primary">{user.job_title || 'Não definido'}</span>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit ${getRoleBadgeColor(user.role)}`}>
                           <Shield className="w-2.5 h-2.5 mr-1" />
                           {user.role.toUpperCase()}
