@@ -134,10 +134,12 @@ export default function Reembolso() {
         description: formData.description,
         amount: formData.amount,
         expense_date: formData.expense_date,
-        budget_id: formData.budget_id || null,
+        budget_id: formData.budget_id === 'interno' ? null : (formData.budget_id || null),
         payment_method: formData.payment_method,
-        notes: formData.notes,
-        attachments: attachmentData,
+        notes: formData.budget_id === 'interno' ? `${formData.notes}\n[Gasto Interno]`.trim() : formData.notes,
+        attachments: formData.budget_id === 'interno' && attachmentData 
+          ? attachmentData.map((a: any) => ({ ...a, interno: true })) 
+          : attachmentData,
         status: 'pendente'
       }]);
       if (error) throw error;
@@ -261,6 +263,7 @@ export default function Reembolso() {
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto (Opcional)</label>
             <select className="input-lumos w-full" value={formData.budget_id} onChange={e => setFormData({...formData, budget_id: e.target.value})}>
               <option value="">Nenhum projeto selecionado</option>
+              <option value="interno" className="text-lumos-yellow font-bold">Lumos — Gasto Interno</option>
               {budgets.map(b => <option key={b.id} value={b.id}>{b.project_name}</option>)}
             </select>
           </div>
