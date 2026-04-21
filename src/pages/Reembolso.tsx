@@ -9,8 +9,11 @@ import {
   Upload,
   ChevronRight,
   Trash2,
-  Search
+  Search,
+  Check,
+  AlertTriangle
 } from 'lucide-react';
+import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
@@ -63,6 +66,8 @@ export default function Reembolso() {
   const [uploading, setUploading] = useState(false);
   const [projectSearch, setProjectSearch] = useState('');
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     fetchReimbursements();
@@ -191,6 +196,64 @@ export default function Reembolso() {
     } catch (error: any) { alert(error.message); }
   };
 
+  const handleBatchStatus = async (status: string) => {
+    const toUpdate = reimbursements.filter(r => selectedIds.has(r.id));
+    if (toUpdate.length === 0) return;
+
+    try {
+      const ids = toUpdate.map(r => r.id);
+      const { error } = await supabase.from('reimbursements').update({ 
+        status, 
+        updated_at: new Date().toISOString() 
+      }).in('id', ids);
+      if (error) throw error;
+
+      if (status === 'aprovado') {
+        const payables = toUpdate.map(item => ({
+          description: `Reembolso — ${item.requester?.full_name || 'Funcionário'}`,
+          amount: item.amount,
+          due_date: new Date().toISOString().split('T')[0],
+          category: 'outro',
+          notes: item.description,
+          created_by: profile?.id
+        }));
+        await supabase.from('payables').insert(payables);
+      }
+
+      setSelectedIds(new Set());
+      fetchReimbursements();
+    } catch (error: any) { alert(error.message); }
+  };
+
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    try {
+      const { error } = await supabase.from('reimbursements').delete().in('id', ids);
+      if (error) throw error;
+      setIsBatchDeleteModalOpen(false);
+      setSelectedIds(new Set());
+      fetchReimbursements();
+    } catch (error: any) { alert(error.message); }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === reimbursements.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(reimbursements.map(r => r.id)));
+    }
+  };
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
   const resetForm = () => {
     setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], budget_id: '', payment_method: 'pix', notes: '', attachment: null });
     setProjectSearch('');
@@ -213,6 +276,21 @@ export default function Reembolso() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+                {isAdmin && (
+                  <th className="px-6 py-4 w-10">
+                    <div 
+                      onClick={toggleSelectAll}
+                      className={clsx(
+                        "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                        selectedIds.size === reimbursements.length && reimbursements.length > 0
+                          ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                          : "border-lumos-border hover:border-lumos-yellow/50"
+                      )}
+                    >
+                      {selectedIds.size === reimbursements.length && reimbursements.length > 0 && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </th>
+                )}
                 {isAdmin && <th className="px-6 py-4">Funcionário</th>}
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
@@ -223,12 +301,35 @@ export default function Reembolso() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={isAdmin ? 6 : 5} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <tr><td colSpan={isAdmin ? 7 : 5} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : reimbursements.length === 0 ? (
-                <tr><td colSpan={isAdmin ? 6 : 5} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
+                <tr><td colSpan={isAdmin ? 7 : 5} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
               ) : (
                 reimbursements.map((r) => (
-                  <tr key={r.id} className="hover:bg-lumos-text-primary/5 transition-colors">
+                  <tr 
+                    key={r.id} 
+                    className={clsx(
+                      "hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group",
+                      selectedIds.has(r.id) && "bg-lumos-yellow/[0.03]"
+                    )}
+                    onClick={() => !isAdmin && r.status === 'pendente' ? null : null}
+                  >
+                    {isAdmin && (
+                      <td className="px-6 py-4">
+                        <div 
+                          onClick={(e) => toggleSelect(r.id, e)}
+                          className={clsx(
+                            "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
+                            selectedIds.has(r.id)
+                              ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
+                              : "border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100",
+                            selectedIds.size > 0 && "opacity-100"
+                          )}
+                        >
+                          {selectedIds.has(r.id) && <Check className="w-3.5 h-3.5" />}
+                        </div>
+                      </td>
+                    )}
                     {isAdmin && <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.requester?.full_name}</td>}
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(r.expense_date).toLocaleDateString('pt-BR')}</td>
                     <td className="px-6 py-4">
@@ -271,6 +372,86 @@ export default function Reembolso() {
           </table>
         </div>
       </div>
+
+      {/* Batch Action Bar */}
+      {isAdmin && selectedIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
+            <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
+              <div className="w-8 h-8 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-sm">
+                {selectedIds.size}
+              </div>
+              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-tight">
+                {selectedIds.size === 1 ? 'Item selecionado' : 'Itens selecionados'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => handleBatchStatus('aprovado')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 text-green-500 font-black text-[10px] uppercase hover:bg-green-500 hover:text-white transition-all active:scale-95"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Aprovar
+              </button>
+
+              <button 
+                onClick={() => handleBatchStatus('rejeitado')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/10 text-red-500 font-black text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                Rejeitar
+              </button>
+
+              <button 
+                onClick={() => handleBatchStatus('pago')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-lumos-yellow text-lumos-bg font-black text-[10px] uppercase hover:scale-105 active:scale-95 transition-all"
+              >
+                <DollarSign className="w-3.5 h-3.5" />
+                Marcar Pago
+              </button>
+              
+              <button 
+                onClick={() => setIsBatchDeleteModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/10 text-red-500 font-black text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir
+              </button>
+
+              <button 
+                onClick={() => setSelectedIds(new Set())}
+                className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary transition-colors text-xs font-bold uppercase"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      <Modal
+        isOpen={isBatchDeleteModalOpen}
+        onClose={() => setIsBatchDeleteModalOpen(false)}
+        title="Excluir Solicitações"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-4 items-start">
+            <div className="p-3 bg-red-500/10 rounded-full flex-shrink-0">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lumos-text-primary font-bold">Confirma a exclusão em lote?</p>
+              <p className="text-xs text-lumos-text-secondary">Você selecionou {selectedIds.size} solicitações de reembolso para exclusão permanente. Esta ação não pode ser desfeita.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setIsBatchDeleteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={handleBatchDelete} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-all">Sim, Excluir</button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Solicitar Reembolso">
         <form onSubmit={handleSubmit} className="space-y-4">
