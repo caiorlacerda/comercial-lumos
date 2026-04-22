@@ -129,9 +129,11 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   }
 
   const location = useLocation();
-  const isAdmin = profile.role === 'admin';
 
-  if (!isAdmin && location.pathname === '/') {
+  if (profile?.role === 'producao' && location.pathname === '/') {
+    return <Navigate to="/financeiro/custos-projeto" />;
+  }
+  if (profile?.role === 'basico' && location.pathname === '/') {
     return <Navigate to="/financeiro/reembolso" />;
   }
 
