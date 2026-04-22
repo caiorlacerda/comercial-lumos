@@ -99,7 +99,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   if (!user) return <Navigate to="/login" />;
 
   // VALIDAÇÃO DE PERFIL LUMOS
-  if (!profile) {
+  if (!loading && !profile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
         <div className="bg-yellow-500/10 border border-yellow-500 p-8 rounded-lumos max-w-md">
@@ -114,7 +114,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (profile.status === 'inativo') {
+  if (!loading && profile?.status === 'inativo') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
         <div className="bg-red-500/10 border border-red-500 p-8 rounded-lumos max-w-md">
