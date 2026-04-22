@@ -43,7 +43,8 @@ export default function UsersPage() {
     email: '',
     role: 'basico' as UserRole,
     job_title: '',
-    status: 'ativo' as UserStatus
+    status: 'ativo' as UserStatus,
+    password: ''
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
@@ -88,10 +89,29 @@ export default function UsersPage() {
     try {
       setFormLoading(true);
 
-      // 1. Criar o registro prévio em app_users
+      if (formData.password.length < 8) {
+        throw new Error('A senha deve ter pelo menos 8 caracteres.');
+      }
+
+      // 1. Criar o usuário no Auth via Edge Function
+      const { data: userData, error: funcError } = await supabase.functions.invoke('create-user', {
+        body: { 
+          email: formData.email, 
+          password: formData.password,
+          full_name: formData.full_name, 
+          role: formData.role, 
+          job_title: formData.job_title 
+        }
+      });
+
+      if (funcError) throw funcError;
+      const authUserId = userData.user.id;
+
+      // 2. Criar o registro em app_users vinculado ao Auth
       const { error: dbError } = await supabase
         .from('app_users')
         .insert([{
+          auth_user_id: authUserId,
           full_name: formData.full_name,
           email: formData.email,
           role: formData.role,
@@ -102,34 +122,13 @@ export default function UsersPage() {
 
       if (dbError) throw dbError;
 
-      // 2. Chamar a Edge Function para disparar o e-mail de convite
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const { error: funcError } = await supabase.functions.invoke('invite-user', {
-        body: { 
-          email: formData.email, 
-          full_name: formData.full_name, 
-          role: formData.role, 
-          job_title: formData.job_title 
-        },
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`
-        }
-      });
-
-      if (funcError) {
-        // Rollback: deleta o registro recém-criado em app_users se a função falhar
-        await supabase.from('app_users').delete().eq('email', formData.email).is('auth_user_id', null);
-        throw funcError;
-      }
-
-      alert(`Convite enviado com sucesso para ${formData.email}!`);
+      alert(`Usuário ${formData.email} cadastrado com sucesso!`);
       setIsInviteModalOpen(false);
       resetForm();
       fetchUsers();
     } catch (error: any) {
-      console.error('Erro no convite:', error);
-      alert(`Erro ao processar convite: ${error.message}`);
+      console.error('Erro no cadastro:', error);
+      alert(`Erro ao processar cadastro: ${error.message}`);
     } finally {
       setFormLoading(false);
     }
@@ -253,7 +252,8 @@ export default function UsersPage() {
       email: user.email,
       role: user.role,
       job_title: user.job_title || '',
-      status: user.status
+      status: user.status,
+      password: ''
     });
     setIsEditModalOpen(true);
   };
@@ -264,7 +264,8 @@ export default function UsersPage() {
       email: '',
       role: 'basico',
       job_title: '',
-      status: 'ativo'
+      status: 'ativo',
+      password: ''
     });
   };
 
@@ -296,7 +297,7 @@ export default function UsersPage() {
           className="btn-primary flex items-center justify-center gap-2 h-10 px-6"
         >
           <UserPlus className="w-4 h-4" />
-          Convidar Usuário
+          Novo Usuário
         </button>
       </div>
 
@@ -581,7 +582,7 @@ export default function UsersPage() {
       <Modal 
         isOpen={isInviteModalOpen} 
         onClose={() => !formLoading && setIsInviteModalOpen(false)}
-        title="Convidar Novo Usuário"
+        title="Cadastrar Novo Usuário"
       >
         <form onSubmit={handleInvite} className="space-y-4">
           <div className="space-y-2">
@@ -636,10 +637,22 @@ export default function UsersPage() {
               </div>
             </div>
           </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase">Senha Temporária</label>
+            <input 
+              required
+              type="password" 
+              minLength={8}
+              className="input-lumos w-full"
+              placeholder="Mínimo 8 caracteres"
+              value={formData.password}
+              onChange={(e) => setFormData({...formData, password: e.target.value})}
+            />
+          </div>
           <div className="pt-4 flex gap-3">
             <button type="button" disabled={formLoading} onClick={() => setIsInviteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" disabled={formLoading} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2">
-              {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Enviar Convite'}
+              {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Cadastrar Usuário'}
             </button>
           </div>
         </form>
