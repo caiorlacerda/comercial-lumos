@@ -93,25 +93,10 @@ export default function UsersPage() {
         throw new Error('A senha deve ter pelo menos 8 caracteres.');
       }
 
-      // 1. Criar o usuário no Auth via Edge Function
-      const { data: userData, error: funcError } = await supabase.functions.invoke('create-user', {
-        body: { 
-          email: formData.email, 
-          password: formData.password,
-          full_name: formData.full_name, 
-          role: formData.role, 
-          job_title: formData.job_title 
-        }
-      });
-
-      if (funcError) throw funcError;
-      const authUserId = userData.user.id;
-
-      // 2. Criar o registro em app_users vinculado ao Auth
+      // 1. Criar apenas o registro em app_users (vínculo com Auth será via trigger no Dashboard)
       const { error: dbError } = await supabase
         .from('app_users')
         .insert([{
-          auth_user_id: authUserId,
           full_name: formData.full_name,
           email: formData.email,
           role: formData.role,
@@ -122,7 +107,8 @@ export default function UsersPage() {
 
       if (dbError) throw dbError;
 
-      alert(`Usuário ${formData.email} cadastrado com sucesso!`);
+      alert(`Perfil criado com sucesso!\n\nAgora crie a conta no Supabase Dashboard em Authentication → Users com o e-mail ${formData.email} e a senha informada. O usuário aparecerá automaticamente na lista ao fazer login.`);
+      
       setIsInviteModalOpen(false);
       resetForm();
       fetchUsers();
