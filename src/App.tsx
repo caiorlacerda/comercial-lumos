@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import throttle from 'lodash/throttle';
 import Login from '@/pages/Login';
@@ -126,6 +126,13 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     );
+  }
+
+  const location = useLocation();
+  const isAdmin = profile.role === 'admin';
+
+  if (!isAdmin && location.pathname === '/') {
+    return <Navigate to="/financeiro/reembolso" />;
   }
 
   return <Sidebar>{children}</Sidebar>;
