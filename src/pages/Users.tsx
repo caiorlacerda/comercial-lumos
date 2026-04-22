@@ -103,12 +103,17 @@ export default function UsersPage() {
       if (dbError) throw dbError;
 
       // 2. Chamar a Edge Function para disparar o e-mail de convite
+      const { data: { session } } = await supabase.auth.getSession();
+
       const { error: funcError } = await supabase.functions.invoke('invite-user', {
         body: { 
           email: formData.email, 
           full_name: formData.full_name, 
           role: formData.role, 
           job_title: formData.job_title 
+        },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`
         }
       });
 
