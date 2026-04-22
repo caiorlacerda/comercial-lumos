@@ -70,7 +70,7 @@ export default function ContasPagar() {
       const [payablesRes, costsRes, usersRes] = await Promise.all([
         supabase.from('payables').select('*, responsible:app_users!responsible_id(full_name)').order('due_date', { ascending: true }),
         supabase.from('project_costs').select('*, budget:budgets(project_name), responsible:app_users!responsible_id(full_name)').order('cost_date', { ascending: true }),
-        supabase.from('app_users').select('id, full_name').eq('status', 'ativo')
+        supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name', { ascending: true })
       ]);
 
       const unifiedPayables = [

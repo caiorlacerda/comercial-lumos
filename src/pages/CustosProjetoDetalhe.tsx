@@ -59,7 +59,7 @@ export default function CustosProjetoDetalhe() {
           .select('unit_cost, quantity, version_id')
           .eq('version_id', budgetData.active_version_id),
         supabase.from('project_costs').select('*, responsible:app_users!responsible_id(full_name)').eq('budget_id', id).order('cost_date', { ascending: false }),
-        supabase.from('app_users').select('id, full_name').eq('status', 'ativo')
+        supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name', { ascending: true })
       ]);
 
       setProject({ ...budgetData, budget_items: itemsRes.data || [] });
