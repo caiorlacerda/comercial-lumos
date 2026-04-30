@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Pagination from '@/components/common/Pagination';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import {
@@ -40,6 +41,8 @@ export default function Clients() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 12;
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('lumos-clients-view') as 'grid' | 'list') || 'grid';
   });
@@ -137,6 +140,8 @@ export default function Clients() {
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (c.agency_name && c.agency_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+  const totalPages = Math.ceil(filteredClients.length / PAGE_SIZE);
+  const pagedClients = filteredClients.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <div className="space-y-8">
@@ -185,7 +190,7 @@ export default function Clients() {
           placeholder="Buscar clientes por empresa ou agência..."
           className="input-lumos w-full pl-10 h-10 font-medium"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
         />
       </div>
 
@@ -200,8 +205,9 @@ export default function Clients() {
           Nenhum cliente cadastrado.
         </div>
       ) : viewMode === 'grid' ? (
+        <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in zoom-in-95 duration-500">
-          {filteredClients.map((client) => (
+          {pagedClients.map((client) => (
             <div key={client.id} className="card group hover:shadow-lg transition-all relative border-t-4 border-t-lumos-yellow flex flex-col">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-2.5 rounded-lumos bg-lumos-yellow/10 text-lumos-yellow">
@@ -260,7 +266,10 @@ export default function Clients() {
             </div>
           ))}
         </div>
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredClients.length} pageSize={PAGE_SIZE} />
+        </div>
       ) : (
+        <div className="space-y-4">
         <div className="card !p-0 overflow-hidden shadow-sm animate-in fade-in zoom-in-95 duration-500">
           <table className="w-full text-left">
             <thead>
@@ -273,7 +282,7 @@ export default function Clients() {
               </tr>
             </thead>
             <tbody className="divide-y divide-lumos-border">
-              {filteredClients.map((client) => (
+              {pagedClients.map((client) => (
                 <tr key={client.id} className="hover:bg-lumos-yellow/[0.02] transition-colors group cursor-pointer" onClick={() => navigate(`/clientes/${client.id}`)}>
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-3">
@@ -325,6 +334,8 @@ export default function Clients() {
               ))}
             </tbody>
           </table>
+        </div>
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredClients.length} pageSize={PAGE_SIZE} />
         </div>
       )}
 

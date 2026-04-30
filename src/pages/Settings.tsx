@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { 
-  User, 
-  Save, 
-  CheckCircle2, 
+import {
+  User,
+  Save,
+  CheckCircle2,
   AlertCircle,
   ArrowLeft,
   Moon,
-  Plus
+  Plus,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/context/ThemeContext';
@@ -24,6 +27,12 @@ export default function Settings() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.user_metadata?.full_name) {
@@ -91,6 +100,32 @@ export default function Settings() {
         .slice(0, 2);
     }
     return user?.email?.charAt(0).toUpperCase() || 'U';
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    if (newPassword.length < 8) {
+      setPasswordError('A senha deve ter no mínimo 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('As senhas não coincidem.');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setPasswordSuccess(true);
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Erro ao atualizar senha.');
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -256,6 +291,79 @@ export default function Settings() {
         </div>
 
         <ThemeToggle showDescription={true} />
+      </div>
+
+      {/* Password Change Section */}
+      <div className="card space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
+        <div className="flex items-center gap-4 pb-6 border-b border-lumos-border">
+          <div className="w-16 h-16 rounded-full bg-lumos-yellow/20 flex items-center justify-center text-lumos-yellow">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight">Segurança</h3>
+            <p className="text-sm text-lumos-text-secondary font-medium">Altere sua senha de acesso.</p>
+          </div>
+        </div>
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest block">Nova Senha</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="input-lumos w-full py-3 px-4 pr-12 font-medium"
+                placeholder="Mínimo 8 caracteres..."
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest block">Confirmar Nova Senha</label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              className="input-lumos w-full py-3 px-4 font-medium"
+              placeholder="Repita a nova senha..."
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
+          </div>
+          <div className="flex items-center gap-4 pt-2">
+            <button
+              type="submit"
+              disabled={savingPassword}
+              className="btn-primary flex items-center gap-2 py-3 px-8 shadow-lg shadow-lumos-yellow/20 disabled:opacity-50"
+            >
+              {savingPassword ? (
+                <div className="w-5 h-5 border-2 border-black/30 border-t-black animate-spin rounded-full" />
+              ) : (
+                <Lock className="w-5 h-5" />
+              )}
+              Alterar Senha
+            </button>
+            {passwordSuccess && (
+              <div className="flex items-center gap-2 text-green-500 font-bold animate-in fade-in slide-in-from-left-2">
+                <CheckCircle2 className="w-5 h-5" />
+                <span>Senha atualizada!</span>
+              </div>
+            )}
+            {passwordError && (
+              <div className="flex items-center gap-2 text-red-500 font-bold">
+                <AlertCircle className="w-5 h-5" />
+                <span className="text-sm">{passwordError}</span>
+              </div>
+            )}
+          </div>
+        </form>
       </div>
 
       <div className="bg-lumos-yellow/5 border border-lumos-yellow/10 p-6 rounded-lumos space-y-2">

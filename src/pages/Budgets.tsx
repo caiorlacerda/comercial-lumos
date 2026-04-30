@@ -28,6 +28,7 @@ import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import { pdf } from '@react-pdf/renderer';
 import Modal from '@/components/common/Modal';
+import Pagination from '@/components/common/Pagination';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -54,6 +55,8 @@ export default function Budgets() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 15;
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   
@@ -512,6 +515,9 @@ export default function Budgets() {
       return 0;
     });
 
+  const totalPages = Math.ceil(filteredBudgets.length / PAGE_SIZE);
+  const pagedBudgets = filteredBudgets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   const SortIcon = ({ field }: { field: string }) => {
     if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-lumos-text-secondary opacity-30" />;
     return sortOrder === 'asc' 
@@ -546,7 +552,7 @@ export default function Budgets() {
               placeholder="Buscar por projeto, cliente ou código..." 
               className="input-lumos w-full pl-10 h-11 text-sm font-medium"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
           <div className="flex gap-2">
@@ -555,7 +561,7 @@ export default function Budgets() {
               <select 
                 className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
               >
                 <option value="all">Status: Todos</option>
                 <option value="rascunho">Rascunhos</option>
@@ -569,7 +575,7 @@ export default function Budgets() {
               <select 
                 className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
               >
                 <option value="all">Categoria: Todas</option>
                 <option value="digital">Digital</option>
@@ -582,7 +588,7 @@ export default function Budgets() {
               <select 
                 className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
                 value={clientFilter}
-                onChange={(e) => setClientFilter(e.target.value)}
+                onChange={(e) => { setClientFilter(e.target.value); setCurrentPage(1); }}
               >
                 <option value="all">Cliente: Todos</option>
                 {allClients.map(c => (
@@ -685,9 +691,15 @@ export default function Budgets() {
             </thead>
             <tbody className="divide-y divide-lumos-border relative">
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td colSpan={7} className="px-6 py-8 h-12"></td>
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse border-b border-lumos-border">
+                    <td className="px-6 py-4"><div className="h-4 w-4 rounded bg-lumos-border" /></td>
+                    <td className="px-6 py-4"><div className="h-3 w-20 rounded bg-lumos-border" /></td>
+                    <td className="px-6 py-4"><div className="h-3 w-40 rounded bg-lumos-border" /></td>
+                    <td className="px-6 py-4"><div className="h-3 w-28 rounded bg-lumos-border" /></td>
+                    <td className="px-6 py-4"><div className="h-5 w-24 rounded-full bg-lumos-border" /></td>
+                    <td className="px-6 py-4"><div className="h-3 w-24 rounded bg-lumos-border ml-auto" /></td>
+                    <td className="px-6 py-4"><div className="h-3 w-20 rounded bg-lumos-border ml-auto" /></td>
                   </tr>
                 ))
               ) : filteredBudgets.length === 0 ? (
@@ -697,7 +709,7 @@ export default function Budgets() {
                   </td>
                 </tr>
               ) : (
-                filteredBudgets.map((budget) => (
+                pagedBudgets.map((budget) => (
                   <tr 
                     key={budget.id} 
                     className={clsx(
@@ -854,6 +866,15 @@ export default function Budgets() {
               ))}
             </tbody>
           </table>
+          <div className="px-6 pb-4">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalItems={filteredBudgets.length}
+              pageSize={PAGE_SIZE}
+            />
+          </div>
       </div>
 
       {/* Individual Delete Confirmation Modal */}

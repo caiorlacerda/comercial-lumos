@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth, AppUserProfile } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import Pagination from '@/components/common/Pagination';
 
 type UserRole = 'admin' | 'producao' | 'basico';
 type UserStatus = 'ativo' | 'inativo';
@@ -27,6 +28,8 @@ export default function UsersPage() {
   const [users, setUsers] = useState<AppUserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
@@ -210,12 +213,14 @@ export default function UsersPage() {
   };
 
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          u.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
     return matchesSearch && matchesRole && matchesStatus;
   });
+  const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
+  const pagedUsers = filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
@@ -249,14 +254,14 @@ export default function UsersPage() {
             placeholder="Buscar por nome ou e-mail..."
             className="input-lumos pl-10 w-full"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
           />
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           <select 
             className="input-lumos text-sm h-10 px-4"
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => { setRoleFilter(e.target.value); setCurrentPage(1); }}
           >
             <option value="all">Todos os Cargos</option>
             <option value="admin">Admin</option>
@@ -266,7 +271,7 @@ export default function UsersPage() {
           <select 
             className="input-lumos text-sm h-10 px-4"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
           >
             <option value="all">Todos os Status</option>
             <option value="ativo">Ativos</option>
@@ -301,11 +306,23 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow mx-auto"></div>
-                  </td>
-                </tr>
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse border-b border-lumos-border">
+                    <td className="px-6 py-4"><div className="h-4 w-4 rounded bg-lumos-border" /></td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-lumos-border flex-shrink-0" />
+                        <div className="space-y-1.5">
+                          <div className="h-3 w-32 rounded bg-lumos-border" />
+                          <div className="h-2.5 w-40 rounded bg-lumos-border" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4"><div className="h-5 w-20 rounded-full bg-lumos-border" /></td>
+                    <td className="px-6 py-4"><div className="h-5 w-16 rounded-full bg-lumos-border" /></td>
+                    <td className="px-6 py-4"><div className="h-3 w-8 rounded bg-lumos-border ml-auto" /></td>
+                  </tr>
+                ))
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-lumos-text-secondary text-sm italic">
@@ -313,7 +330,7 @@ export default function UsersPage() {
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
+                pagedUsers.map((user) => (
                   <tr 
                     key={user.id} 
                     className={clsx(
@@ -381,6 +398,9 @@ export default function UsersPage() {
               )}
             </tbody>
           </table>
+          <div className="px-6 pb-4">
+            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredUsers.length} pageSize={PAGE_SIZE} />
+          </div>
         </div>
       </div>
 
