@@ -238,15 +238,15 @@ export default function Budgets() {
       setBudgets(prev => prev.filter(b => b.id !== budgetToDelete.id));
       setBudgetToDelete(null);
       setActiveMenu(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error deleting budget:', err);
-      toast.error('Erro ao deletar orçamento.');
+      toast.error(`Erro ao deletar orçamento: ${err?.message || JSON.stringify(err)}`);
     }
   };
 
   const handleBatchDelete = async () => {
     if (budgetsToDelete.length === 0) return;
-    
+
     try {
       const idsToDelete = budgetsToDelete.map(b => b.id);
       const { error } = await supabase
@@ -255,13 +255,13 @@ export default function Budgets() {
         .in('id', idsToDelete);
 
       if (error) throw error;
-      
+
       setBudgets(prev => prev.filter(b => !idsToDelete.includes(b.id)));
       setBudgetsToDelete([]);
       setSelectedIds(new Set());
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error in batch delete:', err);
-      toast.error('Erro ao deletar orçamentos em lote.');
+      toast.error(`Erro ao deletar orçamentos: ${err?.message || JSON.stringify(err)}`);
     }
   };
 
