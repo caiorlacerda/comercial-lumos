@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { Users, Plus, Trash, Building2 } from 'lucide-react';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { logAudit } from '@/hooks/useAuditLog';
 import { clsx } from 'clsx';
 
 interface Client {
@@ -94,6 +95,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
         const { data, error } = await supabase.from('clients').insert(formData).select().single();
         if (error) throw error;
         clientId = data.id;
+        logAudit('client_created', `Cliente "${formData.name}" criado`, { client_id: clientId });
       }
 
       // 2. Save/Update Contacts

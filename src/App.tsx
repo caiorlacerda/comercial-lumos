@@ -17,6 +17,7 @@ import { PermissionGuard } from '@/components/auth/PermissionGuard';
 
 // Novas Páginas Financeiras
 import UsersPage from '@/pages/Users';
+import AuditLog from '@/pages/AuditLog';
 import FinanceiroDashboard from '@/pages/FinanceiroDashboard';
 import ContasPagar from '@/pages/ContasPagar';
 import ContasReceber from '@/pages/ContasReceber';
@@ -280,15 +281,25 @@ function AppContent() {
               </AuthWrapper>
             } 
           />
-          <Route 
-            path="/usuarios" 
+          <Route
+            path="/usuarios"
             element={
               <AuthWrapper>
                 <PermissionGuard permission="admin">
                   <UsersPage />
                 </PermissionGuard>
               </AuthWrapper>
-            } 
+            }
+          />
+          <Route
+            path="/auditoria"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <AuditLog />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
           />
         </Routes>
       </div>

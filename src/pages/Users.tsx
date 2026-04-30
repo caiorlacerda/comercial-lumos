@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth, AppUserProfile } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
 
 type UserRole = 'admin' | 'producao' | 'basico';
@@ -95,6 +96,7 @@ export default function UsersPage() {
 
       if (dbError) throw dbError;
 
+      logAudit('user_created', `Usuário "${formData.full_name}" (${formData.email}) criado`, { email: formData.email, role: formData.role });
       toast.success(`Perfil criado! Crie a conta em Supabase → Authentication → Users com o e-mail ${formData.email}.`);
       
       setIsInviteModalOpen(false);
@@ -125,7 +127,12 @@ export default function UsersPage() {
         .eq('id', selectedUser.id);
 
       if (error) throw error;
-      
+
+      if (formData.status !== selectedUser.status) {
+        const action = formData.status === 'inativo' ? 'user_deactivated' : 'user_activated';
+        logAudit(action, `Usuário "${selectedUser.full_name}" ${formData.status === 'inativo' ? 'desativado' : 'reativado'}`, { user_id: selectedUser.id });
+      }
+
       setIsEditModalOpen(false);
       fetchUsers();
     } catch (error: any) {
@@ -146,6 +153,8 @@ export default function UsersPage() {
         .in('id', ids);
 
       if (error) throw error;
+      const action = status === 'inativo' ? 'user_deactivated' : 'user_activated';
+      logAudit(action, `${ids.length} usuário(s) ${status === 'inativo' ? 'desativado(s)' : 'ativado(s)'} em lote`, { user_ids: ids });
       setSelectedIds(new Set());
       fetchUsers();
     } catch (error: any) {

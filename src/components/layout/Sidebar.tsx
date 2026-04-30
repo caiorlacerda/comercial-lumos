@@ -13,7 +13,8 @@ import {
   ArrowDownCircle,
   Receipt,
   Briefcase,
-  ShieldCheck
+  ShieldCheck,
+  ClipboardList
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
@@ -67,6 +68,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       visible: isAdmin,
       items: [
         { icon: ShieldCheck, label: 'Usuários', path: '/usuarios' },
+        { icon: ClipboardList, label: 'Auditoria', path: '/auditoria' },
         { icon: Settings, label: 'Configurações', path: '/configuracoes' },
       ]
     }

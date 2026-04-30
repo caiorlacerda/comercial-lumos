@@ -34,6 +34,7 @@ import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
 import { getPdfFileName } from '@/utils/pdfFileName';
 import { useToast } from '@/context/ToastContext';
+import { logAudit } from '@/hooks/useAuditLog';
 
 interface Budget {
   id: string;
@@ -248,6 +249,7 @@ export default function Budgets() {
       if (error) throw error;
 
       setBudgets(prev => prev.filter(b => b.id !== budgetToDelete.id));
+      logAudit('budget_deleted', `Orçamento "${budgetToDelete.project_name}" (#${budgetToDelete.code}) excluído`, { budget_id: budgetToDelete.id });
       setBudgetToDelete(null);
       setActiveMenu(null);
       toast.success('Orçamento excluído.');
@@ -272,6 +274,7 @@ export default function Budgets() {
       if (error) throw error;
 
       setBudgets(prev => prev.filter(b => !idsToDelete.includes(b.id)));
+      logAudit('budget_deleted', `${idsToDelete.length} orçamento(s) excluído(s) em lote`, { budget_ids: idsToDelete });
       setBudgetsToDelete([]);
       setSelectedIds(new Set());
       toast.success(`${idsToDelete.length} orçamento(s) excluído(s).`);

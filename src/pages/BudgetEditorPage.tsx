@@ -64,6 +64,7 @@ import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { logAudit } from '@/hooks/useAuditLog';
 
 interface Budget {
   id: string;
@@ -432,6 +433,7 @@ export default function BudgetEditorPage() {
         currentVersionId = vData.id;
 
         await supabase.from('budgets').update({ active_version_id: currentVersionId }).eq('id', currentBudgetId);
+        logAudit('budget_created', `Orçamento "${budget.project_name}" (#${finalCode}) criado`, { budget_id: currentBudgetId });
         setIsDraft(false);
         navigate(`/orcamentos/${currentBudgetId}`, { replace: true });
       } else {

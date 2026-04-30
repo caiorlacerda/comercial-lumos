@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Pagination from '@/components/common/Pagination';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { logAudit } from '@/hooks/useAuditLog';
 import {
   Users,
   Plus,
@@ -128,8 +129,10 @@ export default function Clients() {
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este cliente e todos os seus contatos?')) return;
     try {
+      const clientName = clients.find(c => c.id === id)?.name ?? id;
       const { error } = await supabase.from('clients').delete().eq('id', id);
       if (error) throw error;
+      logAudit('client_deleted', `Cliente "${clientName}" excluído`, { client_id: id });
       fetchClients();
     } catch (err) {
       console.error('Error deleting client:', err);
