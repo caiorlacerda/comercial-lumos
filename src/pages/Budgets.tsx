@@ -705,6 +705,7 @@ export default function Budgets() {
                     Datas <SortIcon field="updated_at" />
                   </div>
                 </th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase text-lumos-text-primary tracking-widest text-center">Aprovação</th>
                 <th className="px-6 py-4 text-[10px] font-black uppercase text-lumos-text-primary tracking-widest text-right">Ação</th>
               </tr>
             </thead>
@@ -718,12 +719,13 @@ export default function Budgets() {
                     <td className="px-6 py-4"><div className="h-3 w-28 rounded bg-lumos-border" /></td>
                     <td className="px-6 py-4"><div className="h-5 w-24 rounded-full bg-lumos-border" /></td>
                     <td className="px-6 py-4"><div className="h-3 w-24 rounded bg-lumos-border ml-auto" /></td>
+                    <td className="px-6 py-4"><div className="h-5 w-20 rounded-full bg-lumos-border mx-auto" /></td>
                     <td className="px-6 py-4"><div className="h-3 w-20 rounded bg-lumos-border ml-auto" /></td>
                   </tr>
                 ))
               ) : filteredBudgets.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-lumos-text-secondary italic font-medium">
+                  <td colSpan={8} className="px-6 py-12 text-center text-lumos-text-secondary italic font-medium">
                     Nenhum orçamento encontrado.
                   </td>
                 </tr>
@@ -756,21 +758,6 @@ export default function Budgets() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-lumos-text-primary font-bold group-hover:text-lumos-yellow transition-colors">{budget.project_name}</span>
-                      {approvalMap[budget.id] && (
-                        <span className={`ml-2 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${
-                          approvalMap[budget.id] === 'pending'
-                            ? 'text-lumos-yellow bg-lumos-yellow/10 border-lumos-yellow/20'
-                            : (approvalMap[budget.id] as any).approved
-                              ? 'text-green-400 bg-green-500/10 border-green-500/20'
-                              : 'text-red-400 bg-red-500/10 border-red-500/20'
-                        }`}>
-                          {approvalMap[budget.id] === 'pending'
-                            ? '⏳ Aguardando'
-                            : (approvalMap[budget.id] as any).approved
-                              ? '✓ Aprovado'
-                              : '✗ Recusado'}
-                        </span>
-                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-[10px] text-lumos-text-secondary font-black uppercase tracking-tighter">
@@ -832,6 +819,25 @@ export default function Budgets() {
                           {format(new Date(budget.updated_at), 'dd/MM/yy', { locale: ptBR })}
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {approvalMap[budget.id] ? (
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full border whitespace-nowrap ${
+                          approvalMap[budget.id] === 'pending'
+                            ? 'text-lumos-yellow bg-lumos-yellow/10 border-lumos-yellow/20'
+                            : (approvalMap[budget.id] as any).approved
+                              ? 'text-green-400 bg-green-500/10 border-green-500/20'
+                              : 'text-red-400 bg-red-500/10 border-red-500/20'
+                        }`}>
+                          {approvalMap[budget.id] === 'pending'
+                            ? '⏳ Aguardando'
+                            : (approvalMap[budget.id] as any).approved
+                              ? '✓ Aprovado'
+                              : '✗ Recusado'}
+                        </span>
+                      ) : (
+                        <span className="text-lumos-border">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end relative" ref={activeMenu === budget.id ? menuRef : null}>
