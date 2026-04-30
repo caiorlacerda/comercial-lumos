@@ -78,7 +78,7 @@ interface Budget {
   template_category?: string;
 }
 
-function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly: boolean; children: React.ReactNode }) {
+function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly: boolean; children: (dragHandle: React.ReactNode) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -86,21 +86,19 @@ function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly:
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
   };
+  const dragHandle = !isReadOnly ? (
+    <button
+      {...attributes}
+      {...listeners}
+      className="text-lumos-text-secondary/30 hover:text-lumos-text-secondary cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+      tabIndex={-1}
+    >
+      <GripVertical className="w-4 h-4" />
+    </button>
+  ) : null;
   return (
-    <div ref={setNodeRef} style={style} className="group flex flex-col border-b border-lumos-border last:border-0 hover:bg-lumos-bg/30 transition-colors">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        {!isReadOnly && (
-          <button
-            {...attributes}
-            {...listeners}
-            className="text-lumos-text-secondary/30 hover:text-lumos-text-secondary cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
-            tabIndex={-1}
-          >
-            <GripVertical className="w-4 h-4" />
-          </button>
-        )}
-        {children}
-      </div>
+    <div ref={setNodeRef} style={style} className="group border-b border-lumos-border last:border-0 hover:bg-lumos-bg/30 transition-colors">
+      {children(dragHandle)}
     </div>
   );
 }
@@ -344,6 +342,7 @@ export default function BudgetEditorPage() {
       setVersions(versionsData || []);
       setVersion(targetVersion);
       setItems(itemsData || []);
+      setExpandedDescriptions(new Set((itemsData || []).filter((i: any) => i.description).map((i: any) => i.id)));
       
       if (budgetData.client_id) {
         fetchContactsForClient(budgetData.client_id);
@@ -1430,99 +1429,107 @@ export default function BudgetEditorPage() {
                   <div className="p-8 text-center text-xs text-lumos-text-secondary italic">
                     Nenhum item adicionado a este grupo.
                   </div>
-                ) : groupItems.map(item => (
+                ) : groupItems.map(item => {
+                  const isExpanded = expandedDescriptions.has(item.id);
+                  const toggleDescription = () => {
+                    const newSet = new Set(expandedDescriptions);
+                    if (newSet.has(item.id)) newSet.delete(item.id);
+                    else newSet.add(item.id);
+                    setExpandedDescriptions(newSet);
+                  };
+                  return (
                   <SortableItemRow key={item.id} id={item.id} isReadOnly={isReadOnly}>
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="flex-1">
-                        <input
-                          disabled={isReadOnly}
-                          className="bg-transparent border-none w-full p-0 font-medium text-lumos-text-primary focus:ring-0 placeholder:text-lumos-text-secondary/30 disabled:opacity-70"
-                          value={item.name}
-                          onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                          placeholder="Nome do item..."
-                        />
-                      </div>
-                      <div className="w-32">
-                        <div className="flex items-center gap-1 border-b border-transparent hover:border-lumos-border transition-colors">
-                          <span className="text-xs text-lumos-text-secondary">R$</span>
-                          <input
-                            disabled={isReadOnly}
-                            type="number"
-                            className="bg-transparent border-none w-full p-0 text-right text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70"
-                            value={item.unit_cost}
-                            onChange={(e) => updateItem(item.id, { unit_cost: Number(e.target.value) })}
-                          />
+                    {(dragHandle) => (
+                      <>
+                        <div className="flex items-center gap-2 px-4 py-3">
+                          {dragHandle}
+                          <div className="flex-1 min-w-0">
+                            <input
+                              disabled={isReadOnly}
+                              className="bg-transparent border-none w-full p-0 font-medium text-lumos-text-primary focus:ring-0 placeholder:text-lumos-text-secondary/30 disabled:opacity-70"
+                              value={item.name}
+                              onChange={(e) => updateItem(item.id, { name: e.target.value })}
+                              placeholder="Nome do item..."
+                            />
+                          </div>
+                          <div className="w-32 flex-shrink-0">
+                            <div className="flex items-center gap-1 border-b border-transparent hover:border-lumos-border transition-colors">
+                              <span className="text-xs text-lumos-text-secondary">R$</span>
+                              <input
+                                disabled={isReadOnly}
+                                type="number"
+                                className="bg-transparent border-none w-full p-0 text-right text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70"
+                                value={item.unit_cost}
+                                onChange={(e) => updateItem(item.id, { unit_cost: Number(e.target.value) })}
+                              />
+                            </div>
+                          </div>
+                          <div className="w-16 flex-shrink-0">
+                            <input
+                              disabled={isReadOnly}
+                              type="number"
+                              className="bg-transparent border-none w-full p-0 text-center text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70"
+                              value={item.quantity}
+                              onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="w-24 flex-shrink-0">
+                            <select
+                              disabled={isReadOnly}
+                              className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary focus:ring-0 cursor-pointer disabled:cursor-default disabled:opacity-70"
+                              value={item.unit_label}
+                              onChange={(e) => updateItem(item.id, { unit_label: e.target.value })}
+                            >
+                              <option value="diaria">diária</option>
+                              <option value="hora">hora</option>
+                              <option value="video">vídeo</option>
+                              <option value="unidade">unidade</option>
+                              <option value="pacote">pacote</option>
+                            </select>
+                          </div>
+                          <div className="w-32 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary">
+                            {formatCurrency(item.unit_cost * item.quantity)}
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                            <button
+                              onClick={toggleDescription}
+                              className={clsx(
+                                "p-2 transition-colors rounded-full",
+                                isExpanded || item.description
+                                  ? "text-lumos-yellow bg-lumos-yellow/10"
+                                  : "text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/5"
+                              )}
+                              title={isExpanded ? "Fechar nota" : "Abrir nota"}
+                            >
+                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+                            {!isReadOnly && (
+                              <button
+                                onClick={() => removeItem(item.id)}
+                                className="text-red-400 hover:text-red-600 p-2 transition-colors"
+                                title="Remover Item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="w-16">
-                        <input
-                          disabled={isReadOnly}
-                          type="number"
-                          className="bg-transparent border-none w-full p-0 text-center text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="w-24">
-                        <select
-                          disabled={isReadOnly}
-                          className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary focus:ring-0 cursor-pointer disabled:cursor-default disabled:opacity-70"
-                          value={item.unit_label}
-                          onChange={(e) => updateItem(item.id, { unit_label: e.target.value })}
-                        >
-                          <option value="diaria">diária</option>
-                          <option value="hora">hora</option>
-                          <option value="video">vídeo</option>
-                          <option value="unidade">unidade</option>
-                          <option value="pacote">pacote</option>
-                        </select>
-                      </div>
-                      <div className="w-32 text-right font-mono text-sm font-bold text-lumos-text-primary">
-                        {formatCurrency(item.unit_cost * item.quantity)}
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => {
-                            const newSet = new Set(expandedDescriptions);
-                            if (newSet.has(item.id)) newSet.delete(item.id);
-                            else newSet.add(item.id);
-                            setExpandedDescriptions(newSet);
-                          }}
-                          className={clsx(
-                            "p-2 transition-colors rounded-full",
-                            expandedDescriptions.has(item.id) || item.description
-                              ? "text-lumos-yellow bg-lumos-yellow/10"
-                              : "text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/5"
-                          )}
-                          title="Descrição/Notas"
-                        >
-                          <StickyNote className="w-4 h-4" />
-                        </button>
-                        {!isReadOnly && (
-                          <button 
-                            onClick={() => removeItem(item.id)}
-                            className="text-red-400 hover:text-red-600 p-2 transition-colors"
-                            title="Remover Item"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        {isExpanded && (
+                          <div className="px-10 pb-3 animate-in slide-in-from-top-1 duration-200">
+                            <textarea
+                              disabled={isReadOnly}
+                              className="w-full bg-lumos-bg/50 border border-lumos-border/50 rounded-lumos p-3 text-xs text-lumos-text-primary focus:border-lumos-yellow/50 focus:ring-0 resize-none h-[60px] placeholder:text-lumos-text-secondary/30"
+                              placeholder="Adicione uma nota para este item..."
+                              value={item.description || ''}
+                              onChange={(e) => updateItem(item.id, { description: e.target.value })}
+                            />
+                          </div>
                         )}
-                      </div>
-                    </div>
-                    
-                    {(expandedDescriptions.has(item.id) || item.description) && (
-                      <div className="animate-in slide-in-from-top-1 duration-200 px-4 pb-3">
-                        <textarea
-                          disabled={isReadOnly}
-                          className="w-full bg-lumos-bg/50 border border-lumos-border/50 rounded-lumos p-3 text-xs text-lumos-text-primary focus:border-lumos-yellow/50 focus:ring-0 resize-none h-[60px] placeholder:text-lumos-text-secondary/30"
-                          placeholder="Adicione uma descrição opcional para este item..."
-                          value={item.description || ''}
-                          onChange={(e) => updateItem(item.id, { description: e.target.value })}
-                        />
-                      </div>
+                      </>
                     )}
                   </SortableItemRow>
-                ))}
+                  );
+                })}
               </div>
               </SortableContext>
               </DndContext>
