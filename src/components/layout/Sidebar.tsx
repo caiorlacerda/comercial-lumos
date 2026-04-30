@@ -146,7 +146,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 ml-64 min-h-screen overflow-auto bg-lumos-bg transition-colors duration-300">
-        <div className="max-w-7xl mx-auto p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="w-full p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           {children}
         </div>
       </main>

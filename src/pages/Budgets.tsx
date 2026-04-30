@@ -640,8 +640,7 @@ export default function Budgets() {
 
       {/* Table Container with minimum height to prevent clipping when few items exist */}
       <div className="card !p-0 shadow-sm border-lumos-border animate-in fade-in slide-in-from-bottom-6 duration-700 min-h-[200px] overflow-visible">
-        <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse" style={{ minWidth: 900 }}>
+        <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-lumos-bg/50 border-b border-lumos-border">
                 <th className="px-6 py-4 w-10">
@@ -912,7 +911,6 @@ export default function Budgets() {
               ))}
             </tbody>
           </table>
-          </div>{/* overflow-x-auto */}
           <div className="px-6 pb-4">
             <Pagination
               currentPage={currentPage}
