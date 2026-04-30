@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { 
-  ChevronLeft, 
+import {
+  ChevronLeft,
   ChevronRight,
-  Save, 
-  Plus, 
-  Trash2, 
-  Copy, 
+  Save,
+  Plus,
+  Trash2,
+  Copy,
   FileDown,
   AlertCircle,
   MoreVertical,
@@ -27,8 +27,24 @@ import {
   StickyNote,
   RotateCcw,
   Calendar,
-  MapPin
+  MapPin,
+  GripVertical
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { 
   BudgetItem, 
   BudgetVersion, 
@@ -62,6 +78,33 @@ interface Budget {
   template_category?: string;
 }
 
+function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly: boolean; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="group flex flex-col border-b border-lumos-border last:border-0 hover:bg-lumos-bg/30 transition-colors">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+        {!isReadOnly && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="text-lumos-text-secondary/30 hover:text-lumos-text-secondary cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            tabIndex={-1}
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function BudgetEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -91,6 +134,8 @@ export default function BudgetEditorPage() {
   const [templateCategory, setTemplateCategory] = useState('');
   const [availableContacts, setAvailableContacts] = useState<any[]>([]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -673,6 +718,37 @@ export default function BudgetEditorPage() {
     } catch (err) {
       console.error('Error syncing item:', err);
       notifySaveStatus('error');
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent, group: BudgetItem['item_group']) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const groupItems = items.filter(i => i.item_group === group);
+    const oldIndex = groupItems.findIndex(i => i.id === active.id);
+    const newIndex = groupItems.findIndex(i => i.id === over.id);
+    const reordered = arrayMove(groupItems, oldIndex, newIndex);
+
+    const otherItems = items.filter(i => i.item_group !== group);
+    const updatedItems = [...otherItems, ...reordered.map((item, idx) => ({ ...item, sort_order: idx }))];
+    setItems(updatedItems);
+
+    if (!isDraft && version) {
+      notifySaveStatus('saving');
+      try {
+        await Promise.all(
+          reordered.map((item, idx) =>
+            supabase.from('budget_items').update({ sort_order: idx }).eq('id', item.id)
+          )
+        );
+        notifySaveStatus('saved');
+      } catch (err) {
+        console.error('Error saving sort order:', err);
+        notifySaveStatus('error');
+      }
+    } else {
+      isDirty.current = true;
     }
   };
 
@@ -1327,14 +1403,16 @@ export default function BudgetEditorPage() {
             </div>
           </div>
 
-          {(['equipe', 'equipamentos', 'producao', 'edicao'] as const).map(group => (
+          {(['equipe', 'equipamentos', 'producao', 'edicao'] as const).map(group => {
+            const groupItems = items.filter(i => i.item_group === group);
+            return (
             <div key={group} className="card !p-0 overflow-hidden shadow-sm border-lumos-border">
               <div className="bg-lumos-bg/50 px-6 py-4 flex items-center justify-between border-b border-lumos-border">
                 <h3 className="uppercase tracking-widest text-[10px] font-black text-lumos-text-secondary">
                   {group === 'edicao' ? 'Pós-produção' : group}
                 </h3>
                 {!isReadOnly && (
-                  <button 
+                  <button
                     onClick={() => {
                       setActiveGroup(group);
                       setIsCatalogOpen(true);
@@ -1345,46 +1423,48 @@ export default function BudgetEditorPage() {
                   </button>
                 )}
               </div>
+              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd(e, group)}>
+              <SortableContext items={groupItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
               <div className="divide-y divide-lumos-border">
-                {items.filter(i => i.item_group === group).length === 0 ? (
+                {groupItems.length === 0 ? (
                   <div className="p-8 text-center text-xs text-lumos-text-secondary italic">
                     Nenhum item adicionado a este grupo.
                   </div>
-                ) : items.filter(i => i.item_group === group).map(item => (
-                  <div key={item.id} className="p-4 flex flex-col gap-3 group hover:bg-lumos-bg/30 transition-colors">
-                    <div className="flex items-center gap-4">
+                ) : groupItems.map(item => (
+                  <SortableItemRow key={item.id} id={item.id} isReadOnly={isReadOnly}>
+                    <div className="flex items-center gap-4 flex-1">
                       <div className="flex-1">
-                        <input 
+                        <input
                           disabled={isReadOnly}
-                          className="bg-transparent border-none w-full p-0 font-medium text-lumos-text-primary focus:ring-0 placeholder:text-lumos-text-secondary/30 disabled:opacity-70" 
-                          value={item.name} 
+                          className="bg-transparent border-none w-full p-0 font-medium text-lumos-text-primary focus:ring-0 placeholder:text-lumos-text-secondary/30 disabled:opacity-70"
+                          value={item.name}
                           onChange={(e) => updateItem(item.id, { name: e.target.value })}
                           placeholder="Nome do item..."
                         />
                       </div>
                       <div className="w-32">
-                        <div className="flex items-center gap-1 border-b border-transparent group-hover:border-lumos-border transition-colors">
+                        <div className="flex items-center gap-1 border-b border-transparent hover:border-lumos-border transition-colors">
                           <span className="text-xs text-lumos-text-secondary">R$</span>
-                          <input 
+                          <input
                             disabled={isReadOnly}
                             type="number"
-                            className="bg-transparent border-none w-full p-0 text-right text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70" 
-                            value={item.unit_cost} 
+                            className="bg-transparent border-none w-full p-0 text-right text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70"
+                            value={item.unit_cost}
                             onChange={(e) => updateItem(item.id, { unit_cost: Number(e.target.value) })}
                           />
                         </div>
                       </div>
                       <div className="w-16">
-                        <input 
+                        <input
                           disabled={isReadOnly}
                           type="number"
-                          className="bg-transparent border-none w-full p-0 text-center text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70" 
-                          value={item.quantity} 
+                          className="bg-transparent border-none w-full p-0 text-center text-sm font-bold focus:ring-0 text-lumos-text-primary disabled:opacity-70"
+                          value={item.quantity}
                           onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
                         />
                       </div>
                       <div className="w-24">
-                        <select 
+                        <select
                           disabled={isReadOnly}
                           className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary focus:ring-0 cursor-pointer disabled:cursor-default disabled:opacity-70"
                           value={item.unit_label}
@@ -1431,7 +1511,7 @@ export default function BudgetEditorPage() {
                     </div>
                     
                     {(expandedDescriptions.has(item.id) || item.description) && (
-                      <div className="animate-in slide-in-from-top-1 duration-200">
+                      <div className="animate-in slide-in-from-top-1 duration-200 px-4 pb-3">
                         <textarea
                           disabled={isReadOnly}
                           className="w-full bg-lumos-bg/50 border border-lumos-border/50 rounded-lumos p-3 text-xs text-lumos-text-primary focus:border-lumos-yellow/50 focus:ring-0 resize-none h-[60px] placeholder:text-lumos-text-secondary/30"
@@ -1441,12 +1521,14 @@ export default function BudgetEditorPage() {
                         />
                       </div>
                     )}
-                  </div>
-                 ))
-               }
-               </div>
+                  </SortableItemRow>
+                ))}
+              </div>
+              </SortableContext>
+              </DndContext>
             </div>
-          ))}
+          )})}
+
         </div>
 
         {/* Financial Sidebar */}
