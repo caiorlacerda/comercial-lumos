@@ -177,6 +177,7 @@ export default function AprovacaoPublica() {
   if (!budget || !version) return null;
 
   const financials = calcFinancials(items, version);
+  const markupMultiplier = financials.totalCusto > 0 ? financials.valorFinal / financials.totalCusto : 1;
   const emissao = createdAt ? new Date(createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const codeTitle = `#${budget.code} | Lumos + ${budget.clients?.name || ''} | ${budget.project_name}`;
 
@@ -260,7 +261,7 @@ export default function AprovacaoPublica() {
               {GROUPS.map(({ key, label }) => {
                 const groupItems = items.filter(i => i.item_group === key);
                 if (!groupItems.length) return null;
-                const groupTotal = groupItems.reduce((sum, i) => sum + i.unit_cost * i.quantity, 0);
+                const groupTotal = groupItems.reduce((sum, i) => sum + i.unit_cost * i.quantity * markupMultiplier, 0);
                 return (
                   <React.Fragment key={key}>
                     <tr style={s.groupRow}>
