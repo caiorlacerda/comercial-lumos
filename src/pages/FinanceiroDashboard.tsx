@@ -1,16 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  Wallet, 
-  TrendingUp, 
-  ArrowDownRight, 
-  ArrowUpRight, 
-  Activity, 
+import React, { useEffect, useState, useMemo } from 'react';
+import {
+  Wallet,
+  TrendingUp,
+  ArrowDownRight,
+  ArrowUpRight,
+  Activity,
   AlertCircle,
   CheckCircle2,
   Calendar,
   DollarSign
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  CartesianGrid,
+} from 'recharts';
 
 export default function FinanceiroDashboard() {
   const [stats, setStats] = useState({
@@ -21,6 +31,8 @@ export default function FinanceiroDashboard() {
     despesasMes: 0,
     recebidoMes: 0
   });
+  const [allPayables, setAllPayables] = useState<any[]>([]);
+  const [allReceivables, setAllReceivables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,50 +45,50 @@ export default function FinanceiroDashboard() {
       const now = new Date();
       const nextWeek = new Date();
       nextWeek.setDate(now.getDate() + 7);
-      
+
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
       const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
       const nextWeekStr = nextWeek.toISOString().split('T')[0];
 
       const [payablesRes, receivablesRes, reimbursementsRes] = await Promise.all([
-        supabase.from('payables').select('amount, due_date, paid_at'),
+        supabase.from('payables').select('amount, due_date, paid_at, category'),
         supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at'),
         supabase.from('reimbursements').select('amount, status, paid_at')
       ]);
 
-      const totalRecebido = (receivablesRes.data || []).reduce((acc, r) => acc + r.received_amount, 0);
-      const totalPagoDespesas = (payablesRes.data || []).filter(p => p.paid_at).reduce((acc, p) => acc + p.amount, 0);
-      const totalPagoReembolsos = (reimbursementsRes.data || []).filter(r => r.status === 'pago').reduce((acc, r) => acc + r.amount, 0);
+      const payables = payablesRes.data || [];
+      const receivables = receivablesRes.data || [];
+      const reimbursements = reimbursementsRes.data || [];
+
+      setAllPayables(payables);
+      setAllReceivables(receivables);
+
+      const totalRecebido = receivables.reduce((acc, r) => acc + (r.received_amount || 0), 0);
+      const totalPagoDespesas = payables.filter(p => p.paid_at).reduce((acc, p) => acc + p.amount, 0);
+      const totalPagoReembolsos = reimbursements.filter(r => r.status === 'pago').reduce((acc, r) => acc + r.amount, 0);
       const saldoGeral = totalRecebido - (totalPagoDespesas + totalPagoReembolsos);
 
-      const faturamentoMes = (receivablesRes.data || [])
+      const faturamentoMes = receivables
         .filter(r => r.due_date && r.due_date >= firstDayOfMonth && r.due_date <= lastDayOfMonth)
         .reduce((acc, r) => acc + r.total_amount, 0);
 
-      const pagarSemana = (payablesRes.data || [])
+      const pagarSemana = payables
         .filter(p => !p.paid_at && p.due_date <= nextWeekStr)
         .reduce((acc, p) => acc + p.amount, 0);
 
-      const receberSemana = (receivablesRes.data || [])
+      const receberSemana = receivables
         .filter(r => r.status !== 'recebido' && r.due_date <= nextWeekStr)
-        .reduce((acc, r) => acc + (r.total_amount - r.received_amount), 0);
+        .reduce((acc, r) => acc + (r.total_amount - (r.received_amount || 0)), 0);
 
-      const recebidoMes = (receivablesRes.data || [])
+      const recebidoMes = receivables
         .filter(r => r.received_at && r.received_at.split('T')[0] >= firstDayOfMonth)
-        .reduce((acc, r) => acc + r.received_amount, 0);
-      
-      const despesasMes = (payablesRes.data || [])
+        .reduce((acc, r) => acc + (r.received_amount || 0), 0);
+
+      const despesasMes = payables
         .filter(p => p.paid_at && p.paid_at.split('T')[0] >= firstDayOfMonth)
         .reduce((acc, p) => acc + p.amount, 0);
 
-      setStats({
-        saldoGeral,
-        faturamentoMes,
-        pagarSemana,
-        receberSemana,
-        despesasMes,
-        recebidoMes
-      });
+      setStats({ saldoGeral, faturamentoMes, pagarSemana, receberSemana, despesasMes, recebidoMes });
     } catch (error) {
       console.error('Erro no Dashboard:', error);
     } finally {
@@ -86,7 +98,43 @@ export default function FinanceiroDashboard() {
 
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen bg-lumos-bg"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-lumos-yellow"></div></div>;
+  const monthlyChartData = useMemo(() => {
+    const now = new Date();
+    const months: { mes: string; entradas: number; saidas: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.toISOString().slice(0, 7); // YYYY-MM
+      const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      const entradas = allReceivables
+        .filter(r => r.received_at && r.received_at.startsWith(key))
+        .reduce((s, r) => s + (r.received_amount || 0), 0);
+      const saidas = allPayables
+        .filter(p => p.paid_at && p.paid_at.startsWith(key))
+        .reduce((s, p) => s + (p.amount || 0), 0);
+      months.push({ mes: label, entradas, saidas });
+    }
+    return months;
+  }, [allPayables, allReceivables]);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3 shadow-xl text-xs">
+        <p className="font-black uppercase text-lumos-text-secondary mb-2">{label}</p>
+        {payload.map((p: any) => (
+          <p key={p.name} style={{ color: p.fill }} className="font-bold">
+            {p.name}: {formatBRL(p.value)}
+          </p>
+        ))}
+      </div>
+    );
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-lumos-yellow" />
+    </div>
+  );
 
   return (
     <div className="space-y-8 font-work-sans">
@@ -127,6 +175,24 @@ export default function FinanceiroDashboard() {
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">A Receber (7 dias)</p>
           <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">{formatBRL(stats.receberSemana)}</p>
         </div>
+      </div>
+
+      {/* Gráfico de fluxo mensal */}
+      <div className="card p-6">
+        <h3 className="text-sm font-black text-lumos-text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+          <Activity className="w-4 h-4 text-lumos-yellow" /> Fluxo de Caixa — Últimos 6 Meses
+        </h3>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={monthlyChartData} barGap={6} barCategoryGap="30%">
+            <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+            <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} />
+            <YAxis tickFormatter={(v) => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={55} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            <Legend formatter={(v) => <span style={{ fontSize: 11, color: '#aaa', fontWeight: 700, textTransform: 'uppercase' }}>{v}</span>} />
+            <Bar dataKey="entradas" name="Entradas" fill="#22c55e" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="saidas" name="Saídas" fill="#ef4444" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
