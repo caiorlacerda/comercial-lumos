@@ -238,25 +238,9 @@ export default function AprovacaoPublica() {
         {version.notes_client && (
           <div style={{ marginBottom: 40 }}>
             <h2 style={s.sectionTitle}>Escopo e Briefing</h2>
-            <style>{`
-              .briefing-content p { margin: 0 0 10px; font-size: 12px; line-height: 1.85; color: #333; }
-              .briefing-content h1, .briefing-content h2, .briefing-content h3 {
-                font-weight: 700; font-size: 11px; text-transform: uppercase;
-                letter-spacing: 0.06em; color: #111; margin: 20px 0 8px;
-              }
-              .briefing-content ul, .briefing-content ol { padding-left: 18px; margin: 0 0 10px; }
-              .briefing-content li { font-size: 12px; line-height: 1.85; color: #333; margin-bottom: 3px; }
-              .briefing-content strong { font-weight: 700; }
-              .briefing-content em { font-style: italic; }
-              .briefing-content a { color: #555; text-decoration: underline; word-break: break-all; }
-              .briefing-content blockquote { border-left: 3px solid #EFC700; padding-left: 14px; margin: 12px 0; color: #666; }
-              .briefing-content hr { border: none; border-top: 1px solid #e0e0e0; margin: 16px 0; }
-              .briefing-content br { display: block; content: ''; margin-top: 4px; }
-            `}</style>
-            <div
-              className="briefing-content"
-              dangerouslySetInnerHTML={{ __html: version.notes_client }}
-            />
+            <div style={{ fontSize: 12, lineHeight: 1.85, color: '#333', whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+              {version.notes_client}
+            </div>
           </div>
         )}
 

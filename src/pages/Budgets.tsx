@@ -70,6 +70,7 @@ export default function Budgets() {
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [approvalMap, setApprovalMap] = useState<Record<string, { approved: boolean; approver_name: string | null } | 'pending'>>({});
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   
   // Sorting & Filtering
@@ -165,6 +166,21 @@ export default function Budgets() {
       });
       
       setBudgets(processed);
+
+      // Fetch approval status for versions with public tokens
+      const { data: versionsWithToken } = await supabase
+        .from('budget_versions')
+        .select('id, budget_id, budget_approvals(approved, approver_name)')
+        .not('public_token', 'is', null);
+
+      if (versionsWithToken?.length) {
+        const map: Record<string, { approved: boolean; approver_name: string | null } | 'pending'> = {};
+        for (const v of versionsWithToken) {
+          const approval = (v as any).budget_approvals?.[0];
+          map[v.budget_id] = approval ? { approved: approval.approved, approver_name: approval.approver_name } : 'pending';
+        }
+        setApprovalMap(map);
+      }
     } catch (err) {
       console.error('Error fetching budgets:', err);
     } finally {
@@ -740,6 +756,21 @@ export default function Budgets() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-lumos-text-primary font-bold group-hover:text-lumos-yellow transition-colors">{budget.project_name}</span>
+                      {approvalMap[budget.id] && (
+                        <span className={`ml-2 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                          approvalMap[budget.id] === 'pending'
+                            ? 'text-lumos-yellow bg-lumos-yellow/10 border-lumos-yellow/20'
+                            : (approvalMap[budget.id] as any).approved
+                              ? 'text-green-400 bg-green-500/10 border-green-500/20'
+                              : 'text-red-400 bg-red-500/10 border-red-500/20'
+                        }`}>
+                          {approvalMap[budget.id] === 'pending'
+                            ? '⏳ Aguardando'
+                            : (approvalMap[budget.id] as any).approved
+                              ? '✓ Aprovado'
+                              : '✗ Recusado'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-[10px] text-lumos-text-secondary font-black uppercase tracking-tighter">
