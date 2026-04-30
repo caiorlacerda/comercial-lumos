@@ -225,8 +225,11 @@ export default function Budgets() {
   };
 
   const unlinkBudgetReferences = async (ids: string[]) => {
-    // Desvincular recebíveis antes de deletar (FK sem CASCADE)
-    await supabase.from('receivables').update({ budget_id: null }).in('budget_id', ids);
+    // Desvincular tabelas com FK sem CASCADE antes de deletar
+    await Promise.all([
+      supabase.from('receivables').update({ budget_id: null }).in('budget_id', ids),
+      supabase.from('project_costs').update({ budget_id: null }).in('budget_id', ids),
+    ]);
   };
 
   const handleDeleteBudget = async () => {
