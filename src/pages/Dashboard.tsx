@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  Plus, 
-  Search, 
-  Clock, 
-  CheckCircle2, 
+import {
+  Plus,
+  Search,
+  Clock,
+  CheckCircle2,
   XCircle,
   FileText,
   MoreVertical,
@@ -14,8 +14,12 @@ import {
   Download,
   ChevronUp,
   ChevronDown,
-  ArrowUpDown
+  ArrowUpDown,
+  TrendingUp,
+  Target,
+  Users
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -231,6 +235,42 @@ export default function Dashboard() {
 
   const recentList = sortedBudgets.slice(0, 5);
 
+  // Performance comercial
+  const approvedBudgets = budgets.filter(b => b.status === 'aprovado');
+  const decidedBudgets = budgets.filter(b => b.status === 'aprovado' || b.status === 'reprovado');
+  const taxaAprovacao = decidedBudgets.length > 0
+    ? Math.round((approvedBudgets.length / decidedBudgets.length) * 100)
+    : 0;
+  const ticketMedio = approvedBudgets.length > 0
+    ? approvedBudgets.reduce((s, b) => s + ((b as any).valorFinal || 0), 0) / approvedBudgets.length
+    : 0;
+
+  const monthlyData = useMemo(() => {
+    const months: Record<string, number> = {};
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      months[key] = 0;
+    }
+    approvedBudgets.forEach(b => {
+      const d = new Date(b.updated_at);
+      const key = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      if (key in months) months[key] += (b as any).valorFinal || 0;
+    });
+    return Object.entries(months).map(([mes, valor]) => ({ mes, valor }));
+  }, [approvedBudgets]);
+
+  const topClients = useMemo(() => {
+    const map: Record<string, { name: string; total: number }> = {};
+    approvedBudgets.forEach(b => {
+      const name = b.clients?.name || 'Sem cliente';
+      if (!map[name]) map[name] = { name, total: 0 };
+      map[name].total += (b as any).valorFinal || 0;
+    });
+    return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [approvedBudgets]);
+
   const SortIcon = ({ field }: { field: string }) => {
     if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-lumos-text-secondary opacity-30" />;
     return sortOrder === 'asc' 
@@ -272,6 +312,90 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Performance Comercial */}
+      {!loading && budgets.length > 0 && (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h2 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight">Performance Comercial</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* KPIs */}
+            <div className="space-y-4">
+              <div className="card flex items-center gap-4">
+                <div className="p-3 rounded-lumos bg-lumos-yellow/10 text-lumos-yellow">
+                  <Target className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Taxa de Aprovação</p>
+                  <p className="text-2xl font-black text-lumos-text-primary">{taxaAprovacao}%</p>
+                  <p className="text-[10px] text-lumos-text-secondary">{decidedBudgets.length} decididos</p>
+                </div>
+              </div>
+              <div className="card flex items-center gap-4">
+                <div className="p-3 rounded-lumos bg-green-500/10 text-green-500">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Ticket Médio</p>
+                  <p className="text-xl font-black text-lumos-text-primary">{formatCurrency(ticketMedio)}</p>
+                  <p className="text-[10px] text-lumos-text-secondary">{approvedBudgets.length} aprovados</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Gráfico mensal */}
+            <div className="card">
+              <p className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest mb-4">Aprovados por Mês (R$)</p>
+              <ResponsiveContainer width="100%" height={140}>
+                <BarChart data={monthlyData} barSize={24}>
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Tooltip
+                    formatter={(v: any) => [formatCurrency(Number(v)), 'Aprovado']}
+                    contentStyle={{ background: '#2a2a2a', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: '#aaa' }}
+                    cursor={{ fill: 'rgba(239,199,0,0.05)' }}
+                  />
+                  <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+                    {monthlyData.map((_, i) => (
+                      <Cell key={i} fill={i === monthlyData.length - 1 ? '#EFC700' : '#EFC70040'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Top clientes */}
+            <div className="card">
+              <p className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Users className="w-3 h-3" /> Top Clientes por Aprovado
+              </p>
+              {topClients.length === 0 ? (
+                <p className="text-xs text-lumos-text-secondary italic">Nenhum orçamento aprovado ainda.</p>
+              ) : (
+                <div className="space-y-3">
+                  {topClients.map((c, i) => {
+                    const max = topClients[0].total;
+                    return (
+                      <div key={c.name}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-bold text-lumos-text-primary truncate max-w-[140px]">{c.name}</span>
+                          <span className="text-lumos-text-secondary font-mono flex-shrink-0 ml-2">{formatCurrency(c.total)}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-lumos-border overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-lumos-yellow transition-all duration-700"
+                            style={{ width: `${(c.total / max) * 100}%`, opacity: 1 - i * 0.15 }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="space-y-6">

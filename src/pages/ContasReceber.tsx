@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  ArrowDownCircle, 
-  Search, 
-  CheckCircle2, 
-  Calendar, 
-  Building2, 
+import {
+  ArrowDownCircle,
+  Search,
+  CheckCircle2,
+  Calendar,
+  Building2,
   FileText,
   DollarSign,
   Plus,
   Trash2,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  FileDown
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
@@ -207,9 +209,32 @@ export default function ContasReceber() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Contas a Receber</h1>
           <p className="text-lumos-text-secondary text-sm">Controle de faturamento e entradas de projetos.</p>
         </div>
-        <button onClick={() => setIsNewModalOpen(true)} className="btn-primary h-10 px-6 flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Novo Recebível
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const rows = filtered.map(r => ({
+                'Descrição': r.description || '',
+                'Cliente': r.client?.name || '',
+                'Projeto': r.budget?.project_name || '',
+                'Valor Total (R$)': r.total_amount,
+                'Valor Recebido (R$)': r.received_amount || 0,
+                'Saldo (R$)': r.total_amount - (r.received_amount || 0),
+                'Vencimento': r.due_date ? new Date(r.due_date).toLocaleDateString('pt-BR') : '',
+                'Status': r.status === 'recebido' ? 'Recebido' : r.status === 'aprovado' ? 'Aprovado' : 'Pendente',
+              }));
+              const ws = XLSX.utils.json_to_sheet(rows);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, 'Contas a Receber');
+              XLSX.writeFile(wb, `contas-receber-${new Date().toISOString().slice(0,10)}.xlsx`);
+            }}
+            className="btn-secondary h-10 px-4 flex items-center gap-2 text-sm"
+          >
+            <FileDown className="w-4 h-4" /> Excel
+          </button>
+          <button onClick={() => setIsNewModalOpen(true)} className="btn-primary h-10 px-6 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Novo Recebível
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

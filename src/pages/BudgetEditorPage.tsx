@@ -134,6 +134,8 @@ export default function BudgetEditorPage() {
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const [activity, setActivity] = useState<{ id: string; action: string; description: string; user_name: string; created_at: string }[]>([]);
+  const [showActivity, setShowActivity] = useState(false);
   
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -343,7 +345,11 @@ export default function BudgetEditorPage() {
       setVersion(targetVersion);
       setItems(itemsData || []);
       setExpandedDescriptions(new Set((itemsData || []).filter((i: any) => i.description).map((i: any) => i.id)));
-      
+
+      // Load activity history (fails silently if table doesn't exist)
+      supabase.from('budget_activity').select('*').eq('budget_id', budgetData.id).order('created_at', { ascending: false }).limit(30)
+        .then(({ data }) => { if (data) setActivity(data); });
+
       if (budgetData.client_id) {
         fetchContactsForClient(budgetData.client_id);
       }
@@ -356,6 +362,21 @@ export default function BudgetEditorPage() {
       setLoading(false);
     }
   }
+
+  const logActivity = async (action: string, description: string) => {
+    if (!budget?.id || isDraft) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase.from('app_users').select('full_name').eq('auth_user_id', user?.id).single();
+      const { data: row } = await supabase.from('budget_activity').insert({
+        budget_id: budget.id,
+        user_name: (profile as any)?.full_name || user?.email || 'Usuário',
+        action,
+        description,
+      }).select().single();
+      if (row) setActivity(prev => [row, ...prev]);
+    } catch { /* silently ignore if table doesn't exist */ }
+  };
 
   // Persistent Save Logic
   const handleSave = async (showNotification: boolean = true) => {
@@ -584,7 +605,8 @@ export default function BudgetEditorPage() {
       }
 
       await supabase.from('budgets').update({ active_version_id: newV.id }).eq('id', budget.id);
-      
+      logActivity('version_created', `Nova versão criada (v${nextNumber})`);
+
       isDirty.current = false;
       notifySaveStatus('saved');
       await fetchBudgetData(budget.id, newV.id);
@@ -918,6 +940,7 @@ export default function BudgetEditorPage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      logActivity('pdf_generated', `PDF gerado: ${fileName}`);
 
       // Backup if needed
       const isNegotiating = budget.status === 'em_negociacao';
@@ -948,6 +971,10 @@ export default function BudgetEditorPage() {
 
   const updateBudget = (updates: Partial<Budget>) => {
     if (isReadOnly) return;
+    if (updates.status && budget?.status && updates.status !== budget.status) {
+      const labels: Record<string, string> = { rascunho: 'Rascunho', em_negociacao: 'Em Negociação', aprovado: 'Aprovado', reprovado: 'Reprovado' };
+      logActivity('status_changed', `Status alterado: ${labels[budget.status]} → ${labels[updates.status]}`);
+    }
     setBudget(prev => prev ? { ...prev, ...updates } : null);
     if (!isDraft) triggerSave('budget', updates);
     else isDirty.current = true;
@@ -1695,7 +1722,7 @@ export default function BudgetEditorPage() {
             )}
             
             <div className="mt-4 flex flex-col items-center gap-2">
-               <button 
+               <button
                 disabled={isDraft}
                 onClick={handleNewVersion}
                 className="text-[9px] font-bold text-lumos-text-secondary hover:text-lumos-yellow transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1704,6 +1731,36 @@ export default function BudgetEditorPage() {
                </button>
             </div>
           </div>
+
+          {/* Histórico de atividade */}
+          {!isDraft && (
+            <div className="card shadow-sm border-lumos-border">
+              <button
+                onClick={() => setShowActivity(v => !v)}
+                className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"
+              >
+                <span className="flex items-center gap-2"><Clock className="w-3.5 h-3.5" /> Histórico</span>
+                {showActivity ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {showActivity && (
+                <div className="mt-4 space-y-3">
+                  {activity.length === 0 ? (
+                    <p className="text-xs text-lumos-text-secondary italic">Nenhuma atividade registrada ainda.</p>
+                  ) : activity.map((a) => (
+                    <div key={a.id} className="flex gap-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-lumos-yellow mt-1.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-lumos-text-primary leading-snug">{a.description}</p>
+                        <p className="text-[10px] text-lumos-text-secondary mt-0.5">
+                          {a.user_name} · {new Date(a.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </aside>
       </div>
 

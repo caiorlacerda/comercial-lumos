@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  ArrowUpCircle, 
-  Plus, 
-  Search, 
-  CheckCircle2, 
-  Calendar, 
+import {
+  ArrowUpCircle,
+  Plus,
+  Search,
+  CheckCircle2,
+  Calendar,
   MoreVertical,
   Edit2,
   Trash2,
@@ -12,8 +12,10 @@ import {
   ChevronDown,
   FileText,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  FileDown
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -319,9 +321,32 @@ export default function ContasPagar() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Contas a Pagar</h1>
           <p className="text-lumos-text-secondary text-sm">Gestão de despesas fixas, fornecedores e equipe.</p>
         </div>
-        <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-primary h-10 px-6 flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nova Despesa
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const rows = filtered.map(p => ({
+                'Descrição': p.description,
+                'Fornecedor': p.supplier || '',
+                'Categoria': p.category || '',
+                'Valor (R$)': p.amount,
+                'Vencimento': p.due_date ? new Date(p.due_date).toLocaleDateString('pt-BR') : '',
+                'Status': p.paid_at ? 'Pago' : 'Pendente',
+                'Pago em': p.paid_at ? new Date(p.paid_at).toLocaleDateString('pt-BR') : '',
+                'Responsável': p.responsible?.full_name || '',
+              }));
+              const ws = XLSX.utils.json_to_sheet(rows);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, 'Contas a Pagar');
+              XLSX.writeFile(wb, `contas-pagar-${new Date().toISOString().slice(0,10)}.xlsx`);
+            }}
+            className="btn-secondary h-10 px-4 flex items-center gap-2 text-sm"
+          >
+            <FileDown className="w-4 h-4" /> Excel
+          </button>
+          <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="btn-primary h-10 px-6 flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Nova Despesa
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
