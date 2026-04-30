@@ -46,36 +46,30 @@ export default function AprovacaoPublica() {
 
   async function fetchData() {
     try {
-      const { data: versionData, error: vError } = await supabase
-        .from('budget_versions')
-        .select(`
-          *,
-          budgets (
-            project_name, code, category, status,
-            clients ( name, agency_name )
-          )
-        `)
-        .eq('public_token', token)
-        .single();
+      const { data, error } = await supabase.rpc('get_public_budget_by_token', {
+        p_token: token,
+      });
 
-      if (vError || !versionData) {
+      if (error || !data) {
         setStatus('not_found');
         return;
       }
+
+      const versionData = data as any;
 
       // Check if already responded
       const { data: existing } = await supabase
         .from('budget_approvals')
         .select('id')
         .eq('version_id', versionData.id)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         setStatus('already_responded');
         return;
       }
 
-      const b = versionData.budgets as any;
+      const b = versionData.budgets;
       setBudget({
         project_name: b.project_name,
         code: b.code,
@@ -84,15 +78,7 @@ export default function AprovacaoPublica() {
         clients: b.clients,
       });
       setVersion(versionData as unknown as BudgetVersion);
-
-      // Fetch items
-      const { data: itemsData } = await supabase
-        .from('budget_items')
-        .select('*')
-        .eq('version_id', versionData.id)
-        .order('sort_order');
-
-      setItems((itemsData || []) as BudgetItem[]);
+      setItems((versionData.items || []) as BudgetItem[]);
     } catch {
       setStatus('not_found');
     } finally {
@@ -105,11 +91,11 @@ export default function AprovacaoPublica() {
     setDecision(approved ? 'aprovado' : 'reprovado');
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('budget_approvals').insert({
-        version_id: version.id,
-        approved,
-        approver_name: approverName.trim() || null,
-        approver_notes: approverNotes.trim() || null,
+      const { error } = await supabase.rpc('insert_budget_approval', {
+        p_version_id: version.id,
+        p_approved: approved,
+        p_approver_name: approverName.trim() || null,
+        p_approver_notes: approverNotes.trim() || null,
       });
 
       if (error) throw error;
