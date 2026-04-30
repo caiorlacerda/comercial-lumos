@@ -18,6 +18,7 @@ import { PermissionGuard } from '@/components/auth/PermissionGuard';
 // Novas Páginas Financeiras
 import UsersPage from '@/pages/Users';
 import AuditLog from '@/pages/AuditLog';
+import AprovacaoPublica from '@/pages/AprovacaoPublica';
 import FinanceiroDashboard from '@/pages/FinanceiroDashboard';
 import ContasPagar from '@/pages/ContasPagar';
 import ContasReceber from '@/pages/ContasReceber';
@@ -174,6 +175,7 @@ function AppContent() {
       <div className="min-h-screen bg-lumos-bg">
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/aprovar/:token" element={<AprovacaoPublica />} />
           
           <Route 
             path="/" 

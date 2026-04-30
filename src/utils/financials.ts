@@ -36,6 +36,7 @@ export interface BudgetVersion {
   logistics_date?: string | null;
   logistics_time?: string | null;
   logistics_location?: string | null;
+  public_token?: string | null;
 }
 
 export interface VersionFinancials {

@@ -140,6 +140,7 @@ export default function BudgetEditorPage() {
   
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const { login, uploadToDrive, isAuthenticated } = useGoogleDrive();
   
   const [briefingTemplates, setBriefingTemplates] = useState<any[]>([]);
@@ -982,6 +983,35 @@ export default function BudgetEditorPage() {
     else isDirty.current = true;
   };
 
+  const handleGeneratePublicLink = async () => {
+    if (!version) return;
+    setIsGeneratingLink(true);
+    try {
+      let token = version.public_token;
+
+      if (!token) {
+        const { data, error } = await supabase
+          .from('budget_versions')
+          .update({ public_token: crypto.randomUUID() })
+          .eq('id', version.id)
+          .select('public_token')
+          .single();
+
+        if (error) throw error;
+        token = data.public_token;
+        setVersion(prev => prev ? { ...prev, public_token: token } : null);
+      }
+
+      const url = `${window.location.origin}/aprovar/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copiado para a área de transferência!');
+    } catch {
+      toast.error('Erro ao gerar link público.');
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  };
+
   const updateVersion = (updates: Partial<BudgetVersion>) => {
     if (isReadOnly) return;
     setVersion(prev => prev ? { ...prev, ...updates } : null);
@@ -1723,6 +1753,17 @@ export default function BudgetEditorPage() {
               </div>
             )}
             
+            {!isDraft && (
+              <button
+                onClick={handleGeneratePublicLink}
+                disabled={isGeneratingLink}
+                className="btn-secondary w-full py-3 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] border-lumos-yellow/20 hover:border-lumos-yellow/40 mt-2"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                {isGeneratingLink ? 'Gerando...' : version?.public_token ? 'Copiar Link Público' : 'Gerar Link de Aprovação'}
+              </button>
+            )}
+
             <div className="mt-4 flex flex-col items-center gap-2">
                <button
                 disabled={isDraft}
