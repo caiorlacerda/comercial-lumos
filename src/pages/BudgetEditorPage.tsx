@@ -141,6 +141,7 @@ export default function BudgetEditorPage() {
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [approvalResponse, setApprovalResponse] = useState<{ approved: boolean; approver_name: string | null; approver_notes: string | null; created_at: string } | null>(null);
   const { login, uploadToDrive, isAuthenticated } = useGoogleDrive();
   
   const [briefingTemplates, setBriefingTemplates] = useState<any[]>([]);
@@ -351,6 +352,13 @@ export default function BudgetEditorPage() {
       // Load activity history (fails silently if table doesn't exist)
       supabase.from('budget_activity').select('*').eq('budget_id', budgetData.id).order('created_at', { ascending: false }).limit(30)
         .then(({ data }) => { if (data) setActivity(data); });
+
+      // Load approval response if version has a public token
+      if (targetVersion.public_token) {
+        supabase.from('budget_approvals').select('approved, approver_name, approver_notes, created_at')
+          .eq('version_id', targetVersion.id).maybeSingle()
+          .then(({ data }) => { if (data) setApprovalResponse(data); });
+      }
 
       if (budgetData.client_id) {
         fetchContactsForClient(budgetData.client_id);
@@ -1762,6 +1770,40 @@ export default function BudgetEditorPage() {
                 <ExternalLink className="w-3.5 h-3.5" />
                 {isGeneratingLink ? 'Gerando...' : version?.public_token ? 'Copiar Link Público' : 'Gerar Link de Aprovação'}
               </button>
+            )}
+
+            {/* Approval response */}
+            {version?.public_token && (
+              <div className={`mt-2 rounded-lumos border p-3 text-[10px] ${
+                approvalResponse
+                  ? approvalResponse.approved
+                    ? 'bg-green-500/5 border-green-500/20'
+                    : 'bg-red-500/5 border-red-500/20'
+                  : 'bg-lumos-border/10 border-lumos-border'
+              }`}>
+                <p className={`font-black uppercase tracking-widest mb-1 ${
+                  approvalResponse
+                    ? approvalResponse.approved ? 'text-green-500' : 'text-red-500'
+                    : 'text-lumos-text-secondary'
+                }`}>
+                  {approvalResponse
+                    ? approvalResponse.approved ? '✓ Proposta Aprovada' : '✗ Proposta Recusada'
+                    : '⏳ Aguardando Resposta'}
+                </p>
+                {approvalResponse && (
+                  <>
+                    {approvalResponse.approver_name && (
+                      <p className="text-lumos-text-secondary">Por: <span className="text-lumos-text-primary font-semibold">{approvalResponse.approver_name}</span></p>
+                    )}
+                    {approvalResponse.approver_notes && (
+                      <p className="text-lumos-text-secondary mt-1 italic">"{approvalResponse.approver_notes}"</p>
+                    )}
+                    <p className="text-lumos-text-secondary mt-1">
+                      {new Date(approvalResponse.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </>
+                )}
+              </div>
             )}
 
             <div className="mt-4 flex flex-col items-center gap-2">

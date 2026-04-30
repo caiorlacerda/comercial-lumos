@@ -238,8 +238,23 @@ export default function AprovacaoPublica() {
         {version.notes_client && (
           <div style={{ marginBottom: 40 }}>
             <h2 style={s.sectionTitle}>Escopo e Briefing</h2>
+            <style>{`
+              .briefing-content p { margin: 0 0 10px; font-size: 12px; line-height: 1.85; color: #333; }
+              .briefing-content h1, .briefing-content h2, .briefing-content h3 {
+                font-weight: 700; font-size: 11px; text-transform: uppercase;
+                letter-spacing: 0.06em; color: #111; margin: 20px 0 8px;
+              }
+              .briefing-content ul, .briefing-content ol { padding-left: 18px; margin: 0 0 10px; }
+              .briefing-content li { font-size: 12px; line-height: 1.85; color: #333; margin-bottom: 3px; }
+              .briefing-content strong { font-weight: 700; }
+              .briefing-content em { font-style: italic; }
+              .briefing-content a { color: #555; text-decoration: underline; word-break: break-all; }
+              .briefing-content blockquote { border-left: 3px solid #EFC700; padding-left: 14px; margin: 12px 0; color: #666; }
+              .briefing-content hr { border: none; border-top: 1px solid #e0e0e0; margin: 16px 0; }
+              .briefing-content br { display: block; content: ''; margin-top: 4px; }
+            `}</style>
             <div
-              style={{ fontSize: 12, lineHeight: 1.85, color: '#333' }}
+              className="briefing-content"
               dangerouslySetInnerHTML={{ __html: version.notes_client }}
             />
           </div>
@@ -313,6 +328,68 @@ export default function AprovacaoPublica() {
             )}
           </div>
         )}
+
+        {/* Condições Gerais */}
+        <div style={{ marginBottom: 40 }}>
+          <h2 style={s.sectionTitle}>Condições Gerais</h2>
+          {[
+            {
+              title: '1. Prazos e Alterações',
+              items: [
+                'Esta Proposta Comercial terá validade por 7 dias corridos, a partir da celebração do contrato entre as partes. Após este período, os investimentos estarão sujeitos a alterações.',
+                'Eventuais alterações nas especificações dos trabalhos a serem realizados podem alterar o valor desta Proposta Comercial.',
+              ],
+            },
+            {
+              title: '2. Cancelamento e Rescisão',
+              items: [
+                'Aprovada esta Proposta Comercial, em qualquer hipótese de cancelamento da prestação dos serviços, por parte do CLIENTE, será devida multa, em favor da LUMOS, em valor correspondente a 70% (setenta por cento) do valor total devido pelo CLIENTE, sem prejuízo do pagamento de todas as despesas já realizadas pela LUMOS, na execução dos serviços objeto da presente Proposta Comercial.',
+                'Para quaisquer finalidades que se façam necessárias, a presente Proposta Comercial, considerar-se-á aprovada pelo CLIENTE, em qualquer hipótese de manifestação deste, concordando com seus termos e condições, seja por concordância manifestada por e-mail ou outros meios, tais como mas não limitados a aplicativos de troca de mensagens, mensagens de texto, etc., seja por manifestação tácita da vontade do CLIENTE, no sentido deste ter ciência do início do cumprimento das obrigações constantes da Proposta Comercial, pela LUMOS, sem que se manifeste em contrário.',
+              ],
+            },
+            {
+              title: '3. Pagamento',
+              items: [
+                'O pagamento deverá ocorrer de acordo com prazo de pagamento combinado entre o CLIENTE e a LUMOS no ato do aceite da presente Proposta Comercial, dentro das opções disponíveis nesta.',
+                'O atraso no pagamento sujeitará o CLIENTE à multa de 10% (dez por cento) e juros de 1% a.m. sobre o valor do débito.',
+              ],
+            },
+            {
+              title: '4. Taxa de Remarcação',
+              items: [
+                'Caso o CLIENTE altere a data prevista para a execução do serviço, sem respeitar o prazo máximo de 48 horas de antecedência, será cobrada uma taxa de remarcação no valor mínimo de R$2.000,00 ou 20% do valor total do projeto.',
+              ],
+            },
+            {
+              title: '5. Direitos Autorais e Uso',
+              items: [
+                'Todo o material produzido pela LUMOS permanece de propriedade desta até a quitação integral do valor contratado.',
+                'A cessão de direitos de uso do material produzido está limitada ao território e período de veiculação descritos nesta Proposta.',
+              ],
+            },
+            {
+              title: '6. Créditos',
+              items: [
+                'A LUMOS reserva-se o direito de utilizar o material produzido em seu portfólio e materiais de divulgação, salvo expressa proibição do CLIENTE formalizada por escrito.',
+              ],
+            },
+            {
+              title: '7. Responsabilidades',
+              items: [
+                'A LUMOS não se responsabiliza por atrasos ou impedimentos causados por fatores externos ao seu controle, como condições climáticas, restrições de locação ou atrasos por parte do CLIENTE na entrega de materiais necessários à produção.',
+              ],
+            },
+          ].map((section, si) => (
+            <div key={si} style={{ marginBottom: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, color: '#111' }}>{section.title}</div>
+              {section.items.map((item, ii) => (
+                <p key={ii} style={{ fontSize: 11.5, lineHeight: 1.8, color: '#444', margin: '0 0 6px', paddingLeft: 16 }}>
+                  {`${si + 1}.${ii + 1}. ${item}`}
+                </p>
+              ))}
+            </div>
+          ))}
+        </div>
 
         {/* Approval form */}
         <div style={s.termsBox}>
