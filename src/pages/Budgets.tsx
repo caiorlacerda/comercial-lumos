@@ -226,8 +226,8 @@ export default function Budgets() {
 
   const unlinkBudgetReferences = async (ids: string[]) => {
     await Promise.all([
-      // receivables podem existir sem orçamento — apenas desvincula
-      supabase.from('receivables').update({ budget_id: null }).in('budget_id', ids),
+      // receivables podem existir sem orçamento — desvincula budget_id e budget_version_id
+      supabase.from('receivables').update({ budget_id: null, budget_version_id: null }).in('budget_id', ids),
       // project_costs têm NOT NULL em budget_id — deletar junto com o orçamento
       supabase.from('project_costs').delete().in('budget_id', ids),
     ]);
