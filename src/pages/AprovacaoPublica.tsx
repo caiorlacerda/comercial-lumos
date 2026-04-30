@@ -39,6 +39,7 @@ export default function AprovacaoPublica() {
   const [approverName, setApproverName] = useState('');
   const [approverNotes, setApproverNotes] = useState('');
   const [decision, setDecision] = useState<'aprovado' | 'reprovado' | null>(null);
+  const [debugError, setDebugError] = useState<string>('');
 
   useEffect(() => {
     if (token) fetchData();
@@ -51,6 +52,7 @@ export default function AprovacaoPublica() {
       });
 
       if (error || !data) {
+        setDebugError(error ? `${error.code}: ${error.message}` : 'data is null/undefined');
         setStatus('not_found');
         return;
       }
@@ -123,6 +125,11 @@ export default function AprovacaoPublica() {
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-black text-white mb-2">Link inválido</h1>
           <p className="text-gray-400">Este link de aprovação não existe ou expirou.</p>
+          {debugError && (
+            <p className="mt-4 text-xs text-red-400 bg-red-900/20 border border-red-500/20 rounded p-3 text-left font-mono break-all">
+              {debugError}
+            </p>
+          )}
         </div>
       </div>
     );
