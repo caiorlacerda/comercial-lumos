@@ -640,7 +640,8 @@ export default function Budgets() {
 
       {/* Table Container with minimum height to prevent clipping when few items exist */}
       <div className="card !p-0 shadow-sm border-lumos-border animate-in fade-in slide-in-from-bottom-6 duration-700 min-h-[200px] overflow-visible">
-        <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse" style={{ minWidth: 900 }}>
             <thead>
               <tr className="bg-lumos-bg/50 border-b border-lumos-border">
                 <th className="px-6 py-4 w-10">
@@ -756,8 +757,13 @@ export default function Budgets() {
                     <td className="px-6 py-4 font-mono text-lumos-yellow text-sm font-black whitespace-nowrap">
                       {formatBudgetCode(budget.code)}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-lumos-text-primary font-bold group-hover:text-lumos-yellow transition-colors">{budget.project_name}</span>
+                    <td className="px-6 py-4 max-w-[180px] md:max-w-[220px] lg:max-w-[280px] xl:max-w-[340px] 2xl:max-w-[420px]">
+                      <span
+                        className="text-lumos-text-primary font-bold group-hover:text-lumos-yellow transition-colors block truncate"
+                        title={budget.project_name}
+                      >
+                        {budget.project_name}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-[10px] text-lumos-text-secondary font-black uppercase tracking-tighter">
@@ -906,6 +912,7 @@ export default function Budgets() {
               ))}
             </tbody>
           </table>
+          </div>{/* overflow-x-auto */}
           <div className="px-6 pb-4">
             <Pagination
               currentPage={currentPage}
