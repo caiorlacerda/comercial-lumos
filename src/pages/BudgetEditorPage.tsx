@@ -47,6 +47,7 @@ import { debounce } from 'lodash';
 import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
 
 interface Budget {
   id: string;
@@ -65,6 +66,7 @@ export default function BudgetEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [version, setVersion] = useState<BudgetVersion | null>(null);
@@ -164,7 +166,7 @@ export default function BudgetEditorPage() {
     if (templateToUse) {
       handleLoadBriefingTemplate(templateToUse.notes_client);
     } else {
-      alert(`Nenhum template padrão encontrado para a categoria ${budget?.category}`);
+      toast.warning(`Nenhum template padrão encontrado para a categoria ${budget?.category}`);
     }
   };
 
@@ -639,11 +641,11 @@ export default function BudgetEditorPage() {
 
       setIsTemplateModalOpen(false);
       notifySaveStatus('saved');
-      alert('Orçamento salvo como padrão com sucesso!');
+      toast.success('Orçamento salvo como padrão com sucesso!');
     } catch (err) {
       console.error('Error saving as template:', err);
       notifySaveStatus('error');
-      alert('Erro ao salvar como template: ' + (err as any).message);
+      toast.error('Erro ao salvar como template: ' + (err as any).message);
     }
   };
 
@@ -765,8 +767,14 @@ export default function BudgetEditorPage() {
 
   const removeItem = (id: string) => {
     if (isReadOnly) return;
+    // Cancel any pending debounced save for this item to prevent re-insertion after delete
+    const timerKey = `item-${id}`;
+    if (saveTimers.current[timerKey]) {
+      clearTimeout(saveTimers.current[timerKey]);
+      delete saveTimers.current[timerKey];
+    }
     setItems(items.filter(i => i.id !== id));
-    
+
     if (!isDraft && version) {
       deleteItemFromDb(id);
     } else {
@@ -778,6 +786,9 @@ export default function BudgetEditorPage() {
     if (isReadOnly) return;
     const item = items.find(i => i.id === id);
     if (!item) return;
+
+    if ('unit_cost' in updates) updates.unit_cost = Math.max(0, updates.unit_cost as number);
+    if ('quantity' in updates) updates.quantity = Math.max(0, updates.quantity as number);
 
     const updatedItem = { ...item, ...updates };
     setItems(items.map(i => i.id === id ? updatedItem : i));
@@ -839,24 +850,14 @@ export default function BudgetEditorPage() {
       if (shouldBackup && isNegotiating) {
         try {
           await uploadToDrive(blob, fileName);
-          // Toast-like notification
-          const toast = document.createElement('div');
-          toast.className = 'fixed bottom-6 right-6 bg-green-600 text-white px-6 py-3 rounded-lumos shadow-2xl z-[100] animate-in slide-in-from-bottom-4 duration-300 font-bold flex items-center gap-2';
-          toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> PDF salvo no Google Drive ✓';
-          document.body.appendChild(toast);
-          setTimeout(() => {
-            toast.classList.add('animate-out', 'fade-out', 'slide-out-to-bottom-4');
-            setTimeout(() => {
-              if (document.body.contains(toast)) document.body.removeChild(toast);
-            }, 300);
-          }, 4000);
+          toast.success('PDF salvo no Google Drive ✓');
         } catch (uploadErr) {
           console.error('Drive upload failed:', uploadErr);
         }
       }
     } catch (err) {
       console.error('PDF generation error:', err);
-      alert('Erro ao gerar o PDF da proposta.');
+      toast.error('Erro ao gerar o PDF da proposta.');
     } finally {
       setIsGeneratingPDF(false);
     }

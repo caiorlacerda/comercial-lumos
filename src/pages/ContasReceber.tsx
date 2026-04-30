@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/context/ToastContext';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,6 +31,7 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
 
 export default function ContasReceber() {
   const { profile } = useAuth();
+  const toast = useToast();
   const [receivables, setReceivables] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -80,7 +82,15 @@ export default function ContasReceber() {
   const handleRegisterPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReceivable) return;
+    if (paymentData.amount <= 0) {
+      toast.error('O valor recebido deve ser maior que zero.');
+      return;
+    }
     const newReceivedAmount = Number(selectedReceivable.received_amount) + Number(paymentData.amount);
+    if (newReceivedAmount > selectedReceivable.total_amount) {
+      toast.error(`O valor ultrapassa o total do recebível (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedReceivable.total_amount)}).`);
+      return;
+    }
     const newStatus = newReceivedAmount >= selectedReceivable.total_amount ? 'recebido' : 'parcial';
     try {
       const { error } = await supabase.from('receivables').update({
@@ -93,13 +103,13 @@ export default function ContasReceber() {
       if (error) throw error;
       setIsPayModalOpen(false);
       fetchReceivables();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleCreateManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) {
-      alert("Você precisa estar logado para realizar esta ação.");
+      toast.error("Você precisa estar logado para realizar esta ação.");
       return;
     }
     try {
@@ -114,7 +124,7 @@ export default function ContasReceber() {
       setIsNewModalOpen(false);
       setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: new Date().toISOString().split('T')[0], notes: '' });
       fetchReceivables();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleDelete = async () => {
@@ -125,7 +135,7 @@ export default function ContasReceber() {
       setIsDeleteModalOpen(false);
       setDeletingId(null);
       fetchReceivables();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleBatchReceive = async () => {
@@ -145,7 +155,7 @@ export default function ContasReceber() {
       await Promise.all(updates);
       setSelectedIds(new Set());
       fetchReceivables();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleBatchDelete = async () => {
@@ -160,7 +170,7 @@ export default function ContasReceber() {
       setIsBatchDeleteModalOpen(false);
       setSelectedIds(new Set());
       fetchReceivables();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const toggleSelectAll = () => {

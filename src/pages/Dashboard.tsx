@@ -25,6 +25,7 @@ import Modal from '@/components/common/Modal';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
+import { useToast } from '@/context/ToastContext';
 
 interface Budget {
   id: string;
@@ -40,6 +41,7 @@ interface Budget {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [recentBudgets, setRecentBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +155,7 @@ export default function Dashboard() {
   const handleExportPDF = async (budget: Budget) => {
     const activeVersion = budget.versions?.find((v: any) => v.id === budget.active_version_id) || budget.versions?.[0];
     if (!activeVersion) {
-      alert('Nenhuma versão encontrada para este orçamento.');
+      toast.warning('Nenhuma versão encontrada para este orçamento.');
       return;
     }
 
@@ -185,7 +187,7 @@ export default function Dashboard() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error exporting PDF:', err);
-      alert('Erro ao gerar PDF.');
+      toast.error('Erro ao gerar PDF.');
     } finally {
       setExportingId(null);
     }

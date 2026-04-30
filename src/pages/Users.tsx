@@ -16,12 +16,14 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth, AppUserProfile } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
 
 type UserRole = 'admin' | 'producao' | 'basico';
 type UserStatus = 'ativo' | 'inativo';
 
 export default function UsersPage() {
   const { profile: currentUserProfile } = useAuth();
+  const toast = useToast();
   const [users, setUsers] = useState<AppUserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -90,14 +92,14 @@ export default function UsersPage() {
 
       if (dbError) throw dbError;
 
-      alert(`Perfil criado com sucesso!\n\nAgora crie a conta no Supabase Dashboard em Authentication → Users com o e-mail ${formData.email} e a senha informada. O usuário aparecerá automaticamente na lista ao fazer login.`);
+      toast.success(`Perfil criado! Crie a conta em Supabase → Authentication → Users com o e-mail ${formData.email}.`);
       
       setIsInviteModalOpen(false);
       resetForm();
       fetchUsers();
     } catch (error: any) {
       console.error('Erro no cadastro:', error);
-      alert(`Erro ao processar cadastro: ${error.message}`);
+      toast.error(`Erro ao processar cadastro: ${error.message}`);
     } finally {
       setFormLoading(false);
     }
@@ -124,7 +126,7 @@ export default function UsersPage() {
       setIsEditModalOpen(false);
       fetchUsers();
     } catch (error: any) {
-      alert(`Erro ao atualizar: ${error.message}`);
+      toast.error(`Erro ao atualizar: ${error.message}`);
     } finally {
       setFormLoading(false);
     }
@@ -144,7 +146,7 @@ export default function UsersPage() {
       setSelectedIds(new Set());
       fetchUsers();
     } catch (error: any) {
-      alert(`Erro ao atualizar status: ${error.message}`);
+      toast.error(`Erro ao atualizar status: ${error.message}`);
     }
   };
 
@@ -163,7 +165,7 @@ export default function UsersPage() {
       setSelectedIds(new Set());
       fetchUsers();
     } catch (error: any) {
-      alert(`Erro ao excluir: ${error.message}`);
+      toast.error(`Erro ao excluir: ${error.message}`);
     }
   };
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Users, Plus, Trash, Building2 } from 'lucide-react';
 import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
 import { clsx } from 'clsx';
 
 interface Client {
@@ -26,6 +27,7 @@ interface ClientModalProps {
 }
 
 export default function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalProps) {
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -122,7 +124,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       onClose();
     } catch (err) {
       console.error('Error saving client:', err);
-      alert('Erro ao salvar cliente.');
+      toast.error('Erro ao salvar cliente.');
     } finally {
       setSaving(false);
     }

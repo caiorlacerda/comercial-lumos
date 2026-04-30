@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -19,6 +20,7 @@ export default function CustosProjetoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const toast = useToast();
   const [project, setProject] = useState<any>(null);
   const [costs, setCosts] = useState<any[]>([]);
   const [appUsers, setAppUsers] = useState<any[]>([]);
@@ -85,7 +87,7 @@ export default function CustosProjetoDetalhe() {
       setEditingId(null);
       fetchProjectData();
       resetForm();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleDeleteCost = async () => {
@@ -96,7 +98,7 @@ export default function CustosProjetoDetalhe() {
       setIsDeleteModalOpen(false);
       setDeletingId(null);
       fetchProjectData();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleBatchDelete = async () => {
@@ -109,7 +111,7 @@ export default function CustosProjetoDetalhe() {
       setIsBatchDeleteModalOpen(false);
       setSelectedIds(new Set());
       fetchProjectData();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const toggleSelectAll = () => {

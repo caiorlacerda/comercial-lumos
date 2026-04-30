@@ -19,6 +19,7 @@ import {
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
 
 interface Template {
   id: string;
@@ -43,6 +44,7 @@ type Tab = 'budgets' | 'briefing';
 
 export default function Templates() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('budgets');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -165,7 +167,7 @@ export default function Templates() {
       navigate(`/orcamentos/${newBudget.id}`);
     } catch (err) {
       console.error('Error using template:', err);
-      alert('Erro ao criar orçamento a partir do template.');
+      toast.error('Erro ao criar orçamento a partir do template.');
     } finally {
       setIsDuplicating(false);
     }

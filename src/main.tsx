@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import { ThemeProvider } from '@/context/ThemeContext.tsx'
+import { ToastProvider } from '@/context/ToastContext.tsx'
 import './index.css'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <ThemeProvider>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </ThemeProvider>
     </GoogleOAuthProvider>
   </React.StrictMode>,

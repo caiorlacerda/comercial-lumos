@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,6 +48,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export default function Reembolso() {
   const { profile, isAdmin } = useAuth();
+  const toast = useToast();
   const { login, isAuthenticated, uploadToDrive, listFiles, createFolder } = useGoogleDrive();
   const [reimbursements, setReimbursements] = useState<any[]>([]);
   const [budgets, setBudgets] = useState<any[]>([]);
@@ -154,9 +156,9 @@ export default function Reembolso() {
       setIsModalOpen(false);
       fetchReimbursements();
       resetForm();
-    } catch (error: any) { 
+    } catch (error: any) {
       console.error(error);
-      alert(error.message); 
+      toast.error(error.message);
     } finally {
       setUploading(false);
     }
@@ -182,7 +184,7 @@ export default function Reembolso() {
       }
 
       fetchReimbursements();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleDelete = async () => {
@@ -193,7 +195,7 @@ export default function Reembolso() {
       setIsDeleteModalOpen(false);
       setDeletingId(null);
       fetchReimbursements();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleBatchStatus = async (status: string) => {
@@ -222,7 +224,7 @@ export default function Reembolso() {
 
       setSelectedIds(new Set());
       fetchReimbursements();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleBatchDelete = async () => {
@@ -235,7 +237,7 @@ export default function Reembolso() {
       setIsBatchDeleteModalOpen(false);
       setSelectedIds(new Set());
       fetchReimbursements();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const toggleSelectAll = () => {

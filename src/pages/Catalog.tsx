@@ -21,6 +21,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
+import { useToast } from '@/context/ToastContext';
 
 interface CatalogItem {
   id: string;
@@ -34,6 +35,7 @@ interface CatalogItem {
 }
 
 export default function Catalog() {
+  const toast = useToast();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -185,9 +187,9 @@ export default function Catalog() {
       if (error) {
         console.error('Supabase Delete Error:', error);
         if (error.code === '23503') {
-          alert('Não é possível excluir este item pois ele está sendo usado em orçamentos existentes. Tente desativá-lo em vez de excluir.');
+          toast.warning('Não é possível excluir este item pois ele está sendo usado em orçamentos existentes. Tente desativá-lo em vez de excluir.');
         } else {
-          alert('Ocorreu um erro ao tentar excluir o item. Verifique o console para mais detalhes.');
+          toast.error('Ocorreu um erro ao tentar excluir o item. Verifique o console para mais detalhes.');
         }
         return;
       }

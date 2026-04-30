@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -32,6 +33,7 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
 
 export default function ContasPagar() {
   const { profile } = useAuth();
+  const toast = useToast();
   const [payables, setPayables] = useState<any[]>([]);
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,7 +157,7 @@ export default function ContasPagar() {
       setEditingId(null);
       fetchData();
       resetForm();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleDelete = async () => {
@@ -166,7 +168,7 @@ export default function ContasPagar() {
       setIsDeleteModalOpen(false);
       setDeletingId(null);
       fetchData();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const markAsPaid = async (item: any) => {
@@ -178,7 +180,7 @@ export default function ContasPagar() {
       }).eq('id', item.id);
       if (error) throw error;
       fetchData();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleBatchPaid = async () => {
@@ -200,7 +202,7 @@ export default function ContasPagar() {
       await Promise.all(promises);
       setSelectedIds(new Set());
       fetchData();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const handleBatchDelete = async () => {
@@ -218,7 +220,7 @@ export default function ContasPagar() {
       setIsBatchDeleteModalOpen(false);
       setSelectedIds(new Set());
       fetchData();
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) { toast.error(error.message); }
   };
 
   const toggleSelectAll = () => {

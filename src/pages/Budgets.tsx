@@ -32,6 +32,7 @@ import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
 import { getPdfFileName } from '@/utils/pdfFileName';
+import { useToast } from '@/context/ToastContext';
 
 interface Budget {
   id: string;
@@ -49,6 +50,7 @@ interface Budget {
 
 export default function Budgets() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -188,7 +190,7 @@ export default function Budgets() {
       setStatusMenuOpen(null);
     } catch (err) {
       console.error('Error updating status:', err);
-      alert('Erro ao atualizar status.');
+      toast.error('Erro ao atualizar status.');
     }
   };
 
@@ -209,7 +211,7 @@ export default function Budgets() {
       setBatchStatusMenuOpen(false);
     } catch (err) {
       console.error('Error in batch status update:', err);
-      alert('Erro ao atualizar status em lote.');
+      toast.error('Erro ao atualizar status em lote.');
     }
   };
 
@@ -238,7 +240,7 @@ export default function Budgets() {
       setActiveMenu(null);
     } catch (err) {
       console.error('Error deleting budget:', err);
-      alert('Erro ao deletar orçamento.');
+      toast.error('Erro ao deletar orçamento.');
     }
   };
 
@@ -259,7 +261,7 @@ export default function Budgets() {
       setSelectedIds(new Set());
     } catch (err) {
       console.error('Error in batch delete:', err);
-      alert('Erro ao deletar orçamentos em lote.');
+      toast.error('Erro ao deletar orçamentos em lote.');
     }
   };
 
@@ -297,7 +299,7 @@ export default function Budgets() {
 
       const activeVersion = (fullBudget as any).active_version;
       if (!activeVersion) {
-        if (showAlerts) alert('Nenhuma versão encontrada para este orçamento.');
+        if (showAlerts) toast.warning('Nenhuma versão encontrada para este orçamento.');
         return;
       }
 
@@ -332,7 +334,7 @@ export default function Budgets() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error exporting PDF:', err);
-      if (showAlerts) alert('Erro ao gerar PDF: ' + (err as any).message);
+      if (showAlerts) toast.error('Erro ao gerar PDF: ' + (err as any).message);
     } finally {
       if (showAlerts) setExportingId(null);
     }
@@ -352,7 +354,7 @@ export default function Budgets() {
       }
     } catch (err) {
       console.error('Error in batch export:', err);
-      alert('Erro na exportação em lote.');
+      toast.error('Erro na exportação em lote.');
     } finally {
       setExportProgress(null);
       setSelectedIds(new Set());
@@ -448,7 +450,7 @@ export default function Budgets() {
       navigate(`/orcamentos/${newBudget.id}`);
     } catch (err) {
       console.error('Error duplicating budget:', err);
-      alert('Erro ao duplicar orçamento.');
+      toast.error('Erro ao duplicar orçamento.');
     } finally {
       setIsDuplicating(false);
     }

@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import throttle from 'lodash/throttle';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
@@ -24,16 +24,19 @@ import Reembolso from '@/pages/Reembolso';
 import CustosProjeto from '@/pages/CustosProjeto';
 import CustosProjetoDetalhe from '@/pages/CustosProjetoDetalhe';
 
+const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
+
 function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { user, profile, loading, error, signOut } = useAuth();
   const lastActivityRef = useRef<number>(Date.now());
-  
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+
   useEffect(() => {
     if (!user) return;
 
     const STORAGE_KEY = 'lumos_last_activity';
     const TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
-    const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    const CHECK_INTERVAL = 60 * 1000; // check every minute
 
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
@@ -46,15 +49,21 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       lastActivityRef.current = now;
       localStorage.setItem(STORAGE_KEY, now.toString());
+      setShowTimeoutWarning(false);
     }, 60000);
 
     const checkInactivity = () => {
       const storedActivity = localStorage.getItem(STORAGE_KEY);
       const lastActivity = storedActivity ? parseInt(storedActivity, 10) : lastActivityRef.current;
-      
-      if (Date.now() - lastActivity > TIMEOUT_MS) {
+      const idle = Date.now() - lastActivity;
+
+      if (idle > TIMEOUT_MS) {
         signOut();
         window.location.href = '/login?timeout=true';
+      } else if (idle > TIMEOUT_MS - TIMEOUT_WARNING_MS) {
+        setShowTimeoutWarning(true);
+      } else {
+        setShowTimeoutWarning(false);
       }
     };
 
@@ -137,7 +146,25 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     return <Navigate to="/financeiro/reembolso" />;
   }
 
-  return <Sidebar>{children}</Sidebar>;
+  return (
+    <>
+      {showTimeoutWarning && (
+        <div className="fixed top-0 left-0 right-0 z-[300] bg-yellow-500 text-black px-4 py-2 flex items-center justify-between text-sm font-semibold shadow-lg">
+          <span>⚠️ Sua sessão expira em menos de 5 minutos por inatividade. Clique em qualquer lugar para continuar.</span>
+          <button
+            onClick={() => {
+              localStorage.setItem('lumos_last_activity', Date.now().toString());
+              setShowTimeoutWarning(false);
+            }}
+            className="ml-4 underline hover:no-underline"
+          >
+            Renovar sessão
+          </button>
+        </div>
+      )}
+      <Sidebar>{children}</Sidebar>
+    </>
+  );
 }
 
 function AppContent() {
