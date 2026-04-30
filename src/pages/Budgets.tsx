@@ -224,20 +224,28 @@ export default function Budgets() {
     }
   };
 
+  const unlinkBudgetReferences = async (ids: string[]) => {
+    // Desvincular recebíveis antes de deletar (FK sem CASCADE)
+    await supabase.from('receivables').update({ budget_id: null }).in('budget_id', ids);
+  };
+
   const handleDeleteBudget = async () => {
     if (!budgetToDelete) return;
-    
+
     try {
+      await unlinkBudgetReferences([budgetToDelete.id]);
+
       const { error } = await supabase
         .from('budgets')
         .delete()
         .eq('id', budgetToDelete.id);
 
       if (error) throw error;
-      
+
       setBudgets(prev => prev.filter(b => b.id !== budgetToDelete.id));
       setBudgetToDelete(null);
       setActiveMenu(null);
+      toast.success('Orçamento excluído.');
     } catch (err: any) {
       console.error('Error deleting budget:', err);
       toast.error(`Erro ao deletar orçamento: ${err?.message || JSON.stringify(err)}`);
@@ -249,6 +257,8 @@ export default function Budgets() {
 
     try {
       const idsToDelete = budgetsToDelete.map(b => b.id);
+      await unlinkBudgetReferences(idsToDelete);
+
       const { error } = await supabase
         .from('budgets')
         .delete()
@@ -259,6 +269,7 @@ export default function Budgets() {
       setBudgets(prev => prev.filter(b => !idsToDelete.includes(b.id)));
       setBudgetsToDelete([]);
       setSelectedIds(new Set());
+      toast.success(`${idsToDelete.length} orçamento(s) excluído(s).`);
     } catch (err: any) {
       console.error('Error in batch delete:', err);
       toast.error(`Erro ao deletar orçamentos: ${err?.message || JSON.stringify(err)}`);
