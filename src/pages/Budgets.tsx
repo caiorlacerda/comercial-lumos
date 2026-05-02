@@ -16,7 +16,7 @@ import {
   Calendar,
   Filter,
   ExternalLink,
-  Download,
+  FileDown,
   Check,
   ChevronUp,
   ChevronDown,
@@ -888,8 +888,8 @@ export default function Budgets() {
                               disabled={exportingId === budget.id}
                               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-lumos-text-primary hover:bg-lumos-bg transition-colors disabled:opacity-50"
                             >
-                              <Download className={clsx("w-4 h-4 text-green-500", exportingId === budget.id && "animate-bounce")} />
-                              {exportingId === budget.id ? 'Gerando...' : 'Exportar PDF'}
+                              <FileDown className={clsx("w-4 h-4 text-green-500", exportingId === budget.id && "animate-bounce")} />
+                              {exportingId === budget.id ? 'Gerando...' : 'Gerar Orçamento PDF'}
                             </button>
                             <button
                               onClick={(e) => {
@@ -983,8 +983,8 @@ export default function Budgets() {
                   </>
                 ) : (
                   <>
-                    <Download className="w-3.5 h-3.5" />
-                    Exportar PDFs
+                    <FileDown className="w-3.5 h-3.5" />
+                    Gerar PDFs
                   </>
                 )}
               </button>

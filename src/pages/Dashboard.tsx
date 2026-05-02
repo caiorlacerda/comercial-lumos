@@ -11,7 +11,7 @@ import {
   Edit2,
   Trash2,
   AlertTriangle,
-  Download,
+  FileDown,
   ChevronUp,
   ChevronDown,
   ArrowUpDown,
@@ -29,6 +29,7 @@ import Modal from '@/components/common/Modal';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
+import { getPdfFileName } from '@/utils/pdfFileName';
 import { useToast } from '@/context/ToastContext';
 
 interface Budget {
@@ -157,27 +158,51 @@ export default function Dashboard() {
   };
 
   const handleExportPDF = async (budget: Budget) => {
-    const activeVersion = budget.versions?.find((v: any) => v.id === budget.active_version_id) || budget.versions?.[0];
-    if (!activeVersion) {
-      toast.warning('Nenhuma versão encontrada para este orçamento.');
-      return;
-    }
-
     try {
       setExportingId(budget.id);
       setActiveMenu(null);
 
-      const financials = calcFinancials(activeVersion.items || [], activeVersion);
-      const contact = activeVersion.contact;
-      const clientDisplayName = budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente');
-      const fileName = `${budget.code} | Lumos + ${clientDisplayName} | ${budget.project_name}.pdf`;
+      const { data: fullBudget, error } = await supabase
+        .from('budgets')
+        .select(`
+          *,
+          clients(name, agency_name, contact_name, email),
+          active_version:budget_versions!budgets_active_version_fkey(
+            *,
+            contact:client_contacts(name, email, role),
+            budget_items(
+              id, item_group, name, description,
+              unit_cost, quantity, unit_label, sort_order
+            )
+          )
+        `)
+        .eq('id', budget.id)
+        .single();
+
+      if (error) throw error;
+      if (!fullBudget) throw new Error('Budget not found');
+
+      const activeVersion = (fullBudget as any).active_version;
+      if (!activeVersion) {
+        toast.warning('Nenhuma versão encontrada para este orçamento.');
+        return;
+      }
+
+      const items = activeVersion.budget_items || [];
+      const financials = calcFinancials(items, activeVersion);
+      const fileName = getPdfFileName(
+        fullBudget.code,
+        fullBudget.clients?.name || 'Cliente',
+        fullBudget.clients?.agency_name,
+        fullBudget.project_name
+      );
 
       const blob = await pdf(
-        <BudgetPDF 
-          budget={budget}
+        <BudgetPDF
+          budget={fullBudget as any}
           version={activeVersion}
-          contact={contact}
-          items={activeVersion.items || []}
+          contact={activeVersion.contact}
+          items={items}
           financials={financials}
           userName={currentUser?.user_metadata?.full_name || 'Equipe Lumos'}
         />
@@ -187,7 +212,9 @@ export default function Dashboard() {
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error exporting PDF:', err);
@@ -539,8 +566,8 @@ export default function Dashboard() {
                                 disabled={exportingId === budget.id}
                                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-lumos-text-primary hover:bg-lumos-bg transition-colors disabled:opacity-50"
                               >
-                                <Download className={clsx("w-4 h-4 text-green-500", exportingId === budget.id && "animate-bounce")} />
-                                {exportingId === budget.id ? 'Gerando...' : 'Exportar PDF'}
+                                <FileDown className={clsx("w-4 h-4 text-green-500", exportingId === budget.id && "animate-bounce")} />
+                                {exportingId === budget.id ? 'Gerando...' : 'Gerar Orçamento PDF'}
                               </button>
                               <button
                                 onClick={(e) => {
