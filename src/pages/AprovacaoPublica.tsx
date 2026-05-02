@@ -44,6 +44,7 @@ const RESPONSIVE_CSS = `
     .ap-info-table { font-size: 12px; }
     .ap-info-emissao { display: none; }
     .ap-info-categoria-cell { display: block; font-size: 11px; color: #888; margin-top: 2px; }
+    .ap-info-value { border-right: 1px solid #e0e0e0; }
 
     .ap-fin-wrap { margin: 0 -16px; width: calc(100% + 32px); }
     .ap-fin-desc { display: none; }
@@ -241,7 +242,7 @@ export default function AprovacaoPublica() {
           <tbody>
             <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
               <td style={s.infoLabel}>Projeto</td>
-              <td style={{ ...s.infoValue, fontWeight: 700, fontSize: 14 }}>
+              <td className="ap-info-value" style={{ ...s.infoValue, fontWeight: 700, fontSize: 14 }}>
                 {budget.project_name}
                 {emissao && <span className="ap-info-categoria-cell">Emissão: {emissao}</span>}
               </td>
@@ -251,7 +252,7 @@ export default function AprovacaoPublica() {
             </tr>
             <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
               <td style={s.infoLabel}>Cliente</td>
-              <td style={s.infoValue}>
+              <td className="ap-info-value" style={s.infoValue}>
                 {budget.clients?.name || '—'}
                 <span className="ap-info-categoria-cell">
                   {CATEGORY_LABELS[budget.category] || budget.category}
@@ -265,7 +266,7 @@ export default function AprovacaoPublica() {
             {contact && (
               <tr>
                 <td style={s.infoLabel}>Contato</td>
-                <td colSpan={2} style={s.infoValue}>
+                <td colSpan={2} className="ap-info-value" style={s.infoValue}>
                   {contact.name}{contact.email ? ` · ${contact.email}` : ''}
                 </td>
               </tr>
@@ -341,11 +342,15 @@ export default function AprovacaoPublica() {
                         </tr>
                       ))}
                       <tr style={s.subtotalRow}>
-                        <td colSpan={3} style={{ padding: '7px 12px', textAlign: 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#888' }}>
-                          Subtotal {label}
-                        </td>
-                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: '#222', whiteSpace: 'nowrap', fontSize: 13 }}>
-                          {formatCurrency(groupTotal)}
+                        <td colSpan={4} style={{ padding: '7px 12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#888' }}>
+                              Subtotal {label}
+                            </span>
+                            <span style={{ fontWeight: 800, color: '#222', whiteSpace: 'nowrap', fontSize: 13 }}>
+                              {formatCurrency(groupTotal)}
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     </React.Fragment>
