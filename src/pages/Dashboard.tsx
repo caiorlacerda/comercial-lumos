@@ -308,12 +308,12 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="animate-in fade-in slide-in-from-left-4 duration-500">
           <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">Dashboard</h1>
           <p className="text-lumos-text-secondary mt-1 font-medium">Resumo de performance e atividades recentes.</p>
         </div>
-        <Link to="/orcamentos/novo" className="btn-primary flex items-center gap-2 shadow-xl shadow-lumos-yellow/20 hover:scale-105 active:scale-95 transition-all">
+        <Link to="/orcamentos/novo" className="btn-primary flex items-center gap-2 text-sm shadow-xl shadow-lumos-yellow/20 hover:scale-105 active:scale-95 transition-all">
           <Plus className="w-5 h-5" />
           Novo Orçamento
         </Link>
@@ -426,15 +426,20 @@ export default function Dashboard() {
 
       {/* Recent Activity */}
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight">Atividades Recentes</h2>
-          <Link to="/orcamentos" className="text-xs font-bold text-lumos-yellow hover:underline flex items-center gap-1 group">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight">Atividades Recentes</h2>
+            <Link to="/orcamentos" className="text-xs font-bold text-lumos-yellow hover:underline flex items-center gap-1 group sm:hidden">
+              Ver todos <MoreVertical className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+          <Link to="/orcamentos" className="hidden sm:flex text-xs font-bold text-lumos-yellow hover:underline items-center gap-1 group">
             Ver todos os orçamentos <MoreVertical className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
           </Link>
-          <div className="relative">
+          <div className="relative sm:ml-auto">
             <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
-            <select 
-              className="input-lumos h-9 pl-9 pr-6 text-[9px] font-black uppercase tracking-widest min-w-[150px]"
+            <select
+              className="input-lumos h-9 pl-9 pr-6 text-[9px] font-black uppercase tracking-widest min-w-[150px] w-full sm:w-auto"
               value={`${sortField}-${sortOrder}`}
               onChange={(e) => {
                 const [field, order] = e.target.value.split('-');

@@ -115,7 +115,7 @@ export default function AuditLog() {
 
   return (
     <div className="space-y-6 font-work-sans">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">Log de Auditoria</h1>
           <p className="text-lumos-text-secondary font-medium mt-1">Histórico de ações realizadas na plataforma.</p>
@@ -130,8 +130,8 @@ export default function AuditLog() {
         </button>
       </div>
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary pointer-events-none" />
           <input
             type="text"

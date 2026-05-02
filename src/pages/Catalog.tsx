@@ -235,14 +235,14 @@ export default function Catalog() {
   return (
     <div className="space-y-8 p-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold text-lumos-text-primary">Catálogo de Itens</h1>
           <p className="text-lumos-text-secondary mt-1">Biblioteca global de itens e serviços.</p>
         </div>
-        <button 
+        <button
           onClick={() => handleOpenModal()}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-2 text-sm"
         >
           <Plus className="w-5 h-5" />
           Novo Item

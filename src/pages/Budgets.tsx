@@ -547,14 +547,14 @@ export default function Budgets() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="animate-in fade-in slide-in-from-left-4 duration-500">
           <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">Orçamentos</h1>
           <p className="text-lumos-text-secondary mt-1 font-medium">Gerencie e visualize todos os seus projetos.</p>
         </div>
-        <button 
+        <button
           onClick={() => navigate('/orcamentos/novo')}
-          className="btn-primary flex items-center gap-2 shadow-xl shadow-lumos-yellow/20 hover:scale-105 active:scale-95 transition-all"
+          className="btn-primary flex items-center gap-2 text-sm shadow-xl shadow-lumos-yellow/20 hover:scale-105 active:scale-95 transition-all"
         >
           <Plus className="w-5 h-5" />
           Novo Orçamento
@@ -574,10 +574,10 @@ export default function Budgets() {
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-              <select 
+              <select
                 className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
@@ -640,6 +640,7 @@ export default function Budgets() {
 
       {/* Table Container with minimum height to prevent clipping when few items exist */}
       <div className="card !p-0 shadow-sm border-lumos-border animate-in fade-in slide-in-from-bottom-6 duration-700 min-h-[200px] overflow-visible">
+        <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-lumos-bg/50 border-b border-lumos-border">
@@ -911,6 +912,7 @@ export default function Budgets() {
               ))}
             </tbody>
           </table>
+        </div>
           <div className="px-6 pb-4">
             <Pagination
               currentPage={currentPage}
@@ -960,7 +962,7 @@ export default function Budgets() {
       {/* Batch Action Bar */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
-          <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
+          <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex flex-wrap items-center gap-4 backdrop-blur-xl">
             <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
               <div className="w-8 h-8 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-sm">
                 {selectedIds.size}

@@ -274,6 +274,7 @@ export default function Clients() {
       ) : (
         <div className="space-y-4">
         <div className="card !p-0 overflow-hidden shadow-sm animate-in fade-in zoom-in-95 duration-500">
+          <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-bg/50 border-b border-lumos-border">
@@ -337,6 +338,7 @@ export default function Clients() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
         <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredClients.length} pageSize={PAGE_SIZE} />
         </div>
