@@ -220,7 +220,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
       {/* Conteúdo principal */}
       <main className="flex-1 lg:ml-64 min-h-screen overflow-auto bg-lumos-bg transition-colors duration-300">
-        <div className="w-full pt-14 lg:pt-0 p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="w-full pt-14 p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           {children}
         </div>
       </main>
