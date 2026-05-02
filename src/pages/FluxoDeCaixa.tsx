@@ -140,6 +140,13 @@ export default function FluxoDeCaixa() {
         supabase.from('fixed_costs').select('amount').eq('is_active', true),
       ]);
 
+      console.log('[FluxoDeCaixa] recRes:', recRes.error?.message, 'data:', recRes.data?.length);
+      console.log('[FluxoDeCaixa] payRes:', payRes.error?.message, 'data:', payRes.data?.length);
+      console.log('[FluxoDeCaixa] pcRes:', pcRes.error?.message, 'data:', pcRes.data?.length);
+      console.log('[FluxoDeCaixa] reimbRes:', reimbRes.error?.message, 'data:', reimbRes.data?.length);
+      console.log('[FluxoDeCaixa] ceRes:', ceRes.error?.message, 'data:', ceRes.data?.length);
+      console.log('[FluxoDeCaixa] fcRes:', fcRes.error?.message, 'data:', fcRes.data?.length);
+
       if (ceRes.error) console.error('[FluxoDeCaixa] cash_flow_entries:', ceRes.error.message);
       if (fcRes.error) console.error('[FluxoDeCaixa] fixed_costs:', fcRes.error.message);
 
@@ -150,6 +157,8 @@ export default function FluxoDeCaixa() {
       setCashEntries(ceRes.data || []);
       const fcTotal = (fcRes.data || []).reduce((acc: number, r: any) => acc + (r.amount || 0), 0);
       setFixedCostsTotal(fcTotal);
+
+      toast.info(`Carregado: ${ceRes.data?.length ?? 0} entradas | ${fcRes.data?.length ?? 0} custos fixos | erros: ${ceRes.error?.message || fcRes.error?.message || 'nenhum'}`);
 
       if (ceRes.error || fcRes.error) {
         toast.error('Erro ao carregar dados. Verifique se as tabelas foram criadas no Supabase.');
