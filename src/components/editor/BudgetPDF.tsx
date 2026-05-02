@@ -493,18 +493,13 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
             );
 
             return (
-              /* Sem wrap={false} no grupo inteiro: permite que grupos grandes se dividam entre páginas */
-              <View key={group}>
-                {/* Cabeçalho do grupo + primeiro item sempre juntos: evita header órfão no rodapé */}
-                <View wrap={false}>
-                  <View style={styles.groupHeader}>
-                    <Text>{groupLabels[group]}</Text>
-                  </View>
-                  {groupItems.slice(0, 1).map((item, index) => renderItemRow(item, index))}
+              /* wrap={false} mantém o grupo inteiro numa só página, evitando divisões no meio da categoria */
+              <View key={group} wrap={false}>
+                <View style={styles.groupHeader}>
+                  <Text>{groupLabels[group]}</Text>
                 </View>
 
-                {/* Demais itens do grupo */}
-                {groupItems.slice(1).map((item, index) => renderItemRow(item, index + 1))}
+                {groupItems.map((item, index) => renderItemRow(item, index))}
 
                 <View style={styles.groupSubtotalRow}>
                   <Text style={styles.groupSubtotalText}>Subtotal {groupLabels[group]}</Text>
