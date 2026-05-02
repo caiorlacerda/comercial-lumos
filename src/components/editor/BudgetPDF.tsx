@@ -463,16 +463,17 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
           </View>
         )}
 
-        {/* Proposta Financeira — título + cabeçalho da tabela sempre juntos */}
-        <View wrap={false} style={{ marginTop: 10 }}>
-          <Text style={styles.sectionTitle}>Proposta Financeira Detalhada</Text>
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.colName]}>Item / Serviço</Text>
-            <Text style={[styles.tableHeaderCell, styles.colDesc]}>Descrição</Text>
-            <Text style={[styles.tableHeaderCell, styles.colQty]}>Qtd</Text>
-            <Text style={[styles.tableHeaderCell, styles.colUnit]}>Unid.</Text>
+        {/* Proposta Financeira — sempre começa numa nova página */}
+        <View break>
+          <View wrap={false}>
+            <Text style={styles.sectionTitle}>Proposta Financeira Detalhada</Text>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderCell, styles.colName]}>Item / Serviço</Text>
+              <Text style={[styles.tableHeaderCell, styles.colDesc]}>Descrição</Text>
+              <Text style={[styles.tableHeaderCell, styles.colQty]}>Qtd</Text>
+              <Text style={[styles.tableHeaderCell, styles.colUnit]}>Unid.</Text>
+            </View>
           </View>
-        </View>
 
         <View style={{ marginBottom: 12 }}>
           {groups.filter(g => (items || []).some(i => i.item_group === g)).map((group, groupIdx, activeGroups) => {
@@ -516,10 +517,11 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
             );
           })}
         </View>
+        </View>{/* fim: Proposta Financeira */}
 
       </Page>
 
-      {/* PÁGINA 2: CONDIÇÕES E ASSINATURAS */}
+      {/* PÁGINA DE CONDIÇÕES E ASSINATURAS */}
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho Página 2 */}
         <View style={styles.header}>
