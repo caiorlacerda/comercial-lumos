@@ -25,6 +25,8 @@ import ContasReceber from '@/pages/ContasReceber';
 import Reembolso from '@/pages/Reembolso';
 import CustosProjeto from '@/pages/CustosProjeto';
 import CustosProjetoDetalhe from '@/pages/CustosProjetoDetalhe';
+import FluxoDeCaixa from '@/pages/FluxoDeCaixa';
+import CustosFixos from '@/pages/CustosFixos';
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
@@ -273,15 +275,35 @@ function AppContent() {
               </AuthWrapper>
             } 
           />
-          <Route 
-            path="/financeiro/custos-projeto/:id" 
+          <Route
+            path="/financeiro/custos-projeto/:id"
             element={
               <AuthWrapper>
                 <PermissionGuard permission="custos_projeto">
                   <CustosProjetoDetalhe />
                 </PermissionGuard>
               </AuthWrapper>
-            } 
+            }
+          />
+          <Route
+            path="/financeiro/fluxo-de-caixa"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <FluxoDeCaixa />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/financeiro/custos-fixos"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <CustosFixos />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
           />
           <Route
             path="/usuarios"
