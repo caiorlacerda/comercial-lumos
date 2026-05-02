@@ -140,6 +140,9 @@ export default function FluxoDeCaixa() {
         supabase.from('fixed_costs').select('amount').eq('is_active', true),
       ]);
 
+      if (ceRes.error) console.error('[FluxoDeCaixa] cash_flow_entries:', ceRes.error.message);
+      if (fcRes.error) console.error('[FluxoDeCaixa] fixed_costs:', fcRes.error.message);
+
       setReceivables(recRes.data || []);
       setPayables(payRes.data || []);
       setProjectCosts(pcRes.data || []);
@@ -147,6 +150,10 @@ export default function FluxoDeCaixa() {
       setCashEntries(ceRes.data || []);
       const fcTotal = (fcRes.data || []).reduce((acc: number, r: any) => acc + (r.amount || 0), 0);
       setFixedCostsTotal(fcTotal);
+
+      if (ceRes.error || fcRes.error) {
+        toast.error('Erro ao carregar dados. Verifique se as tabelas foram criadas no Supabase.');
+      }
     } catch (error: any) {
       toast.error(error.message);
     } finally {
