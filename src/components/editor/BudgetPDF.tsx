@@ -463,52 +463,55 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
           </View>
         )}
 
-        {/* Proposta Financeira */}
-        <Text style={styles.sectionTitle}>Proposta Financeira Detalhada</Text>
-        
-        <View style={styles.table}>
+        {/* Proposta Financeira — título + cabeçalho da tabela sempre juntos */}
+        <View wrap={false} style={{ marginTop: 10 }}>
+          <Text style={styles.sectionTitle}>Proposta Financeira Detalhada</Text>
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderCell, styles.colName]}>Item / Serviço</Text>
             <Text style={[styles.tableHeaderCell, styles.colDesc]}>Descrição</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qtd</Text>
             <Text style={[styles.tableHeaderCell, styles.colUnit]}>Unid.</Text>
           </View>
+        </View>
 
+        <View style={{ marginBottom: 12 }}>
           {groups.filter(g => (items || []).some(i => i.item_group === g)).map((group, groupIdx, activeGroups) => {
             const groupItems = (items || []).filter(i => i.item_group === group);
             const isLastGroup = groupIdx === activeGroups.length - 1;
-            let groupSum = 0;
+            const groupSum = groupItems.reduce((sum, item) =>
+              sum + item.unit_cost * markupMultiplier * item.quantity, 0);
+
+            const renderItemRow = (item: BudgetItem, index: number) => (
+              <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]} wrap={false}>
+                <Text style={[styles.tableCell, styles.colName]}>{item.name}</Text>
+                <Text style={[styles.tableCell, styles.colDesc, { color: '#888', fontSize: 7, lineHeight: 1.4 }]}>
+                  {item.description || ''}
+                </Text>
+                <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
+                <Text style={[styles.tableCell, styles.colUnit]}>{item.unit_label}</Text>
+              </View>
+            );
 
             return (
-              <View key={group} wrap={false}>
-                <View style={styles.groupHeader}>
-                  <Text>{groupLabels[group]}</Text>
+              /* Sem wrap={false} no grupo inteiro: permite que grupos grandes se dividam entre páginas */
+              <View key={group}>
+                {/* Cabeçalho do grupo + primeiro item sempre juntos: evita header órfão no rodapé */}
+                <View wrap={false}>
+                  <View style={styles.groupHeader}>
+                    <Text>{groupLabels[group]}</Text>
+                  </View>
+                  {groupItems.slice(0, 1).map((item, index) => renderItemRow(item, index))}
                 </View>
 
-                {groupItems.map((item, index) => {
-                  const finalUnitPrice = item.unit_cost * markupMultiplier;
-                  const finalTotalItem = finalUnitPrice * item.quantity;
-                  groupSum += finalTotalItem;
-
-                  return (
-                    <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]} wrap={false}>
-                      <Text style={[styles.tableCell, styles.colName]}>{item.name}</Text>
-                      <Text style={[styles.tableCell, styles.colDesc, { color: '#888', fontSize: 7, lineHeight: 1.4 }]}>
-                        {item.description || ''}
-                      </Text>
-                      <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
-                      <Text style={[styles.tableCell, styles.colUnit]}>{item.unit_label}</Text>
-                    </View>
-                  );
-                })}
+                {/* Demais itens do grupo */}
+                {groupItems.slice(1).map((item, index) => renderItemRow(item, index + 1))}
 
                 <View style={styles.groupSubtotalRow}>
-                   <Text style={styles.groupSubtotalText}>Subtotal {groupLabels[group]}</Text>
-                   <Text style={styles.groupSubtotalValue}>{formatCurrency(groupSum)}</Text>
+                  <Text style={styles.groupSubtotalText}>Subtotal {groupLabels[group]}</Text>
+                  <Text style={styles.groupSubtotalValue}>{formatCurrency(groupSum)}</Text>
                 </View>
 
                 {isLastGroup && (
-                  /* Investimento Total Linked to last group to avoid orphan */
                   <View style={styles.totalContainer} wrap={false} minPresenceAhead={80}>
                     <Text style={styles.totalLabel}>Investimento Total do Projeto</Text>
                     <Text style={styles.totalValue}>{formatCurrency(financials.valorFinal)}</Text>
