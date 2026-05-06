@@ -178,7 +178,12 @@ export default function Reembolso() {
 
       const { data, error } = await supabase
         .from('budgets')
-        .insert([{ project_name: name.trim(), status: 'rascunho', code }])
+        .insert([{
+          project_name: name.trim(),
+          status: 'rascunho',
+          code,
+          category: 'digital',
+        }])
         .select('id, project_name, code')
         .single();
       if (error) throw error;
