@@ -158,8 +158,6 @@ export default function FluxoDeCaixa() {
       const fcTotal = (fcRes.data || []).reduce((acc: number, r: any) => acc + (r.amount || 0), 0);
       setFixedCostsTotal(fcTotal);
 
-      toast.info(`Carregado: ${ceRes.data?.length ?? 0} entradas | ${fcRes.data?.length ?? 0} custos fixos | erros: ${ceRes.error?.message || fcRes.error?.message || 'nenhum'}`);
-
       if (ceRes.error || fcRes.error) {
         toast.error('Erro ao carregar dados. Verifique se as tabelas foram criadas no Supabase.');
       }
