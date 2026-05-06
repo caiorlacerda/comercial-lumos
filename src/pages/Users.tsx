@@ -1,20 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  UserPlus, 
-  Search, 
-  Edit2, 
-  Shield, 
-  CheckCircle2, 
-  XCircle, 
-  Mail, 
+import {
+  UserPlus,
+  Search,
+  Edit2,
+  Shield,
+  CheckCircle2,
+  XCircle,
+  Mail,
   Briefcase,
   Check,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  Lock,
+  CheckCheck
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useAuth, AppUserProfile } from '@/hooks/useAuth';
+
+const DEFAULT_PASSWORD = 'Lum0s1604!!';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
@@ -41,6 +47,7 @@ export default function UsersPage() {
   
   
   
+  const [credentialsCopied, setCredentialsCopied] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -78,14 +85,27 @@ export default function UsersPage() {
     try {
       setFormLoading(true);
 
-      if (formData.password.length < 8) {
-        throw new Error('A senha deve ter pelo menos 8 caracteres.');
-      }
+      // Cria usuário no Supabase Auth usando cliente temporário (não afeta a sessão do admin)
+      const tempClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_ANON_KEY,
+        { auth: { persistSession: false, storageKey: `lumos-signup-${Date.now()}` } }
+      );
 
-      // 1. Criar apenas o registro em app_users (vínculo com Auth será via trigger no Dashboard)
+      const { data: authData, error: authError } = await tempClient.auth.signUp({
+        email: formData.email,
+        password: DEFAULT_PASSWORD,
+        options: { data: { full_name: formData.full_name } }
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Falha ao criar conta. Verifique se o e-mail já está cadastrado.');
+
+      // Cria o perfil em app_users vinculado ao auth_user_id
       const { error: dbError } = await supabase
         .from('app_users')
         .insert([{
+          auth_user_id: authData.user.id,
           full_name: formData.full_name,
           email: formData.email,
           role: formData.role,
@@ -96,18 +116,29 @@ export default function UsersPage() {
 
       if (dbError) throw dbError;
 
+      // Copia credenciais automaticamente
+      const credentials = `E-mail: ${formData.email}\nSenha: ${DEFAULT_PASSWORD}`;
+      navigator.clipboard.writeText(credentials).catch(() => {});
+
       logAudit('user_created', `Usuário "${formData.full_name}" (${formData.email}) criado`, { email: formData.email, role: formData.role });
-      toast.success(`Perfil criado! Crie a conta em Supabase → Authentication → Users com o e-mail ${formData.email}.`);
-      
+      toast.success(`✓ Usuário criado! Credenciais copiadas — cole no WhatsApp/e-mail para a funcionária.`);
+
       setIsInviteModalOpen(false);
       resetForm();
       fetchUsers();
     } catch (error: any) {
       console.error('Erro no cadastro:', error);
-      toast.error(`Erro ao processar cadastro: ${error.message}`);
+      toast.error(`Erro: ${error.message}`);
     } finally {
       setFormLoading(false);
     }
+  };
+
+  const copyCredentials = async (email: string) => {
+    const text = `E-mail: ${email}\nSenha: ${DEFAULT_PASSWORD}`;
+    await navigator.clipboard.writeText(text);
+    setCredentialsCopied(true);
+    setTimeout(() => setCredentialsCopied(false), 2000);
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -545,21 +576,33 @@ export default function UsersPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase">Senha Temporária</label>
-            <input 
-              required
-              type="password" 
-              minLength={8}
-              className="input-lumos w-full"
-              placeholder="Mínimo 8 caracteres"
-              value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
-            />
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Senha Temporária</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+                <input
+                  readOnly
+                  type="text"
+                  className="input-lumos pl-10 w-full bg-lumos-text-primary/5 cursor-default font-mono tracking-wider"
+                  value={DEFAULT_PASSWORD}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => copyCredentials(formData.email)}
+                className="btn-secondary px-3 flex items-center gap-1.5 text-xs font-bold flex-shrink-0"
+                title="Copiar credenciais"
+              >
+                {credentialsCopied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                {credentialsCopied ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
+            <p className="text-[10px] text-lumos-text-secondary">Senha padrão atribuída a todos os novos usuários. As credenciais são copiadas automaticamente ao cadastrar.</p>
           </div>
           <div className="pt-4 flex gap-3">
             <button type="button" disabled={formLoading} onClick={() => setIsInviteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" disabled={formLoading} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2">
-              {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Cadastrar Usuário'}
+              {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Cadastrar e Copiar Credenciais'}
             </button>
           </div>
         </form>
