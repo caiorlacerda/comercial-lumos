@@ -52,7 +52,7 @@ export default function Reembolso() {
   const toast = useToast();
   const { login, isAuthenticated, uploadToDrive, listFiles, createFolder } = useGoogleDrive();
   const [reimbursements, setReimbursements] = useState<any[]>([]);
-  const [budgets, setBudgets] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -61,7 +61,7 @@ export default function Reembolso() {
     description: '',
     amount: 0,
     expense_date: new Date().toISOString().split('T')[0],
-    budget_id: '',
+    project_id: '',
     payment_method: 'pix',
     notes: '',
     attachment: null as File | null
@@ -74,12 +74,12 @@ export default function Reembolso() {
 
   useEffect(() => {
     fetchReimbursements();
-    fetchBudgets();
+    fetchProjects();
   }, [profile, isAdmin]);
 
-  async function fetchBudgets() {
-    const { data } = await supabase.from('budgets').select('id, project_name, code').eq('status', 'aprovado').order('code', { ascending: false });
-    setBudgets(data || []);
+  async function fetchProjects() {
+    const { data } = await supabase.from('projects').select('id, name, code').order('created_at', { ascending: false });
+    setProjects(data || []);
   }
 
   async function fetchReimbursements() {
@@ -145,10 +145,10 @@ export default function Reembolso() {
         description: formData.description,
         amount: formData.amount,
         expense_date: formData.expense_date,
-        budget_id: formData.budget_id === 'interno' ? null : (formData.budget_id || null),
+        project_id: formData.project_id === 'interno' ? null : (formData.project_id || null),
         payment_method: formData.payment_method,
-        notes: formData.budget_id === 'interno' ? `${formData.notes}\n[Gasto Interno]`.trim() : formData.notes,
-        attachments: formData.budget_id === 'interno' && attachmentData 
+        notes: formData.project_id === 'interno' ? `${formData.notes}\n[Gasto Interno]`.trim() : formData.notes,
+        attachments: formData.project_id === 'interno' && attachmentData
           ? attachmentData.map((a: any) => ({ ...a, interno: true })) 
           : attachmentData,
         status: 'pendente'
@@ -171,25 +171,16 @@ export default function Reembolso() {
     if (!name.trim()) return;
     try {
       setIsCreatingProject(true);
-      // Busca o próximo código via RPC (mesmo sistema do editor de orçamentos)
-      let code = '----';
-      const { data: nextCode } = await supabase.rpc('next_budget_code');
-      if (nextCode) code = nextCode;
 
       const { data, error } = await supabase
-        .from('budgets')
-        .insert([{
-          project_name: name.trim(),
-          status: 'rascunho',
-          code,
-          category: 'digital',
-        }])
-        .select('id, project_name, code')
+        .from('projects')
+        .insert([{ name: name.trim(), created_by: profile?.id }])
+        .select('id, name, code')
         .single();
       if (error) throw error;
-      setBudgets(prev => [data, ...prev]);
-      setFormData({ ...formData, budget_id: data.id });
-      setProjectSearch(`${data.project_name}`);
+      setProjects(prev => [data, ...prev]);
+      setFormData({ ...formData, project_id: data.id });
+      setProjectSearch(data.name);
       setShowProjectDropdown(false);
       toast.success(`Projeto "${data.project_name}" criado!`);
     } catch (err: any) {
@@ -292,7 +283,7 @@ export default function Reembolso() {
   };
 
   const resetForm = () => {
-    setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], budget_id: '', payment_method: 'pix', notes: '', attachment: null });
+    setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], project_id: '', payment_method: 'pix', notes: '', attachment: null });
     setProjectSearch('');
   };
 
@@ -521,7 +512,7 @@ export default function Reembolso() {
                     <button
                       type="button"
                       onClick={() => {
-                        setFormData({ ...formData, budget_id: 'interno' });
+                        setFormData({ ...formData, project_id: 'interno' });
                         setProjectSearch('#000 — Produtora Lumos');
                         setShowProjectDropdown(false);
                       }}
@@ -530,9 +521,9 @@ export default function Reembolso() {
                       <p className="text-xs font-black text-lumos-yellow uppercase tracking-tighter">#000 — Produtora Lumos</p>
                       <p className="text-[10px] text-lumos-text-secondary italic group-hover:text-lumos-yellow/70 transition-colors">Gasto interno administrativo</p>
                     </button>
-                    {budgets
+                    {projects
                       .filter(b =>
-                        b.project_name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+                        b.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
                         (b.code && b.code.toLowerCase().includes(projectSearch.toLowerCase()))
                       )
                       .map(b => (
@@ -540,18 +531,18 @@ export default function Reembolso() {
                           key={b.id}
                           type="button"
                           onClick={() => {
-                            setFormData({ ...formData, budget_id: b.id });
-                            setProjectSearch(`#${b.code || 'S/N'} — ${b.project_name}`);
+                            setFormData({ ...formData, project_id: b.id });
+                            setProjectSearch(b.code ? `#${b.code} — ${b.name}` : b.name);
                             setShowProjectDropdown(false);
                           }}
                           className="w-full text-left px-4 py-2.5 hover:bg-lumos-text-primary/5 transition-colors border-b border-lumos-border/50 last:border-0"
                         >
-                          <p className="text-xs font-bold text-lumos-text-primary">#{b.code || 'S/N'} — {b.project_name}</p>
+                          <p className="text-xs font-bold text-lumos-text-primary">{b.code ? `#${b.code} — ${b.name}` : b.name}</p>
                         </button>
                       ))}
                     {/* Opção de criar novo projeto quando há texto digitado */}
                     {projectSearch.trim() &&
-                      !budgets.some(b => b.project_name.toLowerCase() === projectSearch.toLowerCase()) &&
+                      !projects.some(b => b.name.toLowerCase() === projectSearch.toLowerCase()) &&
                       projectSearch !== '#000 — Produtora Lumos' && (
                       <button
                         type="button"

@@ -487,6 +487,7 @@ export default function BudgetEditorPage() {
 
       if (budget.status === 'aprovado' && financials) {
         await syncReceivable(currentBudgetId, currentVersionId, budget.project_name, budget.client_id || '', financials.valorFinal);
+        await syncProject(currentBudgetId, budget.project_name, budget.client_id || '', budget.code || '');
       }
 
       isDirty.current = false;
@@ -534,6 +535,26 @@ export default function BudgetEditorPage() {
     }
   };
 
+  const syncProject = async (budgetId: string, projectName: string, clientId: string, code: string) => {
+    try {
+      const { data: existing } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('budget_id', budgetId)
+        .maybeSingle();
+      if (!existing) {
+        await supabase.from('projects').insert([{
+          name: projectName,
+          code,
+          budget_id: budgetId,
+          client_id: clientId || null,
+        }]);
+      }
+    } catch (err) {
+      console.error('Error syncing project:', err);
+    }
+  };
+
   // Optimized Partial Saves
   const savePartialBudget = async (updates: Partial<Budget>) => {
     if (isDraft || !budget) return;
@@ -545,12 +566,13 @@ export default function BudgetEditorPage() {
       // Sync to Receivables if approved
       if (updates.status === 'aprovado' && financials) {
         await syncReceivable(
-          budget.id, 
-          version?.id || '', 
-          budget.project_name, 
-          budget.client_id, 
+          budget.id,
+          version?.id || '',
+          budget.project_name,
+          budget.client_id,
           financials.valorFinal
         );
+        await syncProject(budget.id, budget.project_name, budget.client_id || '', budget.code || '');
       }
 
       lastSavedRef.current = new Date();
