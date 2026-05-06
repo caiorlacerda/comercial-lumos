@@ -54,7 +54,7 @@ import {
 } from '@/utils/financials';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
-import { pdf, PDFDownloadLink } from '@react-pdf/renderer';
+import { pdf } from '@react-pdf/renderer';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import GoogleDriveAuthModal from '@/components/editor/GoogleDriveAuthModal';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -140,6 +140,7 @@ export default function BudgetEditorPage() {
   
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingOS, setIsGeneratingOS] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [approvalResponse, setApprovalResponse] = useState<{ approved: boolean; approver_name: string | null; approver_notes: string | null; created_at: string } | null>(null);
   const { login, uploadToDrive, isAuthenticated } = useGoogleDrive();
@@ -499,15 +500,18 @@ export default function BudgetEditorPage() {
   };
 
   const syncReceivable = async (budgetId: string, versionId: string, projectName: string, clientId: string, totalAmount: number) => {
+    if (!totalAmount || totalAmount <= 0) return;
     try {
       const { data: existing } = await supabase
         .from('receivables')
-        .select('id, total_amount')
+        .select('id, total_amount, status')
         .eq('budget_id', budgetId)
         .maybeSingle();
 
       if (existing) {
-        if (existing.total_amount === 0) {
+        // Always keep total_amount in sync with the budget's final value
+        // (unless the receivable is already fully received)
+        if (existing.status !== 'recebido') {
           await supabase.from('receivables').update({
             total_amount: totalAmount,
             budget_version_id: versionId,
@@ -977,6 +981,41 @@ export default function BudgetEditorPage() {
       setIsDriveModalOpen(true);
     } else {
       handleGenerateAndBackup(isAuthenticated());
+    }
+  };
+
+  const handleGenerateOS = async () => {
+    if (!budget || !version) return;
+    setIsGeneratingOS(true);
+    try {
+      const fileName = getPdfFileName(
+        budget.code,
+        budget.clients?.name || 'Cliente',
+        budget.clients?.agency_name,
+        budget.project_name,
+        'OS_'
+      );
+      const blob = await pdf(
+        <ServiceOrderPDF
+          budget={budget}
+          version={version}
+          contact={selectedContact}
+          items={items}
+        />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('OS generation error:', err);
+      toast.error('Erro ao gerar a O.S.');
+    } finally {
+      setIsGeneratingOS(false);
     }
   };
 
@@ -1732,32 +1771,14 @@ export default function BudgetEditorPage() {
                   {isGeneratingPDF ? 'Preparando...' : 'Gerar Orçamento PDF'}
                 </button>
 
-                <PDFDownloadLink 
-                  key={`os-${version.id}-${items.length}`}
-                  document={
-                    <ServiceOrderPDF 
-                      budget={budget} 
-                      version={version} 
-                      contact={selectedContact}
-                      items={items} 
-                    />
-                  } 
-                  fileName={getPdfFileName(
-                    budget.code,
-                    budget.clients?.name || 'Cliente',
-                    budget.clients?.agency_name,
-                    budget.project_name,
-                    'OS_'
-                  )}
+                <button
+                  onClick={handleGenerateOS}
+                  disabled={isGeneratingOS}
                   className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] border-lumos-yellow/20 hover:border-lumos-yellow/40"
                 >
-                  {({ loading }) => (
-                    <>
-                      <ClipboardList className="w-4 h-4" />
-                      {loading ? 'Preparando...' : 'Gerar O.S'}
-                    </>
-                  )}
-                </PDFDownloadLink>
+                  <ClipboardList className="w-4 h-4" />
+                  {isGeneratingOS ? 'Preparando...' : 'Gerar O.S'}
+                </button>
               </div>
             )}
             
