@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Receipt, 
-  Plus, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
+import {
+  Receipt,
+  Plus,
+  CheckCircle2,
+  XCircle,
+  Clock,
   DollarSign,
   Upload,
   ChevronRight,
   Trash2,
   Search,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  FolderPlus
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -161,6 +162,30 @@ export default function Reembolso() {
       toast.error(error.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+
+  const createNewProject = async (name: string) => {
+    if (!name.trim()) return;
+    try {
+      setIsCreatingProject(true);
+      const { data, error } = await supabase
+        .from('budgets')
+        .insert([{ project_name: name.trim(), status: 'rascunho' }])
+        .select('id, project_name, code')
+        .single();
+      if (error) throw error;
+      setBudgets(prev => [data, ...prev]);
+      setFormData({ ...formData, budget_id: data.id });
+      setProjectSearch(`${data.project_name}`);
+      setShowProjectDropdown(false);
+      toast.success(`Projeto "${data.project_name}" criado!`);
+    } catch (err: any) {
+      toast.error(`Erro ao criar projeto: ${err.message}`);
+    } finally {
+      setIsCreatingProject(false);
     }
   };
 
@@ -496,8 +521,8 @@ export default function Reembolso() {
                       <p className="text-[10px] text-lumos-text-secondary italic group-hover:text-lumos-yellow/70 transition-colors">Gasto interno administrativo</p>
                     </button>
                     {budgets
-                      .filter(b => 
-                        b.project_name.toLowerCase().includes(projectSearch.toLowerCase()) || 
+                      .filter(b =>
+                        b.project_name.toLowerCase().includes(projectSearch.toLowerCase()) ||
                         (b.code && b.code.toLowerCase().includes(projectSearch.toLowerCase()))
                       )
                       .map(b => (
@@ -514,6 +539,27 @@ export default function Reembolso() {
                           <p className="text-xs font-bold text-lumos-text-primary">#{b.code || 'S/N'} — {b.project_name}</p>
                         </button>
                       ))}
+                    {/* Opção de criar novo projeto quando há texto digitado */}
+                    {projectSearch.trim() &&
+                      !budgets.some(b => b.project_name.toLowerCase() === projectSearch.toLowerCase()) &&
+                      projectSearch !== '#000 — Produtora Lumos' && (
+                      <button
+                        type="button"
+                        disabled={isCreatingProject}
+                        onClick={() => createNewProject(projectSearch)}
+                        className="w-full text-left px-4 py-3 hover:bg-lumos-yellow/10 border-t border-lumos-border transition-colors group flex items-center gap-3"
+                      >
+                        <div className="p-1.5 bg-lumos-yellow/10 rounded text-lumos-yellow flex-shrink-0">
+                          <FolderPlus className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-lumos-yellow">
+                            {isCreatingProject ? 'Criando...' : `Criar projeto "${projectSearch}"`}
+                          </p>
+                          <p className="text-[10px] text-lumos-text-secondary">Novo projeto em rascunho</p>
+                        </div>
+                      </button>
+                    )}
                   </div>
                 </>
               )}
