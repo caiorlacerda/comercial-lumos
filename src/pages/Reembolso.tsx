@@ -171,9 +171,14 @@ export default function Reembolso() {
     if (!name.trim()) return;
     try {
       setIsCreatingProject(true);
+      // Gera código único: ano + sequência aleatória (ex: 2026-R42)
+      const year = new Date().getFullYear();
+      const seq = Math.floor(Math.random() * 900) + 100;
+      const code = `${year}-R${seq}`;
+
       const { data, error } = await supabase
         .from('budgets')
-        .insert([{ project_name: name.trim(), status: 'rascunho' }])
+        .insert([{ project_name: name.trim(), status: 'rascunho', code }])
         .select('id, project_name, code')
         .single();
       if (error) throw error;
