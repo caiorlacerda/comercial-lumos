@@ -171,10 +171,10 @@ export default function Reembolso() {
     if (!name.trim()) return;
     try {
       setIsCreatingProject(true);
-      // Gera código único: ano + sequência aleatória (ex: 2026-R42)
-      const year = new Date().getFullYear();
-      const seq = Math.floor(Math.random() * 900) + 100;
-      const code = `${year}-R${seq}`;
+      // Busca o próximo código via RPC (mesmo sistema do editor de orçamentos)
+      let code = '----';
+      const { data: nextCode } = await supabase.rpc('next_budget_code');
+      if (nextCode) code = nextCode;
 
       const { data, error } = await supabase
         .from('budgets')
