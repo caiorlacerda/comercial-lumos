@@ -1,15 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check } from 'lucide-react';
+import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check, Pencil } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Modal from '@/components/common/Modal';
+import { useToast } from '@/context/ToastContext';
+
+const CurrencyInput = ({ value, onChange, className }: any) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\D/g, '');
+    const numberValue = rawValue ? parseInt(rawValue) / 100 : 0;
+    onChange(numberValue);
+  };
+  return (
+    <input
+      type="text"
+      className={className}
+      value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+      onChange={handleChange}
+    />
+  );
+};
 
 export default function CustosProjeto() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [projects, setProjects] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editProjectData, setEditProjectData] = useState({ name: '', code: '', client_id: '', production_value: 0 });
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -19,7 +42,15 @@ export default function CustosProjeto() {
     setSelectedIds(next);
   };
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => {
+    fetchProjects();
+    fetchClients();
+  }, []);
+
+  async function fetchClients() {
+    const { data } = await supabase.from('clients').select('id, name').order('name');
+    setClients(data || []);
+  }
 
   async function fetchProjects() {
     try {
@@ -33,7 +64,9 @@ export default function CustosProjeto() {
           name,
           code,
           budget_id,
-          client:clients(name),
+          client_id,
+          production_value,
+          client:clients(id, name),
           costs:project_costs(amount)
         `)
         .order('created_at', { ascending: false });
@@ -68,16 +101,20 @@ export default function CustosProjeto() {
         }
       }
 
-      // 3. Processa os dados
+      // 3. Processa os dados — production_value manual sobrescreve cálculo do orçamento
       const processed = (projectsData || []).map(p => {
         const versionId = p.budget_id ? budgetVersionMap[p.budget_id] : null;
         const projectItems = versionId
           ? allItems.filter(item => item.version_id === versionId)
           : [];
-        const totalProductionValue = projectItems.reduce(
+        const budgetProductionValue = projectItems.reduce(
           (acc: number, item: any) => acc + item.unit_cost * item.quantity,
           0
         );
+        const totalProductionValue =
+          p.production_value && Number(p.production_value) > 0
+            ? Number(p.production_value)
+            : budgetProductionValue;
         const totalCosts = p.costs?.reduce((acc: number, c: any) => acc + c.amount, 0) || 0;
         const margin = totalProductionValue - totalCosts;
         const marginPercent = totalProductionValue > 0 ? (margin / totalProductionValue) * 100 : 0;
@@ -91,6 +128,40 @@ export default function CustosProjeto() {
       setLoading(false);
     }
   }
+
+  const openEditModal = (project: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingProjectId(project.id);
+    setEditProjectData({
+      name: project.name || '',
+      code: project.code || '',
+      client_id: project.client_id || '',
+      production_value: project.production_value ? Number(project.production_value) : 0,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const saveProjectEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProjectId) return;
+    try {
+      const payload: any = {
+        name: editProjectData.name.trim(),
+        code: editProjectData.code.trim() || null,
+        client_id: editProjectData.client_id || null,
+        production_value: editProjectData.production_value > 0 ? editProjectData.production_value : null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('projects').update(payload).eq('id', editingProjectId);
+      if (error) throw error;
+      setIsEditModalOpen(false);
+      setEditingProjectId(null);
+      toast.success('Projeto atualizado!');
+      fetchProjects();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
 
   const filtered = projects.filter(
     p =>
@@ -201,7 +272,14 @@ export default function CustosProjeto() {
                       S/ Orçamento
                     </div>
                   )}
-                  <ChevronRight className="w-5 h-5 text-lumos-text-secondary ml-4 group-hover:translate-x-1 transition-transform" />
+                  <button
+                    onClick={e => openEditModal(p, e)}
+                    className="ml-4 p-2 rounded-full hover:bg-lumos-yellow/10 text-lumos-text-secondary hover:text-lumos-yellow transition-all"
+                    title="Editar projeto"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <ChevronRight className="w-5 h-5 text-lumos-text-secondary ml-1 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
             </div>
@@ -230,6 +308,64 @@ export default function CustosProjeto() {
           </div>
         </div>
       )}
+
+      {/* Modal de edição do projeto */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Projeto">
+        <form onSubmit={saveProjectEdit} className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Código</label>
+              <input
+                type="text"
+                className="input-lumos w-full"
+                placeholder="192"
+                value={editProjectData.code}
+                onChange={e => setEditProjectData({ ...editProjectData, code: e.target.value })}
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Nome do projeto *</label>
+              <input
+                required
+                type="text"
+                className="input-lumos w-full"
+                value={editProjectData.name}
+                onChange={e => setEditProjectData({ ...editProjectData, name: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
+            <select
+              className="input-lumos w-full"
+              value={editProjectData.client_id}
+              onChange={e => setEditProjectData({ ...editProjectData, client_id: e.target.value })}
+            >
+              <option value="">Sem cliente</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">
+              Valor Total para Produção
+            </label>
+            <CurrencyInput
+              className="input-lumos w-full font-bold"
+              value={editProjectData.production_value}
+              onChange={(val: number) => setEditProjectData({ ...editProjectData, production_value: val })}
+            />
+            <p className="text-[10px] text-lumos-text-secondary italic">
+              Deixe em R$ 0,00 para usar o cálculo automático do orçamento (se houver vinculado).
+            </p>
+          </div>
+          <div className="pt-4 flex gap-3">
+            <button type="button" onClick={() => setIsEditModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button type="submit" className="btn-primary flex-1 h-10">Salvar Alterações</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

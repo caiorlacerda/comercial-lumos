@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -31,11 +31,14 @@ export default function CustosProjetoDetalhe() {
   const [project, setProject] = useState<any>(null);
   const [costs, setCosts] = useState<any[]>([]);
   const [appUsers, setAppUsers] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
+  const [editProjectData, setEditProjectData] = useState({ name: '', code: '', client_id: '', production_value: 0 });
   const [formData, setFormData] = useState({
     description: '',
     amount: 0,
@@ -62,6 +65,8 @@ export default function CustosProjetoDetalhe() {
           name,
           code,
           budget_id,
+          client_id,
+          production_value,
           client:clients(name)
         `)
         .eq('id', id)
@@ -97,8 +102,8 @@ export default function CustosProjetoDetalhe() {
         }
       }
 
-      // 3. Busca custos e usuários em paralelo (por project_id)
-      const [costsRes, usersRes] = await Promise.all([
+      // 3. Busca custos, usuários e clientes em paralelo
+      const [costsRes, usersRes, clientsRes] = await Promise.all([
         supabase
           .from('project_costs')
           .select('*, responsible:app_users!responsible_id(full_name)')
@@ -109,11 +114,16 @@ export default function CustosProjetoDetalhe() {
           .select('id, full_name')
           .eq('status', 'ativo')
           .order('full_name', { ascending: true }),
+        supabase
+          .from('clients')
+          .select('id, name')
+          .order('name'),
       ]);
 
       setProject({ ...projectData, budget_items: budgetItems, receivable_amount: receivableAmount, budget_id: budgetId });
       setCosts(costsRes.data || []);
       setAppUsers(usersRes.data || []);
+      setClients(clientsRes.data || []);
     } catch (error) {
       console.error('Erro ao carregar projeto:', error);
       navigate('/financeiro/custos-projeto');
@@ -222,6 +232,36 @@ export default function CustosProjetoDetalhe() {
     setIsModalOpen(true);
   };
 
+  const openEditProjectModal = () => {
+    setEditProjectData({
+      name: project.name || '',
+      code: project.code || '',
+      client_id: project.client_id || '',
+      production_value: project.production_value || 0,
+    });
+    setIsEditProjectModalOpen(true);
+  };
+
+  const saveProjectEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload: any = {
+        name: editProjectData.name.trim(),
+        code: editProjectData.code.trim() || null,
+        client_id: editProjectData.client_id || null,
+        production_value: editProjectData.production_value > 0 ? editProjectData.production_value : null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('projects').update(payload).eq('id', id);
+      if (error) throw error;
+      setIsEditProjectModalOpen(false);
+      toast.success('Projeto atualizado!');
+      fetchProjectData();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   if (loading)
     return (
       <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
@@ -235,10 +275,15 @@ export default function CustosProjetoDetalhe() {
       </div>
     );
 
-  const totalProductionValue = (project.budget_items || []).reduce(
+  // production_value manual do projeto sobrescreve o cálculo do orçamento, se setado
+  const budgetProductionValue = (project.budget_items || []).reduce(
     (acc: number, item: any) => acc + item.unit_cost * item.quantity,
     0
   );
+  const totalProductionValue =
+    project.production_value && project.production_value > 0
+      ? Number(project.production_value)
+      : budgetProductionValue;
   const totalCosts = costs.reduce((acc, c) => acc + c.amount, 0);
   const margin = totalProductionValue - totalCosts;
   const consumptionPercent =
@@ -273,6 +318,13 @@ export default function CustosProjetoDetalhe() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={openEditProjectModal}
+            className="btn-secondary flex items-center gap-2 h-10 px-4 text-xs"
+            title="Editar projeto"
+          >
+            <Pencil className="w-4 h-4" /> Editar
+          </button>
           {project.budget_id && (
             <Link
               to={`/orcamentos/${project.budget_id}`}
@@ -362,35 +414,33 @@ export default function CustosProjetoDetalhe() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
-                {profile?.role === 'admin' && (
-                  <th className="px-6 py-4 w-10">
-                    <div
-                      onClick={toggleSelectAll}
-                      className={clsx(
-                        'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
-                        selectedIds.size === costs.length && costs.length > 0
-                          ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
-                          : 'border-lumos-border hover:border-lumos-yellow/50'
-                      )}
-                    >
-                      {selectedIds.size === costs.length && costs.length > 0 && (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
-                    </div>
-                  </th>
-                )}
+                <th className="px-6 py-4 w-10">
+                  <div
+                    onClick={toggleSelectAll}
+                    className={clsx(
+                      'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
+                      selectedIds.size === costs.length && costs.length > 0
+                        ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
+                        : 'border-lumos-border hover:border-lumos-yellow/50'
+                    )}
+                  >
+                    {selectedIds.size === costs.length && costs.length > 0 && (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4 text-right">Valor</th>
-                {profile?.role === 'admin' && <th className="px-6 py-4 text-right">Ações</th>}
+                <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {costs.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={profile?.role === 'admin' ? 6 : 4}
+                    colSpan={6}
                     className="px-6 py-8 text-center text-lumos-text-secondary text-sm italic"
                   >
                     Nenhum custo registrado.
@@ -404,24 +454,22 @@ export default function CustosProjetoDetalhe() {
                       'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
                       selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]'
                     )}
-                    onClick={() => (profile?.role === 'admin' ? handleEdit(c) : null)}
+                    onClick={() => handleEdit(c)}
                   >
-                    {profile?.role === 'admin' && (
-                      <td className="px-6 py-4">
-                        <div
-                          onClick={e => toggleSelect(c.id, e)}
-                          className={clsx(
-                            'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
-                            selectedIds.has(c.id)
-                              ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
-                              : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
-                            selectedIds.size > 0 && 'opacity-100'
-                          )}
-                        >
-                          {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
-                        </div>
-                      </td>
-                    )}
+                    <td className="px-6 py-4">
+                      <div
+                        onClick={e => toggleSelect(c.id, e)}
+                        className={clsx(
+                          'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
+                          selectedIds.has(c.id)
+                            ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
+                            : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
+                          selectedIds.size > 0 && 'opacity-100'
+                        )}
+                      >
+                        {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">
                       {new Date(c.cost_date).toLocaleDateString('pt-BR')}
                     </td>
@@ -432,24 +480,22 @@ export default function CustosProjetoDetalhe() {
                     <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}
                     </td>
-                    {profile?.role === 'admin' && (
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={e => { e.stopPropagation(); handleEdit(c); }}
-                            className="p-1.5 text-lumos-text-secondary hover:text-blue-500 transition-colors"
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={e => { e.stopPropagation(); handleEdit(c); }}
+                          className="p-1.5 text-lumos-text-secondary hover:text-blue-500 transition-colors"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setDeletingId(c.id); setIsDeleteModalOpen(true); }}
+                          className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); setDeletingId(c.id); setIsDeleteModalOpen(true); }}
-                            className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -459,7 +505,7 @@ export default function CustosProjetoDetalhe() {
       </div>
 
       {/* Batch Action Bar */}
-      {profile?.role === 'admin' && selectedIds.size > 0 && (
+      {selectedIds.size > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
           <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
             <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
@@ -589,6 +635,66 @@ export default function CustosProjetoDetalhe() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Modal de edição do projeto */}
+      <Modal isOpen={isEditProjectModalOpen} onClose={() => setIsEditProjectModalOpen(false)} title="Editar Projeto">
+        <form onSubmit={saveProjectEdit} className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Código</label>
+              <input
+                type="text"
+                className="input-lumos w-full"
+                placeholder="192"
+                value={editProjectData.code}
+                onChange={e => setEditProjectData({ ...editProjectData, code: e.target.value })}
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Nome do projeto *</label>
+              <input
+                required
+                type="text"
+                className="input-lumos w-full"
+                value={editProjectData.name}
+                onChange={e => setEditProjectData({ ...editProjectData, name: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
+            <select
+              className="input-lumos w-full"
+              value={editProjectData.client_id}
+              onChange={e => setEditProjectData({ ...editProjectData, client_id: e.target.value })}
+            >
+              <option value="">Sem cliente</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">
+              Valor Total para Produção
+            </label>
+            <CurrencyInput
+              className="input-lumos w-full font-bold"
+              value={editProjectData.production_value}
+              onChange={(val: number) => setEditProjectData({ ...editProjectData, production_value: val })}
+            />
+            {project.budget_id && (
+              <p className="text-[10px] text-lumos-text-secondary italic">
+                Deixe em R$ 0,00 para usar o cálculo automático do orçamento vinculado.
+              </p>
+            )}
+          </div>
+          <div className="pt-4 flex gap-3">
+            <button type="button" onClick={() => setIsEditProjectModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button type="submit" className="btn-primary flex-1 h-10">Salvar Alterações</button>
+          </div>
+        </form>
       </Modal>
     </div>
   );
