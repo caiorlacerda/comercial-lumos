@@ -101,6 +101,9 @@ export default function UsersPage() {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Falha ao criar conta. Verifique se o e-mail já está cadastrado.');
 
+      // Confirma o e-mail automaticamente (sem precisar clicar em link de confirmação)
+      await supabase.rpc('confirm_user_email', { user_email: formData.email });
+
       // Cria o perfil em app_users vinculado ao auth_user_id
       const { error: dbError } = await supabase
         .from('app_users')
