@@ -85,7 +85,7 @@ export default function Reembolso() {
   async function fetchReimbursements() {
     try {
       setLoading(true);
-      let query = supabase.from('reimbursements').select('*, requester:app_users!requester_id(full_name), budget:budgets(project_name)');
+      let query = supabase.from('reimbursements').select('*, requester:app_users!requester_id(full_name), project:projects(name)');
       if (!isAdmin) query = query.eq('requester_id', profile?.id);
       const { data, error } = await query.order('created_at', { ascending: false });
       setReimbursements(data || []);
@@ -182,7 +182,7 @@ export default function Reembolso() {
       setFormData({ ...formData, project_id: data.id });
       setProjectSearch(data.name);
       setShowProjectDropdown(false);
-      toast.success(`Projeto "${data.project_name}" criado!`);
+      toast.success(`Projeto "${data.name}" criado!`);
     } catch (err: any) {
       toast.error(`Erro ao criar projeto: ${err.message}`);
     } finally {
@@ -363,8 +363,8 @@ export default function Reembolso() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
-                        {r.budget && (
-                          <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest">Projeto: {r.budget.project_name}</span>
+                        {r.project && (
+                          <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest">Projeto: {r.project.name}</span>
                         )}
                       </div>
                     </td>
