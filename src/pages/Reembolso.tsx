@@ -53,6 +53,7 @@ export default function Reembolso() {
   const { login, isAuthenticated, uploadToDrive, listFiles, createFolder } = useGoogleDrive();
   const [reimbursements, setReimbursements] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -75,11 +76,20 @@ export default function Reembolso() {
   useEffect(() => {
     fetchReimbursements();
     fetchProjects();
+    fetchClients();
   }, [profile, isAdmin]);
 
   async function fetchProjects() {
-    const { data } = await supabase.from('projects').select('id, name, code').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('projects')
+      .select('id, name, code, client:clients(id, name)')
+      .order('created_at', { ascending: false });
     setProjects(data || []);
+  }
+
+  async function fetchClients() {
+    const { data } = await supabase.from('clients').select('id, name').order('name');
+    setClients(data || []);
   }
 
   async function fetchReimbursements() {
@@ -166,22 +176,51 @@ export default function Reembolso() {
   };
 
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [showCreateProjectForm, setShowCreateProjectForm] = useState(false);
+  const [newProjectData, setNewProjectData] = useState({ code: '', name: '', client_id: '' });
 
-  const createNewProject = async (name: string) => {
-    if (!name.trim()) return;
+  // Inicia o formulário de criação tentando inferir código e nome do que foi digitado
+  // Aceita formatos como "#192 - Nome", "192 — Nome", "192 Nome" ou apenas "Nome"
+  const openCreateProjectForm = (rawInput: string) => {
+    const trimmed = rawInput.trim();
+    const match = trimmed.match(/^#?\s*(\d+)\s*[-—–:]\s*(.+)$/) || trimmed.match(/^#?\s*(\d+)\s+(.+)$/);
+    if (match) {
+      setNewProjectData({ code: match[1].trim(), name: match[2].trim(), client_id: '' });
+    } else {
+      setNewProjectData({ code: '', name: trimmed, client_id: '' });
+    }
+    setShowCreateProjectForm(true);
+  };
+
+  const createNewProject = async () => {
+    const { code, name, client_id } = newProjectData;
+    if (!name.trim()) {
+      toast.error('Informe o nome do projeto');
+      return;
+    }
     try {
       setIsCreatingProject(true);
 
+      const insertPayload: any = {
+        name: name.trim(),
+        created_by: profile?.id,
+      };
+      if (code.trim()) insertPayload.code = code.trim();
+      if (client_id) insertPayload.client_id = client_id;
+
       const { data, error } = await supabase
         .from('projects')
-        .insert([{ name: name.trim(), created_by: profile?.id }])
-        .select('id, name, code')
+        .insert([insertPayload])
+        .select('id, name, code, client:clients(id, name)')
         .single();
       if (error) throw error;
+
       setProjects(prev => [data, ...prev]);
       setFormData({ ...formData, project_id: data.id });
-      setProjectSearch(data.name);
+      setProjectSearch(data.code ? `#${data.code} — ${data.name}` : data.name);
       setShowProjectDropdown(false);
+      setShowCreateProjectForm(false);
+      setNewProjectData({ code: '', name: '', client_id: '' });
       toast.success(`Projeto "${data.name}" criado!`);
     } catch (err: any) {
       toast.error(`Erro ao criar projeto: ${err.message}`);
@@ -505,7 +544,7 @@ export default function Reembolso() {
                 />
               </div>
 
-              {showProjectDropdown && (
+              {showProjectDropdown && !showCreateProjectForm && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowProjectDropdown(false)}></div>
                   <div className="absolute top-full left-0 right-0 mt-1 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-20 max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
@@ -538,6 +577,7 @@ export default function Reembolso() {
                           className="w-full text-left px-4 py-2.5 hover:bg-lumos-text-primary/5 transition-colors border-b border-lumos-border/50 last:border-0"
                         >
                           <p className="text-xs font-bold text-lumos-text-primary">{b.code ? `#${b.code} — ${b.name}` : b.name}</p>
+                          {b.client?.name && <p className="text-[10px] text-lumos-text-secondary">{b.client.name}</p>}
                         </button>
                       ))}
                     {/* Opção de criar novo projeto quando há texto digitado */}
@@ -546,8 +586,7 @@ export default function Reembolso() {
                       projectSearch !== '#000 — Produtora Lumos' && (
                       <button
                         type="button"
-                        disabled={isCreatingProject}
-                        onClick={() => createNewProject(projectSearch)}
+                        onClick={() => openCreateProjectForm(projectSearch)}
                         className="w-full text-left px-4 py-3 hover:bg-lumos-yellow/10 border-t border-lumos-border transition-colors group flex items-center gap-3"
                       >
                         <div className="p-1.5 bg-lumos-yellow/10 rounded text-lumos-yellow flex-shrink-0">
@@ -555,12 +594,80 @@ export default function Reembolso() {
                         </div>
                         <div>
                           <p className="text-xs font-black text-lumos-yellow">
-                            {isCreatingProject ? 'Criando...' : `Criar projeto "${projectSearch}"`}
+                            Criar projeto "{projectSearch}"
                           </p>
-                          <p className="text-[10px] text-lumos-text-secondary">Novo projeto em rascunho</p>
+                          <p className="text-[10px] text-lumos-text-secondary">Preencher dados do novo projeto</p>
                         </div>
                       </button>
                     )}
+                  </div>
+                </>
+              )}
+
+              {/* Mini-formulário de criação de novo projeto */}
+              {showCreateProjectForm && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowCreateProjectForm(false)}></div>
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-lumos-surface border border-lumos-yellow/40 rounded-lumos shadow-2xl z-20 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center gap-2 pb-2 border-b border-lumos-border">
+                      <div className="p-1.5 bg-lumos-yellow/10 rounded text-lumos-yellow">
+                        <FolderPlus className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xs font-black text-lumos-yellow uppercase tracking-widest">Novo Projeto</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Código</label>
+                        <input
+                          type="text"
+                          className="input-lumos w-full h-9 text-sm"
+                          placeholder="192"
+                          value={newProjectData.code}
+                          onChange={e => setNewProjectData({ ...newProjectData, code: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Nome do projeto *</label>
+                        <input
+                          type="text"
+                          required
+                          className="input-lumos w-full h-9 text-sm"
+                          placeholder="Sicredi | Social Show"
+                          value={newProjectData.name}
+                          onChange={e => setNewProjectData({ ...newProjectData, name: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
+                      <select
+                        className="input-lumos w-full h-9 text-sm"
+                        value={newProjectData.client_id}
+                        onChange={e => setNewProjectData({ ...newProjectData, client_id: e.target.value })}
+                      >
+                        <option value="">Selecione (opcional)</option>
+                        {clients.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateProjectForm(false)}
+                        className="btn-secondary flex-1 h-9 text-xs"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isCreatingProject || !newProjectData.name.trim()}
+                        onClick={createNewProject}
+                        className="btn-primary flex-1 h-9 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {isCreatingProject ? 'Criando...' : 'Criar Projeto'}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
