@@ -19,10 +19,11 @@ import ThemeToggle from '@/components/common/ThemeToggle';
 import { supabase } from '@/lib/supabase';
 
 export default function Settings() {
-  const { user, updateProfile, updateAvatar } = useAuth();
+  const { user, profile, updateProfile, updateAvatar } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +39,10 @@ export default function Settings() {
     if (user?.user_metadata?.full_name) {
       setFullName(user.user_metadata.full_name);
     }
-  }, [user]);
+    if (profile?.phone) {
+      setPhone(profile.phone);
+    }
+  }, [user, profile]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,6 +140,14 @@ export default function Settings() {
 
     try {
       await updateProfile(fullName);
+      // Atualiza o telefone direto na tabela app_users (é por usuário)
+      if (user) {
+        const { error: phoneError } = await supabase
+          .from('app_users')
+          .update({ phone: phone.trim() || null })
+          .eq('auth_user_id', user.id);
+        if (phoneError) throw phoneError;
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -237,13 +249,26 @@ export default function Settings() {
             <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest block">
               Nome Completo (Exibido nas assinaturas do PDF)
             </label>
-            <input 
-              type="text" 
-              className="input-lumos w-full py-3 px-4 font-bold text-lg" 
+            <input
+              type="text"
+              className="input-lumos w-full py-3 px-4 font-bold text-lg"
               placeholder="Digite seu nome completo..."
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest block">
+              Telefone (usado nos contatos de produção da Ordem do Dia)
+            </label>
+            <input
+              type="tel"
+              className="input-lumos w-full py-3 px-4 font-medium"
+              placeholder="(11) 98765-4321"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </div>
 

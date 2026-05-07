@@ -10,6 +10,7 @@ export interface AppUserProfile {
   job_title: string | null;
   status: 'ativo' | 'inativo';
   custom_permissions: Record<string, boolean>;
+  phone: string | null;
   joined_at: string;
 }
 

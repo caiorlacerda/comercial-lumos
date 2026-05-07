@@ -100,6 +100,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       items: [
         { icon: ShieldCheck, label: 'Usuários', path: '/usuarios' },
         { icon: ClipboardList, label: 'Auditoria', path: '/auditoria' },
+      ]
+    },
+    {
+      title: 'CONTA',
+      visible: true,
+      items: [
         { icon: Settings, label: 'Configurações', path: '/configuracoes' },
       ]
     }

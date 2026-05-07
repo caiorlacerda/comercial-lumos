@@ -351,6 +351,31 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
           </View>
         )}
 
+        {/* TALENTOS */}
+        {secoes.talentos && (ordem.talentos?.length ?? 0) > 0 && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionHeaderText}>Lista de Talentos</Text>
+            </View>
+            <View style={styles.tableHeaderRow}>
+              <Text style={[styles.cellHeader, { width: '22%' }]}>Nome</Text>
+              <Text style={[styles.cellHeader, { width: '18%' }]}>Função</Text>
+              <Text style={[styles.cellHeader, { width: '12%' }]}>Chegada</Text>
+              <Text style={[styles.cellHeader, { width: '12%' }]}>Gravação</Text>
+              <Text style={[styles.cellHeader, { width: '36%' }]}>Observações</Text>
+            </View>
+            {(ordem.talentos || []).map((t, i) => (
+              <View key={i} style={styles.tableRow} wrap={false}>
+                <Text style={[styles.cell, { width: '22%' }]}>{t.nome || '—'}</Text>
+                <Text style={[styles.cell, { width: '18%' }]}>{t.funcao || '—'}</Text>
+                <Text style={[styles.cell, { width: '12%' }]}>{t.horario_chegada || '—'}</Text>
+                <Text style={[styles.cell, { width: '12%' }]}>{t.horario_gravacao || '—'}</Text>
+                <Text style={[styles.cell, { width: '36%' }]}>{t.obs || '—'}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* EQUIPE — duas colunas */}
         {secoes.equipe && equipe.length > 0 && (
           <View>
@@ -400,31 +425,6 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
                 </View>
               );
             })}
-          </View>
-        )}
-
-        {/* TALENTOS */}
-        {secoes.talentos && (ordem.talentos?.length ?? 0) > 0 && (
-          <View>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeaderText}>Lista de Talentos</Text>
-            </View>
-            <View style={styles.tableHeaderRow}>
-              <Text style={[styles.cellHeader, { width: '22%' }]}>Nome</Text>
-              <Text style={[styles.cellHeader, { width: '18%' }]}>Função</Text>
-              <Text style={[styles.cellHeader, { width: '12%' }]}>Chegada</Text>
-              <Text style={[styles.cellHeader, { width: '12%' }]}>Gravação</Text>
-              <Text style={[styles.cellHeader, { width: '36%' }]}>Observações</Text>
-            </View>
-            {(ordem.talentos || []).map((t, i) => (
-              <View key={i} style={styles.tableRow} wrap={false}>
-                <Text style={[styles.cell, { width: '22%' }]}>{t.nome || '—'}</Text>
-                <Text style={[styles.cell, { width: '18%' }]}>{t.funcao || '—'}</Text>
-                <Text style={[styles.cell, { width: '12%' }]}>{t.horario_chegada || '—'}</Text>
-                <Text style={[styles.cell, { width: '12%' }]}>{t.horario_gravacao || '—'}</Text>
-                <Text style={[styles.cell, { width: '36%' }]}>{t.obs || '—'}</Text>
-              </View>
-            ))}
           </View>
         )}
 

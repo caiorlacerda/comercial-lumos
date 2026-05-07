@@ -13,6 +13,8 @@ import {
   Users,
   ListChecks,
   Star,
+  Search,
+  Briefcase,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { pdf } from '@react-pdf/renderer';
 import { OrdemDoDiaPDF } from '@/components/editor/OrdemDoDiaPDF';
+import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 import {
   SECOES_ATIVAS_DEFAULT,
   type Contato,
@@ -144,6 +147,11 @@ export default function OrdemDoDiaEditor() {
   const [saving, setSaving] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
 
+  // Dropdown de projetos
+  const [projects, setProjects] = useState<Array<{ id: string; code: string | null; name: string }>>([]);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+
   const fetchOrdem = useCallback(async () => {
     if (isNew) return;
     try {
@@ -177,6 +185,31 @@ export default function OrdemDoDiaEditor() {
   }, [id, isNew, navigate, toast]);
 
   useEffect(() => { fetchOrdem(); }, [fetchOrdem]);
+
+  // Busca projetos para o dropdown do cabeçalho
+  useEffect(() => {
+    supabase
+      .from('projects')
+      .select('id, code, name')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setProjects(data || []));
+  }, []);
+
+  // Em nova ordem, pré-preenche contatos com o produtor logado (se tiver telefone cadastrado)
+  useEffect(() => {
+    if (!isNew) return;
+    if (!profile) return;
+    if (form.contatos.length > 0) return; // não sobrescreve
+    if (profile.phone && profile.full_name) {
+      setForm(f => ({
+        ...f,
+        contatos: [
+          { funcao: 'Produção Lumos', nome: profile.full_name, telefone: profile.phone || '' },
+        ],
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, profile?.id]);
 
   // Helpers de update
   const toggleSection = (key: keyof SecoesAtivas) => {
@@ -337,6 +370,72 @@ export default function OrdemDoDiaEditor() {
         <h2 className="text-sm font-black text-lumos-text-primary uppercase tracking-widest pb-2 border-b border-lumos-border">
           Cabeçalho
         </h2>
+
+        {/* Dropdown de projetos existentes — preenche código e título automaticamente */}
+        <div className="space-y-2 relative">
+          <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">
+            Vincular Projeto Existente (opcional)
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
+            <input
+              type="text"
+              className="input-lumos w-full pl-9 h-10 text-sm"
+              placeholder="Buscar projeto pelo código ou nome..."
+              value={projectSearch}
+              onFocus={() => setShowProjectDropdown(true)}
+              onChange={e => {
+                setProjectSearch(e.target.value);
+                setShowProjectDropdown(true);
+              }}
+            />
+          </div>
+          {showProjectDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowProjectDropdown(false)}></div>
+              <div className="absolute top-full left-0 right-0 mt-1 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-20 max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                {projects
+                  .filter(p =>
+                    p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+                    (p.code && p.code.toLowerCase().includes(projectSearch.toLowerCase()))
+                  )
+                  .slice(0, 30)
+                  .map(p => {
+                    const codeStr = p.code ? (p.code.startsWith('#') ? p.code : `#${p.code}`) : '';
+                    const display = codeStr ? `${codeStr} — ${p.name}` : p.name;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setForm(f => ({
+                            ...f,
+                            codigo: codeStr || f.codigo,
+                            titulo: p.name,
+                          }));
+                          setProjectSearch(display);
+                          setShowProjectDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-lumos-yellow/10 transition-colors border-b border-lumos-border/50 last:border-0 flex items-center gap-3"
+                      >
+                        <div className="p-1.5 bg-lumos-yellow/10 rounded text-lumos-yellow flex-shrink-0">
+                          <Briefcase className="w-3.5 h-3.5" />
+                        </div>
+                        <p className="text-xs font-bold text-lumos-text-primary">{display}</p>
+                      </button>
+                    );
+                  })}
+                {projects.length === 0 && (
+                  <p className="px-4 py-3 text-xs text-lumos-text-secondary italic">Nenhum projeto cadastrado.</p>
+                )}
+              </div>
+            </>
+          )}
+          <p className="text-[10px] text-lumos-text-secondary italic">
+            Ao selecionar, o código e o título serão preenchidos. Você pode editar manualmente depois.
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Código da OS *</label>
@@ -397,20 +496,28 @@ export default function OrdemDoDiaEditor() {
         active={form.secoes_ativas.ponto_encontro}
         onToggle={() => toggleSection('ponto_encontro')}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-3">
           <input
             type="text"
-            placeholder="Nome do local"
+            placeholder="Nome do local (ex: Café da Esquina)"
             className="input-lumos w-full"
             value={form.ponto_encontro.nome}
             onChange={e => setForm(f => ({ ...f, ponto_encontro: { ...f.ponto_encontro, nome: e.target.value } }))}
           />
-          <input
-            type="text"
-            placeholder="Endereço completo"
-            className="input-lumos w-full"
+          <AddressAutocomplete
             value={form.ponto_encontro.endereco}
-            onChange={e => setForm(f => ({ ...f, ponto_encontro: { ...f.ponto_encontro, endereco: e.target.value } }))}
+            onChange={(formatted, details) =>
+              setForm(f => ({
+                ...f,
+                ponto_encontro: {
+                  ...f.ponto_encontro,
+                  endereco: formatted,
+                  // Se o usuário ainda não preencheu nome do local, sugere o nome do place selecionado
+                  nome: f.ponto_encontro.nome || details?.name || f.ponto_encontro.nome,
+                },
+              }))
+            }
+            placeholder="Endereço completo (ex: Av. Paulista, 1000)"
           />
         </div>
       </Section>
@@ -422,7 +529,7 @@ export default function OrdemDoDiaEditor() {
         active={form.secoes_ativas.locacao}
         onToggle={() => toggleSection('locacao')}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-3">
           <input
             type="text"
             placeholder="Nome da locação"
@@ -430,21 +537,28 @@ export default function OrdemDoDiaEditor() {
             value={form.locacao.nome}
             onChange={e => setForm(f => ({ ...f, locacao: { ...f.locacao, nome: e.target.value } }))}
           />
-          <input
-            type="text"
-            placeholder="Endereço"
-            className="input-lumos w-full"
+          <AddressAutocomplete
             value={form.locacao.endereco}
-            onChange={e => setForm(f => ({ ...f, locacao: { ...f.locacao, endereco: e.target.value } }))}
+            onChange={(formatted, details) =>
+              setForm(f => ({
+                ...f,
+                locacao: {
+                  ...f.locacao,
+                  endereco: formatted,
+                  nome: f.locacao.nome || details?.name || f.locacao.nome,
+                },
+              }))
+            }
+            placeholder="Endereço da locação"
+          />
+          <textarea
+            rows={2}
+            placeholder="Observações de acesso (opcional)"
+            className="input-lumos w-full resize-none"
+            value={form.locacao.observacoes}
+            onChange={e => setForm(f => ({ ...f, locacao: { ...f.locacao, observacoes: e.target.value } }))}
           />
         </div>
-        <textarea
-          rows={2}
-          placeholder="Observações de acesso (opcional)"
-          className="input-lumos w-full resize-none"
-          value={form.locacao.observacoes}
-          onChange={e => setForm(f => ({ ...f, locacao: { ...f.locacao, observacoes: e.target.value } }))}
-        />
       </Section>
 
       {/* CONTATOS */}
@@ -500,6 +614,93 @@ export default function OrdemDoDiaEditor() {
             setForm(f => ({
               ...f,
               contatos: [...f.contatos, { funcao: '', nome: '', telefone: '' }],
+            }))
+          }
+        />
+      </Section>
+
+      {/* TALENTOS — agora vem antes de Equipe */}
+      <Section
+        Icon={Star}
+        title="Lista de Talentos"
+        active={form.secoes_ativas.talentos}
+        onToggle={() => toggleSection('talentos')}
+      >
+        {form.talentos.map((t, i) => (
+          <div key={i} className="space-y-2 p-3 bg-lumos-bg/40 rounded-lumos border border-lumos-border/50">
+            <div className="grid grid-cols-12 gap-2">
+              <input
+                type="text"
+                placeholder="Nome"
+                className="input-lumos col-span-5 w-full"
+                value={t.nome}
+                onChange={e => setForm(f => {
+                  const arr = [...f.talentos];
+                  arr[i] = { ...arr[i], nome: e.target.value };
+                  return { ...f, talentos: arr };
+                })}
+              />
+              <input
+                type="text"
+                placeholder="Função (ex: Palestrante)"
+                className="input-lumos col-span-6 w-full"
+                value={t.funcao}
+                onChange={e => setForm(f => {
+                  const arr = [...f.talentos];
+                  arr[i] = { ...arr[i], funcao: e.target.value };
+                  return { ...f, talentos: arr };
+                })}
+              />
+              <div className="col-span-1 flex justify-end">
+                <RemoveButton onClick={() => setForm(f => ({ ...f, talentos: f.talentos.filter((_, j) => j !== i) }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-12 gap-2">
+              <input
+                type="time"
+                placeholder="Chegada"
+                className="input-lumos col-span-3 w-full"
+                value={t.horario_chegada}
+                onChange={e => setForm(f => {
+                  const arr = [...f.talentos];
+                  arr[i] = { ...arr[i], horario_chegada: e.target.value };
+                  return { ...f, talentos: arr };
+                })}
+              />
+              <input
+                type="time"
+                placeholder="Gravação"
+                className="input-lumos col-span-3 w-full"
+                value={t.horario_gravacao}
+                onChange={e => setForm(f => {
+                  const arr = [...f.talentos];
+                  arr[i] = { ...arr[i], horario_gravacao: e.target.value };
+                  return { ...f, talentos: arr };
+                })}
+              />
+              <input
+                type="text"
+                placeholder="Observações"
+                className="input-lumos col-span-6 w-full"
+                value={t.obs}
+                onChange={e => setForm(f => {
+                  const arr = [...f.talentos];
+                  arr[i] = { ...arr[i], obs: e.target.value };
+                  return { ...f, talentos: arr };
+                })}
+              />
+            </div>
+          </div>
+        ))}
+        <AddButton
+          label="Adicionar talento"
+          onClick={() =>
+            setForm(f => ({
+              ...f,
+              talentos: [
+                ...f.talentos,
+                { nome: '', funcao: '', horario_chegada: '', horario_gravacao: '', obs: '' },
+              ],
             }))
           }
         />
@@ -636,93 +837,6 @@ export default function OrdemDoDiaEditor() {
               plano_acao: [
                 ...f.plano_acao,
                 { inicio: '', fim: '', descricao: '', responsavel: '', destaque: false },
-              ],
-            }))
-          }
-        />
-      </Section>
-
-      {/* TALENTOS */}
-      <Section
-        Icon={Star}
-        title="Lista de Talentos"
-        active={form.secoes_ativas.talentos}
-        onToggle={() => toggleSection('talentos')}
-      >
-        {form.talentos.map((t, i) => (
-          <div key={i} className="space-y-2 p-3 bg-lumos-bg/40 rounded-lumos border border-lumos-border/50">
-            <div className="grid grid-cols-12 gap-2">
-              <input
-                type="text"
-                placeholder="Nome"
-                className="input-lumos col-span-5 w-full"
-                value={t.nome}
-                onChange={e => setForm(f => {
-                  const arr = [...f.talentos];
-                  arr[i] = { ...arr[i], nome: e.target.value };
-                  return { ...f, talentos: arr };
-                })}
-              />
-              <input
-                type="text"
-                placeholder="Função (ex: Palestrante)"
-                className="input-lumos col-span-6 w-full"
-                value={t.funcao}
-                onChange={e => setForm(f => {
-                  const arr = [...f.talentos];
-                  arr[i] = { ...arr[i], funcao: e.target.value };
-                  return { ...f, talentos: arr };
-                })}
-              />
-              <div className="col-span-1 flex justify-end">
-                <RemoveButton onClick={() => setForm(f => ({ ...f, talentos: f.talentos.filter((_, j) => j !== i) }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-12 gap-2">
-              <input
-                type="time"
-                placeholder="Chegada"
-                className="input-lumos col-span-3 w-full"
-                value={t.horario_chegada}
-                onChange={e => setForm(f => {
-                  const arr = [...f.talentos];
-                  arr[i] = { ...arr[i], horario_chegada: e.target.value };
-                  return { ...f, talentos: arr };
-                })}
-              />
-              <input
-                type="time"
-                placeholder="Gravação"
-                className="input-lumos col-span-3 w-full"
-                value={t.horario_gravacao}
-                onChange={e => setForm(f => {
-                  const arr = [...f.talentos];
-                  arr[i] = { ...arr[i], horario_gravacao: e.target.value };
-                  return { ...f, talentos: arr };
-                })}
-              />
-              <input
-                type="text"
-                placeholder="Observações"
-                className="input-lumos col-span-6 w-full"
-                value={t.obs}
-                onChange={e => setForm(f => {
-                  const arr = [...f.talentos];
-                  arr[i] = { ...arr[i], obs: e.target.value };
-                  return { ...f, talentos: arr };
-                })}
-              />
-            </div>
-          </div>
-        ))}
-        <AddButton
-          label="Adicionar talento"
-          onClick={() =>
-            setForm(f => ({
-              ...f,
-              talentos: [
-                ...f.talentos,
-                { nome: '', funcao: '', horario_chegada: '', horario_gravacao: '', obs: '' },
               ],
             }))
           }
