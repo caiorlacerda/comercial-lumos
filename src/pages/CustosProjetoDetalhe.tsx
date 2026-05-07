@@ -748,7 +748,7 @@ export default function CustosProjetoDetalhe() {
                     <button
                       type="button"
                       onClick={() => { setCreatingCategory(false); setNewCategoryName(''); }}
-                      className="btn-secondary flex-1 h-9 text-xs"
+                      className="flex-1 min-w-0 h-9 px-2 rounded-lumos border border-lumos-border text-lumos-text-secondary text-[11px] font-bold uppercase tracking-widest hover:text-lumos-text-primary hover:bg-lumos-bg/50 transition-colors"
                     >
                       Cancelar
                     </button>
@@ -756,7 +756,7 @@ export default function CustosProjetoDetalhe() {
                       type="button"
                       onClick={confirmNewCategory}
                       disabled={!newCategoryName.trim()}
-                      className="btn-primary flex-1 h-9 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex-1 min-w-0 h-9 px-2 rounded-lumos bg-lumos-yellow text-lumos-bg text-[11px] font-black uppercase tracking-widest hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                     >
                       Adicionar
                     </button>
