@@ -62,13 +62,30 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
           return;
         }
         const ac = new google.maps.places.Autocomplete(inputRef.current, {
-          fields: ['formatted_address', 'name', 'address_components', 'place_id'],
+          fields: ['formatted_address', 'name', 'address_components', 'place_id', 'types'],
           componentRestrictions: { country: 'br' },
         });
         ac.addListener('place_changed', () => {
           const place = ac.getPlace();
           const formatted = place.formatted_address || place.name || inputRef.current?.value || '';
-          onChange(formatted, { name: place.name });
+          // Só consideramos o `name` quando é um estabelecimento/POI (hotel, restaurante,
+          // ponto turístico, prédio com nome). Para endereços de rua puros, o `name` do Google
+          // é só o trecho da rua e não serve como "nome do local".
+          const types: string[] = place.types || [];
+          const isNamedPlace = types.some(t =>
+            t === 'establishment' ||
+            t === 'point_of_interest' ||
+            t === 'premise' ||
+            t === 'lodging' ||
+            t === 'tourist_attraction' ||
+            t === 'shopping_mall' ||
+            t === 'park' ||
+            t === 'university' ||
+            t === 'school' ||
+            t === 'stadium' ||
+            t === 'museum'
+          );
+          onChange(formatted, { name: isNamedPlace ? place.name : undefined });
         });
         autocompleteRef.current = ac;
       })

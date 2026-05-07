@@ -512,8 +512,9 @@ export default function OrdemDoDiaEditor() {
                 ponto_encontro: {
                   ...f.ponto_encontro,
                   endereco: formatted,
-                  // Se o usuário ainda não preencheu nome do local, sugere o nome do place selecionado
-                  nome: f.ponto_encontro.nome || details?.name || f.ponto_encontro.nome,
+                  // Se o Google retornou um nome de estabelecimento (hotel, café, etc),
+                  // sobrescreve o nome do local com ele. Caso contrário, mantém o que estiver.
+                  nome: details?.name || f.ponto_encontro.nome,
                 },
               }))
             }
@@ -545,7 +546,8 @@ export default function OrdemDoDiaEditor() {
                 locacao: {
                   ...f.locacao,
                   endereco: formatted,
-                  nome: f.locacao.nome || details?.name || f.locacao.nome,
+                  // Sobrescreve com o nome do estabelecimento quando o Google retorna um.
+                  nome: details?.name || f.locacao.nome,
                 },
               }))
             }
