@@ -27,6 +27,8 @@ import CustosProjeto from '@/pages/CustosProjeto';
 import CustosProjetoDetalhe from '@/pages/CustosProjetoDetalhe';
 import FluxoDeCaixa from '@/pages/FluxoDeCaixa';
 import CustosFixos from '@/pages/CustosFixos';
+import OrdensDoDia from '@/pages/OrdensDoDia';
+import OrdemDoDiaEditor from '@/pages/OrdemDoDiaEditor';
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
@@ -305,6 +307,38 @@ function AppContent() {
               </AuthWrapper>
             }
           />
+          {/* PRODUÇÃO — Ordem do Dia */}
+          <Route
+            path="/ordem-do-dia"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <OrdensDoDia />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/ordem-do-dia/nova"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <OrdemDoDiaEditor />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/ordem-do-dia/:id"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <OrdemDoDiaEditor />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
           <Route
             path="/usuarios"
             element={

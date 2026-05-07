@@ -18,7 +18,8 @@ import {
   Menu,
   X,
   TrendingUp,
-  Landmark
+  Landmark,
+  CalendarDays
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
@@ -68,6 +69,13 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         { icon: FileText, label: 'Catálogo', path: '/catalogo' },
         { icon: FileStack, label: 'Templates', path: '/templates' },
       ]
+    },
+    {
+      title: 'PRODUÇÃO',
+      visible: can('ordem_do_dia'),
+      items: [
+        { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
+      ].filter(item => can(item.permission))
     },
     {
       title: 'FINANCEIRO',
@@ -123,7 +131,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               <NavLink
                 key={item.path}
                 to={item.path}
-                end={item.end}
+                end={(item as any).end}
                 className={({ isActive }) => cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lumos text-sm font-bold transition-all group",
                   isActive

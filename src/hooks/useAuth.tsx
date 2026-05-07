@@ -102,7 +102,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     const defaults: Record<string, string[]> = {
       admin: ['*'],
-      producao: ['reembolso', 'custos_projeto'],
+      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia'],
       basico: ['reembolso'],
     };
     const rolePermissions = defaults[profile.role] || [];
