@@ -43,11 +43,13 @@ export default function CustosProjetoDetalhe() {
     description: '',
     amount: 0,
     cost_date: new Date().toISOString().split('T')[0],
+    payment_due_date: '',
     category: 'equipe',
     supplier: '',
     responsible_id: '',
     notes: '',
   });
+  const [duePreset, setDuePreset] = useState<string>('30'); // dias padrão
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
@@ -135,17 +137,23 @@ export default function CustosProjetoDetalhe() {
   const handleAddCost = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // normaliza payment_due_date — string vazia precisa virar null para o tipo DATE do Postgres
+      const payload: any = {
+        ...formData,
+        payment_due_date: formData.payment_due_date || null,
+      };
+
       if (editingId) {
         const { error } = await supabase
           .from('project_costs')
-          .update({ ...formData, updated_at: new Date().toISOString() })
+          .update({ ...payload, updated_at: new Date().toISOString() })
           .eq('id', editingId);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('project_costs')
           .insert([{
-            ...formData,
+            ...payload,
             project_id: id,
             // mantém budget_id para compatibilidade caso a coluna tenha constraint
             ...(project?.budget_id ? { budget_id: project.budget_id } : {}),
@@ -205,17 +213,27 @@ export default function CustosProjetoDetalhe() {
     setSelectedIds(next);
   };
 
+  // calcula data adicionando dias (formato YYYY-MM-DD)
+  const addDaysToDate = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  };
+
   const resetForm = () => {
     setEditingId(null);
+    const today = new Date().toISOString().split('T')[0];
     setFormData({
       description: '',
       amount: 0,
-      cost_date: new Date().toISOString().split('T')[0],
+      cost_date: today,
+      payment_due_date: addDaysToDate(today, 30),
       category: 'equipe',
       supplier: '',
       responsible_id: '',
       notes: '',
     });
+    setDuePreset('30');
   };
 
   const handleEdit = (c: any) => {
@@ -224,12 +242,44 @@ export default function CustosProjetoDetalhe() {
       description: c.description,
       amount: c.amount,
       cost_date: c.cost_date,
+      payment_due_date: c.payment_due_date || '',
       category: c.category,
       supplier: c.supplier || '',
       responsible_id: c.responsible_id || '',
       notes: c.notes || '',
     });
+    // detecta preset baseado na diferença entre cost_date e payment_due_date
+    if (c.payment_due_date && c.cost_date) {
+      const diff = Math.round(
+        (new Date(c.payment_due_date).getTime() - new Date(c.cost_date).getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      const presets = [7, 15, 30, 45, 60];
+      setDuePreset(presets.includes(diff) ? String(diff) : 'custom');
+    } else {
+      setDuePreset('custom');
+    }
     setIsModalOpen(true);
+  };
+
+  // quando o preset de dias muda, recalcula a data de vencimento
+  const applyDuePreset = (preset: string) => {
+    setDuePreset(preset);
+    if (preset !== 'custom' && formData.cost_date) {
+      const newDueDate = addDaysToDate(formData.cost_date, parseInt(preset));
+      setFormData(prev => ({ ...prev, payment_due_date: newDueDate }));
+    }
+  };
+
+  // quando cost_date muda e há preset ativo, recalcula vencimento
+  const handleCostDateChange = (newCostDate: string) => {
+    setFormData(prev => {
+      const updated = { ...prev, cost_date: newCostDate };
+      if (duePreset !== 'custom' && newCostDate) {
+        updated.payment_due_date = addDaysToDate(newCostDate, parseInt(duePreset));
+      }
+      return updated;
+    });
   };
 
   const openEditProjectModal = () => {
@@ -432,6 +482,7 @@ export default function CustosProjetoDetalhe() {
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Categoria</th>
+                <th className="px-6 py-4">Vencimento</th>
                 <th className="px-6 py-4 text-right">Valor</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
@@ -440,7 +491,7 @@ export default function CustosProjetoDetalhe() {
               {costs.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-6 py-8 text-center text-lumos-text-secondary text-sm italic"
                   >
                     Nenhum custo registrado.
@@ -476,6 +527,26 @@ export default function CustosProjetoDetalhe() {
                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{c.description}</td>
                     <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">
                       {c.category}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {c.payment_due_date ? (
+                        (() => {
+                          const due = new Date(c.payment_due_date + 'T00:00:00');
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const isOverdue = due < today;
+                          return (
+                            <span className={clsx(
+                              'font-bold',
+                              isOverdue ? 'text-red-500' : 'text-lumos-text-secondary'
+                            )}>
+                              {due.toLocaleDateString('pt-BR')}
+                            </span>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-lumos-text-secondary/40 italic text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}
@@ -579,13 +650,42 @@ export default function CustosProjetoDetalhe() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Data</label>
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Data do Custo</label>
               <input
                 required
                 type="date"
                 className="input-lumos w-full"
                 value={formData.cost_date}
-                onChange={e => setFormData({ ...formData, cost_date: e.target.value })}
+                onChange={e => handleCostDateChange(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Pagamento em</label>
+              <select
+                className="input-lumos w-full"
+                value={duePreset}
+                onChange={e => applyDuePreset(e.target.value)}
+              >
+                <option value="7">7 dias</option>
+                <option value="15">15 dias</option>
+                <option value="30">30 dias</option>
+                <option value="45">45 dias</option>
+                <option value="60">60 dias</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Vencimento</label>
+              <input
+                type="date"
+                className="input-lumos w-full"
+                value={formData.payment_due_date}
+                onChange={e => {
+                  setFormData({ ...formData, payment_due_date: e.target.value });
+                  setDuePreset('custom');
+                }}
               />
             </div>
           </div>
