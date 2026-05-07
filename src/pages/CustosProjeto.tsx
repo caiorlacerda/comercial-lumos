@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check, Pencil } from 'lucide-react';
+import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check, Pencil, Plus, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,13 +26,15 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
 export default function CustosProjeto() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { profile } = useAuth();
   const [projects, setProjects] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientFilter, setClientFilter] = useState<string>(''); // '' = todos
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null); // null = criação
   const [editProjectData, setEditProjectData] = useState({ name: '', code: '', client_id: '', production_value: 0 });
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
@@ -138,36 +141,66 @@ export default function CustosProjeto() {
       client_id: project.client_id || '',
       production_value: project.production_value ? Number(project.production_value) : 0,
     });
-    setIsEditModalOpen(true);
+    setIsModalOpen(true);
   };
 
-  const saveProjectEdit = async (e: React.FormEvent) => {
+  const openCreateModal = () => {
+    setEditingProjectId(null);
+    setEditProjectData({ name: '', code: '', client_id: '', production_value: 0 });
+    setIsModalOpen(true);
+  };
+
+  const saveProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProjectId) return;
+    if (!editProjectData.name.trim()) {
+      toast.error('Informe o nome do projeto');
+      return;
+    }
     try {
-      const payload: any = {
-        name: editProjectData.name.trim(),
-        code: editProjectData.code.trim() || null,
-        client_id: editProjectData.client_id || null,
-        production_value: editProjectData.production_value > 0 ? editProjectData.production_value : null,
-        updated_at: new Date().toISOString(),
-      };
-      const { error } = await supabase.from('projects').update(payload).eq('id', editingProjectId);
-      if (error) throw error;
-      setIsEditModalOpen(false);
+      if (editingProjectId) {
+        // Edição
+        const payload: any = {
+          name: editProjectData.name.trim(),
+          code: editProjectData.code.trim() || null,
+          client_id: editProjectData.client_id || null,
+          production_value: editProjectData.production_value > 0 ? editProjectData.production_value : null,
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await supabase.from('projects').update(payload).eq('id', editingProjectId);
+        if (error) throw error;
+        toast.success('Projeto atualizado!');
+      } else {
+        // Criação
+        const payload: any = {
+          name: editProjectData.name.trim(),
+          created_by: profile?.id || null,
+        };
+        if (editProjectData.code.trim()) payload.code = editProjectData.code.trim();
+        if (editProjectData.client_id) payload.client_id = editProjectData.client_id;
+        if (editProjectData.production_value > 0) payload.production_value = editProjectData.production_value;
+        const { error } = await supabase.from('projects').insert([payload]);
+        if (error) throw error;
+        toast.success('Projeto criado!');
+      }
+      setIsModalOpen(false);
       setEditingProjectId(null);
-      toast.success('Projeto atualizado!');
       fetchProjects();
     } catch (err: any) {
       toast.error(err.message);
     }
   };
 
-  const filtered = projects.filter(
-    p =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.client?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filtros: busca em nome, cliente ou código + filtro por cliente
+  const filtered = projects.filter(p => {
+    const term = searchTerm.toLowerCase();
+    const matchSearch =
+      !term ||
+      p.name.toLowerCase().includes(term) ||
+      p.client?.name?.toLowerCase().includes(term) ||
+      (p.code && p.code.toLowerCase().includes(term));
+    const matchClient = !clientFilter || p.client_id === clientFilter;
+    return matchSearch && matchClient;
+  });
 
   return (
     <div className="space-y-6 font-work-sans">
@@ -176,19 +209,61 @@ export default function CustosProjeto() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Custos de Projeto</h1>
           <p className="text-lumos-text-secondary text-sm">Lucratividade real de cada projeto.</p>
         </div>
+        <button
+          onClick={openCreateModal}
+          className="btn-primary h-10 px-6 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> Novo Projeto
+        </button>
       </div>
 
-      <div className="card p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-          <input
-            type="text"
-            placeholder="Buscar projeto ou cliente..."
-            className="input-lumos pl-10 w-full h-10"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
+      <div className="card p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+            <input
+              type="text"
+              placeholder="Buscar por código, projeto ou cliente..."
+              className="input-lumos pl-10 w-full h-10"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <select
+              className="input-lumos w-full h-10 appearance-none pr-9"
+              value={clientFilter}
+              onChange={e => setClientFilter(e.target.value)}
+            >
+              <option value="">Todos os clientes</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {clientFilter && (
+              <button
+                onClick={() => setClientFilter('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary"
+                title="Limpar filtro"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
+        {(searchTerm || clientFilter) && (
+          <div className="flex items-center justify-between text-xs text-lumos-text-secondary">
+            <span>
+              Mostrando <strong className="text-lumos-text-primary">{filtered.length}</strong> de {projects.length} projetos
+            </span>
+            <button
+              onClick={() => { setSearchTerm(''); setClientFilter(''); }}
+              className="text-lumos-yellow hover:underline font-bold uppercase tracking-widest text-[10px]"
+            >
+              Limpar filtros
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4">
@@ -309,9 +384,13 @@ export default function CustosProjeto() {
         </div>
       )}
 
-      {/* Modal de edição do projeto */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Projeto">
-        <form onSubmit={saveProjectEdit} className="space-y-4">
+      {/* Modal de criação/edição do projeto */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingProjectId ? 'Editar Projeto' : 'Novo Projeto'}
+      >
+        <form onSubmit={saveProject} className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Código</label>
@@ -361,8 +440,10 @@ export default function CustosProjeto() {
             </p>
           </div>
           <div className="pt-4 flex gap-3">
-            <button type="button" onClick={() => setIsEditModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-            <button type="submit" className="btn-primary flex-1 h-10">Salvar Alterações</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button type="submit" className="btn-primary flex-1 h-10">
+              {editingProjectId ? 'Salvar Alterações' : 'Criar Projeto'}
+            </button>
           </div>
         </form>
       </Modal>
