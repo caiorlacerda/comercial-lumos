@@ -731,12 +731,12 @@ export default function CustosProjetoDetalhe() {
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
               {creatingCategory ? (
-                <div className="flex gap-2">
+                <div className="border border-lumos-yellow/40 rounded-lumos p-3 space-y-2 bg-lumos-yellow/[0.03]">
                   <input
                     type="text"
                     autoFocus
                     placeholder="Nome da nova categoria"
-                    className="input-lumos flex-1"
+                    className="input-lumos w-full"
                     value={newCategoryName}
                     onChange={e => setNewCategoryName(e.target.value)}
                     onKeyDown={e => {
@@ -744,20 +744,23 @@ export default function CustosProjetoDetalhe() {
                       if (e.key === 'Escape') { setCreatingCategory(false); setNewCategoryName(''); }
                     }}
                   />
-                  <button
-                    type="button"
-                    onClick={confirmNewCategory}
-                    className="px-3 rounded-lumos bg-lumos-yellow text-lumos-bg font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
-                  >
-                    Adicionar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setCreatingCategory(false); setNewCategoryName(''); }}
-                    className="px-3 rounded-lumos border border-lumos-border text-lumos-text-secondary text-xs font-bold uppercase tracking-widest hover:text-lumos-text-primary transition-colors"
-                  >
-                    Cancelar
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setCreatingCategory(false); setNewCategoryName(''); }}
+                      className="btn-secondary flex-1 h-9 text-xs"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmNewCategory}
+                      disabled={!newCategoryName.trim()}
+                      className="btn-primary flex-1 h-9 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <select
