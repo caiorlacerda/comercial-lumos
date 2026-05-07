@@ -93,13 +93,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 4,
   },
-  // Linhas/células de tabela
+  // Linhas/células de tabela (com zebra striping)
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 0.5,
     borderBottomColor: '#DDDDDD',
     paddingVertical: 5,
     paddingHorizontal: 4,
+  },
+  tableRowAlt: {
+    backgroundColor: 'rgba(0,0,0,0.04)',
   },
   tableHeaderRow: {
     flexDirection: 'row',
@@ -223,8 +226,8 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
     ? formatDateExtenso(ordem.data_emissao.split('T')[0])
     : formatDateExtenso(new Date().toISOString().split('T')[0]);
   const dataProducao = formatDateExtenso(ordem.data_producao);
-  const codigoStr = ordem.codigo?.startsWith('#') ? ordem.codigo : `#${ordem.codigo}`;
-  const nomenclatureHeader = `${codigoStr} · LUMOS · ${ordem.titulo} · ORDEM DO DIA`;
+  // Cabeçalho do documento — sem código (removido a pedido)
+  const nomenclatureHeader = `LUMOS · ${ordem.titulo} · ORDEM DO DIA`;
 
   const secoes = ordem.secoes_ativas;
   const equipe = ordem.equipe || [];
@@ -233,7 +236,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
   const equipeColB = equipe.slice(equipeMid);
 
   return (
-    <Document title={`OS_LUMOS_${(ordem.codigo || '').replace('#', '')}_OrdemDoDia`}>
+    <Document title={`OD_LUMOS_${(ordem.codigo || '').replace('#', '')}_${ordem.titulo}`}>
       <Page size="A4" style={styles.page} wrap>
         {/* Cabeçalho */}
         <View style={styles.header} fixed>
@@ -241,30 +244,21 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
           <View style={styles.companyInfo}>
             <Text style={{ fontWeight: 700 }}>Produtora Lumos Audiovisual Ltda.</Text>
             <Text>CNPJ: 51.253.010/0001-70</Text>
-            <Text>R. Jaceru, 384 - Cj. 1604 - Vila Gertrudes</Text>
-            <Text>São Paulo - SP, 04705-000</Text>
-            <Text>comercial@produtoralumos.com.br</Text>
-            <Text>+55 (11) 98667-6747</Text>
-            <Text>www.produtoralumos.com.br</Text>
           </View>
         </View>
         <View style={styles.headerLine} fixed />
 
         <Text style={styles.nomenclatureTag}>{nomenclatureHeader}</Text>
 
-        {/* Bloco de identificação */}
+        {/* Bloco de identificação (código removido a pedido) */}
         <View style={styles.idBlock}>
-          <View style={styles.idRow}>
-            <View style={styles.idLabelCol}><Text>Projeto</Text></View>
-            <View style={styles.idValueCol}><Text style={{ fontWeight: 700 }}>{ordem.titulo}</Text></View>
-            <View style={styles.idLabelCol}><Text>Código</Text></View>
-            <View style={styles.idValueCol}><Text>{codigoStr}</Text></View>
-          </View>
           <View style={[styles.idRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.idLabelCol}><Text>Projeto</Text></View>
+            <View style={[styles.idValueCol, { width: '35%' }]}><Text style={{ fontWeight: 700 }}>{ordem.titulo}</Text></View>
             <View style={styles.idLabelCol}><Text>Produção</Text></View>
-            <View style={styles.idValueCol}><Text style={{ fontWeight: 700 }}>{dataProducao}</Text></View>
-            <View style={styles.idLabelCol}><Text>Emissão</Text></View>
-            <View style={styles.idValueCol}><Text>{dataEmissao}</Text></View>
+            <View style={[styles.idValueCol, { width: '20%' }]}><Text style={{ fontWeight: 700 }}>{dataProducao}</Text></View>
+            <View style={[styles.idLabelCol, { width: '10%' }]}><Text>Emissão</Text></View>
+            <View style={[styles.idValueCol, { width: '20%' }]}><Text>{dataEmissao}</Text></View>
           </View>
         </View>
 
@@ -342,7 +336,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
               <Text style={[styles.cellHeader, { width: '25%' }]}>Telefone</Text>
             </View>
             {(ordem.contatos || []).map((c, i) => (
-              <View key={i} style={styles.tableRow} wrap={false}>
+              <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                 <Text style={[styles.cell, { width: '35%' }]}>{c.funcao || '—'}</Text>
                 <Text style={[styles.cell, { width: '40%' }]}>{c.nome || '—'}</Text>
                 <Text style={[styles.cell, { width: '25%' }]}>{c.telefone || '—'}</Text>
@@ -365,7 +359,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
               <Text style={[styles.cellHeader, { width: '36%' }]}>Observações</Text>
             </View>
             {(ordem.talentos || []).map((t, i) => (
-              <View key={i} style={styles.tableRow} wrap={false}>
+              <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                 <Text style={[styles.cell, { width: '22%' }]}>{t.nome || '—'}</Text>
                 <Text style={[styles.cell, { width: '18%' }]}>{t.funcao || '—'}</Text>
                 <Text style={[styles.cell, { width: '12%' }]}>{t.horario_chegada || '—'}</Text>
@@ -385,7 +379,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
             <View style={styles.twoColRow}>
               <View style={styles.col}>
                 {equipeColA.map((m, i) => (
-                  <View key={i} style={styles.equipeItem} wrap={false}>
+                  <View key={i} style={[styles.equipeItem, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                     <Text style={styles.equipeFuncao}>{m.funcao || '—'}</Text>
                     <Text style={styles.equipeNome}>{m.nome || '—'}</Text>
                   </View>
@@ -393,7 +387,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
               </View>
               <View style={styles.col}>
                 {equipeColB.map((m, i) => (
-                  <View key={i} style={styles.equipeItem} wrap={false}>
+                  <View key={i} style={[styles.equipeItem, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                     <Text style={styles.equipeFuncao}>{m.funcao || '—'}</Text>
                     <Text style={styles.equipeNome}>{m.nome || '—'}</Text>
                   </View>
@@ -418,7 +412,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
               const horario = a.fim ? `${a.inicio} – ${a.fim}` : a.inicio;
               const Cell = a.destaque ? styles.cellBold : styles.cell;
               return (
-                <View key={i} style={styles.tableRow} wrap={false}>
+                <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                   <Text style={[Cell, { width: '15%' }]}>{horario || '—'}</Text>
                   <Text style={[Cell, { width: '60%' }]}>{a.descricao || '—'}</Text>
                   <Text style={[Cell, { width: '25%' }]}>{a.responsavel || '—'}</Text>

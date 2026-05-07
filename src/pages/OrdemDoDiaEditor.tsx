@@ -303,7 +303,7 @@ export default function OrdemDoDiaEditor() {
       const blob = await pdf(<OrdemDoDiaPDF ordem={ordemForPdf} />).toBlob();
       const codigoSafe = form.codigo.replace(/[^\w-]/g, '');
       const tituloSafe = form.titulo.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
-      const fileName = `OS_${codigoSafe}_Lumos_${tituloSafe}_OrdemDoDia_${form.data_producao || 'sem-data'}.pdf`;
+      const fileName = `OD_${codigoSafe}_Lumos_${tituloSafe}_${form.data_producao || 'sem-data'}.pdf`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
