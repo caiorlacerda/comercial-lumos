@@ -104,6 +104,14 @@ const styles = StyleSheet.create({
   tableRowAlt: {
     backgroundColor: 'rgba(0,0,0,0.04)',
   },
+  // Linha de "marco do dia" — cinza ainda mais escuro
+  tableRowDestaque: {
+    backgroundColor: 'rgba(0,0,0,0.13)',
+  },
+  // Célula de função (Contatos, Equipe) — cinza médio (entre zebra e destaque)
+  funcaoCellBg: {
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
   tableHeaderRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -174,11 +182,14 @@ const styles = StyleSheet.create({
   equipeFuncao: {
     width: '45%',
     fontSize: 7.5,
-    color: '#666',
+    color: '#444',
     fontFamily: 'Poppins',
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    paddingVertical: 3,
+    paddingHorizontal: 4,
   },
   equipeNome: {
     flex: 1,
@@ -337,7 +348,9 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
             </View>
             {(ordem.contatos || []).map((c, i) => (
               <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
-                <Text style={[styles.cell, { width: '35%' }]}>{c.funcao || '—'}</Text>
+                <Text style={[styles.cell, styles.funcaoCellBg, { width: '35%', fontFamily: 'Poppins', fontWeight: 700, fontSize: 7.5, color: '#444', textTransform: 'uppercase', letterSpacing: 0.3, paddingVertical: 4 }]}>
+                  {c.funcao || '—'}
+                </Text>
                 <Text style={[styles.cell, { width: '40%' }]}>{c.nome || '—'}</Text>
                 <Text style={[styles.cell, { width: '25%' }]}>{c.telefone || '—'}</Text>
               </View>
@@ -411,8 +424,12 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
             {(ordem.plano_acao || []).map((a, i) => {
               const horario = a.fim ? `${a.inicio} – ${a.fim}` : a.inicio;
               const Cell = a.destaque ? styles.cellBold : styles.cell;
+              // Marco do dia tem precedência sobre o zebra striping
+              const rowBg = a.destaque
+                ? styles.tableRowDestaque
+                : (i % 2 === 1 ? styles.tableRowAlt : {});
               return (
-                <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
+                <View key={i} style={[styles.tableRow, rowBg]} wrap={false}>
                   <Text style={[Cell, { width: '15%' }]}>{horario || '—'}</Text>
                   <Text style={[Cell, { width: '60%' }]}>{a.descricao || '—'}</Text>
                   <Text style={[Cell, { width: '25%' }]}>{a.responsavel || '—'}</Text>
