@@ -53,7 +53,45 @@ export default function CustosProjetoDetalhe() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
+  // Categorias dinâmicas (defaults + as já cadastradas no banco)
+  const [categories, setCategories] = useState<string[]>(['equipe', 'equipamento', 'locacao']);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
   useEffect(() => { fetchProjectData(); }, [id]);
+  useEffect(() => { fetchCategories(); }, []);
+
+  // Busca todas as categorias já cadastradas no banco (em qualquer projeto)
+  async function fetchCategories() {
+    try {
+      const { data } = await supabase
+        .from('project_costs')
+        .select('category')
+        .not('category', 'is', null);
+      const fromDb = (data || []).map((r: any) => (r.category || '').toLowerCase().trim()).filter(Boolean);
+      const merged = Array.from(new Set(['equipe', 'equipamento', 'locacao', ...fromDb])).sort();
+      setCategories(merged);
+    } catch (err) {
+      console.error('Erro ao buscar categorias:', err);
+    }
+  }
+
+  // Adiciona uma categoria nova à lista e seleciona ela
+  const confirmNewCategory = () => {
+    const trimmed = newCategoryName.trim().toLowerCase();
+    if (!trimmed) {
+      setCreatingCategory(false);
+      setNewCategoryName('');
+      return;
+    }
+    setCategories(prev => Array.from(new Set([...prev, trimmed])).sort());
+    setFormData(f => ({ ...f, category: trimmed }));
+    setCreatingCategory(false);
+    setNewCategoryName('');
+  };
+
+  // Helper pra exibir o nome da categoria com a primeira letra maiúscula
+  const formatCategoryLabel = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);
 
   async function fetchProjectData() {
     try {
@@ -526,7 +564,7 @@ export default function CustosProjetoDetalhe() {
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{c.description}</td>
                     <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">
-                      {c.category}
+                      {c.category ? formatCategoryLabel(c.category) : '—'}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       {c.payment_due_date ? (
@@ -692,15 +730,53 @@ export default function CustosProjetoDetalhe() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
-              <select
-                className="input-lumos w-full"
-                value={formData.category}
-                onChange={e => setFormData({ ...formData, category: e.target.value })}
-              >
-                <option value="equipe">Equipe</option>
-                <option value="equipamento">Equipamento</option>
-                <option value="locacao">Locação</option>
-              </select>
+              {creatingCategory ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Nome da nova categoria"
+                    className="input-lumos flex-1"
+                    value={newCategoryName}
+                    onChange={e => setNewCategoryName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); confirmNewCategory(); }
+                      if (e.key === 'Escape') { setCreatingCategory(false); setNewCategoryName(''); }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={confirmNewCategory}
+                    className="px-3 rounded-lumos bg-lumos-yellow text-lumos-bg font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
+                  >
+                    Adicionar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCreatingCategory(false); setNewCategoryName(''); }}
+                    className="px-3 rounded-lumos border border-lumos-border text-lumos-text-secondary text-xs font-bold uppercase tracking-widest hover:text-lumos-text-primary transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <select
+                  className="input-lumos w-full"
+                  value={formData.category}
+                  onChange={e => {
+                    if (e.target.value === '__new__') {
+                      setCreatingCategory(true);
+                    } else {
+                      setFormData({ ...formData, category: e.target.value });
+                    }
+                  }}
+                >
+                  {categories.map(c => (
+                    <option key={c} value={c}>{formatCategoryLabel(c)}</option>
+                  ))}
+                  <option value="__new__">+ Criar nova categoria</option>
+                </select>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Responsável</label>
