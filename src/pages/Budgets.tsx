@@ -197,6 +197,85 @@ export default function Budgets() {
     }
   }
 
+  // Quando um orçamento é APROVADO via lista, sincroniza receivable + project
+  // (mesmo comportamento do editor de orçamento).
+  const syncBudgetOnApprove = async (budgetId: string) => {
+    try {
+      // 1. Busca dados completos do orçamento (com versão ativa)
+      const { data: budget, error: bErr } = await supabase
+        .from('budgets')
+        .select('id, project_name, code, client_id, active_version_id')
+        .eq('id', budgetId)
+        .single();
+      if (bErr || !budget) return;
+
+      // 2. Cria projeto se ainda não existir (independente de ter valor)
+      const { data: existingProject } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('budget_id', budget.id)
+        .maybeSingle();
+      if (!existingProject) {
+        await supabase.from('projects').insert([{
+          name: budget.project_name,
+          code: budget.code || null,
+          budget_id: budget.id,
+          client_id: budget.client_id || null,
+        }]);
+      }
+
+      // 3. Sincroniza receivable com valor calculado da versão ativa
+      if (!budget.active_version_id) return;
+
+      const [versionRes, itemsRes] = await Promise.all([
+        supabase
+          .from('budget_versions')
+          .select('id, margin_pct, nf_pct, discount_value')
+          .eq('id', budget.active_version_id)
+          .single(),
+        supabase
+          .from('budget_items')
+          .select('item_group, unit_cost, quantity')
+          .eq('version_id', budget.active_version_id),
+      ]);
+
+      const version = versionRes.data;
+      const items = itemsRes.data || [];
+      if (!version) return;
+
+      const financials = calcFinancials(items as any, version as any);
+      const totalAmount = financials.valorFinal;
+      if (!totalAmount || totalAmount <= 0) return;
+
+      const { data: existingRec } = await supabase
+        .from('receivables')
+        .select('id, status')
+        .eq('budget_id', budget.id)
+        .maybeSingle();
+
+      if (existingRec) {
+        if (existingRec.status !== 'recebido') {
+          await supabase.from('receivables').update({
+            total_amount: totalAmount,
+            budget_version_id: budget.active_version_id,
+            updated_at: new Date().toISOString(),
+          }).eq('id', existingRec.id);
+        }
+      } else {
+        await supabase.from('receivables').insert([{
+          budget_id: budget.id,
+          budget_version_id: budget.active_version_id,
+          description: budget.project_name,
+          client_id: budget.client_id,
+          total_amount: totalAmount,
+          status: 'aguardando',
+        }]);
+      }
+    } catch (err) {
+      console.error('Erro ao sincronizar orçamento aprovado:', err);
+    }
+  };
+
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     try {
       const { error } = await supabase
@@ -206,8 +285,16 @@ export default function Budgets() {
 
       if (error) throw error;
 
+      // Sincroniza recebíveis e projeto quando aprovado
+      if (newStatus === 'aprovado') {
+        await syncBudgetOnApprove(id);
+      }
+
       setBudgets(prev => prev.map(b => b.id === id ? { ...b, status: newStatus as any } : b));
       setStatusMenuOpen(null);
+      if (newStatus === 'aprovado') {
+        toast.success('Orçamento aprovado! Projeto e contas a receber atualizados.');
+      }
     } catch (err) {
       console.error('Error updating status:', err);
       toast.error('Erro ao atualizar status.');
@@ -226,9 +313,17 @@ export default function Budgets() {
 
       if (error) throw error;
 
+      // Sincroniza cada orçamento aprovado em lote
+      if (newStatus === 'aprovado') {
+        await Promise.all(idsToUpdate.map(id => syncBudgetOnApprove(id)));
+      }
+
       setBudgets(prev => prev.map(b => idsToUpdate.includes(b.id) ? { ...b, status: newStatus as any } : b));
       setSelectedIds(new Set());
       setBatchStatusMenuOpen(false);
+      if (newStatus === 'aprovado') {
+        toast.success(`${idsToUpdate.length} orçamento(s) aprovado(s)! Projetos e contas a receber atualizados.`);
+      }
     } catch (err) {
       console.error('Error in batch status update:', err);
       toast.error('Erro ao atualizar status em lote.');
