@@ -29,6 +29,8 @@ import FluxoDeCaixa from '@/pages/FluxoDeCaixa';
 import CustosFixos from '@/pages/CustosFixos';
 import OrdensDoDia from '@/pages/OrdensDoDia';
 import OrdemDoDiaEditor from '@/pages/OrdemDoDiaEditor';
+import Fornecedores from '@/pages/Fornecedores';
+import FornecedorEditor from '@/pages/FornecedorEditor';
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
@@ -334,6 +336,38 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="ordem_do_dia">
                   <OrdemDoDiaEditor />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
+          {/* PRODUÇÃO — Fornecedores */}
+          <Route
+            path="/producao/fornecedores"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="fornecedores">
+                  <Fornecedores />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/producao/fornecedores/nova"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="fornecedores">
+                  <FornecedorEditor />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/producao/fornecedores/:id"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="fornecedores">
+                  <FornecedorEditor />
                 </PermissionGuard>
               </AuthWrapper>
             }

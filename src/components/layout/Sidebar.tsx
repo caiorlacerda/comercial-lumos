@@ -19,11 +19,13 @@ import {
   X,
   TrendingUp,
   Landmark,
-  CalendarDays
+  CalendarDays,
+  Truck
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import ThemeToggle from '@/components/common/ThemeToggle';
+import NotificationBell from '@/components/layout/NotificationBell';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -72,9 +74,10 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     },
     {
       title: 'PRODUÇÃO',
-      visible: can('ordem_do_dia'),
+      visible: can('ordem_do_dia') || can('fornecedores'),
       items: [
         { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
+        { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
       ].filter(item => can(item.permission))
     },
     {
@@ -119,12 +122,15 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           alt="Lumos Logo"
           className="h-8 transition-all duration-300"
         />
-        <button
-          onClick={() => setMobileOpen(false)}
-          className="lg:hidden p-1 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden p-1 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <nav className="flex-1 px-4 space-y-6 mt-4 overflow-y-auto custom-scrollbar">
@@ -217,19 +223,22 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       </>
 
       {/* Top bar mobile */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-lumos-surface border-b border-lumos-border flex items-center px-4 gap-3 shadow-sm">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="p-2 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
-          aria-label="Abrir menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-        <img
-          src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"}
-          alt="Lumos Logo"
-          className="h-6"
-        />
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-lumos-surface border-b border-lumos-border flex items-center px-4 gap-3 shadow-sm justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="p-2 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
+            aria-label="Abrir menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <img
+            src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"}
+            alt="Lumos Logo"
+            className="h-6"
+          />
+        </div>
+        <NotificationBell />
       </div>
 
       {/* Conteúdo principal */}
