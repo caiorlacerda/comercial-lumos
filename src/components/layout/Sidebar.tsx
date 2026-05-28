@@ -57,11 +57,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     },
     {
       title: 'PRODUÇÃO',
-      visible: can('ordem_do_dia') || can('fornecedores'),
+      visible: can('ordem_do_dia') || can('fornecedores') || can('custos_projeto'),
       items: [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/producao/dashboard', permission: 'ordem_do_dia' },
         { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
         { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
+        { icon: Briefcase, label: 'Custos de Projeto', path: '/financeiro/custos-projeto', permission: 'custos_projeto' },
       ].filter(item => can(item.permission))
     },
     {
@@ -73,7 +74,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         { icon: Landmark, label: 'Custos Fixos', path: '/financeiro/custos-fixos', permission: 'financeiro_admin' },
         { icon: ArrowUpCircle, label: 'Contas a Pagar', path: '/financeiro/contas-pagar', permission: 'financeiro_admin' },
         { icon: ArrowDownCircle, label: 'Contas a Receber', path: '/financeiro/contas-receber', permission: 'financeiro_admin' },
-        { icon: Briefcase, label: 'Custos de Projeto', path: '/financeiro/custos-projeto', permission: 'custos_projeto' },
         { icon: Receipt, label: 'Reembolso', path: '/financeiro/reembolso', permission: 'reembolso' },
       ].filter(item => {
         if (item.permission === 'financeiro_admin') return isAdmin;
@@ -82,37 +82,29 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       })
     },
     {
-      title: 'SISTEMA',
-      visible: isAdmin,
-      items: [
-        { icon: ShieldCheck, label: 'Usuários', path: '/usuarios' },
-        { icon: ClipboardList, label: 'Auditoria', path: '/auditoria' },
-      ]
-    },
-    {
-      title: 'CONTA',
+      title: 'CONFIGURAÇÕES',
       visible: true,
       items: [
-        { icon: Users2, label: 'Equipe', path: '/equipe' }, // Nova rota /equipe (Tarefa 3)
+        { icon: Users2, label: 'Equipe', path: '/equipe' },
         { icon: Settings, label: 'Configurações', path: '/configuracoes' },
-      ]
+        { icon: ShieldCheck, label: 'Usuários', path: '/usuarios', permission: 'admin' },
+        { icon: ClipboardList, label: 'Auditoria', path: '/auditoria', permission: 'admin' },
+      ].filter(item => !item.permission || (item.permission === 'admin' && isAdmin))
     }
   ];
 
   const sections = [
     { id: 'comercial' as SectionType, label: 'Comercial', visible: isAdmin },
-    { id: 'producao' as SectionType, label: 'Produção', visible: can('ordem_do_dia') || can('fornecedores') },
+    { id: 'producao' as SectionType, label: 'Produção', visible: can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') },
     { id: 'financeiro' as SectionType, label: 'Financeiro', visible: true },
-    { id: 'sistema' as SectionType, label: 'Sistema', visible: isAdmin },
-    { id: 'conta' as SectionType, label: 'Conta', visible: true },
+    { id: 'configuracoes' as SectionType, label: 'Configurações', visible: true },
   ];
 
   const sectionKeyMap: Record<string, string> = {
     comercial: 'COMERCIAL',
     producao: 'PRODUÇÃO',
     financeiro: 'FINANCEIRO',
-    sistema: 'SISTEMA',
-    conta: 'CONTA'
+    configuracoes: 'CONFIGURAÇÕES'
   };
 
   const activeSectionTitle = sectionKeyMap[activeSection];

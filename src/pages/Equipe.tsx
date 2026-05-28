@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { usePresence } from '@/hooks/usePresence';
+import { useLayout } from '@/context/LayoutContext';
 import { Mail, Phone, Calendar, Search, Users, Shield } from 'lucide-react';
 import { clsx } from 'clsx';
 import StatusDot from '@/components/common/StatusDot';
@@ -11,7 +11,7 @@ export default function Equipe() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
-  const { getLiveStatus } = usePresence();
+  const { getLiveStatus } = useLayout();
 
   useEffect(() => {
     fetchUsers();

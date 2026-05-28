@@ -35,10 +35,9 @@ export default function Topbar() {
   // Section buttons data
   const sections = [
     { id: 'comercial' as SectionType, label: 'Comercial', visible: isAdmin },
-    { id: 'producao' as SectionType, label: 'Produção', visible: can('ordem_do_dia') || can('fornecedores') },
+    { id: 'producao' as SectionType, label: 'Produção', visible: can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') },
     { id: 'financeiro' as SectionType, label: 'Financeiro', visible: true },
-    { id: 'sistema' as SectionType, label: 'Sistema', visible: isAdmin },
-    { id: 'conta' as SectionType, label: 'Conta', visible: true },
+    { id: 'configuracoes' as SectionType, label: 'Configurações', visible: true },
   ];
 
   const handleStatusChange = async (status: 'online' | 'busy' | 'away') => {

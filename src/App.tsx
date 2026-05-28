@@ -34,6 +34,7 @@ import Fornecedores from '@/pages/Fornecedores';
 import FornecedorEditor from '@/pages/FornecedorEditor';
 import Equipe from '@/pages/Equipe';
 import ProducaoDashboard from '@/pages/ProducaoDashboard';
+import CadastroFornecedorPublico from '@/pages/CadastroFornecedorPublico';
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
@@ -185,6 +186,7 @@ function AppContent() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/aprovar/:token" element={<AprovacaoPublica />} />
+          <Route path="/cadastro-fornecedor" element={<CadastroFornecedorPublico />} />
           
           <Route 
             path="/" 

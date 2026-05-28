@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Plus, Search, Phone, Mail, FileText, Trash2, Edit2, AlertTriangle } from 'lucide-react';
+import { Truck, Plus, Search, Phone, Mail, FileText, Trash2, Edit2, AlertTriangle, Link2, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
@@ -21,6 +21,17 @@ export default function Fornecedores() {
   useEffect(() => {
     fetchFornecedores();
   }, []);
+
+  const handleCopyPublicLink = async () => {
+    const url = `${window.location.origin}/cadastro-fornecedor`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(`Link de cadastro copiado: ${url}`);
+    } catch (err) {
+      console.error(err);
+      toast.error(`Falha ao copiar o link. URL: ${url}`);
+    }
+  };
 
   async function fetchFornecedores() {
     try {
@@ -69,12 +80,21 @@ export default function Fornecedores() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Fornecedores</h1>
           <p className="text-lumos-text-secondary text-sm">Gestão de parceiros, fornecedores e diárias de serviço.</p>
         </div>
-        <button
-          onClick={() => navigate('/producao/fornecedores/nova')}
-          className="btn-primary h-10 px-6 flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> Novo Fornecedor
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleCopyPublicLink}
+            className="btn-secondary h-10 px-4 flex items-center gap-2 text-xs"
+            title="Copiar URL pública de cadastro para enviar aos fornecedores"
+          >
+            <Link2 className="w-4 h-4" /> Enviar link de cadastro
+          </button>
+          <button
+            onClick={() => navigate('/producao/fornecedores/nova')}
+            className="btn-primary h-10 px-6 flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> Novo Fornecedor
+          </button>
+        </div>
       </div>
 
       <div className="card p-4 relative">
@@ -107,9 +127,16 @@ export default function Fornecedores() {
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-lg font-bold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors line-clamp-1">
-                      {f.nome}
-                    </h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-bold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors line-clamp-1">
+                        {f.nome}
+                      </h3>
+                      {f.status_cadastro === 'pendente' && (
+                        <span className="bg-yellow-500/15 text-yellow-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-yellow-500/20 shrink-0">
+                          Pendente
+                        </span>
+                      )}
+                    </div>
                     {f.cnpj && (
                       <p className="text-xs text-lumos-text-secondary font-medium tracking-wide mt-0.5">
                         CNPJ/CPF: {f.cnpj}
@@ -141,7 +168,29 @@ export default function Fornecedores() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 mt-6 pt-3 border-t border-lumos-border/20">
+              <div className="flex items-center justify-end gap-2 mt-6 pt-3 border-t border-lumos-border/20">
+                {f.status_cadastro === 'pendente' && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const { error } = await supabase
+                          .from('fornecedores')
+                          .update({ status_cadastro: 'aprovado' })
+                          .eq('id', f.id);
+                        if (error) throw error;
+                        toast.success('Fornecedor aprovado com sucesso!');
+                        fetchFornecedores();
+                      } catch (err: any) {
+                        toast.error(`Erro ao aprovar: ${err.message}`);
+                      }
+                    }}
+                    className="mr-auto flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-green-500 hover:bg-green-500/10 rounded transition-all border border-green-500/20"
+                    title="Aprovar Fornecedor"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
+                  </button>
+                )}
                 <button
                   onClick={e => {
                     e.stopPropagation();
