@@ -100,25 +100,64 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
 
       // 2. Save/Update Contacts
       if (clientId) {
-        // Delete existing if editing
-        if (client) {
-          await supabase.from('client_contacts').delete().eq('client_id', clientId);
+        // Fetch current contacts in DB for this client
+        const { data: dbContacts } = await supabase
+          .from('client_contacts')
+          .select('id')
+          .eq('client_id', clientId);
+        
+        const dbContactIds = (dbContacts || []).map(c => c.id);
+        const formContacts = contacts.filter(c => c.name.trim());
+        
+        // Contacts to delete (existed in DB but not in form)
+        const formContactIds = formContacts.map(c => c.id).filter(Boolean) as string[];
+        const idsToDelete = dbContactIds.filter(id => !formContactIds.includes(id));
+        
+        if (idsToDelete.length > 0) {
+          const { error: delError } = await supabase
+            .from('client_contacts')
+            .delete()
+            .in('id', idsToDelete);
+          if (delError) throw delError;
         }
-
-        const contactsToInsert = contacts
-          .filter(c => c.name.trim())
-          .map((c, idx) => ({
-            client_id: clientId,
-            name: c.name,
-            email: c.email,
-            phone: c.phone,
-            role: c.role,
-            is_primary: idx === 0
-          }));
-
+        
+        // Contacts to insert (no id)
+        const contactsToInsert = formContacts
+          .filter(c => !c.id)
+          .map(c => {
+            const idx = formContacts.indexOf(c);
+            return {
+              client_id: clientId,
+              name: c.name,
+              email: c.email,
+              phone: c.phone,
+              role: c.role,
+              is_primary: idx === 0
+            };
+          });
+        
         if (contactsToInsert.length > 0) {
-          const { error: cError } = await supabase.from('client_contacts').insert(contactsToInsert);
-          if (cError) throw cError;
+          const { error: insError } = await supabase
+            .from('client_contacts')
+            .insert(contactsToInsert);
+          if (insError) throw insError;
+        }
+        
+        // Contacts to update (has id)
+        const contactsToUpdate = formContacts.filter(c => c.id);
+        for (const c of contactsToUpdate) {
+          const idx = formContacts.indexOf(c);
+          const { error: updError } = await supabase
+            .from('client_contacts')
+            .update({
+              name: c.name,
+              email: c.email,
+              phone: c.phone,
+              role: c.role,
+              is_primary: idx === 0
+            })
+            .eq('id', c.id);
+          if (updError) throw updError;
         }
       }
 
