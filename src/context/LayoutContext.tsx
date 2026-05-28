@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 export type SectionType = 'comercial' | 'producao' | 'financeiro' | 'sistema' | 'conta';
 
 interface LayoutContextType {
   activeSection: SectionType;
   setActiveSection: (section: SectionType) => void;
+  navigateToSection: (section: SectionType) => void;
   mobileSidebarOpen: boolean;
   setMobileSidebarOpen: (open: boolean) => void;
 }
@@ -22,6 +24,9 @@ export function getSectionFromPath(path: string): SectionType {
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAdmin, can } = useAuth();
+  
   const [activeSection, setActiveSection] = useState<SectionType>(() => 
     getSectionFromPath(location.pathname)
   );
@@ -33,10 +38,37 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     setMobileSidebarOpen(false); // Fecha o drawer mobile ao navegar
   }, [location.pathname]);
 
+  const navigateToSection = (sectionId: SectionType) => {
+    let targetPath = '/';
+
+    if (sectionId === 'comercial') {
+      if (isAdmin) targetPath = '/';
+      else return;
+    } else if (sectionId === 'producao') {
+      if (can('ordem_do_dia')) targetPath = '/producao/dashboard';
+      else if (can('fornecedores')) targetPath = '/producao/fornecedores';
+      else return;
+    } else if (sectionId === 'financeiro') {
+      if (isAdmin) targetPath = '/financeiro';
+      else if (can('custos_projeto')) targetPath = '/financeiro/custos-projeto';
+      else if (can('reembolso')) targetPath = '/financeiro/reembolso';
+      else return;
+    } else if (sectionId === 'sistema') {
+      if (isAdmin) targetPath = '/usuarios';
+      else return;
+    } else if (sectionId === 'conta') {
+      targetPath = '/equipe';
+    }
+
+    setActiveSection(sectionId);
+    navigate(targetPath);
+  };
+
   return (
     <LayoutContext.Provider value={{
       activeSection,
       setActiveSection,
+      navigateToSection,
       mobileSidebarOpen,
       setMobileSidebarOpen
     }}>

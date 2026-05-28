@@ -33,6 +33,7 @@ import OrdemDoDiaEditor from '@/pages/OrdemDoDiaEditor';
 import Fornecedores from '@/pages/Fornecedores';
 import FornecedorEditor from '@/pages/FornecedorEditor';
 import Equipe from '@/pages/Equipe';
+import ProducaoDashboard from '@/pages/ProducaoDashboard';
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
@@ -316,6 +317,18 @@ function AppContent() {
               </AuthWrapper>
             }
           />
+          {/* PRODUÇÃO — Dashboard */}
+          <Route
+            path="/producao/dashboard"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <ProducaoDashboard />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
           {/* PRODUÇÃO — Ordem do Dia */}
           <Route
             path="/ordem-do-dia"

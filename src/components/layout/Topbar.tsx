@@ -11,7 +11,7 @@ import { clsx } from 'clsx';
 export default function Topbar() {
   const { signOut, user, profile, isAdmin, can, updatePresenceStatus } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { activeSection, setActiveSection, mobileSidebarOpen, setMobileSidebarOpen } = useLayout();
+  const { activeSection, navigateToSection, mobileSidebarOpen, setMobileSidebarOpen } = useLayout();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -84,7 +84,7 @@ export default function Topbar() {
               sec.visible && (
                 <button
                   key={sec.id}
-                  onClick={() => setActiveSection(sec.id)}
+                  onClick={() => navigateToSection(sec.id)}
                   className={clsx(
                     "px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
                     activeSection === sec.id

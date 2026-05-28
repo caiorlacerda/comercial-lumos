@@ -31,7 +31,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const { can, isAdmin } = useAuth();
   const { theme } = useTheme();
   const location = useLocation();
-  const { activeSection, setActiveSection, mobileSidebarOpen, setMobileSidebarOpen } = useLayout();
+  const { activeSection, navigateToSection, mobileSidebarOpen, setMobileSidebarOpen } = useLayout();
 
   // Bloqueia scroll do body quando drawer aberto
   useEffect(() => {
@@ -59,6 +59,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       title: 'PRODUÇÃO',
       visible: can('ordem_do_dia') || can('fornecedores'),
       items: [
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/producao/dashboard', permission: 'ordem_do_dia' },
         { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
         { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
       ].filter(item => can(item.permission))
@@ -121,16 +122,11 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-lumos-surface">
-      {/* Header */}
-      <div className="p-6 flex items-center justify-between flex-shrink-0">
-        <img
-          src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"}
-          alt="Lumos Logo"
-          className="h-8 transition-all duration-300"
-        />
+      {/* Header - Mobile only */}
+      <div className="lg:hidden p-6 flex items-center justify-end flex-shrink-0">
         <button
           onClick={() => setMobileSidebarOpen(false)}
-          className="lg:hidden p-1 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center hover:bg-lumos-text-secondary/10 transition-colors"
+          className="p-1 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center hover:bg-lumos-text-secondary/10 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -141,7 +137,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         {sections.map(sec => sec.visible && (
           <button
             key={sec.id}
-            onClick={() => setActiveSection(sec.id)}
+            onClick={() => navigateToSection(sec.id)}
             className={clsx(
               "px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all",
               activeSection === sec.id
