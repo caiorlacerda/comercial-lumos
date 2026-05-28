@@ -12,29 +12,35 @@ export interface AppUserProfile {
   custom_permissions: Record<string, boolean>;
   phone: string | null;
   joined_at: string;
+  presence_status?: 'online' | 'busy' | 'away' | 'offline';
+  last_seen?: string;
 }
 
 const AuthContext = createContext<{
   user: User | null;
   profile: AppUserProfile | null;
   loading: boolean;
+  profileChecked: boolean;
   error: string | null;
   isAdmin: boolean;
   isProducao: boolean;
   signOut: () => Promise<void>;
   updateProfile: (fullName: string) => Promise<void>;
   updateAvatar: (url: string) => Promise<void>;
+  updatePresenceStatus: (status: 'online' | 'busy' | 'away') => Promise<void>;
   can: (permission: string) => boolean;
 }>({
   user: null,
   profile: null,
   loading: true,
+  profileChecked: false,
   error: null,
   isAdmin: false,
   isProducao: false,
   signOut: async () => {},
   updateProfile: async () => {},
   updateAvatar: async () => {},
+  updatePresenceStatus: async () => {},
   can: () => false,
 });
 
@@ -42,15 +48,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileChecked, setProfileChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('app_users')
-      .select('*')
-      .eq('auth_user_id', userId)
-      .single();
-    setProfile(data ?? null);
+    try {
+      const { data } = await supabase
+        .from('app_users')
+        .select('*')
+        .eq('auth_user_id', userId)
+        .single();
+      setProfile(data ?? null);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      setProfile(null);
+    } finally {
+      setProfileChecked(true);
+    }
   };
 
   useEffect(() => {
@@ -59,9 +73,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false));
       } else {
+        setProfileChecked(true);
         setLoading(false);
       }
-    }).catch(() => setLoading(false));
+    }).catch(() => {
+      setProfileChecked(true);
+      setLoading(false);
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -69,6 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         fetchProfile(session.user.id).finally(() => setLoading(false));
       } else {
         setProfile(null);
+        setProfileChecked(true);
         setLoading(false);
       }
     });
@@ -96,6 +115,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(updatedUser);
   };
 
+  const updatePresenceStatus = async (status: 'online' | 'busy' | 'away') => {
+    if (!user) return;
+    try {
+      const { error: updateError } = await supabase
+        .from('app_users')
+        .update({ presence_status: status, last_seen: new Date().toISOString() })
+        .eq('auth_user_id', user.id);
+      if (updateError) throw updateError;
+      setProfile(prev => prev ? { ...prev, presence_status: status } : null);
+    } catch (err) {
+      console.error('Error updating presence status:', err);
+    }
+  };
+
   const can = (permission: string): boolean => {
     if (!profile) return false;
     if (profile.custom_permissions && permission in profile.custom_permissions) {
@@ -112,10 +145,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, profile, loading, error,
+      user, profile, loading, profileChecked, error,
       isAdmin: profile?.role === 'admin',
       isProducao: profile?.role === 'producao',
-      signOut, updateProfile, updateAvatar, can
+      signOut, updateProfile, updateAvatar, updatePresenceStatus, can
     }}>
       {children}
     </AuthContext.Provider>

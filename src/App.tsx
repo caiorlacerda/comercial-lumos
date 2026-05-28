@@ -14,6 +14,7 @@ import ClientProfile from '@/pages/ClientProfile';
 
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PermissionGuard } from '@/components/auth/PermissionGuard';
+import { LayoutProvider } from '@/context/LayoutContext';
 
 // Novas Páginas Financeiras
 import UsersPage from '@/pages/Users';
@@ -31,11 +32,12 @@ import OrdensDoDia from '@/pages/OrdensDoDia';
 import OrdemDoDiaEditor from '@/pages/OrdemDoDiaEditor';
 import Fornecedores from '@/pages/Fornecedores';
 import FornecedorEditor from '@/pages/FornecedorEditor';
+import Equipe from '@/pages/Equipe';
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
 function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, error, signOut } = useAuth();
+  const { user, profile, loading, profileChecked, error, signOut } = useAuth();
   const lastActivityRef = useRef<number>(Date.now());
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
 
@@ -89,7 +91,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     };
   }, [user, signOut]);
 
-  if (loading) {
+  if (loading || !profileChecked) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
@@ -116,7 +118,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   if (!user) return <Navigate to="/login" />;
 
   // VALIDAÇÃO DE PERFIL LUMOS
-  if (!loading && !profile) {
+  if (user && profileChecked && !profile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
         <div className="bg-yellow-500/10 border border-yellow-500 p-8 rounded-lumos max-w-md">
@@ -155,7 +157,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <>
+    <LayoutProvider>
       {showTimeoutWarning && (
         <div className="fixed top-0 left-0 right-0 z-[300] bg-yellow-500 text-black px-4 py-2 flex items-center justify-between text-sm font-semibold shadow-lg">
           <span>⚠️ Sua sessão expira em menos de 5 minutos por inatividade. Clique em qualquer lugar para continuar.</span>
@@ -171,7 +173,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <Sidebar>{children}</Sidebar>
-    </>
+    </LayoutProvider>
   );
 }
 
@@ -226,6 +228,11 @@ function AppContent() {
           <Route 
             path="/configuracoes" 
             element={<AuthWrapper><Settings /></AuthWrapper>} 
+          />
+
+          <Route 
+            path="/equipe" 
+            element={<AuthWrapper><Equipe /></AuthWrapper>} 
           />
 
           {/* NOVAS ROTAS FINANCEIRAS */}
