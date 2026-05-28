@@ -38,9 +38,11 @@ export default function ContasPagar() {
   const toast = useToast();
   const [payables, setPayables] = useState<any[]>([]);
   const [appUsers, setAppUsers] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -71,10 +73,11 @@ export default function ContasPagar() {
   async function fetchData() {
     try {
       setLoading(true);
-      const [payablesRes, costsRes, usersRes] = await Promise.all([
-        supabase.from('payables').select('*, responsible:app_users!responsible_id(full_name)').order('due_date', { ascending: true }),
+      const [payablesRes, costsRes, usersRes, projectsRes] = await Promise.all([
+        supabase.from('payables').select('*, project:projects(name), responsible:app_users!responsible_id(full_name)').order('due_date', { ascending: true }),
         supabase.from('project_costs').select('*, budget:budgets(project_name), responsible:app_users!responsible_id(full_name)').order('cost_date', { ascending: true }),
-        supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name', { ascending: true })
+        supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name', { ascending: true }),
+        supabase.from('projects').select('id, name, code').order('name', { ascending: true })
       ]);
 
       const unifiedPayables = [
@@ -83,12 +86,13 @@ export default function ContasPagar() {
           ...c, 
           _type: 'project_cost', 
           due_date: c.cost_date,
-          paid_at: c.paid_at || null // project_costs pode ter paid_at? Assumindo que não por enquanto ou mapeando
+          paid_at: c.paid_at || null
         }))
       ].sort((a, b) => new Date(b.due_date || b.created_at).getTime() - new Date(a.due_date || a.created_at).getTime());
 
       setPayables(unifiedPayables);
       setAppUsers(usersRes.data || []);
+      setProjects(projectsRes.data || []);
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
     } finally {
@@ -176,10 +180,15 @@ export default function ContasPagar() {
   const markAsPaid = async (item: any) => {
     try {
       const table = item._type === 'project_cost' ? 'project_costs' : 'payables';
-      const { error } = await supabase.from(table).update({ 
+      const updateData: any = { 
         paid_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }).eq('id', item.id);
+      };
+      if (item._type === 'project_cost') {
+        updateData.status = 'pago';
+        updateData.paid_by = profile?.id;
+      }
+      const { error } = await supabase.from(table).update(updateData).eq('id', item.id);
       if (error) throw error;
       fetchData();
     } catch (error: any) { toast.error(error.message); }
@@ -198,7 +207,11 @@ export default function ContasPagar() {
         promises.push(supabase.from('payables').update({ paid_at: new Date().toISOString() }).in('id', payablesIds));
       }
       if (projectCostsIds.length > 0) {
-        promises.push(supabase.from('project_costs').update({ paid_at: new Date().toISOString() }).in('id', projectCostsIds));
+        promises.push(supabase.from('project_costs').update({ 
+          paid_at: new Date().toISOString(),
+          status: 'pago',
+          paid_by: profile?.id
+        }).in('id', projectCostsIds));
       }
 
       await Promise.all(promises);
@@ -293,7 +306,8 @@ export default function ContasPagar() {
       const matchesSearch = p.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            (p.supplier && p.supplier.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
-      return matchesSearch && matchesCategory;
+      const matchesProject = projectFilter === 'all' || p.project_id === projectFilter;
+      return matchesSearch && matchesCategory && matchesProject;
     })
     .sort((a, b) => {
       let aVal = a[sortConfig.key];
@@ -364,19 +378,42 @@ export default function ContasPagar() {
         </div>
       </div>
 
-      <div className="card p-4 flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-          <input type="text" placeholder="Buscar por descrição ou fornecedor..." className="input-lumos pl-10 w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+      <div className="card p-4 space-y-3">
+        <div className="flex flex-col md:flex-row gap-4 items-center w-full">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+            <input type="text" placeholder="Buscar por descrição ou fornecedor..." className="input-lumos pl-10 w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          </div>
+          <select className="input-lumos h-10 px-4 text-sm min-w-[180px]" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+            <option value="all">Todas as Categorias</option>
+            <option value="equipe">Equipe</option>
+            <option value="equipamento">Equipamento</option>
+            <option value="locacao">Locação</option>
+            <option value="software">Software</option>
+            <option value="impostos">Impostos</option>
+          </select>
+          <select className="input-lumos h-10 px-4 text-sm min-w-[200px]" value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
+            <option value="all">Todos os Projetos</option>
+            {projects.map(proj => (
+              <option key={proj.id} value={proj.id}>
+                {proj.code ? `#${proj.code} — ${proj.name}` : proj.name}
+              </option>
+            ))}
+          </select>
         </div>
-        <select className="input-lumos h-10 px-4 text-sm" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-          <option value="all">Todas as Categorias</option>
-          <option value="equipe">Equipe</option>
-          <option value="equipamento">Equipamento</option>
-          <option value="locacao">Locação</option>
-          <option value="software">Software</option>
-          <option value="impostos">Impostos</option>
-        </select>
+        {(searchTerm || categoryFilter !== 'all' || projectFilter !== 'all') && (
+          <div className="flex items-center justify-between text-xs text-lumos-text-secondary pt-2 border-t border-lumos-border/30">
+            <span>
+              Mostrando <strong className="text-lumos-text-primary">{filtered.length}</strong> de {payables.length} contas
+            </span>
+            <button
+              onClick={() => { setSearchTerm(''); setCategoryFilter('all'); setProjectFilter('all'); }}
+              className="text-lumos-yellow hover:underline font-bold uppercase tracking-widest text-[10px]"
+            >
+              Limpar filtros
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -403,6 +440,9 @@ export default function ContasPagar() {
                 <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('description')}>
                   <div className="flex items-center gap-1">Descrição <SortIcon column="description" /></div>
                 </th>
+                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('created_at')}>
+                  <div className="flex items-center gap-1">Cadastro <SortIcon column="created_at" /></div>
+                </th>
                 <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('supplier')}>
                   <div className="flex items-center gap-1">Fornecedor <SortIcon column="supplier" /></div>
                 </th>
@@ -417,9 +457,9 @@ export default function ContasPagar() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={7} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <tr><td colSpan={8} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhuma conta encontrada.</td></tr>
+                <tr><td colSpan={8} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhuma conta encontrada.</td></tr>
               ) : (
                 filtered.map((p) => (
                   <tr 
@@ -450,8 +490,8 @@ export default function ContasPagar() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                          {p._type === 'project_cost' ? (
-                            <Link to={`/financeiro/custos-projeto/${p.budget_id}`} className="text-sm font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors flex items-center gap-1.5 group/link">
+                          {p.project_id ? (
+                            <Link to={`/financeiro/custos-projeto/${p.project_id}`} className="text-sm font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors flex items-center gap-1.5 group/link">
                               {p.description} <FileText className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                             </Link>
                           ) : (
@@ -462,9 +502,16 @@ export default function ContasPagar() {
                           )}
                         </div>
                         <span className="text-[10px] text-lumos-text-secondary uppercase tracking-tighter">
-                          {p._type === 'project_cost' ? `PROJETO: ${p.budget?.project_name}` : p.category}
+                          {p._type === 'project_cost' 
+                            ? `PROJETO: ${p.budget?.project_name}` 
+                            : p.project?.name 
+                              ? `PROJETO: ${p.project.name}` 
+                              : p.category}
                         </span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-lumos-text-secondary">
+                      {p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : '—'}
                     </td>
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{p.supplier || '—'}</td>
                     <td className="px-6 py-4 text-right text-sm font-black text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.amount)}</td>

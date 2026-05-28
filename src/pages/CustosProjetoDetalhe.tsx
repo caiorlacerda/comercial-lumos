@@ -58,8 +58,65 @@ export default function CustosProjetoDetalhe() {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
+  const [fornecedores, setFornecedores] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
+  const [selectedFornecedorId, setSelectedFornecedorId] = useState<string>('');
+  const [selectedServicoId, setSelectedServicoId] = useState<string>('');
+
   useEffect(() => { fetchProjectData(); }, [id]);
   useEffect(() => { fetchCategories(); }, []);
+
+  useEffect(() => {
+    if (selectedFornecedorId) {
+      fetchSupplierServices(selectedFornecedorId);
+    } else {
+      setServices([]);
+    }
+  }, [selectedFornecedorId]);
+
+  async function fetchSupplierServices(fornecedorId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('fornecedor_servicos')
+        .select('id, tipo_servico, valor')
+        .eq('fornecedor_id', fornecedorId)
+        .order('tipo_servico');
+      if (error) throw error;
+      setServices(data || []);
+    } catch (err) {
+      console.error('Error fetching services:', err);
+    }
+  }
+
+  const handleFornecedorChange = (fornecedorId: string) => {
+    setSelectedFornecedorId(fornecedorId);
+    setSelectedServicoId('');
+    if (fornecedorId) {
+      const selectedF = fornecedores.find(f => f.id === fornecedorId);
+      if (selectedF) {
+        setFormData(prev => ({
+          ...prev,
+          supplier: selectedF.nome
+        }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, supplier: '' }));
+    }
+  };
+
+  const handleServicoChange = (serviceId: string) => {
+    setSelectedServicoId(serviceId);
+    if (serviceId) {
+      const selectedService = services.find(s => s.id === serviceId);
+      if (selectedService) {
+        setFormData(prev => ({
+          ...prev,
+          description: selectedService.tipo_servico,
+          amount: Number(selectedService.valor || 0)
+        }));
+      }
+    }
+  };
 
   // Busca todas as categorias já cadastradas no banco (em qualquer projeto)
   async function fetchCategories() {
@@ -142,11 +199,11 @@ export default function CustosProjetoDetalhe() {
         }
       }
 
-      // 3. Busca custos, usuários e clientes em paralelo
-      const [costsRes, usersRes, clientsRes] = await Promise.all([
+      // 3. Busca custos, usuários, clientes e fornecedores em paralelo
+      const [costsRes, usersRes, clientsRes, fornecedoresRes] = await Promise.all([
         supabase
           .from('project_costs')
-          .select('*, responsible:app_users!responsible_id(full_name)')
+          .select('*, responsible:app_users!responsible_id(full_name), fornecedor:fornecedores(nome)')
           .eq('project_id', id)
           .order('cost_date', { ascending: false }),
         supabase
@@ -158,12 +215,17 @@ export default function CustosProjetoDetalhe() {
           .from('clients')
           .select('id, name')
           .order('name'),
+        supabase
+          .from('fornecedores')
+          .select('id, nome')
+          .order('nome')
       ]);
 
       setProject({ ...projectData, budget_items: budgetItems, receivable_amount: receivableAmount, budget_id: budgetId });
       setCosts(costsRes.data || []);
       setAppUsers(usersRes.data || []);
       setClients(clientsRes.data || []);
+      setFornecedores(fornecedoresRes.data || []);
     } catch (error) {
       console.error('Erro ao carregar projeto:', error);
       navigate('/financeiro/custos-projeto');
@@ -179,6 +241,8 @@ export default function CustosProjetoDetalhe() {
       const payload: any = {
         ...formData,
         payment_due_date: formData.payment_due_date || null,
+        fornecedor_id: selectedFornecedorId || null,
+        fornecedor_servico_id: selectedServicoId || null,
       };
 
       if (editingId) {
@@ -272,6 +336,8 @@ export default function CustosProjetoDetalhe() {
       notes: '',
     });
     setDuePreset('30');
+    setSelectedFornecedorId('');
+    setSelectedServicoId('');
   };
 
   const handleEdit = (c: any) => {
@@ -297,6 +363,8 @@ export default function CustosProjetoDetalhe() {
     } else {
       setDuePreset('custom');
     }
+    setSelectedFornecedorId(c.fornecedor_id || '');
+    setSelectedServicoId(c.fornecedor_servico_id || '');
     setIsModalOpen(true);
   };
 
@@ -521,6 +589,7 @@ export default function CustosProjetoDetalhe() {
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4">Vencimento</th>
+                <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-right">Valor</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
@@ -529,7 +598,7 @@ export default function CustosProjetoDetalhe() {
               {costs.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-6 py-8 text-center text-lumos-text-secondary text-sm italic"
                   >
                     Nenhum custo registrado.
@@ -562,7 +631,16 @@ export default function CustosProjetoDetalhe() {
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">
                       {new Date(c.cost_date).toLocaleDateString('pt-BR')}
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{c.description}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-lumos-text-primary">{c.description}</span>
+                        {c.fornecedor?.nome && (
+                          <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest mt-0.5">
+                            Fornecedor: {c.fornecedor.nome}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">
                       {c.category ? formatCategoryLabel(c.category) : '—'}
                     </td>
@@ -584,6 +662,17 @@ export default function CustosProjetoDetalhe() {
                         })()
                       ) : (
                         <span className="text-lumos-text-secondary/40 italic text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {c.paid_at ? (
+                        <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full">
+                          Pago
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-[10px] font-bold text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full">
+                          Pendente
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
@@ -668,6 +757,38 @@ export default function CustosProjetoDetalhe() {
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Editar Custo' : 'Registrar Custo'}>
         <form onSubmit={handleAddCost} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest font-semibold">Fornecedor (Opcional)</label>
+              <select
+                className="input-lumos w-full"
+                value={selectedFornecedorId}
+                onChange={e => handleFornecedorChange(e.target.value)}
+              >
+                <option value="">Nenhum fornecedor</option>
+                {fornecedores.map(f => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest font-semibold">Serviço do Fornecedor</label>
+              <select
+                className="input-lumos w-full"
+                value={selectedServicoId}
+                disabled={!selectedFornecedorId}
+                onChange={e => handleServicoChange(e.target.value)}
+              >
+                <option value="">Selecione um serviço</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.tipo_servico} — {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.valor || 0)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Descrição</label>
             <input
