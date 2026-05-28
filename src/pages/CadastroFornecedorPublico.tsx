@@ -77,7 +77,16 @@ export default function CadastroFornecedorPublico() {
     try {
       setSaving(true);
 
+      const supplierId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+        ? crypto.randomUUID() 
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+
       const payload = {
+        id: supplierId,
         nome: formData.nome.trim(),
         cnpj: formData.cnpj.trim() || null,
         telefone: formData.telefone.trim() || null,
@@ -90,20 +99,18 @@ export default function CadastroFornecedorPublico() {
         updated_at: new Date().toISOString()
       };
 
-      // Inserir fornecedor
-      const { data, error } = await supabase
+      // Inserir fornecedor sem retornar via SELECT para contornar RLS de leitura
+      const { error } = await supabase
         .from('fornecedores')
-        .insert([payload])
-        .select()
-        .single();
+        .insert([payload]);
 
       if (error) throw error;
 
       // Inserir serviços se houver
       const formServices = services.filter(s => s.tipo_servico.trim());
-      if (formServices.length > 0 && data) {
+      if (formServices.length > 0) {
         const servicesToInsert = formServices.map(s => ({
-          fornecedor_id: data.id,
+          fornecedor_id: supplierId,
           tipo_servico: s.tipo_servico.trim(),
           valor: s.valor,
           notes: s.notes?.trim() || null
