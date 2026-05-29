@@ -12,8 +12,10 @@ export function useGoogleDrive() {
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
       const token = tokenResponse.access_token;
+      const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
       setAccessToken(token);
       localStorage.setItem(STORAGE_KEY, token);
+      localStorage.setItem(STORAGE_KEY + '_expires_at', expiresAt.toString());
     },
     scope: 'https://www.googleapis.com/auth/drive',
     prompt: 'consent',
@@ -21,7 +23,18 @@ export function useGoogleDrive() {
   });
 
   const isAuthenticated = useCallback(() => {
-    return !!accessToken;
+    if (!accessToken) return false;
+    const expiresAtStr = localStorage.getItem(STORAGE_KEY + '_expires_at');
+    if (expiresAtStr) {
+      const expiresAt = parseInt(expiresAtStr, 10);
+      if (Date.now() >= expiresAt) {
+        setAccessToken(null);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY + '_expires_at');
+        return false;
+      }
+    }
+    return true;
   }, [accessToken]);
 
   const listFiles = useCallback(async (query: string) => {
@@ -36,6 +49,11 @@ export function useGoogleDrive() {
         errorData = await response.json();
       } catch (e) {
         errorData = { error: { message: 'Unknown error' } };
+      }
+      if (response.status === 401) {
+        setAccessToken(null);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY + '_expires_at');
       }
       throw new Error(errorData.error?.message || `Failed to list files (${response.status})`);
     }
@@ -66,6 +84,11 @@ export function useGoogleDrive() {
         errorData = await response.json();
       } catch (e) {
         errorData = { error: { message: 'Unknown error' } };
+      }
+      if (response.status === 401) {
+        setAccessToken(null);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY + '_expires_at');
       }
       throw new Error(errorData.error?.message || `Failed to create folder (${response.status})`);
     }
@@ -121,6 +144,7 @@ export function useGoogleDrive() {
         if (response.status === 401) {
           setAccessToken(null);
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(STORAGE_KEY + '_expires_at');
         }
         throw new Error(errorData.error?.message || `Failed to upload to Google Drive (${response.status})`);
       }
