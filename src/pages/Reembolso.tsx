@@ -103,7 +103,7 @@ export default function Reembolso() {
   }
 
   const getOrCreatePath = async (employeeName: string) => {
-    const rootId = '1-Q38vOIfw-CoDxYtBa82-tvhKa1-Xiks';
+    const rootId = import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID || '1-Q38vOIfw-CoDxYtBa82-tvhKa1-Xiks';
     const month = new Date().toISOString().split('-').slice(0, 2).join('-');
 
     const findFolder = async (name: string, parentId: string) => {

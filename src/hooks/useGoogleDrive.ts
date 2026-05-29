@@ -30,7 +30,15 @@ export function useGoogleDrive() {
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&supportsAllDrives=true&includeItemsFromAllDrives=true`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
-    if (!response.ok) throw new Error('Failed to list files');
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        errorData = { error: { message: 'Unknown error' } };
+      }
+      throw new Error(errorData.error?.message || `Failed to list files (${response.status})`);
+    }
     return await response.json();
   }, [accessToken]);
 
@@ -52,7 +60,15 @@ export function useGoogleDrive() {
         body: JSON.stringify(metadata)
       }
     );
-    if (!response.ok) throw new Error('Failed to create folder');
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        errorData = { error: { message: 'Unknown error' } };
+      }
+      throw new Error(errorData.error?.message || `Failed to create folder (${response.status})`);
+    }
     return await response.json();
   }, [accessToken]);
 
