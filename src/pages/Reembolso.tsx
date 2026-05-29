@@ -111,16 +111,23 @@ export default function Reembolso() {
       return res.files[0]?.id;
     };
 
-    let reembolsosId = await findFolder('Reembolsos', rootId);
-    if (!reembolsosId) reembolsosId = (await createFolder('Reembolsos', rootId)).id;
+    try {
+      let reembolsosId = await findFolder('Reembolsos', rootId);
+      if (!reembolsosId) reembolsosId = (await createFolder('Reembolsos', rootId)).id;
 
-    let employeeId = await findFolder(employeeName, reembolsosId);
-    if (!employeeId) employeeId = (await createFolder(employeeName, reembolsosId)).id;
+      let employeeId = await findFolder(employeeName, reembolsosId);
+      if (!employeeId) employeeId = (await createFolder(employeeName, reembolsosId)).id;
 
-    let monthId = await findFolder(month, employeeId);
-    if (!monthId) monthId = (await createFolder(month, employeeId)).id;
+      let monthId = await findFolder(month, employeeId);
+      if (!monthId) monthId = (await createFolder(month, employeeId)).id;
 
-    return monthId;
+      return monthId;
+    } catch (error: any) {
+      if (error.message?.includes('File not found')) {
+        throw new Error(`A pasta raiz do Google Drive (ID: ${rootId}) não foi encontrada ou sua conta Google não tem permissão para acessá-la. Certifique-se de que fez login com o e-mail corporativo correto da Lumos.`);
+      }
+      throw error;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
