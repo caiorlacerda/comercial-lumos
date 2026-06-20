@@ -28,13 +28,15 @@ import {
 
 interface CashFlowEntry {
   id: string;
-  entry_date: string;
-  type: 'entrada' | 'saida';
-  amount: number;
-  category: string | null;
-  description: string;
-  project_name: string | null;
-  notes: string | null;
+  data: string;
+  tipo: 'entrada' | 'saida';
+  valor: number;
+  descricao: string;
+  cliente_id: string;
+  categoria_id: string;
+  tipo_servico_id: string;
+  projeto_financeiro_id: string | null;
+  notes?: string | null;
 }
 
 interface Transaction {
@@ -62,8 +64,10 @@ interface EntryFormData {
   type: 'entrada' | 'saida';
   amount: number;
   description: string;
-  category: string;
-  project_name: string;
+  cliente_id: string;
+  categoria_id: string;
+  tipo_servico_id: string;
+  projeto_financeiro_id: string;
   notes: string;
 }
 
@@ -117,13 +121,21 @@ export default function FluxoDeCaixa() {
   const [cashEntries, setCashEntries] = useState<CashFlowEntry[]>([]);
   const [fixedCostsTotal, setFixedCostsTotal] = useState(0);
 
+  // Dimensões
+  const [clients, setClients] = useState<any[]>([]);
+  const [categorias, setCategorias] = useState<any[]>([]);
+  const [tiposServico, setTiposServico] = useState<any[]>([]);
+  const [projectsList, setProjectsList] = useState<any[]>([]);
+
   const defaultForm: EntryFormData = {
     entry_date: new Date().toISOString().split('T')[0],
     type: 'entrada',
     amount: 0,
     description: '',
-    category: '',
-    project_name: '',
+    cliente_id: '',
+    categoria_id: '',
+    tipo_servico_id: '',
+    projeto_financeiro_id: '',
     notes: '',
   };
   const [formData, setFormData] = useState<EntryFormData>(defaultForm);
@@ -131,34 +143,37 @@ export default function FluxoDeCaixa() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [recRes, payRes, pcRes, reimbRes, ceRes, fcRes] = await Promise.all([
+      const [recRes, payRes, pcRes, reimbRes, lfRes, fcRes, clientsRes, catsRes, tsRes, projRes] = await Promise.all([
         supabase.from('receivables').select('id, received_amount, received_at, status').not('received_at', 'is', null),
         supabase.from('payables').select('id, amount, paid_at, description, category').not('paid_at', 'is', null),
         supabase.from('project_costs').select('id, amount, paid_at, description, budget_id').not('paid_at', 'is', null),
         supabase.from('reimbursements').select('id, amount, paid_at, status').not('paid_at', 'is', null).eq('status', 'pago'),
-        supabase.from('cash_flow_entries').select('*').order('entry_date', { ascending: true }),
+        supabase.from('lancamentos_financeiros').select('*').order('data', { ascending: true }),
         supabase.from('fixed_costs').select('amount').eq('is_active', true),
+        supabase.from('clients').select('id, name').order('name'),
+        supabase.from('categorias').select('id, nome').eq('ativo', true).order('ordem'),
+        supabase.from('tipos_servico').select('id, categoria_id, nome').eq('ativo', true).order('nome'),
+        supabase.from('vw_rentabilidade').select('id, project_id, proposta_id, origem, budgets(project_name)')
       ]);
 
-      console.log('[FluxoDeCaixa] recRes:', recRes.error?.message, 'data:', recRes.data?.length);
-      console.log('[FluxoDeCaixa] payRes:', payRes.error?.message, 'data:', payRes.data?.length);
-      console.log('[FluxoDeCaixa] pcRes:', pcRes.error?.message, 'data:', pcRes.data?.length);
-      console.log('[FluxoDeCaixa] reimbRes:', reimbRes.error?.message, 'data:', reimbRes.data?.length);
-      console.log('[FluxoDeCaixa] ceRes:', ceRes.error?.message, 'data:', ceRes.data?.length);
-      console.log('[FluxoDeCaixa] fcRes:', fcRes.error?.message, 'data:', fcRes.data?.length);
-
-      if (ceRes.error) console.error('[FluxoDeCaixa] cash_flow_entries:', ceRes.error.message);
+      if (lfRes.error) console.error('[FluxoDeCaixa] lancamentos_financeiros:', lfRes.error.message);
       if (fcRes.error) console.error('[FluxoDeCaixa] fixed_costs:', fcRes.error.message);
 
       setReceivables(recRes.data || []);
       setPayables(payRes.data || []);
       setProjectCosts(pcRes.data || []);
       setReimbursements(reimbRes.data || []);
-      setCashEntries(ceRes.data || []);
+      setCashEntries(lfRes.data || []);
+      
       const fcTotal = (fcRes.data || []).reduce((acc: number, r: any) => acc + (r.amount || 0), 0);
       setFixedCostsTotal(fcTotal);
 
-      if (ceRes.error || fcRes.error) {
+      setClients(clientsRes.data || []);
+      setCategorias(catsRes.data || []);
+      setTiposServico(tsRes.data || []);
+      setProjectsList(projRes.data || []);
+
+      if (lfRes.error || fcRes.error) {
         toast.error('Erro ao carregar dados. Verifique se as tabelas foram criadas no Supabase.');
       }
     } catch (error: any) {
@@ -254,20 +269,20 @@ export default function FluxoDeCaixa() {
 
     // Cash flow entries
     cashEntries.forEach(ce => {
-      const d = ce.entry_date?.slice(0, 10);
+      const d = ce.data?.slice(0, 10);
       if (!d || !d.startsWith(yearStr)) return;
       const m = parseInt(d.slice(5, 7)) - 1;
-      if (ce.type === 'entrada') {
-        months[m].entradas += ce.amount || 0;
+      if (ce.tipo === 'entrada') {
+        months[m].entradas += Number(ce.valor || 0);
       } else {
-        months[m].saidas += ce.amount || 0;
+        months[m].saidas += Number(ce.valor || 0);
       }
       months[m].transactions.push({
         id: ce.id,
         date: d,
-        type: ce.type,
-        amount: ce.amount || 0,
-        description: ce.description,
+        type: ce.tipo,
+        amount: Number(ce.valor || 0),
+        description: ce.descricao,
         source: 'Manual',
       });
     });
@@ -348,18 +363,24 @@ export default function FluxoDeCaixa() {
     e.preventDefault();
     if (!formData.description.trim()) return toast.error('Descrição é obrigatória.');
     if (formData.amount <= 0) return toast.error('Valor deve ser maior que zero.');
+    if (!formData.cliente_id) return toast.error('Cliente é obrigatório.');
+    if (!formData.categoria_id) return toast.error('Categoria é obrigatória.');
+    if (!formData.tipo_servico_id) return toast.error('Tipo de serviço é obrigatório.');
+
     try {
-      const { error } = await supabase.from('cash_flow_entries').insert([{
-        entry_date: formData.entry_date,
-        type: formData.type,
-        amount: formData.amount,
-        description: formData.description,
-        category: formData.category || null,
-        project_name: formData.project_name || null,
-        notes: formData.notes || null,
+      const { error } = await supabase.from('lancamentos_financeiros').insert([{
+        data: formData.entry_date,
+        tipo: formData.type,
+        valor: formData.amount,
+        descricao: formData.description,
+        cliente_id: formData.cliente_id,
+        categoria_id: formData.categoria_id,
+        tipo_servico_id: formData.tipo_servico_id,
+        projeto_financeiro_id: formData.projeto_financeiro_id || null,
+        origem: 'manual'
       }]);
       if (error) throw error;
-      toast.success('Entrada adicionada com sucesso.');
+      toast.success('Lançamento adicionado com sucesso.');
       setIsModalOpen(false);
       setFormData(defaultForm);
       fetchData();
@@ -705,27 +726,69 @@ export default function FluxoDeCaixa() {
             />
           </div>
 
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente *</label>
+            <select
+              required
+              className="input-lumos w-full"
+              value={formData.cliente_id}
+              onChange={e => setFormData({ ...formData, cliente_id: e.target.value })}
+            >
+              <option value="">Selecione um cliente</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
-              <input
-                type="text"
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria *</label>
+              <select
+                required
                 className="input-lumos w-full"
-                placeholder="Ex: Serviços"
-                value={formData.category}
-                onChange={e => setFormData({ ...formData, category: e.target.value })}
-              />
+                value={formData.categoria_id}
+                onChange={e => setFormData({ ...formData, categoria_id: e.target.value, tipo_servico_id: '' })}
+              >
+                <option value="">Selecione</option>
+                {categorias.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto</label>
-              <input
-                type="text"
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Tipo de Serviço *</label>
+              <select
+                required
                 className="input-lumos w-full"
-                placeholder="Nome do projeto"
-                value={formData.project_name}
-                onChange={e => setFormData({ ...formData, project_name: e.target.value })}
-              />
+                value={formData.tipo_servico_id}
+                onChange={e => setFormData({ ...formData, tipo_servico_id: e.target.value })}
+                disabled={!formData.categoria_id}
+              >
+                <option value="">Selecione</option>
+                {tiposServico
+                  .filter(s => s.categoria_id === formData.categoria_id)
+                  .map(s => (
+                    <option key={s.id} value={s.id}>{s.nome}</option>
+                  ))}
+              </select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto (Opcional)</label>
+            <select
+              className="input-lumos w-full"
+              value={formData.projeto_financeiro_id}
+              onChange={e => setFormData({ ...formData, projeto_financeiro_id: e.target.value })}
+            >
+              <option value="">Nenhum projeto</option>
+              {projectsList.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.budget?.project_name || p.origem || 'Projeto Sem Nome'}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-2">

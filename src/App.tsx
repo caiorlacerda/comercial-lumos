@@ -28,6 +28,8 @@ import CustosProjeto from '@/pages/CustosProjeto';
 import CustosProjetoDetalhe from '@/pages/CustosProjetoDetalhe';
 import FluxoDeCaixa from '@/pages/FluxoDeCaixa';
 import CustosFixos from '@/pages/CustosFixos';
+import FinanceiroConfig from '@/pages/FinanceiroConfig';
+import FinanceiroRelatorios from '@/pages/FinanceiroRelatorios';
 import OrdensDoDia from '@/pages/OrdensDoDia';
 import OrdemDoDiaEditor from '@/pages/OrdemDoDiaEditor';
 import Fornecedores from '@/pages/Fornecedores';
@@ -315,6 +317,26 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="financeiro_admin">
                   <CustosFixos />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/financeiro/configuracao"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <FinanceiroConfig />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/financeiro/relatorios"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <FinanceiroRelatorios />
                 </PermissionGuard>
               </AuthWrapper>
             }

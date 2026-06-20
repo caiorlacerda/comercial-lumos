@@ -31,9 +31,7 @@ export default function FinanceiroDashboard() {
     despesasMes: 0,
     recebidoMes: 0
   });
-  const [allPayables, setAllPayables] = useState<any[]>([]);
-  const [allReceivables, setAllReceivables] = useState<any[]>([]);
-  const [allCashEntries, setAllCashEntries] = useState<any[]>([]);
+  const [allResumo, setAllResumo] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,74 +44,35 @@ export default function FinanceiroDashboard() {
       const now = new Date();
       const nextWeek = new Date();
       nextWeek.setDate(now.getDate() + 7);
-
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
       const nextWeekStr = nextWeek.toISOString().split('T')[0];
 
-      const [payablesRes, receivablesRes, reimbursementsRes, cashEntriesRes] = await Promise.all([
-        supabase.from('payables').select('amount, due_date, paid_at, category'),
-        supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at'),
-        supabase.from('reimbursements').select('amount, status, paid_at'),
-        supabase.from('cash_flow_entries').select('entry_date, type, amount')
+      const currentMonthKey = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+      const [resumoRes, payablesRes, receivablesRes] = await Promise.all([
+        supabase.from('vw_resumo_mensal').select('*').order('mes', { ascending: true }),
+        supabase.from('payables').select('amount, due_date, paid_at'),
+        supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at')
       ]);
 
-      const payables = payablesRes.data || [];
-      const receivables = receivablesRes.data || [];
-      const reimbursements = reimbursementsRes.data || [];
-      const cashEntries = cashEntriesRes.data || [];
+      const resumo = resumoRes.data || [];
+      setAllResumo(resumo);
 
-      setAllPayables(payables);
-      setAllReceivables(receivables);
-      setAllCashEntries(cashEntries);
+      // Saldo Geral: soma do lucro histórico
+      const saldoGeral = resumo.reduce((acc, m) => acc + Number(m.lucro || 0), 0);
 
-      const todayStr = now.toISOString().split('T')[0];
+      // Dados do mês atual
+      const currentResumo = resumo.find(r => r.mes === currentMonthKey) || { entradas: 0, saidas: 0, lucro: 0 };
+      const faturamentoMes = Number(currentResumo.entradas || 0);
+      const despesasMes = Number(currentResumo.saidas || 0);
+      const recebidoMes = Number(currentResumo.entradas || 0);
 
-      // Saldo: entradas reais (passadas) - saídas reais (passadas) do fluxo de caixa + recebíveis
-      const ceEntradas = cashEntries
-        .filter(e => e.type === 'entrada' && e.entry_date <= todayStr)
-        .reduce((acc, e) => acc + (e.amount || 0), 0);
-      const ceSaidas = cashEntries
-        .filter(e => e.type === 'saida' && e.entry_date <= todayStr)
-        .reduce((acc, e) => acc + (e.amount || 0), 0);
-      const totalPagoReembolsos = reimbursements.filter(r => r.status === 'pago').reduce((acc, r) => acc + r.amount, 0);
-      const totalPagoDespesas = payables.filter(p => p.paid_at).reduce((acc, p) => acc + p.amount, 0);
-      const saldoGeral = ceEntradas - ceSaidas - totalPagoDespesas - totalPagoReembolsos;
-
-      // Faturamento do mês: entradas do fluxo de caixa + recebíveis com vencimento no mês
-      const ceFaturamentoMes = cashEntries
-        .filter(e => e.type === 'entrada' && e.entry_date >= firstDayOfMonth && e.entry_date <= lastDayOfMonth)
-        .reduce((acc, e) => acc + (e.amount || 0), 0);
-      const recFaturamentoMes = receivables
-        .filter(r => r.due_date && r.due_date >= firstDayOfMonth && r.due_date <= lastDayOfMonth)
-        .reduce((acc, r) => acc + r.total_amount, 0);
-      const faturamentoMes = ceFaturamentoMes + recFaturamentoMes;
-
-      const pagarSemana = payables
+      const pagarSemana = (payablesRes.data || [])
         .filter(p => !p.paid_at && p.due_date && p.due_date <= nextWeekStr)
-        .reduce((acc, p) => acc + p.amount, 0);
+        .reduce((acc, p) => acc + Number(p.amount || 0), 0);
 
-      const receberSemana = receivables
+      const receberSemana = (receivablesRes.data || [])
         .filter(r => r.status !== 'recebido' && r.due_date && r.due_date <= nextWeekStr)
-        .reduce((acc, r) => acc + (r.total_amount - (r.received_amount || 0)), 0);
-
-      // Recebido no mês: entradas do fluxo de caixa + recebíveis recebidos
-      const ceRecebidoMes = cashEntries
-        .filter(e => e.type === 'entrada' && e.entry_date >= firstDayOfMonth && e.entry_date <= lastDayOfMonth)
-        .reduce((acc, e) => acc + (e.amount || 0), 0);
-      const recRecebidoMes = receivables
-        .filter(r => r.received_at && r.received_at.split('T')[0] >= firstDayOfMonth)
-        .reduce((acc, r) => acc + (r.received_amount || 0), 0);
-      const recebidoMes = ceRecebidoMes + recRecebidoMes;
-
-      // Despesas do mês: saídas do fluxo de caixa + despesas pagas
-      const ceDespesasMes = cashEntries
-        .filter(e => e.type === 'saida' && e.entry_date >= firstDayOfMonth && e.entry_date <= lastDayOfMonth)
-        .reduce((acc, e) => acc + (e.amount || 0), 0);
-      const payDespesasMes = payables
-        .filter(p => p.paid_at && p.paid_at.split('T')[0] >= firstDayOfMonth)
-        .reduce((acc, p) => acc + p.amount, 0);
-      const despesasMes = ceDespesasMes + payDespesasMes;
+        .reduce((acc, r) => acc + (Number(r.total_amount || 0) - Number(r.received_amount || 0)), 0);
 
       setStats({ saldoGeral, faturamentoMes, pagarSemana, receberSemana, despesasMes, recebidoMes });
     } catch (error) {
@@ -130,33 +89,18 @@ export default function FinanceiroDashboard() {
     const months: { mes: string; entradas: number; saidas: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = d.toISOString().slice(0, 7); // YYYY-MM
+      const key = d.toISOString().slice(0, 10); // 'YYYY-MM-01'
       const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
 
-      // Entradas: fluxo de caixa + recebíveis
-      const ceEntradas = allCashEntries
-        .filter(e => e.type === 'entrada' && e.entry_date?.startsWith(key))
-        .reduce((s, e) => s + (e.amount || 0), 0);
-      const recEntradas = allReceivables
-        .filter(r => r.received_at && r.received_at.startsWith(key))
-        .reduce((s, r) => s + (r.received_amount || 0), 0);
-
-      // Saídas: fluxo de caixa + despesas pagas
-      const ceSaidas = allCashEntries
-        .filter(e => e.type === 'saida' && e.entry_date?.startsWith(key))
-        .reduce((s, e) => s + (e.amount || 0), 0);
-      const paySaidas = allPayables
-        .filter(p => p.paid_at && p.paid_at.startsWith(key))
-        .reduce((s, p) => s + (p.amount || 0), 0);
-
+      const match = allResumo.find(r => r.mes === key) || { entradas: 0, saidas: 0 };
       months.push({
         mes: label,
-        entradas: ceEntradas + recEntradas,
-        saidas: ceSaidas + paySaidas,
+        entradas: Number(match.entradas || 0),
+        saidas: Number(match.saidas || 0),
       });
     }
     return months;
-  }, [allPayables, allReceivables, allCashEntries]);
+  }, [allResumo]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;

@@ -58,6 +58,7 @@ import { pdf } from '@react-pdf/renderer';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import GoogleDriveAuthModal from '@/components/editor/GoogleDriveAuthModal';
 import { formatBudgetCode } from '@/utils/formatters';
+import { handleBudgetApproval } from '@/utils/financeiro';
 import { getPdfFileName } from '@/utils/pdfFileName';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
@@ -530,6 +531,9 @@ export default function BudgetEditorPage() {
           created_by: user?.id
         }]);
       }
+
+      // Sync projects_financeiro (Fase 1)
+      await handleBudgetApproval(budgetId, totalAmount);
     } catch (err) {
       console.error('Error syncing receivable:', err);
     }

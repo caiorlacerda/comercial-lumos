@@ -8,6 +8,7 @@ import {
   FileText,
   FileStack,
   BarChart3,
+  PieChart,
   ArrowUpCircle,
   ArrowDownCircle,
   Receipt,
@@ -75,6 +76,8 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         { icon: ArrowUpCircle, label: 'Contas a Pagar', path: '/financeiro/contas-pagar', permission: 'financeiro_admin' },
         { icon: ArrowDownCircle, label: 'Contas a Receber', path: '/financeiro/contas-receber', permission: 'financeiro_admin' },
         { icon: Receipt, label: 'Reembolso', path: '/financeiro/reembolso', permission: 'reembolso' },
+        { icon: PieChart, label: 'Relatórios Fin.', path: '/financeiro/relatorios', permission: 'financeiro_admin' },
+        { icon: Settings, label: 'Configuração Fin.', path: '/financeiro/configuracao', permission: 'financeiro_admin' },
       ].filter(item => {
         if (item.permission === 'financeiro_admin') return isAdmin;
         if (item.permission === 'financeiro_dashboard') return isAdmin;

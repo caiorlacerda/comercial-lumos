@@ -31,6 +31,7 @@ import Modal from '@/components/common/Modal';
 import Pagination from '@/components/common/Pagination';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
+import { handleBudgetApproval } from '@/utils/financeiro';
 import { formatBudgetCode } from '@/utils/formatters';
 import { getPdfFileName } from '@/utils/pdfFileName';
 import { useToast } from '@/context/ToastContext';
@@ -271,6 +272,9 @@ export default function Budgets() {
           status: 'aguardando',
         }]);
       }
+
+      // Sincroniza projeto financeiro (Fase 1)
+      await handleBudgetApproval(budget.id, totalAmount);
     } catch (err) {
       console.error('Erro ao sincronizar orçamento aprovado:', err);
     }

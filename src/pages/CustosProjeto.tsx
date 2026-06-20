@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check, Pencil, Plus, X } from 'lucide-react';
+import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check, Pencil, Plus, X, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import Modal from '@/components/common/Modal';
@@ -26,7 +26,7 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
 export default function CustosProjeto() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const [projects, setProjects] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,74 +59,47 @@ export default function CustosProjeto() {
     try {
       setLoading(true);
 
-      // 1. Busca todos os projetos (tabela projects)
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
+      // Query from vw_rentabilidade to get calculations and dimensions
+      const { data: rentData, error: rentError } = await supabase
+        .from('vw_rentabilidade')
         .select(`
-          id,
-          name,
-          code,
-          budget_id,
-          client_id,
-          production_value,
+          *,
           client:clients(id, name),
-          costs:project_costs(amount)
+          budget:budgets(id, project_name, code)
         `)
         .order('created_at', { ascending: false });
 
-      if (projectsError) throw projectsError;
+      if (rentError) throw rentError;
 
-      // 2. Para projetos com budget_id, busca os itens da versão ativa
-      const budgetIds = (projectsData || [])
-        .map(p => p.budget_id)
-        .filter(Boolean);
-
-      let budgetVersionMap: Record<string, string> = {};
-      let allItems: any[] = [];
-
-      if (budgetIds.length > 0) {
-        const { data: budgetsData } = await supabase
-          .from('budgets')
-          .select('id, active_version_id, project_name')
-          .in('id', budgetIds);
-
-        (budgetsData || []).forEach(b => {
-          budgetVersionMap[b.id] = b.active_version_id;
-        });
-
-        const versionIds = Object.values(budgetVersionMap).filter(Boolean);
-        if (versionIds.length > 0) {
-          const { data: itemsData } = await supabase
-            .from('budget_items')
-            .select('unit_cost, quantity, version_id')
-            .in('version_id', versionIds);
-          allItems = itemsData || [];
-        }
-      }
-
-      // 3. Processa os dados — production_value manual sobrescreve cálculo do orçamento
-      const processed = (projectsData || []).map(p => {
-        const versionId = p.budget_id ? budgetVersionMap[p.budget_id] : null;
-        const projectItems = versionId
-          ? allItems.filter(item => item.version_id === versionId)
-          : [];
-        const budgetProductionValue = projectItems.reduce(
-          (acc: number, item: any) => acc + item.unit_cost * item.quantity,
-          0
-        );
-        const totalProductionValue =
-          p.production_value && Number(p.production_value) > 0
-            ? Number(p.production_value)
-            : budgetProductionValue;
-        const totalCosts = p.costs?.reduce((acc: number, c: any) => acc + c.amount, 0) || 0;
-        const margin = totalProductionValue - totalCosts;
-        const marginPercent = totalProductionValue > 0 ? (margin / totalProductionValue) * 100 : 0;
-        return { ...p, totalProductionValue, totalCosts, margin, marginPercent };
+      const processed = (rentData || []).map(p => {
+        const totalProductionValue = Number(p.valor_vendido || 0);
+        const totalCosts = Number(p.custos_total || 0);
+        const margin = Number(p.lucro_liquido || 0);
+        const marginPercent = Number(p.margem || 0) * 100;
+        
+        return {
+          id: p.id,
+          project_id: p.project_id || p.id,
+          name: p.budget?.project_name || p.origem || 'Projeto Sem Nome',
+          code: p.budget?.code || '',
+          budget_id: p.proposta_id,
+          client_id: p.cliente_id,
+          client: p.client,
+          totalProductionValue,
+          totalCosts,
+          margin,
+          marginPercent,
+          status_titulo: p.status_titulo,
+          icp: p.icp,
+          vencido: p.vencido,
+          pendente_preenchimento: p.pendente_preenchimento
+        };
       });
 
       setProjects(processed);
     } catch (error) {
       console.error('Erro ao buscar projetos:', error);
+      toast.error('Erro ao carregar dados dos projetos.');
     } finally {
       setLoading(false);
     }
@@ -134,17 +107,19 @@ export default function CustosProjeto() {
 
   const openEditModal = (project: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditingProjectId(project.id);
+    if (!isAdmin) return;
+    setEditingProjectId(project.project_id);
     setEditProjectData({
       name: project.name || '',
       code: project.code || '',
       client_id: project.client_id || '',
-      production_value: project.production_value ? Number(project.production_value) : 0,
+      production_value: project.totalProductionValue ? Number(project.totalProductionValue) : 0,
     });
     setIsModalOpen(true);
   };
 
   const openCreateModal = () => {
+    if (!isAdmin) return;
     setEditingProjectId(null);
     setEditProjectData({ name: '', code: '', client_id: '', production_value: 0 });
     setIsModalOpen(true);
@@ -152,13 +127,14 @@ export default function CustosProjeto() {
 
   const saveProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (!editProjectData.name.trim()) {
       toast.error('Informe o nome do projeto');
       return;
     }
     try {
       if (editingProjectId) {
-        // Edição
+        // Update both projects and projetos_financeiro
         const payload: any = {
           name: editProjectData.name.trim(),
           code: editProjectData.code.trim() || null,
@@ -166,11 +142,21 @@ export default function CustosProjeto() {
           production_value: editProjectData.production_value > 0 ? editProjectData.production_value : null,
           updated_at: new Date().toISOString(),
         };
-        const { error } = await supabase.from('projects').update(payload).eq('id', editingProjectId);
-        if (error) throw error;
+        const { error: pErr } = await supabase.from('projects').update(payload).eq('id', editingProjectId);
+        if (pErr) throw pErr;
+
+        // Also update valor_vendido in projetos_financeiro
+        await supabase
+          .from('projetos_financeiro')
+          .update({
+            valor_vendido: editProjectData.production_value,
+            cliente_id: editProjectData.client_id || null
+          })
+          .eq('project_id', editingProjectId);
+
         toast.success('Projeto atualizado!');
       } else {
-        // Criação
+        // Create in projects
         const payload: any = {
           name: editProjectData.name.trim(),
           created_by: profile?.id || null,
@@ -178,8 +164,23 @@ export default function CustosProjeto() {
         if (editProjectData.code.trim()) payload.code = editProjectData.code.trim();
         if (editProjectData.client_id) payload.client_id = editProjectData.client_id;
         if (editProjectData.production_value > 0) payload.production_value = editProjectData.production_value;
-        const { error } = await supabase.from('projects').insert([payload]);
-        if (error) throw error;
+        const { data: newProj, error: pErr } = await supabase.from('projects').insert([payload]).select().single();
+        if (pErr) throw pErr;
+
+        // Create projects_financeiro
+        const { data: config } = await supabase.from('config_financeiro').select('nf_percent').eq('id', 1).single();
+        await supabase.from('projetos_financeiro').insert([{
+          proposta_id: null,
+          project_id: newProj.id,
+          cliente_id: editProjectData.client_id,
+          valor_vendido: editProjectData.production_value,
+          nf_percent: config?.nf_percent || 0.18,
+          custos_total: 0,
+          status_titulo: 'emitir_nf',
+          origem: 'manual',
+          pendente_preenchimento: false
+        }]);
+
         toast.success('Projeto criado!');
       }
       setIsModalOpen(false);
@@ -190,7 +191,6 @@ export default function CustosProjeto() {
     }
   };
 
-  // Filtros: busca em nome, cliente ou código + filtro por cliente
   const filtered = projects.filter(p => {
     const term = searchTerm.toLowerCase();
     const matchSearch =
@@ -207,14 +207,16 @@ export default function CustosProjeto() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Custos de Projeto</h1>
-          <p className="text-lumos-text-secondary text-sm">Lucratividade real de cada projeto.</p>
+          <p className="text-lumos-text-secondary text-sm">Acompanhamento de custos e rentabilidade dos projetos Lumos.</p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="btn-primary h-10 px-6 flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> Novo Projeto
-        </button>
+        {isAdmin && (
+          <button
+            onClick={openCreateModal}
+            className="btn-primary h-10 px-6 flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> Novo Projeto
+          </button>
+        )}
       </div>
 
       <div className="card p-4 space-y-3">
@@ -279,91 +281,120 @@ export default function CustosProjeto() {
           filtered.map(p => (
             <div
               key={p.id}
-              onClick={() => navigate(`/financeiro/custos-projeto/${p.id}`)}
+              onClick={() => navigate(`/financeiro/custos-projeto/${p.project_id}`)}
               className={clsx(
                 'card p-6 flex flex-col md:flex-row items-center gap-6 hover:border-lumos-yellow/30 cursor-pointer group relative transition-all',
                 selectedIds.has(p.id) && 'border-lumos-yellow/50 bg-lumos-yellow/[0.02]'
               )}
             >
-              <div
-                onClick={e => toggleSelect(p.id, e)}
-                className={clsx(
-                  'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0',
-                  selectedIds.has(p.id)
-                    ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
-                    : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
-                  selectedIds.size > 0 && 'opacity-100'
-                )}
-              >
-                {selectedIds.has(p.id) && <Check className="w-3.5 h-3.5" />}
-              </div>
+              {isAdmin && (
+                <div
+                  onClick={e => toggleSelect(p.id, e)}
+                  className={clsx(
+                    'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0',
+                    selectedIds.has(p.id)
+                      ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
+                      : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
+                    selectedIds.size > 0 && 'opacity-100'
+                  )}
+                >
+                  {selectedIds.has(p.id) && <Check className="w-3.5 h-3.5" />}
+                </div>
+              )}
 
               <div className="flex-1 w-full">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tighter">
-                    {p.code || 'Projeto'}
-                  </span>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  {p.code && (
+                    <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tighter">
+                      {p.code}
+                    </span>
+                  )}
                   <h3 className="text-lg font-bold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">
                     {p.name}
                   </h3>
+                  {p.pendente_preenchimento && (
+                    <span className="flex items-center gap-1 text-[9px] font-black bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded uppercase tracking-wide">
+                      <AlertTriangle className="w-3 h-3" /> Pendente Info
+                    </span>
+                  )}
+                  {p.vencido && (
+                    <span className="text-[9px] font-black bg-red-500 text-white px-2 py-0.5 rounded uppercase tracking-wide">
+                      Atrasado
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-lumos-text-secondary flex items-center gap-1">
                   <Target className="w-3 h-3" /> {p.client?.name || '—'}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
-                <div>
-                  <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custo Base</p>
-                  <p className="text-sm font-bold text-lumos-text-primary">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalProductionValue)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Reais</p>
-                  <p className="text-sm font-bold text-lumos-text-primary">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Margem Prod.</p>
-                  <p className={`text-sm font-black ${p.margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.margin)}
-                  </p>
-                </div>
-                <div className="flex items-center justify-end">
-                  {p.totalProductionValue > 0 ? (
-                    <div
-                      className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black ${
-                        p.marginPercent > 30
-                          ? 'bg-green-500/10 text-green-500'
-                          : 'bg-yellow-500/10 text-yellow-500'
-                      }`}
+              {/* Conditional columns display for RLS visual implementation */}
+              {isAdmin ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
+                  <div>
+                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Valor Vendido</p>
+                    <p className="text-sm font-bold text-lumos-text-primary">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalProductionValue)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Totais</p>
+                    <p className="text-sm font-bold text-lumos-text-primary">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Lucro Líquido</p>
+                    <p className={`text-sm font-black ${p.margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.margin)}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-end">
+                    {p.totalProductionValue > 0 ? (
+                      <div
+                        className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black ${
+                          p.marginPercent > 30
+                            ? 'bg-green-500/10 text-green-500'
+                            : 'bg-yellow-500/10 text-yellow-500'
+                        }`}
+                      >
+                        {p.marginPercent.toFixed(1)}%
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black bg-lumos-text-secondary/10 text-lumos-text-secondary">
+                        S/ Orçamento
+                      </div>
+                    )}
+                    <button
+                      onClick={e => openEditModal(p, e)}
+                      className="ml-4 p-2 rounded-full hover:bg-lumos-yellow/10 text-lumos-text-secondary hover:text-lumos-yellow transition-all"
+                      title="Editar projeto"
                     >
-                      {p.marginPercent.toFixed(1)}%
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black bg-lumos-text-secondary/10 text-lumos-text-secondary">
-                      S/ Orçamento
-                    </div>
-                  )}
-                  <button
-                    onClick={e => openEditModal(p, e)}
-                    className="ml-4 p-2 rounded-full hover:bg-lumos-yellow/10 text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-                    title="Editar projeto"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <ChevronRight className="w-5 h-5 text-lumos-text-secondary ml-1 group-hover:translate-x-1 transition-transform" />
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <ChevronRight className="w-5 h-5 text-lumos-text-secondary ml-1 group-hover:translate-x-1 transition-transform" />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
+                  <div className="flex items-center justify-between gap-12 w-full">
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Registrados</p>
+                      <p className="text-sm font-bold text-lumos-text-primary">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-lumos-text-secondary group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}
       </div>
 
       {/* Batch Action Bar */}
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && isAdmin && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-8 duration-500">
           <div className="bg-lumos-surface border border-lumos-yellow/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-full px-6 py-4 flex items-center gap-6 backdrop-blur-xl">
             <div className="flex items-center gap-3">
@@ -384,69 +415,68 @@ export default function CustosProjeto() {
         </div>
       )}
 
-      {/* Modal de criação/edição do projeto */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingProjectId ? 'Editar Projeto' : 'Novo Projeto'}
-      >
-        <form onSubmit={saveProject} className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+      {/* Modal de criação/edição do projeto (apenas admin) */}
+      {isAdmin && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title={editingProjectId ? 'Editar Projeto' : 'Novo Projeto'}
+        >
+          <form onSubmit={saveProject} className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Código</label>
+                <input
+                  type="text"
+                  className="input-lumos w-full"
+                  placeholder="192"
+                  value={editProjectData.code}
+                  onChange={e => setEditProjectData({ ...editProjectData, code: e.target.value })}
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Nome do projeto *</label>
+                <input
+                  required
+                  type="text"
+                  className="input-lumos w-full"
+                  value={editProjectData.name}
+                  onChange={e => setEditProjectData({ ...editProjectData, name: e.target.value })}
+                />
+              </div>
+            </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Código</label>
-              <input
-                type="text"
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
+              <select
                 className="input-lumos w-full"
-                placeholder="192"
-                value={editProjectData.code}
-                onChange={e => setEditProjectData({ ...editProjectData, code: e.target.value })}
+                value={editProjectData.client_id}
+                onChange={e => setEditProjectData({ ...editProjectData, client_id: e.target.value })}
+              >
+                <option value="">Sem cliente</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">
+                Valor do Projeto (Faturamento)
+              </label>
+              <CurrencyInput
+                className="input-lumos w-full font-bold"
+                value={editProjectData.production_value}
+                onChange={(val: number) => setEditProjectData({ ...editProjectData, production_value: val })}
               />
             </div>
-            <div className="col-span-2 space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Nome do projeto *</label>
-              <input
-                required
-                type="text"
-                className="input-lumos w-full"
-                value={editProjectData.name}
-                onChange={e => setEditProjectData({ ...editProjectData, name: e.target.value })}
-              />
+            <div className="pt-4 flex gap-3">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button type="submit" className="btn-primary flex-1 h-10">
+                {editingProjectId ? 'Salvar Alterações' : 'Criar Projeto'}
+              </button>
             </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
-            <select
-              className="input-lumos w-full"
-              value={editProjectData.client_id}
-              onChange={e => setEditProjectData({ ...editProjectData, client_id: e.target.value })}
-            >
-              <option value="">Sem cliente</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">
-              Valor Total para Produção
-            </label>
-            <CurrencyInput
-              className="input-lumos w-full font-bold"
-              value={editProjectData.production_value}
-              onChange={(val: number) => setEditProjectData({ ...editProjectData, production_value: val })}
-            />
-            <p className="text-[10px] text-lumos-text-secondary italic">
-              Deixe em R$ 0,00 para usar o cálculo automático do orçamento (se houver vinculado).
-            </p>
-          </div>
-          <div className="pt-4 flex gap-3">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-            <button type="submit" className="btn-primary flex-1 h-10">
-              {editingProjectId ? 'Salvar Alterações' : 'Criar Projeto'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

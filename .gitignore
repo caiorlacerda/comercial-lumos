@@ -4,4 +4,6 @@ dist
 .env
 .env.local
 .env.production
-client_secret_*.json.claude/
+client_secret_*.json
+.claude/
+.gemini/

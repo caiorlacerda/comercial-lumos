@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
+import { handleBudgetApproval } from '@/utils/financeiro';
 import type { BudgetVersion, BudgetItem } from '@/utils/financials';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
@@ -151,6 +152,14 @@ export default function AprovacaoPublica() {
         p_approver_notes: approverNotes.trim() || null,
       });
       if (error) throw error;
+      
+      if (approved) {
+        const fin = calcFinancials(items, version);
+        if (version.budget_id) {
+          await handleBudgetApproval(version.budget_id, fin.valorFinal);
+        }
+      }
+
       setStatus(approved ? 'approved' : 'rejected');
     } catch {
       setDecision(null);

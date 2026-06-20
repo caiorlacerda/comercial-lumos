@@ -53,6 +53,23 @@ export default function CustosProjetoDetalhe() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
+  // Módulo Financeiro (Fase 1)
+  const [projectFinanceiro, setProjectFinanceiro] = useState<any>(null);
+  const [financeCategorias, setFinanceCategorias] = useState<any[]>([]);
+  const [financeTiposServico, setFinanceTiposServico] = useState<any[]>([]);
+  const [isEditingFinance, setIsEditingFinance] = useState(false);
+  const [financeForm, setFinanceForm] = useState({
+    cliente_id: '',
+    categoria_id: '',
+    tipo_servico_id: '',
+    icp: '',
+    data_recebimento_negociada: '',
+    status_titulo: 'emitir_nf',
+    data_recebido: '',
+    nf_percent: 0.18,
+    valor_vendido: 0
+  });
+
   // Categorias dinâmicas (defaults + as já cadastradas no banco)
   const [categories, setCategories] = useState<string[]>(['equipe', 'equipamento', 'locacao']);
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -199,8 +216,8 @@ export default function CustosProjetoDetalhe() {
         }
       }
 
-      // 3. Busca custos, usuários, clientes e fornecedores em paralelo
-      const [costsRes, usersRes, clientsRes, fornecedoresRes] = await Promise.all([
+      // 3. Busca custos, usuários, clientes, fornecedores, categorias e tipos de serviço em paralelo
+      const [costsRes, usersRes, clientsRes, fornecedoresRes, finCatsRes, finServicesRes] = await Promise.all([
         supabase
           .from('project_costs')
           .select('*, responsible:app_users!responsible_id(full_name), fornecedor:fornecedores(nome)')
@@ -218,14 +235,104 @@ export default function CustosProjetoDetalhe() {
         supabase
           .from('fornecedores')
           .select('id, nome')
+          .order('nome'),
+        supabase
+          .from('categorias')
+          .select('*')
+          .eq('ativo', true)
+          .order('ordem'),
+        supabase
+          .from('tipos_servico')
+          .select('*')
+          .eq('ativo', true)
           .order('nome')
       ]);
 
-      setProject({ ...projectData, budget_items: budgetItems, receivable_amount: receivableAmount, budget_id: budgetId });
       setCosts(costsRes.data || []);
       setAppUsers(usersRes.data || []);
       setClients(clientsRes.data || []);
       setFornecedores(fornecedoresRes.data || []);
+      setFinanceCategorias(finCatsRes.data || []);
+      setFinanceTiposServico(finServicesRes.data || []);
+
+      // 4. Busca ou cria projetos_financeiro
+      let finData = null;
+      const { data: existingFin } = await supabase
+        .from('projetos_financeiro')
+        .select('*')
+        .eq('project_id', id)
+        .maybeSingle();
+
+      if (existingFin) {
+        finData = existingFin;
+      } else {
+        // Busca config default
+        const { data: config } = await supabase
+          .from('config_financeiro')
+          .select('nf_percent')
+          .eq('id', 1)
+          .single();
+
+        let client_id = projectData.client_id;
+        if (!client_id && clientsRes.data && clientsRes.data.length > 0) {
+          client_id = clientsRes.data[0].id;
+        }
+
+        if (client_id) {
+          const { data: newFin, error: createFinErr } = await supabase
+            .from('projetos_financeiro')
+            .insert({
+              project_id: id,
+              proposta_id: projectData.budget_id || null,
+              cliente_id: client_id,
+              valor_vendido: projectData.production_value || receivableAmount || 0,
+              nf_percent: config?.nf_percent ?? 0.18,
+              custos_total: costsRes.data?.reduce((sum, c) => sum + Number(c.amount || 0), 0) || 0,
+              status_titulo: 'emitir_nf',
+              origem: 'manual',
+              pendente_preenchimento: true
+            })
+            .select()
+            .single();
+          
+          if (createFinErr) {
+            console.error('Erro ao criar projetos_financeiro:', createFinErr);
+          } else {
+            finData = newFin;
+          }
+        }
+      }
+
+      // 5. Busca dados calculados da view rentabilidade
+      if (finData) {
+        const { data: rentData } = await supabase
+          .from('vw_rentabilidade')
+          .select(`
+            *,
+            categoria:categorias(nome),
+            tipo_servico:tipos_servico(nome)
+          `)
+          .eq('project_id', id)
+          .maybeSingle();
+        
+        if (rentData) {
+          setProjectFinanceiro(rentData);
+          setFinanceForm({
+            cliente_id: rentData.cliente_id || '',
+            categoria_id: rentData.categoria_id || '',
+            tipo_servico_id: rentData.tipo_servico_id || '',
+            icp: rentData.icp || '',
+            data_recebimento_negociada: rentData.data_recebimento_negociada || '',
+            status_titulo: rentData.status_titulo || 'emitir_nf',
+            data_recebido: rentData.data_recebido || '',
+            nf_percent: rentData.nf_percent || 0.18,
+            valor_vendido: rentData.valor_vendido || 0
+          });
+        }
+      }
+
+      setProject({ ...projectData, budget_items: budgetItems, receivable_amount: receivableAmount, budget_id: budgetId });
+
     } catch (error) {
       console.error('Erro ao carregar projeto:', error);
       navigate('/financeiro/custos-projeto');
@@ -418,6 +525,56 @@ export default function CustosProjetoDetalhe() {
     }
   };
 
+  const handleSaveFinance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const isComplete = Boolean(
+        financeForm.cliente_id &&
+        financeForm.categoria_id &&
+        financeForm.tipo_servico_id &&
+        financeForm.icp
+      );
+
+      const payload = {
+        cliente_id: financeForm.cliente_id,
+        categoria_id: financeForm.categoria_id || null,
+        tipo_servico_id: financeForm.tipo_servico_id || null,
+        icp: financeForm.icp || null,
+        data_recebimento_negociada: financeForm.data_recebimento_negociada || null,
+        status_titulo: financeForm.status_titulo,
+        data_recebido: financeForm.status_titulo === 'pagamento_recebido' 
+          ? (financeForm.data_recebido || new Date().toISOString().split('T')[0]) 
+          : null,
+        valor_vendido: financeForm.valor_vendido,
+        nf_percent: financeForm.nf_percent,
+        pendente_preenchimento: !isComplete
+      };
+
+      const { error } = await supabase
+        .from('projetos_financeiro')
+        .update(payload)
+        .eq('project_id', id);
+
+      if (error) throw error;
+
+      // Sincroniza também no projeto principal (se alterou cliente ou valor_vendido)
+      await supabase
+        .from('projects')
+        .update({
+          client_id: financeForm.cliente_id || null,
+          production_value: financeForm.valor_vendido || null
+        })
+        .eq('id', id);
+
+      toast.success('Dados financeiros atualizados!');
+      setIsEditingFinance(false);
+      fetchProjectData();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+
   if (loading)
     return (
       <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
@@ -498,7 +655,7 @@ export default function CustosProjetoDetalhe() {
         </div>
       </div>
 
-      {totalProductionValue > 0 && consumptionPercent > 90 && (
+      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercent > 90 && (
         <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-lumos flex items-center gap-3 animate-pulse">
           <AlertTriangle className="w-5 h-5 text-red-500" />
           <p className="text-sm font-bold text-red-500 uppercase">
@@ -506,7 +663,7 @@ export default function CustosProjetoDetalhe() {
           </p>
         </div>
       )}
-      {totalProductionValue > 0 && consumptionPercent > 70 && consumptionPercent <= 90 && (
+      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercent > 70 && consumptionPercent <= 90 && (
         <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lumos flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-yellow-500" />
           <p className="text-sm font-bold text-yellow-500 uppercase">
@@ -515,8 +672,8 @@ export default function CustosProjetoDetalhe() {
         </div>
       )}
 
-      <div className={`grid grid-cols-1 gap-4 ${totalProductionValue > 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-        {totalProductionValue > 0 && (
+      <div className={`grid grid-cols-1 gap-4 ${profile?.role === 'admin' && totalProductionValue > 0 ? 'md:grid-cols-3' : 'md:grid-cols-1'}`}>
+        {profile?.role === 'admin' && totalProductionValue > 0 && (
           <div className="card p-6">
             <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
               Valor Disponível para Produção
@@ -527,24 +684,28 @@ export default function CustosProjetoDetalhe() {
           </div>
         )}
         <div className="card p-6">
-          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">Total de Custos</p>
+          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
+            {profile?.role === 'admin' ? 'Total de Custos' : 'Custos Registrados'}
+          </p>
           <p className="text-2xl font-black text-lumos-text-primary tracking-tight">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
           </p>
         </div>
-        <div className="card p-6">
-          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
-            {totalProductionValue > 0 ? 'Margem Real (Produção)' : 'Saldo de Custos'}
-          </p>
-          <p className={`text-2xl font-black tracking-tight ${totalProductionValue > 0 ? (margin >= 0 ? 'text-green-500' : 'text-red-500') : 'text-lumos-text-primary'}`}>
-            {totalProductionValue > 0
-              ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(margin)
-              : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
-          </p>
-        </div>
+        {profile?.role === 'admin' && (
+          <div className="card p-6">
+            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
+              {totalProductionValue > 0 ? 'Margem Real (Produção)' : 'Saldo de Custos'}
+            </p>
+            <p className={`text-2xl font-black tracking-tight ${totalProductionValue > 0 ? (margin >= 0 ? 'text-green-500' : 'text-red-500') : 'text-lumos-text-primary'}`}>
+              {totalProductionValue > 0
+                ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(margin)
+                : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
+            </p>
+          </div>
+        )}
       </div>
 
-      {totalProductionValue > 0 && (
+      {profile?.role === 'admin' && totalProductionValue > 0 && (
         <div className="card p-6 space-y-4">
           <div className="flex justify-between items-end">
             <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Saúde do Orçamento</p>
@@ -565,141 +726,431 @@ export default function CustosProjetoDetalhe() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
-                <th className="px-6 py-4 w-10">
-                  <div
-                    onClick={toggleSelectAll}
-                    className={clsx(
-                      'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
-                      selectedIds.size === costs.length && costs.length > 0
-                        ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
-                        : 'border-lumos-border hover:border-lumos-yellow/50'
-                    )}
-                  >
-                    {selectedIds.size === costs.length && costs.length > 0 && (
-                      <Check className="w-3.5 h-3.5" />
-                    )}
-                  </div>
-                </th>
-                <th className="px-6 py-4">Data</th>
-                <th className="px-6 py-4">Descrição</th>
-                <th className="px-6 py-4">Categoria</th>
-                <th className="px-6 py-4">Vencimento</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Valor</th>
-                <th className="px-6 py-4 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-lumos-border">
-              {costs.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-6 py-8 text-center text-lumos-text-secondary text-sm italic"
-                  >
-                    Nenhum custo registrado.
-                  </td>
-                </tr>
-              ) : (
-                costs.map(c => (
-                  <tr
-                    key={c.id}
-                    className={clsx(
-                      'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
-                      selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]'
-                    )}
-                    onClick={() => handleEdit(c)}
-                  >
-                    <td className="px-6 py-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={clsx("space-y-6", profile?.role === 'admin' ? "lg:col-span-2" : "lg:col-span-3")}>
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+                    <th className="px-6 py-4 w-10">
                       <div
-                        onClick={e => toggleSelect(c.id, e)}
+                        onClick={toggleSelectAll}
                         className={clsx(
                           'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
-                          selectedIds.has(c.id)
+                          selectedIds.size === costs.length && costs.length > 0
                             ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
-                            : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
-                          selectedIds.size > 0 && 'opacity-100'
+                            : 'border-lumos-border hover:border-lumos-yellow/50'
                         )}
                       >
-                        {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-lumos-text-secondary">
-                      {new Date(c.cost_date).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-lumos-text-primary">{c.description}</span>
-                        {c.fornecedor?.nome && (
-                          <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest mt-0.5">
-                            Fornecedor: {c.fornecedor.nome}
-                          </span>
+                        {selectedIds.size === costs.length && costs.length > 0 && (
+                          <Check className="w-3.5 h-3.5" />
                         )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">
-                      {c.category ? formatCategoryLabel(c.category) : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {c.payment_due_date ? (
-                        (() => {
-                          const due = new Date(c.payment_due_date + 'T00:00:00');
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const isOverdue = due < today;
-                          return (
-                            <span className={clsx(
-                              'font-bold',
-                              isOverdue ? 'text-red-500' : 'text-lumos-text-secondary'
-                            )}>
-                              {due.toLocaleDateString('pt-BR')}
-                            </span>
-                          );
-                        })()
-                      ) : (
-                        <span className="text-lumos-text-secondary/40 italic text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {c.paid_at ? (
-                        <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full">
-                          Pago
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center text-[10px] font-bold text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full">
-                          Pendente
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={e => { e.stopPropagation(); handleEdit(c); }}
-                          className="p-1.5 text-lumos-text-secondary hover:text-blue-500 transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); setDeletingId(c.id); setIsDeleteModalOpen(true); }}
-                          className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"
-                          >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+                    </th>
+                    <th className="px-6 py-4">Data</th>
+                    <th className="px-6 py-4">Descrição</th>
+                    <th className="px-6 py-4">Categoria</th>
+                    <th className="px-6 py-4">Vencimento</th>
+                    <th className="px-6 py-4 text-center">Status</th>
+                    <th className="px-6 py-4 text-right">Valor</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-lumos-border">
+                  {costs.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-6 py-8 text-center text-lumos-text-secondary text-sm italic"
+                      >
+                        Nenhum custo registrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    costs.map(c => (
+                      <tr
+                        key={c.id}
+                        className={clsx(
+                          'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
+                          selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]'
+                        )}
+                        onClick={() => handleEdit(c)}
+                      >
+                        <td className="px-6 py-4">
+                          <div
+                            onClick={e => toggleSelect(c.id, e)}
+                            className={clsx(
+                              'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
+                              selectedIds.has(c.id)
+                                ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
+                                : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
+                              selectedIds.size > 0 && 'opacity-100'
+                            )}
+                          >
+                            {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-lumos-text-secondary">
+                          {new Date(c.cost_date).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-lumos-text-primary">{c.description}</span>
+                            {c.fornecedor?.nome && (
+                              <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest mt-0.5">
+                                Fornecedor: {c.fornecedor.nome}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">
+                          {c.category ? formatCategoryLabel(c.category) : '—'}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {c.payment_due_date ? (
+                            (() => {
+                              const due = new Date(c.payment_due_date + 'T00:00:00');
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              const isOverdue = due < today;
+                              return (
+                                <span className={clsx(
+                                  'font-bold',
+                                  isOverdue ? 'text-red-500' : 'text-lumos-text-secondary'
+                                )}>
+                                  {due.toLocaleDateString('pt-BR')}
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-lumos-text-secondary/40 italic text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {c.paid_at ? (
+                            <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full">
+                              Pago
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[10px] font-bold text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full">
+                              Pendente
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={e => { e.stopPropagation(); handleEdit(c); }}
+                              className="p-1.5 text-lumos-text-secondary hover:text-blue-500 transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setDeletingId(c.id); setIsDeleteModalOpen(true); }}
+                              className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
+
+        {/* Sidebar Panel for Admin only */}
+        {profile?.role === 'admin' && projectFinanceiro && (
+          <div className="space-y-6">
+            <div className="card p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider flex items-center gap-2">
+                  <Target className="w-4 h-4 text-lumos-yellow" /> Dados Financeiros
+                </h3>
+                {!isEditingFinance ? (
+                  <button
+                    onClick={() => setIsEditingFinance(true)}
+                    className="text-xs text-lumos-yellow hover:underline font-bold flex items-center gap-1 uppercase tracking-wider text-right"
+                  >
+                    <Pencil className="w-3.5 h-3.5 inline mr-1" /> Editar
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsEditingFinance(false);
+                      setFinanceForm({
+                        cliente_id: projectFinanceiro.cliente_id || '',
+                        categoria_id: projectFinanceiro.categoria_id || '',
+                        tipo_servico_id: projectFinanceiro.tipo_servico_id || '',
+                        icp: projectFinanceiro.icp || '',
+                        data_recebimento_negociada: projectFinanceiro.data_recebimento_negociada || '',
+                        status_titulo: projectFinanceiro.status_titulo || 'emitir_nf',
+                        data_recebido: projectFinanceiro.data_recebido || '',
+                        nf_percent: projectFinanceiro.nf_percent || 0.18,
+                        valor_vendido: projectFinanceiro.valor_vendido || 0
+                      });
+                    }}
+                    className="text-xs text-lumos-text-secondary hover:underline font-bold uppercase tracking-wider"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+
+              {projectFinanceiro.pendente_preenchimento && (
+                <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lumos flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-wider">Atenção Comercial</p>
+                    <p className="text-[11px] text-lumos-text-secondary">
+                      Preencha Cliente, Categoria, Tipo de Serviço e ICP para liberar os relatórios.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {isEditingFinance ? (
+                <form onSubmit={handleSaveFinance} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente *</label>
+                    <select
+                      className="input-lumos w-full"
+                      value={financeForm.cliente_id}
+                      onChange={e => setFinanceForm({ ...financeForm, cliente_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Selecione um cliente</option>
+                      {clients.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Valor Vendido *</label>
+                    <CurrencyInput
+                      className="input-lumos w-full font-bold"
+                      value={financeForm.valor_vendido}
+                      onChange={(val: number) => setFinanceForm({ ...financeForm, valor_vendido: val })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Alíquota NF (%) *</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="input-lumos w-full"
+                      value={(financeForm.nf_percent * 100)}
+                      onChange={e => setFinanceForm({ ...financeForm, nf_percent: parseFloat(e.target.value) / 100 || 0 })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">ICP</label>
+                    <select
+                      className="input-lumos w-full"
+                      value={financeForm.icp}
+                      onChange={e => setFinanceForm({ ...financeForm, icp: e.target.value })}
+                    >
+                      <option value="">Selecione</option>
+                      <option value="icp_1">ICP 1</option>
+                      <option value="icp_2">ICP 2</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
+                    <select
+                      className="input-lumos w-full"
+                      value={financeForm.categoria_id}
+                      onChange={e => setFinanceForm({ ...financeForm, categoria_id: e.target.value, tipo_servico_id: '' })}
+                    >
+                      <option value="">Selecione</option>
+                      {financeCategorias.map(c => (
+                        <option key={c.id} value={c.id}>{c.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Tipo de Serviço</label>
+                    <select
+                      className="input-lumos w-full"
+                      value={financeForm.tipo_servico_id}
+                      onChange={e => setFinanceForm({ ...financeForm, tipo_servico_id: e.target.value })}
+                      disabled={!financeForm.categoria_id}
+                    >
+                      <option value="">Selecione</option>
+                      {financeTiposServico
+                        .filter(s => s.categoria_id === financeForm.categoria_id)
+                        .map(s => (
+                          <option key={s.id} value={s.id}>{s.nome}</option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Vencimento Negociado</label>
+                    <input
+                      type="date"
+                      className="input-lumos w-full"
+                      value={financeForm.data_recebimento_negociada}
+                      onChange={e => setFinanceForm({ ...financeForm, data_recebimento_negociada: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Status do Título *</label>
+                    <select
+                      className="input-lumos w-full"
+                      value={financeForm.status_titulo}
+                      onChange={e => setFinanceForm({ ...financeForm, status_titulo: e.target.value })}
+                    >
+                      <option value="emitir_nf">Emitir NF</option>
+                      <option value="pedido_nf_feito">Pedido de NF Feito</option>
+                      <option value="esperando_pagamento">Esperando Pagamento</option>
+                      <option value="pagamento_atraso">Pagamento em Atraso</option>
+                      <option value="pagamento_recebido">Pagamento Recebido</option>
+                    </select>
+                  </div>
+
+                  {financeForm.status_titulo === 'pagamento_recebido' && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Data do Recebimento *</label>
+                      <input
+                        type="date"
+                        className="input-lumos w-full"
+                        value={financeForm.data_recebido}
+                        onChange={e => setFinanceForm({ ...financeForm, data_recebido: e.target.value })}
+                        required
+                      />
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn-primary w-full h-10 mt-2 font-bold text-xs uppercase">
+                    Salvar Alterações
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-4 text-sm">
+                  <div className="border-b border-lumos-border pb-3">
+                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Cliente</p>
+                    <p className="font-bold text-lumos-text-primary">
+                      {clients.find(c => c.id === projectFinanceiro.cliente_id)?.name || 'Não informado'}
+                    </p>
+                  </div>
+
+                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">ICP</p>
+                      <p className="font-bold text-lumos-text-primary">
+                        {projectFinanceiro.icp ? projectFinanceiro.icp.toUpperCase().replace('_', ' ') : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Status de NF/Pgto</p>
+                      <span className={clsx(
+                        'inline-flex items-center text-[10px] font-black uppercase px-2 py-0.5 rounded-full mt-0.5',
+                        projectFinanceiro.status_titulo === 'pagamento_recebido' ? 'bg-green-500/10 text-green-500' :
+                        projectFinanceiro.status_titulo === 'pagamento_atraso' || projectFinanceiro.vencido ? 'bg-red-500/10 text-red-500' :
+                        'bg-yellow-500/10 text-yellow-500'
+                      )}>
+                        {projectFinanceiro.vencido ? 'Atrasado' :
+                         projectFinanceiro.status_titulo === 'emitir_nf' ? 'Emitir NF' :
+                         projectFinanceiro.status_titulo === 'pedido_nf_feito' ? 'Pedido NF Feito' :
+                         projectFinanceiro.status_titulo === 'esperando_pagamento' ? 'Aguardando Pgto' :
+                         projectFinanceiro.status_titulo === 'pagamento_atraso' ? 'Atrasado' :
+                         projectFinanceiro.status_titulo === 'pagamento_recebido' ? 'Recebido' : '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Categoria</p>
+                      <p className="font-bold text-lumos-text-primary">{projectFinanceiro.categoria?.nome || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Tipo de Serviço</p>
+                      <p className="font-bold text-lumos-text-primary">{projectFinanceiro.tipo_servico?.nome || '—'}</p>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-lumos-border pb-3">
+                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Faturamento Bruto</p>
+                    <p className="font-black text-lg text-lumos-text-primary">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_vendido)}
+                    </p>
+                  </div>
+
+                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Imposto ({ (projectFinanceiro.nf_percent * 100).toFixed(0) }%)</p>
+                      <p className="font-bold text-lumos-text-secondary">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_nf)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Receita Líquida</p>
+                      <p className="font-bold text-lumos-text-primary">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.receita_liquida)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Lucro Operacional</p>
+                      <p className={`font-bold ${projectFinanceiro.lucro_operacional >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.lucro_operacional)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Lucro Líquido Real</p>
+                      <p className={`font-black ${projectFinanceiro.lucro_liquido >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.lucro_liquido)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Margem Real (%)</p>
+                      <p className={`font-bold ${(projectFinanceiro.margem * 100) >= 40 ? 'text-green-500' : 'text-yellow-500'}`}>
+                        {(projectFinanceiro.margem * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Vencimento Negociado</p>
+                      <p className="font-bold text-lumos-text-primary">
+                        {projectFinanceiro.data_recebimento_negociada 
+                          ? new Date(projectFinanceiro.data_recebimento_negociada + 'T00:00:00').toLocaleDateString('pt-BR')
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {projectFinanceiro.status_titulo === 'pagamento_recebido' && projectFinanceiro.data_recebido && (
+                    <div>
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Data do Pagamento</p>
+                      <p className="font-bold text-green-500">
+                        {new Date(projectFinanceiro.data_recebido + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Batch Action Bar */}

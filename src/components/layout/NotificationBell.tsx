@@ -44,6 +44,21 @@ export default function NotificationBell() {
               link: '/financeiro/contas-pagar'
             })))
         );
+
+        promises.push(
+          supabase
+            .from('projetos_financeiro')
+            .select('id, created_at, client:clients(name)')
+            .eq('pendente_preenchimento', true)
+            .then(res => (res.data || []).map(p => ({
+              id: p.id,
+              description: `Pendente preencher dimensões: ${(p.client as any)?.name || 'Cliente'}`,
+              amount: null,
+              date: p.created_at.split('T')[0],
+              type: 'pendente',
+              link: `/financeiro/custos-projeto/${p.id}`
+            })))
+        );
       }
 
       // Query project costs for Admins or Production users
@@ -144,16 +159,17 @@ export default function NotificationBell() {
                     <div className="flex items-center justify-between mt-2 text-[9px] text-lumos-text-secondary font-semibold uppercase tracking-wider">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 text-lumos-yellow" />
-                        {item.type === 'ordem' ? 'Gravando em ' : 'Venceu em '}
+                        {item.type === 'ordem' ? 'Gravando em ' : item.type === 'pendente' ? 'Criado em ' : 'Venceu em '}
                         {new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                       </span>
                       <span className={clsx(
                         "text-[9px] font-bold uppercase tracking-wider",
                         item.type === 'despesa' && 'text-lumos-yellow',
                         item.type === 'custo' && 'text-blue-400',
-                        item.type === 'ordem' && 'text-green-400'
+                        item.type === 'ordem' && 'text-green-400',
+                        item.type === 'pendente' && 'text-purple-400'
                       )}>
-                        {item.type}
+                        {item.type === 'pendente' ? 'pendência' : item.type}
                       </span>
                     </div>
                   </Link>
