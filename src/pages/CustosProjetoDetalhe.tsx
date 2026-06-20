@@ -1367,7 +1367,7 @@ export default function CustosProjetoDetalhe() {
               </select>
             </div>
           </div>
-          <div className="pt-4 flex gap-3">
+          <div className="flex gap-3 pt-4 max-lg:sticky max-lg:-mx-6 max-lg:-mb-6 max-lg:bottom-0 max-lg:bg-lumos-surface max-lg:border-t max-lg:p-4 max-lg:pb-[calc(1rem+env(safe-area-inset-bottom))] max-lg:z-30 lg:static lg:pt-4 lg:border-0 lg:p-0">
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" className="btn-primary flex-1 h-10">{editingId ? 'Salvar Alterações' : 'Salvar'}</button>
           </div>

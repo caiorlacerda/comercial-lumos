@@ -6,6 +6,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
 import StatusDot from '@/components/common/StatusDot';
 import NotificationBell from '@/components/layout/NotificationBell';
+import MobileHeader from '@/components/layout/MobileHeader';
 import { clsx } from 'clsx';
 
 export default function Topbar() {
@@ -55,7 +56,8 @@ export default function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full h-16 bg-lumos-surface/85 backdrop-blur-md border-b border-lumos-border flex items-center justify-between px-4 lg:px-8 transition-colors duration-300">
+    <>
+      <header className="hidden lg:flex sticky top-0 z-40 w-full h-16 bg-lumos-surface/85 backdrop-blur-md border-b border-lumos-border items-center justify-between px-4 lg:px-8 transition-colors duration-300">
       {/* Left: Mobile Menu + Logo + Desktop Section Links */}
       <div className="flex items-center gap-6">
         {/* Mobile Menu Toggle */}
@@ -218,6 +220,8 @@ export default function Topbar() {
           )}
         </div>
       </div>
-    </header>
+      </header>
+      <MobileHeader />
+    </>
   );
 }

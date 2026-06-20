@@ -1254,7 +1254,7 @@ export default function BudgetEditorPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 max-lg:fixed max-lg:bottom-0 max-lg:left-0 max-lg:right-0 max-lg:bg-lumos-surface max-lg:border-t max-lg:p-4 max-lg:pb-[calc(1rem+env(safe-area-inset-bottom))] max-lg:z-30 max-lg:justify-end lg:static lg:p-0 lg:border-0">
           <div className="hidden md:flex flex-col items-end mr-2">
             <SavingIndicator />
             {lastSavedTime && (
@@ -1271,7 +1271,7 @@ export default function BudgetEditorPage() {
               />
               
               {!validation.isValid && (
-                <div className="absolute top-full mt-2 right-0 w-64 bg-black/90 text-white p-3 rounded-lumos border border-white/10 shadow-2xl opacity-0 group-hover/save:opacity-100 transition-opacity z-[100] pointer-events-none">
+                <div className="absolute top-full mt-2 max-lg:bottom-full max-lg:top-auto max-lg:mb-2 right-0 w-64 bg-black/90 text-white p-3 rounded-lumos border border-white/10 shadow-2xl opacity-0 group-hover/save:opacity-100 transition-opacity z-[100] pointer-events-none">
                   <p className="text-[10px] font-black uppercase text-lumos-yellow mb-2 tracking-widest">Requisitos pendentes:</p>
                   <ul className="space-y-1">
                     {validation.missing.map(msg => (

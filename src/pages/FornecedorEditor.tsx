@@ -363,18 +363,18 @@ export default function FornecedorEditor() {
             </div>
           </div>
 
-          <div className="pt-6 border-t border-lumos-border/40 flex justify-end gap-4">
+          <div className="flex justify-end gap-4 pt-6 border-t border-lumos-border/40 max-lg:fixed max-lg:bottom-0 max-lg:left-0 max-lg:right-0 max-lg:bg-lumos-surface max-lg:border-t max-lg:p-4 max-lg:pb-[calc(1rem+env(safe-area-inset-bottom))] max-lg:z-30 lg:static lg:pt-6 lg:border-t lg:border-lumos-border/40">
             <button
               type="button"
               onClick={() => navigate('/producao/fornecedores')}
-              className="btn-secondary h-11 px-6 min-w-[140px]"
+              className="btn-secondary h-11 px-6 min-w-[140px] max-lg:flex-1"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="btn-primary h-11 px-8 min-w-[160px] flex items-center justify-center gap-2"
+              className="btn-primary h-11 px-8 min-w-[160px] max-lg:flex-1 flex items-center justify-center gap-2"
             >
               <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar Fornecedor'}
             </button>

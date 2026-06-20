@@ -26,23 +26,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
 import Topbar from '@/components/layout/Topbar';
+import MobileTabBar from '@/components/layout/MobileTabBar';
 import { clsx } from 'clsx';
+import { AnimatePresence } from 'framer-motion';
+import PageTransition from '@/components/layout/PageTransition';
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const { can, isAdmin } = useAuth();
   const { theme } = useTheme();
   const location = useLocation();
-  const { activeSection, navigateToSection, mobileSidebarOpen, setMobileSidebarOpen } = useLayout();
-
-  // Bloqueia scroll do body quando drawer aberto
-  useEffect(() => {
-    if (mobileSidebarOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [mobileSidebarOpen]);
+  const { activeSection, navigateToSection } = useLayout();
 
   const navigation = [
     {
@@ -117,34 +110,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-lumos-surface">
-      {/* Header - Mobile only */}
-      <div className="lg:hidden p-6 flex items-center justify-end flex-shrink-0">
-        <button
-          onClick={() => setMobileSidebarOpen(false)}
-          className="p-1 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center hover:bg-lumos-text-secondary/10 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Mobile Section Selector */}
-      <div className="lg:hidden px-6 pb-4 border-b border-lumos-border flex gap-2 overflow-x-auto custom-scrollbar flex-shrink-0">
-        {sections.map(sec => sec.visible && (
-          <button
-            key={sec.id}
-            onClick={() => navigateToSection(sec.id)}
-            className={clsx(
-              "px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all",
-              activeSection === sec.id
-                ? "bg-lumos-yellow/15 text-lumos-yellow border border-lumos-yellow/20"
-                : "text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 border border-transparent"
-            )}
-          >
-            {sec.label}
-          </button>
-        ))}
-      </div>
-
       {/* Navigation */}
       <nav className="flex-1 px-4 py-4 overflow-y-auto custom-scrollbar">
         {currentSection && (
@@ -194,32 +159,20 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           {sidebarContent}
         </aside>
 
-        {/* Mobile Sidebar overlay and drawer */}
-        <>
-          <div
-            className={clsx(
-              "lg:hidden fixed inset-0 bg-black/60 z-40 transition-opacity duration-300",
-              mobileSidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-            )}
-            onClick={() => setMobileSidebarOpen(false)}
-          />
-          <aside
-            className={clsx(
-              "lg:hidden fixed inset-y-0 left-0 w-72 bg-lumos-surface border-r border-lumos-border flex flex-col z-50 shadow-xl transition-transform duration-300",
-              mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-            )}
-          >
-            {sidebarContent}
-          </aside>
-        </>
-
         {/* Main Content */}
-        <main className="flex-1 lg:ml-64 min-h-screen bg-lumos-bg transition-colors duration-300">
-          <div className="w-full p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {children}
-          </div>
+        <main className="flex-1 lg:ml-64 min-h-screen bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0">
+          <AnimatePresence mode="wait">
+            <PageTransition key={location.pathname}>
+              <div className="w-full p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                {children}
+              </div>
+            </PageTransition>
+          </AnimatePresence>
         </main>
       </div>
+
+      {/* Mobile Bottom Tab Bar */}
+      <MobileTabBar />
     </div>
   );
 }
