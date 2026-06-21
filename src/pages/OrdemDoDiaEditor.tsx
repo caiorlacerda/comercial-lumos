@@ -20,7 +20,10 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import { notify, getUserIdsWithPermission } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import { pdf } from '@react-pdf/renderer';
+
 import { OrdemDoDiaPDF } from '@/components/editor/OrdemDoDiaPDF';
 import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 import {
@@ -250,8 +253,20 @@ export default function OrdemDoDiaEditor() {
           .single();
         if (error) throw error;
         toast.success('Ordem do Dia criada!');
+
+        // Trigger notification ORDEM_DIA_PUBLICADA
+        const recipientIds = await getUserIdsWithPermission('ordem_do_dia');
+        await notify({
+          userIds: recipientIds,
+          event: NOTIFICATION_EVENTS.ORDEM_DIA_PUBLICADA,
+          title: 'Ordem do Dia publicada',
+          body: `Nova Ordem do Dia disponível: ${payload.codigo} - ${payload.titulo}`,
+          link: `/ordem-do-dia/${data.id}`
+        });
+
         navigate(`/ordem-do-dia/${data.id}`, { replace: true });
         return data.id as string;
+
       } else {
         const { error } = await supabase
           .from('ordens_do_dia')

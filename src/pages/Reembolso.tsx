@@ -20,6 +20,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,9 +174,21 @@ export default function Reembolso() {
         status: 'pendente'
       }]);
       if (error) throw error;
+
+      // Trigger notification REEMBOLSO_PENDENTE_APROVACAO
+      const adminIds = await getAdminUserIds();
+      await notify({
+        userIds: adminIds,
+        event: NOTIFICATION_EVENTS.REEMBOLSO_PENDENTE_APROVACAO,
+        title: 'Reembolso pendente de aprovação',
+        body: `Novo reembolso no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(formData.amount)} solicitado por ${profile?.full_name || 'Funcionário'}.`,
+        link: '/financeiro/reembolso'
+      });
+
       setIsModalOpen(false);
       fetchReimbursements();
       resetForm();
+
     } catch (error: any) {
       console.error(error);
       toast.error(error.message);
@@ -241,8 +256,8 @@ export default function Reembolso() {
       const { error } = await supabase.from('reimbursements').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
       
+      const item = reimbursements.find(r => r.id === id);
       if (status === 'aprovado') {
-        const item = reimbursements.find(r => r.id === id);
         if (item) {
           await supabase.from('payables').insert([{
             description: `Reembolso — ${item.requester?.full_name || 'Funcionário'}`,
@@ -255,9 +270,26 @@ export default function Reembolso() {
         }
       }
 
+      // Trigger notifications for approved or rejected
+      if (item && (status === 'aprovado' || status === 'rejeitado') && item.requester_id) {
+        const event = status === 'aprovado' 
+          ? NOTIFICATION_EVENTS.REEMBOLSO_APROVADO 
+          : NOTIFICATION_EVENTS.REEMBOLSO_REJEITADO;
+        const title = status === 'aprovado' ? 'Reembolso aprovado' : 'Reembolso rejeitado';
+        const body = `Seu reembolso de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)} foi ${status}.`;
+        await notify({
+          userIds: [item.requester_id],
+          event,
+          title,
+          body,
+          link: '/financeiro/reembolso'
+        });
+      }
+
       fetchReimbursements();
     } catch (error: any) { toast.error(error.message); }
   };
+
 
   const handleDelete = async () => {
     if (!deletingId) return;
@@ -294,10 +326,31 @@ export default function Reembolso() {
         await supabase.from('payables').insert(payables);
       }
 
+      // Trigger notifications for approved or rejected
+      if (status === 'aprovado' || status === 'rejeitado') {
+        const event = status === 'aprovado' 
+          ? NOTIFICATION_EVENTS.REEMBOLSO_APROVADO 
+          : NOTIFICATION_EVENTS.REEMBOLSO_REJEITADO;
+        const title = status === 'aprovado' ? 'Reembolso aprovado' : 'Reembolso rejeitado';
+        for (const item of toUpdate) {
+          if (item.requester_id) {
+            const body = `Seu reembolso de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount)} foi ${status}.`;
+            await notify({
+              userIds: [item.requester_id],
+              event,
+              title,
+              body,
+              link: '/financeiro/reembolso'
+            });
+          }
+        }
+      }
+
       setSelectedIds(new Set());
       fetchReimbursements();
     } catch (error: any) { toast.error(error.message); }
   };
+
 
   const handleBatchDelete = async () => {
     const ids = Array.from(selectedIds);

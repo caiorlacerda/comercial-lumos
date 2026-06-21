@@ -1,32 +1,12 @@
 import React, { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import {
-  Users,
-  BookOpen,
-  LayoutDashboard,
-  Settings,
-  FileText,
-  FileStack,
-  BarChart3,
-  PieChart,
-  ArrowUpCircle,
-  ArrowDownCircle,
-  Receipt,
-  Briefcase,
-  ShieldCheck,
-  ClipboardList,
-  X,
-  TrendingUp,
-  Landmark,
-  CalendarDays,
-  Truck,
-  Users2
-} from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
 import Topbar from '@/components/layout/Topbar';
 import MobileTabBar from '@/components/layout/MobileTabBar';
+import MobileSubNav from '@/components/layout/MobileSubNav';
+import { getVisibleSections, getSectionItems } from '@/lib/navigation';
 import { clsx } from 'clsx';
 import { AnimatePresence } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
@@ -37,76 +17,9 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { activeSection, navigateToSection } = useLayout();
 
-  const navigation = [
-    {
-      title: 'COMERCIAL',
-      visible: isAdmin,
-      items: [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/', end: true },
-        { icon: Users, label: 'Clientes', path: '/clientes' },
-        { icon: BookOpen, label: 'Orçamentos', path: '/orcamentos' },
-        { icon: FileText, label: 'Catálogo', path: '/catalogo' },
-        { icon: FileStack, label: 'Templates', path: '/templates' },
-      ]
-    },
-    {
-      title: 'PRODUÇÃO',
-      visible: can('ordem_do_dia') || can('fornecedores') || can('custos_projeto'),
-      items: [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/producao/dashboard', permission: 'ordem_do_dia' },
-        { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
-        { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
-        { icon: Briefcase, label: 'Custos de Projeto', path: '/financeiro/custos-projeto', permission: 'custos_projeto' },
-      ].filter(item => can(item.permission))
-    },
-    {
-      title: 'FINANCEIRO',
-      visible: true,
-      items: [
-        { icon: BarChart3, label: 'Dashboard Fin.', path: '/financeiro', permission: 'financeiro_dashboard', end: true },
-        { icon: TrendingUp, label: 'Fluxo de Caixa', path: '/financeiro/fluxo-de-caixa', permission: 'financeiro_admin' },
-        { icon: Landmark, label: 'Custos Fixos', path: '/financeiro/custos-fixos', permission: 'financeiro_admin' },
-        { icon: ArrowUpCircle, label: 'Contas a Pagar', path: '/financeiro/contas-pagar', permission: 'financeiro_admin' },
-        { icon: ArrowDownCircle, label: 'Contas a Receber', path: '/financeiro/contas-receber', permission: 'financeiro_admin' },
-        { icon: Receipt, label: 'Reembolso', path: '/financeiro/reembolso', permission: 'reembolso' },
-        { icon: PieChart, label: 'Relatórios Fin.', path: '/financeiro/relatorios', permission: 'financeiro_admin' },
-        { icon: Settings, label: 'Configuração Fin.', path: '/financeiro/configuracao', permission: 'financeiro_admin' },
-      ].filter(item => {
-        if (item.permission === 'financeiro_admin') return isAdmin;
-        if (item.permission === 'financeiro_dashboard') return isAdmin;
-        return can(item.permission);
-      })
-    },
-    {
-      title: 'CONFIGURAÇÕES',
-      visible: true,
-      items: [
-        { icon: Users2, label: 'Equipe', path: '/equipe' },
-        { icon: Settings, label: 'Configurações', path: '/configuracoes' },
-        { icon: ShieldCheck, label: 'Usuários', path: '/usuarios', permission: 'admin' },
-        { icon: ClipboardList, label: 'Auditoria', path: '/auditoria', permission: 'admin' },
-      ].filter(item => !item.permission || (item.permission === 'admin' && isAdmin))
-    }
-  ];
-
-  const sections = [
-    { id: 'comercial' as SectionType, label: 'Comercial', visible: isAdmin },
-    { id: 'producao' as SectionType, label: 'Produção', visible: can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') },
-    { id: 'financeiro' as SectionType, label: 'Financeiro', visible: true },
-    { id: 'configuracoes' as SectionType, label: 'Configurações', visible: true },
-  ];
-
-  const sectionKeyMap: Record<string, string> = {
-    comercial: 'COMERCIAL',
-    producao: 'PRODUÇÃO',
-    financeiro: 'FINANCEIRO',
-    configuracoes: 'CONFIGURAÇÕES'
-  };
-
-  const activeSectionTitle = sectionKeyMap[activeSection];
-  const visibleSections = navigation.filter(sec => sec.visible && sec.items.length > 0);
-  const activeSectionData = visibleSections.find(sec => sec.title === activeSectionTitle);
-  const currentSection = activeSectionData || visibleSections[0];
+  const ctx = { can, isAdmin };
+  const visibleSecs = getVisibleSections(ctx);
+  const currentSection = visibleSecs.find(s => s.id === activeSection) || visibleSecs[0];
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-lumos-surface">
@@ -122,7 +35,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  end={(item as any).end}
+                  end={item.end}
                   className={({ isActive }) => clsx(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lumos text-sm font-bold transition-all group",
                     isActive
@@ -152,6 +65,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col min-h-screen bg-lumos-bg transition-colors duration-300 font-work-sans">
       {/* Fixed Topbar */}
       <Topbar />
+      <MobileSubNav />
 
       <div className="flex flex-1 relative">
         {/* Desktop Sidebar */}
@@ -176,3 +90,4 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

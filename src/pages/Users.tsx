@@ -19,10 +19,12 @@ import { clsx } from 'clsx';
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useAuth, AppUserProfile } from '@/hooks/useAuth';
-
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 const DEFAULT_PASSWORD = 'Lum0s1604!!';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+
 import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
 
@@ -124,7 +126,19 @@ export default function UsersPage() {
       navigator.clipboard.writeText(credentials).catch(() => {});
 
       logAudit('user_created', `Usuário "${formData.full_name}" (${formData.email}) criado`, { email: formData.email, role: formData.role });
+      
+      // Trigger notification NOVO_USUARIO_ACESSO
+      const admins = await getAdminUserIds();
+      await notify({
+        userIds: admins,
+        event: NOTIFICATION_EVENTS.NOVO_USUARIO_ACESSO,
+        title: 'Novo acesso solicitado',
+        body: `Perfil criado para o funcionário "${formData.full_name}" (${formData.role}).`,
+        link: '/usuarios'
+      });
+
       toast.success(`✓ Usuário criado! Credenciais copiadas — cole no WhatsApp/e-mail para a funcionária.`);
+
 
       setIsInviteModalOpen(false);
       resetForm();
@@ -162,10 +176,22 @@ export default function UsersPage() {
 
       if (error) throw error;
 
+      // Trigger notification PERMISSAO_ALTERADA
+      if (formData.role !== selectedUser.role) {
+        await notify({
+          userIds: [selectedUser.id],
+          event: NOTIFICATION_EVENTS.PERMISSAO_ALTERADA,
+          title: 'Suas permissões foram alteradas',
+          body: `Seu nível de acesso foi alterado para "${formData.role}".`,
+          link: '/configuracoes'
+        });
+      }
+
       if (formData.status !== selectedUser.status) {
         const action = formData.status === 'inativo' ? 'user_deactivated' : 'user_activated';
         logAudit(action, `Usuário "${selectedUser.full_name}" ${formData.status === 'inativo' ? 'desativado' : 'reativado'}`, { user_id: selectedUser.id });
       }
+
 
       setIsEditModalOpen(false);
       fetchUsers();

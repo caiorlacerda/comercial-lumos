@@ -10,8 +10,10 @@ import {
   Plus,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Bell
 } from 'lucide-react';
+
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/context/ThemeContext';
 import { clsx } from 'clsx';
@@ -318,7 +320,30 @@ export default function Settings() {
         <ThemeToggle showDescription={true} />
       </div>
 
+      {/* Notifications Section */}
+      <div className="card space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
+        <div className="flex items-center gap-4 pb-6 border-b border-lumos-border">
+          <div className="w-16 h-16 rounded-full bg-lumos-yellow/20 flex items-center justify-center text-lumos-yellow">
+            <Bell className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight">Notificações</h3>
+            <p className="text-sm text-lumos-text-secondary font-medium">Configure quais alertas você deseja receber.</p>
+          </div>
+        </div>
+
+        <div>
+          <button 
+            onClick={() => navigate('/configuracoes/notificacoes')}
+            className="btn-primary text-xs py-2 px-6 font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            Gerenciar Notificações
+          </button>
+        </div>
+      </div>
+
       {/* Password Change Section */}
+
       <div className="card space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
         <div className="flex items-center gap-4 pb-6 border-b border-lumos-border">
           <div className="w-16 h-16 rounded-full bg-lumos-yellow/20 flex items-center justify-center text-lumos-yellow">

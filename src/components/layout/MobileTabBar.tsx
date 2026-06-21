@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight } from 'lucide-react';
+import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
@@ -22,8 +22,13 @@ export default function MobileTabBar() {
   };
 
   const handleNavClick = (sectionId: SectionType) => {
-    navigateToSection(sectionId);
+    if (activeSection === sectionId) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      navigateToSection(sectionId);
+    }
   };
+
 
   const showComercial = isAdmin;
   const showProducao = can('ordem_do_dia') || can('fornecedores') || can('custos_projeto');
@@ -133,6 +138,22 @@ export default function MobileTabBar() {
             </div>
             <ChevronRight className="w-4 h-4 text-lumos-text-secondary opacity-50" />
           </button>
+
+          {/* Notificações */}
+          <button
+            onClick={() => {
+              setMaisOpen(false);
+              navigate('/configuracoes/notificacoes');
+            }}
+            className="flex items-center justify-between w-full h-12 px-3 rounded-lumos hover:bg-lumos-text-secondary/5 transition-colors text-left"
+          >
+            <div className="flex items-center gap-3">
+              <Bell className="w-5 h-5 text-lumos-text-secondary" />
+              <span className="text-sm font-bold text-lumos-text-primary">Notificações</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-lumos-text-secondary opacity-50" />
+          </button>
+
 
           {/* Usuários (só admin) */}
           {isAdmin && (

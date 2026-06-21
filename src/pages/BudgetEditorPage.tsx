@@ -63,6 +63,9 @@ import { getPdfFileName } from '@/utils/pdfFileName';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
+import { notify, getAdminUserIds, getProfileIdByAuthUserId } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
@@ -75,6 +78,7 @@ interface Budget {
   status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
   client_id: string;
   active_version_id?: string;
+  created_by?: string | null;
   clients?: { name: string; agency_name?: string | null };
   is_template?: boolean;
   template_category?: string;
@@ -108,7 +112,7 @@ function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly:
 export default function BudgetEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -445,8 +449,20 @@ export default function BudgetEditorPage() {
 
         await supabase.from('budgets').update({ active_version_id: currentVersionId }).eq('id', currentBudgetId);
         logAudit('budget_created', `Orçamento "${budget.project_name}" (#${finalCode}) criado`, { budget_id: currentBudgetId });
+
+        // Trigger notification ORCAMENTO_CRIADO
+        const admins = await getAdminUserIds();
+        await notify({
+          userIds: admins,
+          event: NOTIFICATION_EVENTS.ORCAMENTO_CRIADO,
+          title: 'Novo orçamento criado',
+          body: `Orçamento "${budget.project_name}" (#${finalCode}) criado por ${profile?.full_name || 'Funcionário'}.`,
+          link: `/orcamentos/${currentBudgetId}`
+        });
+
         setIsDraft(false);
         navigate(`/orcamentos/${currentBudgetId}`, { replace: true });
+
       } else {
         await Promise.all([
           supabase.from('budget_versions').update({
@@ -577,7 +593,22 @@ export default function BudgetEditorPage() {
           financials.valorFinal
         );
         await syncProject(budget.id, budget.project_name, budget.client_id || '', budget.code || '');
+
+        // Trigger notification ORCAMENTO_APROVADO
+        const creatorProfileId = await getProfileIdByAuthUserId(budget.created_by);
+        const admins = await getAdminUserIds();
+        const recipientIds = new Set<string>(admins);
+        if (creatorProfileId) recipientIds.add(creatorProfileId);
+
+        await notify({
+          userIds: Array.from(recipientIds),
+          event: NOTIFICATION_EVENTS.ORCAMENTO_APROVADO,
+          title: 'Orçamento aprovado',
+          body: `O orçamento "${budget.project_name}" (#${budget.code}) foi marcado como aprovado por ${profile?.full_name || 'Administrador'}.`,
+          link: `/orcamentos/${budget.id}`
+        });
       }
+
 
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());

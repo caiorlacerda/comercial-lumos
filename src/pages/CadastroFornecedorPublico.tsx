@@ -3,6 +3,9 @@ import { Truck, Plus, Trash2, CheckCircle2, Sun, Moon, Send } from 'lucide-react
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,8 +126,19 @@ export default function CadastroFornecedorPublico() {
         if (sError) throw sError;
       }
 
+      // Trigger notification FORNECEDOR_AUTOCADASTRO
+      const admins = await getAdminUserIds();
+      await notify({
+        userIds: admins,
+        event: NOTIFICATION_EVENTS.FORNECEDOR_AUTOCADASTRO,
+        title: 'Novo autocadastro de fornecedor',
+        body: `Fornecedor "${formData.nome.trim()}" preencheu o cadastro público.`,
+        link: '/producao/fornecedores'
+      });
+
       setSuccess(true);
       toast.success('Cadastro enviado com sucesso!');
+
     } catch (err: any) {
       console.error(err);
       toast.error(`Erro ao salvar cadastro: ${err.message}`);

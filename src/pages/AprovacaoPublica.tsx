@@ -5,6 +5,9 @@ import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { handleBudgetApproval } from '@/utils/financeiro';
 import type { BudgetVersion, BudgetItem } from '@/utils/financials';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { notify, getAdminUserIds, getProfileIdByAuthUserId } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+
 
 const COMPANY = {
   name: 'Produtora Lumos Audiovisual Ltda.',
@@ -157,8 +160,23 @@ export default function AprovacaoPublica() {
         const fin = calcFinancials(items, version);
         if (version.budget_id) {
           await handleBudgetApproval(version.budget_id, fin.valorFinal);
+
+          // Trigger notification ORCAMENTO_APROVADO
+          const creatorProfileId = await getProfileIdByAuthUserId(budget?.created_by);
+          const admins = await getAdminUserIds();
+          const recipientIds = new Set<string>(admins);
+          if (creatorProfileId) recipientIds.add(creatorProfileId);
+
+          await notify({
+            userIds: Array.from(recipientIds),
+            event: NOTIFICATION_EVENTS.ORCAMENTO_APROVADO,
+            title: 'Orçamento aprovado pelo cliente',
+            body: `O orçamento "${budget?.project_name || 'Projeto'}" (#${budget?.code || ''}) foi aprovado pelo cliente: ${approverName.trim() || 'Cliente'}.`,
+            link: `/orcamentos/${version.budget_id}`
+          });
         }
       }
+
 
       setStatus(approved ? 'approved' : 'rejected');
     } catch {

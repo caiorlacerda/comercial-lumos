@@ -20,6 +20,9 @@ import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,10 +106,23 @@ export default function ContasReceber() {
         updated_at: new Date().toISOString()
       }).eq('id', selectedReceivable.id);
       if (error) throw error;
+
+      if (newStatus === 'recebido') {
+        const admins = await getAdminUserIds();
+        await notify({
+          userIds: admins,
+          event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
+          title: 'Pagamento recebido',
+          body: `Valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(paymentData.amount)} recebido de "${selectedReceivable.client?.name || 'Cliente'}" para: ${selectedReceivable.description}.`,
+          link: '/financeiro/contas-receber'
+        });
+      }
+
       setIsPayModalOpen(false);
       fetchReceivables();
     } catch (error: any) { toast.error(error.message); }
   };
+
 
   const handleCreateManual = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,10 +171,24 @@ export default function ContasReceber() {
       );
 
       await Promise.all(updates);
+
+      // Trigger notifications for payments received
+      const admins = await getAdminUserIds();
+      for (const item of toReceive) {
+        await notify({
+          userIds: admins,
+          event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
+          title: 'Pagamento recebido (Lote)',
+          body: `Valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.total_amount)} recebido de "${item.client?.name || 'Cliente'}" para: ${item.description}.`,
+          link: '/financeiro/contas-receber'
+        });
+      }
+
       setSelectedIds(new Set());
       fetchReceivables();
     } catch (error: any) { toast.error(error.message); }
   };
+
 
   const handleBatchDelete = async () => {
     const toDelete = filtered.filter(r => selectedIds.has(r.id));
