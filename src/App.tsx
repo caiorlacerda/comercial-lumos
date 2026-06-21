@@ -46,6 +46,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { user, profile, loading, profileChecked, error, signOut } = useAuth();
   const lastActivityRef = useRef<number>(Date.now());
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     if (!user) return;
@@ -152,8 +153,6 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
-  const location = useLocation();
 
   if (profile?.role === 'producao' && location.pathname === '/') {
     return <Navigate to="/financeiro/custos-projeto" />;
