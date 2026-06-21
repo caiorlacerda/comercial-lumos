@@ -489,7 +489,7 @@ export default function Catalog() {
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-lumos-surface/80 backdrop-blur-xl border border-lumos-yellow/20 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6 min-w-[500px]"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-lumos-surface/80 backdrop-blur-xl border border-lumos-yellow/20 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6 min-w-[500px] max-w-[calc(100vw-2rem)] max-lg:min-w-0 max-lg:bottom-20 max-lg:gap-3 max-lg:px-3"
           >
             <div className="flex items-center gap-3 pr-6 border-r border-lumos-border">
               <div className="w-8 h-8 rounded-full bg-lumos-yellow flex items-center justify-center text-lumos-bg font-black text-sm">

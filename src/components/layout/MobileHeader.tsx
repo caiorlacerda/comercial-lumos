@@ -62,45 +62,47 @@ export default function MobileHeader() {
 
   return (
     <>
-      <header className="lg:hidden sticky top-0 z-40 w-full h-12 backdrop-blur-md bg-lumos-surface/80 border-b border-lumos-border flex items-center justify-between px-4 transition-colors duration-300">
-        {/* Left Actions: Back Button or Page Title */}
-        <div className="flex items-center gap-2">
-          {isDetailPage ? (
-            <button
-              onClick={() => navigate(-1)}
-              className="p-1 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-colors flex items-center justify-center"
-              aria-label="Voltar"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-          ) : (
-            <h1 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">
-              {getPageTitle(location.pathname)}
-            </h1>
-          )}
-        </div>
-
-        {/* Right Actions: Notification Bell + Avatar */}
-        <div className="flex items-center gap-3">
-          <NotificationBell />
-
-          <button
-            onClick={() => setProfileOpen(true)}
-            className="w-7 h-7 rounded-full bg-lumos-yellow flex items-center justify-center text-black font-black text-[10px] relative ring-1 ring-lumos-yellow/20 flex-shrink-0"
-          >
-            {user?.user_metadata?.avatar_url ? (
-              <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+      <header className="lg:hidden sticky top-0 z-40 w-full bg-lumos-surface/80 backdrop-blur-md border-b border-lumos-border pt-[env(safe-area-inset-top)] transition-colors duration-300">
+        <div className="h-12 px-4 flex items-center justify-between">
+          {/* Left Actions: Back Button or Page Title */}
+          <div className="flex items-center gap-2">
+            {isDetailPage ? (
+              <button
+                onClick={() => navigate(-1)}
+                className="p-1 rounded-lg text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-colors flex items-center justify-center"
+                aria-label="Voltar"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
             ) : (
-              <span>
-                {profile?.full_name
-                  ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-                  : user?.email?.charAt(0).toUpperCase()}
-              </span>
+              <h1 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">
+                {getPageTitle(location.pathname)}
+              </h1>
             )}
-            <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-1 ring-lumos-surface scale-90">
-              <StatusDot status={profile?.presence_status || 'online'} />
-            </span>
-          </button>
+          </div>
+
+          {/* Right Actions: Notification Bell + Avatar */}
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="w-7 h-7 rounded-full bg-lumos-yellow flex items-center justify-center text-black font-black text-[10px] relative ring-1 ring-lumos-yellow/20 flex-shrink-0"
+            >
+              {user?.user_metadata?.avatar_url ? (
+                <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                <span>
+                  {profile?.full_name
+                    ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                    : user?.email?.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-1 ring-lumos-surface scale-90">
+                <StatusDot status={profile?.presence_status || 'online'} />
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 
