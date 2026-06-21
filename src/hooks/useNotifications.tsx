@@ -59,8 +59,9 @@ export function useNotifications() {
     if (!userId) return;
 
     // Supabase Realtime postgres listener
+    const uniqueChannelName = `notifications:${userId}-${Math.random().toString(36).substring(2, 11)}`;
     const channel = supabase
-      .channel(`notifications:${userId}`)
+      .channel(uniqueChannelName)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
