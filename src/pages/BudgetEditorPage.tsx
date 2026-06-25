@@ -405,12 +405,6 @@ export default function BudgetEditorPage() {
 
       if (isDraft) {
         let finalCode = budget.code;
-        if (finalCode === '----') {
-          const { data: newCode, error: codeError } = await supabase.rpc('next_budget_code');
-          if (codeError) throw codeError;
-          finalCode = newCode || 'AUTO';
-          setBudget(prev => prev ? { ...prev, code: finalCode } : null);
-        }
 
         const { data: bData, error: bError } = await supabase
           .from('budgets')
@@ -426,6 +420,9 @@ export default function BudgetEditorPage() {
         
         if (bError) throw bError;
         currentBudgetId = bData.id;
+        
+        // Atualiza o estado local do orçamento com o código real gerado pelo banco
+        setBudget(prev => prev ? { ...prev, code: bData.code } : null);
 
         const { data: vData, error: vError } = await supabase
           .from('budget_versions')
@@ -708,11 +705,6 @@ export default function BudgetEditorPage() {
       if (isDraft) {
         // If it's a draft, we need to create the budget first
         let finalCode = budget.code;
-        if (finalCode === '----') {
-          const { data: newCode, error: codeError } = await supabase.rpc('next_budget_code');
-          if (codeError) throw codeError;
-          finalCode = newCode || 'AUTO';
-        }
 
         const { data: bData, error: bError } = await supabase
           .from('budgets')
@@ -730,6 +722,9 @@ export default function BudgetEditorPage() {
         
         if (bError) throw bError;
         budgetId = bData.id;
+
+        // Atualiza o estado local do orçamento com o código real gerado pelo banco
+        setBudget(prev => prev ? { ...prev, code: bData.code } : null);
 
         // Create initial version
         const { data: vData, error: vError } = await supabase

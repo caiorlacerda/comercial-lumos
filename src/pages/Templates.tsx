@@ -122,10 +122,9 @@ export default function Templates() {
       if (!originalVersion) throw new Error('Versão do template não encontrada');
 
       const { data: originalItems } = await supabase.from('budget_items').select('*').eq('version_id', originalVersion.id);
-      const { data: newCode } = await supabase.rpc('next_budget_code');
 
       const { data: newBudget, error: bError } = await supabase.from('budgets').insert({
-        code: newCode || '0000',
+        code: '----',
         project_name: `${template.project_name} (Baseada em Template)`,
         category: template.category,
         status: 'rascunho',

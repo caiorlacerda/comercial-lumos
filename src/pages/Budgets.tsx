@@ -539,14 +539,11 @@ export default function Budgets() {
         .select('*')
         .eq('version_id', originalVersion.id);
 
-      // 2. Initialise new code
-      const { data: newCode } = await supabase.rpc('next_budget_code');
-
-      // 3. Create new budget
+      // 2. Create new budget (passing '----' to trigger auto code generation in database)
       const { data: newBudget, error: bError } = await supabase
         .from('budgets')
         .insert({
-          code: newCode || '0000',
+          code: '----',
           project_name: `${budget.project_name} (Cópia)`,
           category: budget.category,
           status: 'rascunho',
