@@ -559,7 +559,7 @@ export default function BudgetEditorPage() {
           }).eq('id', existing.id);
         }
       } else {
-        await supabase.from('receivables').insert([{
+        const { error: insErr } = await supabase.from('receivables').insert([{
           budget_id: budgetId,
           budget_version_id: versionId,
           description: projectName,
@@ -568,6 +568,13 @@ export default function BudgetEditorPage() {
           status: 'aguardando',
           created_by: user?.id
         }]);
+        if (insErr) {
+          if (insErr.code === '23505') {
+            console.log('[syncReceivable] Unique violation, ignoring gracefully.');
+          } else {
+            console.error('Error inserting receivable:', insErr);
+          }
+        }
       }
 
       // Sync projects_financeiro (Fase 1)
@@ -585,12 +592,19 @@ export default function BudgetEditorPage() {
         .eq('budget_id', budgetId)
         .maybeSingle();
       if (!existing) {
-        await supabase.from('projects').insert([{
+        const { error: insErr } = await supabase.from('projects').insert([{
           name: projectName,
           code,
           budget_id: budgetId,
           client_id: clientId || null,
         }]);
+        if (insErr) {
+          if (insErr.code === '23505') {
+            console.log('[syncProject] Unique violation, ignoring gracefully.');
+          } else {
+            console.error('Error inserting project:', insErr);
+          }
+        }
       }
     } catch (err) {
       console.error('Error syncing project:', err);

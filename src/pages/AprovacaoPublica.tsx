@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
@@ -115,6 +115,7 @@ export default function AprovacaoPublica() {
   const [approverNotes, setApproverNotes] = useState('');
   const [decision, setDecision] = useState<'aprovado' | 'reprovado' | null>(null);
   const [debugError, setDebugError] = useState('');
+  const submittingRef = useRef(false);
 
   useEffect(() => { if (token) fetchData(); }, [token]);
 
@@ -144,7 +145,8 @@ export default function AprovacaoPublica() {
   }
 
   async function handleSubmit(approved: boolean) {
-    if (!version) return;
+    if (!version || submittingRef.current) return;
+    submittingRef.current = true;
     setDecision(approved ? 'aprovado' : 'reprovado');
     setSubmitting(true);
     try {
@@ -184,6 +186,7 @@ export default function AprovacaoPublica() {
       alert('Erro ao registrar resposta. Tente novamente.');
     } finally {
       setSubmitting(false);
+      submittingRef.current = false;
     }
   }
 
@@ -511,9 +514,9 @@ export default function AprovacaoPublica() {
               style={{ flex: 1, padding: '14px', backgroundColor: '#EFC700', border: 'none', borderRadius: 6, fontWeight: 800, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#000', letterSpacing: '0.04em', opacity: submitting ? 0.6 : 1 }}
             >
               {submitting && decision === 'aprovado'
-                ? <Loader2 style={{ width: 16, height: 16 }} />
+                ? <Loader2 className="animate-spin" style={{ width: 16, height: 16 }} />
                 : <CheckCircle2 style={{ width: 16, height: 16 }} />}
-              APROVAR PROPOSTA
+              {submitting && decision === 'aprovado' ? 'APROVANDO...' : 'APROVAR PROPOSTA'}
             </button>
             <button
               onClick={() => handleSubmit(false)}
@@ -522,9 +525,9 @@ export default function AprovacaoPublica() {
               style={{ flex: 1, padding: '14px', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#555', letterSpacing: '0.04em', opacity: submitting ? 0.6 : 1 }}
             >
               {submitting && decision === 'reprovado'
-                ? <Loader2 style={{ width: 16, height: 16 }} />
+                ? <Loader2 className="animate-spin" style={{ width: 16, height: 16 }} />
                 : <XCircle style={{ width: 16, height: 16 }} />}
-              RECUSAR
+              {submitting && decision === 'reprovado' ? 'RECUSANDO...' : 'RECUSAR'}
             </button>
           </div>
         </div>

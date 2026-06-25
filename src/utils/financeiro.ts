@@ -81,7 +81,11 @@ export async function handleBudgetApproval(budgetId: string, totalAmount: number
         });
       
       if (insErr) {
-        console.error('[handleBudgetApproval] Error inserting projects_financeiro:', insErr);
+        if (insErr.code === '23505') {
+          console.log('[handleBudgetApproval] Record already exists (idempotent unique violation).');
+        } else {
+          console.error('[handleBudgetApproval] Error inserting projects_financeiro:', insErr);
+        }
       }
     }
   } catch (err) {
