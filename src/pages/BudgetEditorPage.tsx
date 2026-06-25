@@ -439,7 +439,10 @@ export default function BudgetEditorPage() {
             notes_internal: version.notes_internal,
             notes_client: version.notes_client,
             payment_terms: version.payment_terms,
-            validity_days: version.validity_days
+            validity_days: version.validity_days,
+            logistics_date: version.logistics_date || null,
+            logistics_time: version.logistics_time || null,
+            logistics_location: version.logistics_location || null
           })
           .select()
           .single();
@@ -473,7 +476,10 @@ export default function BudgetEditorPage() {
             notes_internal: version.notes_internal,
             notes_client: version.notes_client,
             payment_terms: version.payment_terms,
-            validity_days: version.validity_days
+            validity_days: version.validity_days,
+            logistics_date: version.logistics_date || null,
+            logistics_time: version.logistics_time || null,
+            logistics_location: version.logistics_location || null
           }).eq('id', version.id),
           supabase.from('budgets').update({
             code: budget.code,
@@ -653,7 +659,10 @@ export default function BudgetEditorPage() {
           notes_internal: version.notes_internal,
           notes_client: version.notes_client,
           payment_terms: version.payment_terms,
-          validity_days: version.validity_days
+          validity_days: version.validity_days,
+          logistics_date: version.logistics_date || null,
+          logistics_time: version.logistics_time || null,
+          logistics_location: version.logistics_location || null
         })
         .select()
         .single();
@@ -735,7 +744,10 @@ export default function BudgetEditorPage() {
             notes_internal: version?.notes_internal,
             notes_client: version?.notes_client,
             payment_terms: version?.payment_terms,
-            validity_days: version?.validity_days || 7
+            validity_days: version?.validity_days || 7,
+            logistics_date: version?.logistics_date || null,
+            logistics_time: version?.logistics_time || null,
+            logistics_location: version?.logistics_location || null
           })
           .select()
           .single();
@@ -1172,7 +1184,7 @@ export default function BudgetEditorPage() {
   return (
     <div className="flex flex-col gap-8 pb-20">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:sticky lg:top-16 lg:z-20 lg:bg-lumos-bg/95 lg:backdrop-blur-sm lg:py-4 lg:-mx-8 lg:px-8 lg:-mt-8 lg:mb-4 lg:border-b lg:border-lumos-border/50 transition-all">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/')} className="p-2 hover:bg-lumos-bg rounded-full transition-colors text-lumos-text-secondary">
             <ChevronLeft className="w-6 h-6" />
@@ -1537,28 +1549,58 @@ export default function BudgetEditorPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Pagamento</label>
-                    <input 
+                    <select 
                       disabled={isReadOnly}
-                      className="input-lumos w-full text-xs disabled:opacity-70"
+                      className="input-lumos w-full text-xs disabled:opacity-70 cursor-pointer"
                       value={version?.payment_terms || ''}
                       onChange={(e) => {
                         setVersion(v => v ? { ...v, payment_terms: e.target.value } : null);
                         isDirty.current = true;
                       }}
-                    />
+                    >
+                      <option value="">Selecionar Pagamento</option>
+                      {[
+                        '7 dias após a emissão da nota',
+                        '15 dias após a emissão da nota',
+                        '30 dias após a emissão da nota',
+                        '45 dias após a emissão da nota',
+                        '60 dias após a emissão da nota'
+                      ].map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                      {version?.payment_terms && ![
+                        '7 dias após a emissão da nota',
+                        '15 dias após a emissão da nota',
+                        '30 dias após a emissão da nota',
+                        '45 dias após a emissão da nota',
+                        '60 dias após a emissão da nota'
+                      ].includes(version.payment_terms) && (
+                        <option value={version.payment_terms}>{version.payment_terms}</option>
+                      )}
+                    </select>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Validade (Dias)</label>
-                    <input 
+                    <select 
                       disabled={isReadOnly}
-                      type="number"
-                      className="input-lumos w-full text-xs disabled:opacity-70"
+                      className="input-lumos w-full text-xs disabled:opacity-70 cursor-pointer"
                       value={version?.validity_days || 7}
                       onChange={(e) => {
                         setVersion(v => v ? { ...v, validity_days: Number(e.target.value) } : null);
                         isDirty.current = true;
                       }}
-                    />
+                    >
+                      {Array.from({ length: 30 }, (_, i) => i + 1).map(day => (
+                        <option key={day} value={day}>
+                          {day} {day === 1 ? 'dia' : 'dias'}
+                        </option>
+                      ))}
+                      {version?.validity_days && (version.validity_days < 1 || version.validity_days > 30) && (
+                        <option value={version.validity_days}>
+                          {version.validity_days} {version.validity_days === 1 ? 'dia' : 'dias'}
+                        </option>
+                      )}
+                    </select>
                   </div>
                 </div>
               </div>
