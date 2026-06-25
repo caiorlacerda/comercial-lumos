@@ -132,7 +132,7 @@ export default function BudgetEditorPage() {
   const [catalogSearch, setCatalogSearch] = useState('');
 
   const [clients, setClients] = useState<any[]>([]);
-  const [isEditingCode, setIsEditingCode] = useState(false);
+  const [previewCode, setPreviewCode] = useState('');
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [templateCategory, setTemplateCategory] = useState('');
@@ -245,7 +245,6 @@ export default function BudgetEditorPage() {
   // Validation logic
   const validation = useMemo(() => {
     const missing = [];
-    if (!budget?.code || budget.code === '----') missing.push('Código do orçamento');
     if (!budget?.project_name || budget.project_name === 'Novo Projeto' || budget.project_name.trim() === '') missing.push('Nome do projeto');
     if (!budget?.client_id) missing.push('Cliente');
     if (items.length === 0) missing.push('Pelo menos um item');
@@ -255,6 +254,16 @@ export default function BudgetEditorPage() {
       missing
     };
   }, [budget, items]);
+
+  const displayCode = useMemo(() => {
+    if (isDraft && budget?.code === '----') {
+      if (previewCode) {
+        return `${previewCode} (será confirmado ao salvar)`;
+      }
+      return '---- (será gerado ao salvar)';
+    }
+    return formatBudgetCode(budget?.code || '');
+  }, [isDraft, budget?.code, previewCode]);
 
   // Load basic data
   useEffect(() => {
@@ -280,6 +289,16 @@ export default function BudgetEditorPage() {
     setIsDraft(true);
     setLoading(true);
     try {
+      // Busca a prévia informativa do próximo código sem persistir
+      try {
+        const { data: newCode } = await supabase.rpc('next_budget_code');
+        if (newCode) {
+          setPreviewCode(newCode);
+        }
+      } catch (err) {
+        console.error('Error fetching preview code:', err);
+      }
+
       const draftBudget: Budget = {
         id: 'draft',
         code: '----',
@@ -1186,29 +1205,11 @@ export default function BudgetEditorPage() {
           </button>
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3">
-              {isEditingCode ? (
-                <div className="flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap">
-                  <span className="font-mono text-lumos-yellow text-sm font-bold">#</span>
-                  <input
-                    autoFocus
-                    className="bg-lumos-bg border border-lumos-yellow/50 text-lumos-yellow font-mono text-sm px-2 py-1 rounded w-32 focus:ring-1 focus:ring-lumos-yellow outline-none"
-                    value={budget?.code || ''}
-                    onChange={(e) => updateBudget({ code: e.target.value })}
-                    onBlur={() => setIsEditingCode(false)}
-                    onKeyDown={(e) => e.key === 'Enter' && setIsEditingCode(false)}
-                  />
-                </div>
-              ) : (
-                <span 
-                  onClick={() => !isReadOnly && setIsEditingCode(true)}
-                  className={clsx(
-                    "font-mono text-lumos-yellow text-xs px-2.5 py-1.5 bg-lumos-yellow/10 rounded font-bold border border-lumos-yellow/20 cursor-pointer hover:bg-lumos-yellow/20 transition-all flex-shrink-0 whitespace-nowrap",
-                    isReadOnly && "cursor-default hover:bg-lumos-yellow/10"
-                  )}
-                >
-                  {formatBudgetCode(budget?.code || '')}
-                </span>
-              )}
+              <span 
+                className="font-mono text-lumos-yellow text-xs px-2.5 py-1.5 bg-lumos-yellow/10 rounded font-bold border border-lumos-yellow/20 flex-shrink-0 whitespace-nowrap"
+              >
+                {displayCode}
+              </span>
               <input 
                 disabled={isReadOnly}
                 className="bg-transparent border-none text-2xl font-bold focus:ring-0 p-0 text-lumos-text-primary w-full max-w-md disabled:opacity-70"
