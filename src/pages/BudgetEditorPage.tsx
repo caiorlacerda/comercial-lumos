@@ -258,9 +258,9 @@ export default function BudgetEditorPage() {
   const displayCode = useMemo(() => {
     if (isDraft && budget?.code === '----') {
       if (previewCode) {
-        return `${previewCode} (será confirmado ao salvar)`;
+        return previewCode;
       }
-      return '---- (será gerado ao salvar)';
+      return '#----';
     }
     return formatBudgetCode(budget?.code || '');
   }, [isDraft, budget?.code, previewCode]);
