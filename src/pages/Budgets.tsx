@@ -51,6 +51,20 @@ interface Budget {
   versions: any[];
 }
 
+function parseBudgetCodeNumeric(code: string): number {
+  if (!code) return 0;
+  const clean = code.startsWith('#') ? code.slice(1) : code;
+  if (clean.includes('-')) {
+    const parts = clean.split('-');
+    const year = parseInt(parts[0], 10) || 0;
+    const seq = parseInt(parts[1], 10) || 0;
+    return year * 1000000 + seq;
+  }
+  const seq = parseInt(clean, 10) || 0;
+  const currentYear = new Date().getFullYear();
+  return currentYear * 1000000 + seq;
+}
+
 export default function Budgets() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -75,7 +89,7 @@ export default function Budgets() {
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   
   // Sorting & Filtering
-  const [sortField, setSortField] = useState<string>('updated_at');
+  const [sortField, setSortField] = useState<string>('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [allClients, setAllClients] = useState<any[]>([]);
@@ -605,6 +619,12 @@ export default function Budgets() {
       let valA: any = a[sortField as keyof Budget];
       let valB: any = b[sortField as keyof Budget];
 
+      // Parse budget code numerically for precise sorting
+      if (sortField === 'code') {
+        valA = parseBudgetCodeNumeric(a.code);
+        valB = parseBudgetCodeNumeric(b.code);
+      }
+
       // Handle nested client name
       if (sortField === 'client') {
         valA = a.clients?.name || '';
@@ -630,6 +650,15 @@ export default function Budgets() {
 
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      
+      // Secondary sort tie-breaker by code descending for client sorting
+      if (sortField === 'client') {
+        const codeA = parseBudgetCodeNumeric(a.code);
+        const codeB = parseBudgetCodeNumeric(b.code);
+        if (codeA < codeB) return 1;
+        if (codeA > codeB) return -1;
+      }
+      
       return 0;
     });
 
@@ -725,6 +754,8 @@ export default function Budgets() {
                   setSortOrder(order as 'asc' | 'desc');
                 }}
               >
+                <option value="code-desc">Código (Decrescente)</option>
+                <option value="code-asc">Código (Crescente)</option>
                 <option value="updated_at-desc">Mais recente</option>
                 <option value="updated_at-asc">Mais antigo</option>
                 <option value="valorFinal-desc">Maior valor</option>
