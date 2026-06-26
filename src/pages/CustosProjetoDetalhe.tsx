@@ -644,7 +644,7 @@ export default function CustosProjetoDetalhe() {
   const totalEquipe = equipeCosts.reduce((acc, c) => acc + Number(c.amount || 0), 0);
   const totalProducao = producaoCosts.reduce((acc, c) => acc + Number(c.amount || 0), 0);
 
-  // 2. Cálculos de Custos Estimados do Orçamento (Teto do Produtor)
+  // 2. Cálculos Orçamentários (Teto Operacional e Faturamento)
   const estimatedCost = (project.budget_items || []).reduce(
     (acc: number, item: any) => acc + Number(item.unit_cost || 0) * Number(item.quantity || 0),
     0
@@ -653,17 +653,48 @@ export default function CustosProjetoDetalhe() {
   const defaultNfPercent = projectFinanceiro?.nf_percent ?? 0.18;
   const defaultMarginPercent = 0.40; // 40%
 
+  // TETO DE CUSTOS (Custo Direto do Orçamento)
   const tetoCustos = project.budget_id
     ? estimatedCost
     : (projectFinanceiro?.valor_vendido || Number(project.production_value || 0)) * (1 - defaultNfPercent) / (1 + defaultMarginPercent);
 
+  // Sobra operacional do teto (Saldo de Produção)
   const remainingCosts = tetoCustos - totalCosts;
+
+  // Porcentagem de consumo do teto (usado para saúde do orçamento e progresso do produtor)
   const consumptionPercentProd = tetoCustos > 0 ? (totalCosts / tetoCustos) * 100 : 0;
 
-  // 3. Cálculos de Faturamento e Margem (Apenas Administradores)
-  const totalProductionValue = projectFinanceiro?.valor_vendido ?? Number(project.production_value || 0);
-  const margin = totalProductionValue - totalCosts;
-  const consumptionPercentAdmin = totalProductionValue > 0 ? (totalCosts / totalProductionValue) * 100 : 0;
+  // 3. Cálculos de Faturamento, Impostos e Lucro (Cascata Financeira)
+  const marginPct = Number(project.active_version?.margin_pct ?? defaultMarginPercent);
+  const nfPct = Number(project.active_version?.nf_pct ?? defaultNfPercent);
+  const discountValue = Number(project.active_version?.discount_value ?? 0);
+
+  // Subtotal (Custo + Margem)
+  const subtotalOrçado = estimatedCost * (1 + marginPct);
+
+  // Faturamento Bruto (Recalculado de baixo para cima se tiver orçamento)
+  const faturamentoBruto = project.budget_id
+    ? (subtotalOrçado * (1 + nfPct) - discountValue)
+    : (projectFinanceiro?.valor_vendido ?? Number(project.production_value || 0));
+
+  // Imposto NF
+  const impostoNF = project.budget_id
+    ? (subtotalOrçado * nfPct)
+    : (faturamentoBruto * nfPct);
+
+  // Faturamento Líquido (Receita sem imposto)
+  const faturamentoLiquido = project.budget_id
+    ? subtotalOrçado
+    : (faturamentoBruto / (1 + nfPct));
+
+  // Lucro Líquido Real (com impostos deduzidos)
+  const lucroLiquidoReal = faturamentoLiquido - totalCosts;
+
+  // Lucro Operacional (sem descontar impostos)
+  const lucroOperacionalReal = faturamentoBruto - totalCosts;
+
+  // Margem Real Alcançada
+  const margemRealAlcançada = faturamentoBruto > 0 ? (lucroLiquidoReal / faturamentoBruto) * 100 : 0;
 
   return (
     <div className="space-y-6 font-work-sans">
@@ -718,32 +749,40 @@ export default function CustosProjetoDetalhe() {
         </div>
       </div>
 
-      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercentAdmin > 90 && (
+      {profile?.role === 'admin' && tetoCustos > 0 && consumptionPercentProd > 90 && (
         <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-lumos flex items-center gap-3 animate-pulse">
           <AlertTriangle className="w-5 h-5 text-red-500" />
           <p className="text-sm font-bold text-red-500 uppercase">
-            Atenção Crítica: Consumo de {consumptionPercentAdmin.toFixed(1)}%!
+            Atenção Crítica: Consumo de Teto de {consumptionPercentProd.toFixed(1)}%!
           </p>
         </div>
       )}
-      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercentAdmin > 70 && consumptionPercentAdmin <= 90 && (
+      {profile?.role === 'admin' && tetoCustos > 0 && consumptionPercentProd > 70 && consumptionPercentProd <= 90 && (
         <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lumos flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-yellow-500" />
           <p className="text-sm font-bold text-yellow-500 uppercase">
-            Aviso: Consumo de {consumptionPercentAdmin.toFixed(1)}%.
+            Aviso: Consumo de Teto de {consumptionPercentProd.toFixed(1)}%.
           </p>
         </div>
       )}
 
       {/* Grid de Cards Superiores condicional por Permissão/Papel */}
+      {/* Grid de Cards Superiores condicional por Permissão/Papel */}
       {profile?.role === 'admin' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="card p-6">
-            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
-              Valor Disponível para Produção
-            </p>
+            <div className="flex justify-between items-start mb-1">
+              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">
+                Faturamento Bruto (Venda)
+              </p>
+              {!project.budget_id && (
+                <span className="text-[9px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.5 rounded uppercase tracking-wider scale-90">
+                  Estimado
+                </span>
+              )}
+            </div>
             <p className="text-2xl font-black text-lumos-text-primary tracking-tight">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProductionValue)}
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamentoBruto)}
             </p>
           </div>
           <div className="card p-6">
@@ -755,20 +794,34 @@ export default function CustosProjetoDetalhe() {
             </p>
           </div>
           <div className="card p-6">
-            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
-              Margem Real (Produção)
-            </p>
-            <p className={`text-2xl font-black tracking-tight ${margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(margin)}
+            <div className="flex justify-between items-start mb-1">
+              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">
+                Saldo de Produção (Margem)
+              </p>
+              {!project.budget_id && (
+                <span className="text-[9px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.5 rounded uppercase tracking-wider scale-90">
+                  Estimado
+                </span>
+              )}
+            </div>
+            <p className={`text-2xl font-black tracking-tight ${remainingCosts >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingCosts)}
             </p>
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="card p-6">
-            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
-              Budget Disponível (Teto)
-            </p>
+            <div className="flex justify-between items-start mb-1">
+              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">
+                Budget Disponível (Teto)
+              </p>
+              {!project.budget_id && (
+                <span className="text-[9px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.5 rounded uppercase tracking-wider scale-90">
+                  Estimado
+                </span>
+              )}
+            </div>
             <p className="text-2xl font-black text-lumos-text-primary tracking-tight">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tetoCustos)}
             </p>
@@ -782,9 +835,16 @@ export default function CustosProjetoDetalhe() {
             </p>
           </div>
           <div className="card p-6">
-            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
-              Saldo Restante
-            </p>
+            <div className="flex justify-between items-start mb-1">
+              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">
+                Saldo Restante
+              </p>
+              {!project.budget_id && (
+                <span className="text-[9px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.5 rounded uppercase tracking-wider scale-90">
+                  Estimado
+                </span>
+              )}
+            </div>
             <p className={`text-2xl font-black tracking-tight ${remainingCosts >= 0 ? 'text-green-500' : 'text-red-500'}`}>
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingCosts)}
             </p>
@@ -794,22 +854,22 @@ export default function CustosProjetoDetalhe() {
 
       {/* Barra de Progresso/Saúde condicional por Permissão/Papel */}
       {profile?.role === 'admin' ? (
-        totalProductionValue > 0 && (
+        tetoCustos > 0 && (
           <div className="card p-6 space-y-4">
             <div className="flex justify-between items-end">
-              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Saúde do Orçamento</p>
-              <p className="text-xs font-black text-lumos-text-primary">{consumptionPercentAdmin.toFixed(1)}%</p>
+              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Saúde do Orçamento (Consumo de Teto)</p>
+              <p className="text-xs font-black text-lumos-text-primary">{consumptionPercentProd.toFixed(1)}%</p>
             </div>
             <div className="w-full h-4 bg-lumos-text-primary/5 rounded-full overflow-hidden border border-lumos-border p-0.5">
               <div
                 className={`h-full rounded-full transition-all duration-1000 ${
-                  consumptionPercentAdmin > 90
+                  consumptionPercentProd > 90
                     ? 'bg-red-500'
-                    : consumptionPercentAdmin > 70
+                    : consumptionPercentProd > 70
                     ? 'bg-yellow-500'
                     : 'bg-green-500'
                 }`}
-                style={{ width: `${Math.min(consumptionPercentAdmin, 100)}%` }}
+                style={{ width: `${Math.min(consumptionPercentProd, 100)}%` }}
               />
             </div>
           </div>
@@ -1350,17 +1410,20 @@ export default function CustosProjetoDetalhe() {
                     </div>
                   </div>
 
-                  {/* Cascata de Rentabilidade (Melhoria B) */}
+                  {/* Cascata de Rentabilidade (Melhoria B - Corrigido) */}
                   <div className="space-y-4 bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border">
-                    <h4 className="text-xs font-black text-lumos-yellow uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                      <TrendingUp className="w-4 h-4" /> Cascata de Rentabilidade
+                    <h4 className="text-xs font-black text-lumos-yellow uppercase tracking-widest mb-2 flex items-center justify-between gap-1.5">
+                      <span className="flex items-center gap-1.5"><TrendingUp className="w-4 h-4" /> Cascata de Rentabilidade</span>
+                      {!project.budget_id && (
+                        <span className="text-[9px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.2 rounded uppercase">Estimado</span>
+                      )}
                     </h4>
                     
                     {/* Passo 1: Orçamento Bruto */}
                     <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
                       <span className="text-lumos-text-secondary">1. Faturamento Bruto (Orçamento)</span>
                       <span className="font-bold text-lumos-text-primary">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_vendido)}
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamentoBruto)}
                       </span>
                     </div>
 
@@ -1368,18 +1431,18 @@ export default function CustosProjetoDetalhe() {
                     <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
                       <span className="text-lumos-text-secondary flex flex-col">
                         <span>2. Imposto NF</span>
-                        <span className="text-[10px] text-lumos-text-secondary/60">Alíquota: {(projectFinanceiro.nf_percent * 100).toFixed(1)}%</span>
+                        <span className="text-[10px] text-lumos-text-secondary/60">Alíquota: {(nfPct * 100).toFixed(1)}%</span>
                       </span>
                       <span className="font-bold text-red-400">
-                        - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_nf)}
+                        - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(impostoNF)}
                       </span>
                     </div>
 
-                    {/* Passo 3: Receita Líquida */}
+                    {/* Passo 3: Faturamento Líquido */}
                     <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2 bg-lumos-yellow/[0.02] px-2 py-1 rounded">
                       <span className="text-lumos-text-primary font-bold">3. Faturamento Líquido</span>
                       <span className="font-extrabold text-lumos-text-primary">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.receita_liquida)}
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamentoLiquido)}
                       </span>
                     </div>
 
@@ -1390,7 +1453,7 @@ export default function CustosProjetoDetalhe() {
                         <span className="text-[10px] text-lumos-text-secondary/60">Teto de Custo Estimado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tetoCustos)}</span>
                       </span>
                       <span className="font-bold text-lumos-text-secondary">
-                        {((project.active_version?.margin_pct ?? 0.40) * 100).toFixed(1)}%
+                        {(marginPct * 100).toFixed(1)}%
                       </span>
                     </div>
 
@@ -1411,33 +1474,41 @@ export default function CustosProjetoDetalhe() {
                       </span>
                     </div>
 
-                    {/* Passo 6: Lucro Líquido Real */}
-                    {(() => {
-                      const faturamentoLiquido = projectFinanceiro.receita_liquida;
-                      const lucroLiquidoReal = faturamentoLiquido - totalCosts;
-                      const margemReal = projectFinanceiro.valor_vendido > 0 ? (lucroLiquidoReal / projectFinanceiro.valor_vendido) * 100 : 0;
-                      return (
-                        <>
-                          <div className={clsx(
-                            "flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2 px-2 py-1 rounded",
-                            lucroLiquidoReal >= 0 ? "bg-green-500/5" : "bg-red-500/5"
-                          )}>
-                            <span className="text-lumos-text-primary font-bold">6. Lucro Líquido Real</span>
-                            <span className={clsx("font-black", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lucroLiquidoReal)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs border-b border-lumos-border/50 pb-2">
-                            <span className="text-lumos-text-secondary">Margem Real Alcançada</span>
-                            <span className={clsx("font-bold", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
-                              {margemReal.toFixed(1)}%
-                            </span>
-                          </div>
-                        </>
-                      );
-                    })()}
+                    {/* Passo 6: Lucros (Líquido com NF e Operacional sem NF) */}
+                    <div className={clsx(
+                      "flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2 px-2 py-1 rounded",
+                      lucroLiquidoReal >= 0 ? "bg-green-500/5" : "bg-red-500/5"
+                    )}>
+                      <span className="text-lumos-text-primary flex flex-col">
+                        <span className="font-bold">6. Lucro Líquido Real (com NF)</span>
+                        <span className="text-[9px] text-lumos-text-secondary/60">Dedução: Faturamento Líquido − Custo Real</span>
+                      </span>
+                      <span className={clsx("font-black text-sm", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lucroLiquidoReal)}
+                      </span>
+                    </div>
 
-                    {/* Passo 7: Caixa & Divisão dos Sócios */}
+                    <div className={clsx(
+                      "flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2 px-2 py-1 rounded",
+                      lucroOperacionalReal >= 0 ? "bg-green-500/5" : "bg-red-500/5"
+                    )}>
+                      <span className="text-lumos-text-primary flex flex-col">
+                        <span className="font-bold">7. Lucro Operacional (sem NF)</span>
+                        <span className="text-[9px] text-lumos-text-secondary/60">Dedução: Faturamento Bruto − Custo Real</span>
+                      </span>
+                      <span className={clsx("font-black text-sm", lucroOperacionalReal >= 0 ? "text-green-500" : "text-red-500")}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lucroOperacionalReal)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs border-b border-lumos-border/50 pb-2">
+                      <span className="text-lumos-text-secondary">Margem Real Alcançada</span>
+                      <span className={clsx("font-bold", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
+                        {margemRealAlcançada.toFixed(1)}%
+                      </span>
+                    </div>
+
+                    {/* Passo 8: Caixa & Divisão dos Sócios */}
                     <div className="pt-2 text-xs text-lumos-text-secondary/80 bg-lumos-surface border border-lumos-border/80 p-2.5 rounded">
                       <span className="font-bold uppercase tracking-wider block mb-1 text-[10px] text-lumos-yellow">Caixa & Sócios</span>
                       <p className="italic text-[11px] leading-relaxed">

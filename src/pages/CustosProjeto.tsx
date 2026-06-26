@@ -83,28 +83,51 @@ export default function CustosProjeto() {
       if (rentError) throw rentError;
 
       const processed = (rentData || []).map(p => {
-        const totalProductionValue = Number(p.valor_vendido || 0);
         const totalCosts = Number(p.custos_total || 0);
-        const margin = Number(p.lucro_liquido || 0);
-        const marginPercent = Number(p.margem || 0) * 100;
         
-        // --- CÁLCULO DO TETO DE CUSTOS (Cálculo herdado do detalhe) ---
+        // --- CÁLCULO DE CUSTOS E FATURAMENTO (IDÊNTICO AO DETALHE) ---
         let estimatedCost = 0;
         const budget = p.budget;
+        let marginPct = 0.40; // default margin
+        let nfPct = Number(p.nf_percent ?? 0.18);
+        let discountValue = 0;
+
         if (budget?.active_version) {
-          const items = budget.active_version.budget_items || [];
+          const version = budget.active_version;
+          marginPct = Number(version.margin_pct ?? 0.40);
+          nfPct = Number(version.nf_pct ?? 0.18);
+          discountValue = Number(version.discount_value ?? 0);
+
+          const items = version.budget_items || [];
           estimatedCost = items.reduce(
             (acc: number, item: any) => acc + Number(item.unit_cost || 0) * Number(item.quantity || 0),
             0
           );
         }
 
-        const nfPercent = Number(p.nf_percent ?? 0.18);
-        const defaultMarginPercent = 0.40;
-
+        // TETO DE CUSTOS (Custo Direto do Orçamento)
         const tetoCustos = p.proposta_id
           ? estimatedCost
-          : totalProductionValue * (1 - nfPercent) / (1 + defaultMarginPercent);
+          : Number(p.valor_vendido || 0) * (1 - nfPct) / (1 + 0.40);
+
+        // Subtotal (Custo + Margem)
+        const subtotalOrçado = estimatedCost * (1 + marginPct);
+
+        // Faturamento Bruto (Venda)
+        const totalProductionValue = p.proposta_id
+          ? (subtotalOrçado * (1 + nfPct) - discountValue)
+          : Number(p.valor_vendido || 0);
+
+        // Faturamento Líquido (Receita sem imposto)
+        const faturamentoLiquido = p.proposta_id
+          ? subtotalOrçado
+          : (totalProductionValue / (1 + nfPct));
+
+        // Lucro Líquido Real (com imposto deduzido)
+        const margin = faturamentoLiquido - totalCosts;
+
+        // Margem Real Alcançada % (Lucro / Faturamento)
+        const marginPercent = totalProductionValue > 0 ? (margin / totalProductionValue) * 100 : 0;
         // -------------------------------------------------------------
         
         return {
@@ -363,7 +386,12 @@ export default function CustosProjeto() {
               {isAdmin ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
                   <div>
-                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Valor Vendido</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Valor Vendido</p>
+                      {!p.budget_id && (
+                        <span className="text-[8px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
+                      )}
+                    </div>
                     <p className="text-sm font-bold text-lumos-text-primary">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalProductionValue)}
                     </p>
@@ -375,7 +403,12 @@ export default function CustosProjeto() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Lucro Líquido</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Lucro Líquido</p>
+                      {!p.budget_id && (
+                        <span className="text-[8px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
+                      )}
+                    </div>
                     <p className={`text-sm font-black ${p.margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.margin)}
                     </p>
@@ -409,7 +442,12 @@ export default function CustosProjeto() {
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
                   <div>
-                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Budget Disponível</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Budget Disponível</p>
+                      {!p.budget_id && (
+                        <span className="text-[8px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
+                      )}
+                    </div>
                     <p className="text-sm font-bold text-lumos-text-primary">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.tetoCustos)}
                     </p>
