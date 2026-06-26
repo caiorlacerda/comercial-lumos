@@ -364,14 +364,16 @@ export default function FinanceiroDashboard() {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('dashboard_preferences').upsert({
+        const { error } = await supabase.from('dashboard_preferences').upsert({
           user_id: user.id,
           preferences: updatedPref,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id' });
+
+        if (error) throw error;
       }
     } catch (error) {
-      console.warn('Erro ao salvar preferências no banco/local:', error);
+      console.error('Erro ao salvar preferências no banco/local:', error);
     }
   }
 
