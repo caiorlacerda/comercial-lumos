@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Wallet,
   TrendingUp,
@@ -12,10 +12,13 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
+type PeriodType = 'semana' | 'mes' | 'trimestre' | 'semestre' | 'ano';
+
 export default function FinanceiroDashboard() {
+  const [period, setPeriod] = useState<PeriodType>('mes');
   const [stats, setStats] = useState({
     saldoGeral: 0, // Caixa V2
-    faturamentoMes: 0, // Rentabilidade
+    faturamentoPeriodo: 0, // Rentabilidade dinâmica
     pagarSemana: 0, // Payables
     receberSemana: 0, // Receivables
   });
@@ -23,7 +26,30 @@ export default function FinanceiroDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [period]);
+
+  const getStartDate = (periodType: PeriodType): string => {
+    const now = new Date();
+    let start = new Date();
+    switch (periodType) {
+      case 'semana':
+        start.setDate(now.getDate() - 7);
+        break;
+      case 'mes':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'trimestre':
+        start.setMonth(now.getMonth() - 3);
+        break;
+      case 'semestre':
+        start.setMonth(now.getMonth() - 6);
+        break;
+      case 'ano':
+        start = new Date(now.getFullYear(), 0, 1);
+        break;
+    }
+    return start.toISOString().split('T')[0];
+  };
 
   async function fetchDashboardData() {
     try {
@@ -33,30 +59,23 @@ export default function FinanceiroDashboard() {
       nextWeek.setDate(now.getDate() + 7);
       const nextWeekStr = nextWeek.toISOString().split('T')[0];
 
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
+      const startDate = getStartDate(period);
 
-      // Busca dados de rentabilidade, contas a pagar e contas a receber
+      // Busca dados de rentabilidade (filtrado pelo período global), contas a pagar e contas a receber
       const [rentRes, payablesRes, receivablesRes] = await Promise.all([
         supabase
           .from('vw_rentabilidade')
-          .select('valor_vendido, created_at, data_recebimento_negociada'),
+          .select('valor_vendido, created_at, data_recebimento_negociada')
+          .or(`data_recebimento_negociada.gte.${startDate},created_at.gte.${startDate}`),
         supabase.from('payables').select('amount, due_date, paid_at'),
         supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at')
       ]);
 
       const rentData = rentRes.data || [];
 
-      // Filtra projetos que têm faturamento no mês corrente
-      const currentMonthProjects = rentData.filter(item => {
-        const dateStr = item.data_recebimento_negociada || item.created_at;
-        if (!dateStr) return false;
-        const date = new Date(dateStr);
-        return date.getFullYear() === currentYear && date.getMonth() === currentMonth;
-      });
-
-      // KPIs do Mês Atual baseados em Rentabilidade
-      const faturamentoMes = currentMonthProjects.reduce((acc, item) => acc + Number(item.valor_vendido || 0), 0);
+      // Como o filtro SQL do supabase .or() busca registros MAIORES OU IGUAIS à startDate, 
+      // fazemos uma agregação simples somando todos os registros retornados.
+      const faturamentoPeriodo = rentData.reduce((acc, item) => acc + Number(item.valor_vendido || 0), 0);
 
       // KPIs de Compromissos de Caixa da semana (puxados das tabelas de parcelas)
       const pagarSemana = (payablesRes.data || [])
@@ -68,8 +87,8 @@ export default function FinanceiroDashboard() {
         .reduce((acc, r) => acc + (Number(r.total_amount || 0) - Number(r.received_amount || 0)), 0);
 
       setStats({
-        saldoGeral: 0, // Caixa V2 (Integração Pendente)
-        faturamentoMes,
+        saldoGeral: 0, // Caixa V2
+        faturamentoPeriodo,
         pagarSemana,
         receberSemana,
       });
@@ -90,13 +109,36 @@ export default function FinanceiroDashboard() {
 
   return (
     <div className="space-y-8 font-work-sans">
-      <div>
-        <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">Dashboard Financeiro</h1>
-        <p className="text-lumos-text-secondary font-medium mt-1">Visão geral da saúde econômica da Lumos.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">Dashboard Financeiro</h1>
+          <p className="text-lumos-text-secondary font-medium mt-1">Visão geral da saúde econômica da Lumos.</p>
+        </div>
+
+        {/* Seletor de Período Global */}
+        <div className="flex bg-lumos-surface/40 p-1 border border-lumos-border/50 rounded-full w-fit">
+          {(['semana', 'mes', 'trimestre', 'semestre', 'ano'] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                period === p
+                  ? 'bg-lumos-yellow text-lumos-bg shadow-md scale-105'
+                  : 'text-lumos-text-secondary hover:text-lumos-text-primary'
+              }`}
+            >
+              {p === 'semana' && 'Semana'}
+              {p === 'mes' && 'Mês'}
+              {p === 'trimestre' && 'Trimestre'}
+              {p === 'semestre' && 'Semestre'}
+              {p === 'ano' && 'Ano'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Saldo Geral em Conta (Caixa V2 - Sinalizado) */}
+        {/* Card 1: Saldo Geral em Conta (Caixa V2) */}
         <div className="card p-6 border-t-4 border-lumos-text-secondary/35 shadow-lg relative overflow-hidden opacity-90">
           <div className="p-2 bg-lumos-border rounded-lumos text-lumos-text-secondary w-fit mb-4">
             <Wallet className="w-5 h-5" />
@@ -109,13 +151,15 @@ export default function FinanceiroDashboard() {
           <p className="text-[9px] text-lumos-text-secondary/50 mt-2">Módulo de conciliação de caixa planejado para V2.</p>
         </div>
 
-        {/* Card 2: Faturamento do Mês (Rentabilidade) */}
+        {/* Card 2: Faturamento do Período (Rentabilidade) */}
         <div className="card p-6 border-t-4 border-green-500 shadow-lg">
           <div className="p-2 bg-green-500/10 rounded-lumos text-green-500 w-fit mb-4">
             <TrendingUp className="w-5 h-5" />
           </div>
-          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Faturamento do Mês</p>
-          <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">{formatBRL(stats.faturamentoMes)}</p>
+          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">
+            Faturamento {period === 'semana' ? 'da Semana' : period === 'mes' ? 'do Mês' : period === 'trimestre' ? 'do Trimestre' : period === 'semestre' ? 'do Semestre' : 'do Ano'}
+          </p>
+          <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">{formatBRL(stats.faturamentoPeriodo)}</p>
         </div>
 
         {/* Card 3: A Pagar (7 dias) */}
