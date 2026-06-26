@@ -31,7 +31,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               {currentSection.title}
             </h3>
             <div className="space-y-1">
-              {currentSection.items.map((item) => (
+              {getSectionItems(currentSection.id, ctx).map((item) => (
                 <NavLink
                   key={item.path}
                   to={item.path}
