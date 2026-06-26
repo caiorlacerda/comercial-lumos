@@ -693,8 +693,11 @@ export default function CustosProjetoDetalhe() {
   // Lucro Operacional (sem descontar impostos)
   const lucroOperacionalReal = faturamentoBruto - totalCosts;
 
-  // Margem Real Alcançada
-  const margemRealAlcançada = faturamentoBruto > 0 ? (lucroLiquidoReal / faturamentoBruto) * 100 : 0;
+  // Markup Real (sobre custo) = Lucro Líquido Real ÷ Custo Real
+  const markupReal = totalCosts > 0 ? (lucroLiquidoReal / totalCosts) * 100 : 0;
+
+  // Margem s/ Faturamento = Lucro Líquido Real ÷ Faturamento Bruto
+  const margemFaturamento = faturamentoBruto > 0 ? (lucroLiquidoReal / faturamentoBruto) * 100 : 0;
 
   return (
     <div className="space-y-6 font-work-sans">
@@ -1501,19 +1504,26 @@ export default function CustosProjetoDetalhe() {
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-center text-xs border-b border-lumos-border/50 pb-2">
-                      <span className="text-lumos-text-secondary">Margem Real Alcançada</span>
-                      <span className={clsx("font-bold", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
-                        {margemRealAlcançada.toFixed(1)}%
-                      </span>
-                    </div>
-
-                    {/* Passo 8: Caixa & Divisão dos Sócios */}
-                    <div className="pt-2 text-xs text-lumos-text-secondary/80 bg-lumos-surface border border-lumos-border/80 p-2.5 rounded">
-                      <span className="font-bold uppercase tracking-wider block mb-1 text-[10px] text-lumos-yellow">Caixa & Sócios</span>
-                      <p className="italic text-[11px] leading-relaxed">
-                        ⚠️ **Divisão societária de caixa omitida**: regra de divisão dos sócios pendente de especificação da planilha antiga.
-                      </p>
+                    <div className="grid grid-cols-2 gap-4 border-b border-lumos-border/50 pb-3 pt-1">
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-bold text-lumos-text-secondary uppercase">Markup Real</span>
+                        <span className="font-extrabold text-sm text-lumos-text-primary mt-0.5">
+                          {markupReal.toFixed(1)}%
+                        </span>
+                        <span className="text-[9px] text-lumos-text-secondary/60 leading-snug mt-1">
+                          Lucro sobre o custo real. Compare com a Margem Orçada (mesma base).
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-col border-l border-lumos-border/50 pl-3">
+                        <span className="text-[11px] font-bold text-lumos-text-secondary uppercase">Margem s/ Fat.</span>
+                        <span className="font-extrabold text-sm text-lumos-text-primary mt-0.5">
+                          {margemFaturamento.toFixed(1)}%
+                        </span>
+                        <span className="text-[9px] text-lumos-text-secondary/60 leading-snug mt-1">
+                          Lucro sobre o faturamento total. Visão contábil.
+                        </span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pt-2 text-xs">
