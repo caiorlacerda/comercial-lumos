@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -414,12 +414,50 @@ export default function CustosProjetoDetalhe() {
     }
   };
 
+  const isEquipeCategory = (category: string) => {
+    if (!category) return false;
+    const normalized = category.toLowerCase().trim();
+    if (normalized === 'equipe' || normalized === 'servicos_terceiros' || normalized === 'serviços_terceiros') return true;
+    
+    const equipeKeywords = [
+      'cinegrafista', 'editor', 'audio', 'áudio', 'locutor', 'maquiador', 
+      'fotografo', 'fotógrafo', 'diretor', 'direção', 'direcao', 
+      'assistente', 'roteirista', 'animador', 'designer', 'ator', 
+      'modelo', 'host', 'apresentador', 'operador'
+    ];
+    return equipeKeywords.some(keyword => normalized.includes(keyword));
+  };
+
   const toggleSelectAll = () => {
     if (selectedIds.size === costs.length) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(costs.map(c => c.id)));
     }
+  };
+
+  const toggleSelectAllEquipe = () => {
+    const equipeIds = costs.filter(c => isEquipeCategory(c.category)).map(c => c.id);
+    const allEquipeSelected = equipeIds.length > 0 && equipeIds.every(id => selectedIds.has(id));
+    const next = new Set(selectedIds);
+    if (allEquipeSelected) {
+      equipeIds.forEach(id => next.delete(id));
+    } else {
+      equipeIds.forEach(id => next.add(id));
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleSelectAllProducao = () => {
+    const producaoIds = costs.filter(c => !isEquipeCategory(c.category)).map(c => c.id);
+    const allProducaoSelected = producaoIds.length > 0 && producaoIds.every(id => selectedIds.has(id));
+    const next = new Set(selectedIds);
+    if (allProducaoSelected) {
+      producaoIds.forEach(id => next.delete(id));
+    } else {
+      producaoIds.forEach(id => next.add(id));
+    }
+    setSelectedIds(next);
   };
 
   const toggleSelect = (costId: string, e: React.MouseEvent) => {
@@ -598,6 +636,13 @@ export default function CustosProjetoDetalhe() {
 
   // 1. Cálculos de Custos Reais
   const totalCosts = costs.reduce((acc, c) => acc + Number(c.amount || 0), 0);
+
+  // Agrupamento de Equipe vs. Produção (Melhoria C)
+  const equipeCosts = costs.filter(c => isEquipeCategory(c.category));
+  const producaoCosts = costs.filter(c => !isEquipeCategory(c.category));
+
+  const totalEquipe = equipeCosts.reduce((acc, c) => acc + Number(c.amount || 0), 0);
+  const totalProducao = producaoCosts.reduce((acc, c) => acc + Number(c.amount || 0), 0);
 
   // 2. Cálculos de Custos Estimados do Orçamento (Teto do Produtor)
   const estimatedCost = (project.budget_items || []).reduce(
@@ -794,22 +839,31 @@ export default function CustosProjetoDetalhe() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={clsx("space-y-6", profile?.role === 'admin' ? "lg:col-span-2" : "lg:col-span-3")}>
+          {/* Tabela de Equipe (Serviços e Profissionais) (Melhoria C) */}
           <div className="card overflow-hidden">
+            <div className="p-4 bg-lumos-text-primary/5 border-b border-lumos-border flex justify-between items-center flex-wrap gap-2">
+              <h3 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">
+                Equipe (Serviços e Profissionais)
+              </h3>
+              <span className="text-sm font-black text-lumos-yellow">
+                Subtotal: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalEquipe)}
+              </span>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
                     <th className="px-6 py-4 w-10">
                       <div
-                        onClick={toggleSelectAll}
+                        onClick={toggleSelectAllEquipe}
                         className={clsx(
                           'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
-                          selectedIds.size === costs.length && costs.length > 0
+                          equipeCosts.length > 0 && equipeCosts.every(c => selectedIds.has(c.id))
                             ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
                             : 'border-lumos-border hover:border-lumos-yellow/50'
                         )}
                       >
-                        {selectedIds.size === costs.length && costs.length > 0 && (
+                        {equipeCosts.length > 0 && equipeCosts.every(c => selectedIds.has(c.id)) && (
                           <Check className="w-3.5 h-3.5" />
                         )}
                       </div>
@@ -824,17 +878,163 @@ export default function CustosProjetoDetalhe() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-lumos-border">
-                  {costs.length === 0 ? (
+                  {equipeCosts.length === 0 ? (
                     <tr>
                       <td
                         colSpan={8}
                         className="px-6 py-8 text-center text-lumos-text-secondary text-sm italic"
                       >
-                        Nenhum custo registrado.
+                        Nenhum custo de equipe registrado.
                       </td>
                     </tr>
                   ) : (
-                    costs.map(c => (
+                    equipeCosts.map(c => (
+                      <tr
+                        key={c.id}
+                        className={clsx(
+                          'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
+                          selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]'
+                        )}
+                        onClick={() => handleEdit(c)}
+                      >
+                        <td className="px-6 py-4">
+                          <div
+                            onClick={e => toggleSelect(c.id, e)}
+                            className={clsx(
+                              'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
+                              selectedIds.has(c.id)
+                                ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
+                                : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
+                              selectedIds.size > 0 && 'opacity-100'
+                            )}
+                          >
+                            {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-lumos-text-secondary">
+                          {new Date(c.cost_date).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-lumos-text-primary">{c.description}</span>
+                            {c.fornecedor?.nome && (
+                              <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest mt-0.5">
+                                Fornecedor: {c.fornecedor.nome}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-[10px] font-bold text-lumos-text-secondary uppercase">
+                          {c.category ? formatCategoryLabel(c.category) : '—'}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {c.payment_due_date ? (
+                            (() => {
+                              const due = new Date(c.payment_due_date + 'T00:00:00');
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              const isOverdue = due < today;
+                              return (
+                                <span className={clsx(
+                                  'font-bold',
+                                  isOverdue ? 'text-red-500' : 'text-lumos-text-secondary'
+                                )}>
+                                  {due.toLocaleDateString('pt-BR')}
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-lumos-text-secondary/40 italic text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {c.paid_at ? (
+                            <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full">
+                              Pago
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[10px] font-bold text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full">
+                              Pendente
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={e => { e.stopPropagation(); handleEdit(c); }}
+                              className="p-1.5 text-lumos-text-secondary hover:text-blue-500 transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setDeletingId(c.id); setIsDeleteModalOpen(true); }}
+                              className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Tabela de Produção (Logística, Alimentação, Locação e Outros) (Melhoria C) */}
+          <div className="card overflow-hidden">
+            <div className="p-4 bg-lumos-text-primary/5 border-b border-lumos-border flex justify-between items-center flex-wrap gap-2">
+              <h3 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">
+                Produção (Logística, Alimentação e Locação)
+              </h3>
+              <span className="text-sm font-black text-lumos-yellow">
+                Subtotal: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProducao)}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
+                    <th className="px-6 py-4 w-10">
+                      <div
+                        onClick={toggleSelectAllProducao}
+                        className={clsx(
+                          'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
+                          producaoCosts.length > 0 && producaoCosts.every(c => selectedIds.has(c.id))
+                            ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
+                            : 'border-lumos-border hover:border-lumos-yellow/50'
+                        )}
+                      >
+                        {producaoCosts.length > 0 && producaoCosts.every(c => selectedIds.has(c.id)) && (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-6 py-4">Data</th>
+                    <th className="px-6 py-4">Descrição</th>
+                    <th className="px-6 py-4">Categoria</th>
+                    <th className="px-6 py-4">Vencimento</th>
+                    <th className="px-6 py-4 text-center">Status</th>
+                    <th className="px-6 py-4 text-right">Valor</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-lumos-border">
+                  {producaoCosts.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-6 py-8 text-center text-lumos-text-secondary text-sm italic"
+                      >
+                        Nenhum custo de produção registrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    producaoCosts.map(c => (
                       <tr
                         key={c.id}
                         className={clsx(
@@ -1150,68 +1350,120 @@ export default function CustosProjetoDetalhe() {
                     </div>
                   </div>
 
-                  <div className="border-b border-lumos-border pb-3">
-                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Faturamento Bruto</p>
-                    <p className="font-black text-lg text-lumos-text-primary">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_vendido)}
-                    </p>
-                  </div>
-
-                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Imposto ({ (projectFinanceiro.nf_percent * 100).toFixed(0) }%)</p>
-                      <p className="font-bold text-lumos-text-secondary">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_nf)}
-                      </p>
+                  {/* Cascata de Rentabilidade (Melhoria B) */}
+                  <div className="space-y-4 bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border">
+                    <h4 className="text-xs font-black text-lumos-yellow uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <TrendingUp className="w-4 h-4" /> Cascata de Rentabilidade
+                    </h4>
+                    
+                    {/* Passo 1: Orçamento Bruto */}
+                    <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
+                      <span className="text-lumos-text-secondary">1. Faturamento Bruto (Orçamento)</span>
+                      <span className="font-bold text-lumos-text-primary">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_vendido)}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Receita Líquida</p>
-                      <p className="font-bold text-lumos-text-primary">
+
+                    {/* Passo 2: Imposto (NF) */}
+                    <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
+                      <span className="text-lumos-text-secondary flex flex-col">
+                        <span>2. Imposto NF</span>
+                        <span className="text-[10px] text-lumos-text-secondary/60">Alíquota: {(projectFinanceiro.nf_percent * 100).toFixed(1)}%</span>
+                      </span>
+                      <span className="font-bold text-red-400">
+                        - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.valor_nf)}
+                      </span>
+                    </div>
+
+                    {/* Passo 3: Receita Líquida */}
+                    <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2 bg-lumos-yellow/[0.02] px-2 py-1 rounded">
+                      <span className="text-lumos-text-primary font-bold">3. Faturamento Líquido</span>
+                      <span className="font-extrabold text-lumos-text-primary">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.receita_liquida)}
+                      </span>
+                    </div>
+
+                    {/* Passo 4: Margem Comercial Estimada */}
+                    <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
+                      <span className="text-lumos-text-secondary flex flex-col">
+                        <span>4. Margem Orçada (Comercial)</span>
+                        <span className="text-[10px] text-lumos-text-secondary/60">Teto de Custo Estimado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tetoCustos)}</span>
+                      </span>
+                      <span className="font-bold text-lumos-text-secondary">
+                        {((project.active_version?.margin_pct ?? 0.40) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+
+                    {/* Passo 5: Custos Totais Reais */}
+                    <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
+                      <span className="text-lumos-text-secondary flex flex-col">
+                        <span>5. Custos Totais Reais</span>
+                        <span className="text-[10px] text-lumos-text-secondary/60">
+                          Diferença vs. Teto:{' '}
+                          <span className={remainingCosts >= 0 ? 'text-green-500 font-semibold' : 'text-red-500 font-semibold'}>
+                            {remainingCosts >= 0 ? 'sobrou ' : 'estourou '}
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(remainingCosts))}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="font-bold text-red-400">
+                        - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
+                      </span>
+                    </div>
+
+                    {/* Passo 6: Lucro Líquido Real */}
+                    {(() => {
+                      const faturamentoLiquido = projectFinanceiro.receita_liquida;
+                      const lucroLiquidoReal = faturamentoLiquido - totalCosts;
+                      const margemReal = projectFinanceiro.valor_vendido > 0 ? (lucroLiquidoReal / projectFinanceiro.valor_vendido) * 100 : 0;
+                      return (
+                        <>
+                          <div className={clsx(
+                            "flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2 px-2 py-1 rounded",
+                            lucroLiquidoReal >= 0 ? "bg-green-500/5" : "bg-red-500/5"
+                          )}>
+                            <span className="text-lumos-text-primary font-bold">6. Lucro Líquido Real</span>
+                            <span className={clsx("font-black", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lucroLiquidoReal)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs border-b border-lumos-border/50 pb-2">
+                            <span className="text-lumos-text-secondary">Margem Real Alcançada</span>
+                            <span className={clsx("font-bold", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
+                              {margemReal.toFixed(1)}%
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+
+                    {/* Passo 7: Caixa & Divisão dos Sócios */}
+                    <div className="pt-2 text-xs text-lumos-text-secondary/80 bg-lumos-surface border border-lumos-border/80 p-2.5 rounded">
+                      <span className="font-bold uppercase tracking-wider block mb-1 text-[10px] text-lumos-yellow">Caixa & Sócios</span>
+                      <p className="italic text-[11px] leading-relaxed">
+                        ⚠️ **Divisão societária de caixa omitida**: regra de divisão dos sócios pendente de especificação da planilha antiga.
                       </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-2 text-xs">
+                      <div>
+                        <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Vencimento Negociado</p>
+                        <p className="font-bold text-lumos-text-primary">
+                          {projectFinanceiro.data_recebimento_negociada 
+                            ? new Date(projectFinanceiro.data_recebimento_negociada + 'T00:00:00').toLocaleDateString('pt-BR')
+                            : '—'}
+                        </p>
+                      </div>
+                      {projectFinanceiro.status_titulo === 'pagamento_recebido' && projectFinanceiro.data_recebido && (
+                        <div>
+                          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Data do Pagamento</p>
+                          <p className="font-bold text-green-500">
+                            {new Date(projectFinanceiro.data_recebido + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Lucro Operacional</p>
-                      <p className={`font-bold ${projectFinanceiro.lucro_operacional >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.lucro_operacional)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Lucro Líquido Real</p>
-                      <p className={`font-black ${projectFinanceiro.lucro_liquido >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(projectFinanceiro.lucro_liquido)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-lumos-border pb-3 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Margem Real (%)</p>
-                      <p className={`font-bold ${(projectFinanceiro.margem * 100) >= 40 ? 'text-green-500' : 'text-yellow-500'}`}>
-                        {(projectFinanceiro.margem * 100).toFixed(1)}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Vencimento Negociado</p>
-                      <p className="font-bold text-lumos-text-primary">
-                        {projectFinanceiro.data_recebimento_negociada 
-                          ? new Date(projectFinanceiro.data_recebimento_negociada + 'T00:00:00').toLocaleDateString('pt-BR')
-                          : '—'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {projectFinanceiro.status_titulo === 'pagamento_recebido' && projectFinanceiro.data_recebido && (
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider mb-0.5">Data do Pagamento</p>
-                      <p className="font-bold text-green-500">
-                        {new Date(projectFinanceiro.data_recebido + 'T00:00:00').toLocaleDateString('pt-BR')}
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

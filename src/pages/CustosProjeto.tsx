@@ -65,7 +65,18 @@ export default function CustosProjeto() {
         .select(`
           *,
           client:clients(id, name),
-          budget:budgets(id, project_name, code)
+          budget:budgets(
+            id, 
+            project_name, 
+            code,
+            active_version:budget_versions!active_version_id(
+              id,
+              margin_pct,
+              nf_pct,
+              discount_value,
+              budget_items(unit_cost, quantity)
+            )
+          )
         `)
         .order('created_at', { ascending: false });
 
@@ -76,6 +87,25 @@ export default function CustosProjeto() {
         const totalCosts = Number(p.custos_total || 0);
         const margin = Number(p.lucro_liquido || 0);
         const marginPercent = Number(p.margem || 0) * 100;
+        
+        // --- CÁLCULO DO TETO DE CUSTOS (Cálculo herdado do detalhe) ---
+        let estimatedCost = 0;
+        const budget = p.budget;
+        if (budget?.active_version) {
+          const items = budget.active_version.budget_items || [];
+          estimatedCost = items.reduce(
+            (acc: number, item: any) => acc + Number(item.unit_cost || 0) * Number(item.quantity || 0),
+            0
+          );
+        }
+
+        const nfPercent = Number(p.nf_percent ?? 0.18);
+        const defaultMarginPercent = 0.40;
+
+        const tetoCustos = p.proposta_id
+          ? estimatedCost
+          : totalProductionValue * (1 - nfPercent) / (1 + defaultMarginPercent);
+        // -------------------------------------------------------------
         
         return {
           id: p.id,
@@ -92,7 +122,8 @@ export default function CustosProjeto() {
           status_titulo: p.status_titulo,
           icp: p.icp,
           vencido: p.vencido,
-          pendente_preenchimento: p.pendente_preenchimento
+          pendente_preenchimento: p.pendente_preenchimento,
+          tetoCustos
         };
       });
 
@@ -376,14 +407,20 @@ export default function CustosProjeto() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
-                  <div className="flex items-center justify-between gap-12 w-full">
-                    <div>
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Registrados</p>
-                      <p className="text-sm font-bold text-lumos-text-primary">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
-                      </p>
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
+                  <div>
+                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Budget Disponível</p>
+                    <p className="text-sm font-bold text-lumos-text-primary">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.tetoCustos)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Registrados</p>
+                    <p className="text-sm font-bold text-lumos-text-primary">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-end">
                     <ChevronRight className="w-5 h-5 text-lumos-text-secondary group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
