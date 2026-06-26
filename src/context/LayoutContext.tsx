@@ -18,7 +18,6 @@ interface LayoutContextType {
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 
 export function getSectionFromPath(path: string): SectionType {
-  if (path.startsWith('/financeiro/custos-projeto')) return 'producao';
   if (path.startsWith('/financeiro')) return 'financeiro';
   if (path.startsWith('/ordem-do-dia') || path.startsWith('/producao')) return 'producao';
   if (
@@ -131,11 +130,11 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
       else return;
     } else if (sectionId === 'producao') {
       if (can('ordem_do_dia')) targetPath = '/producao/dashboard';
-      else if (can('custos_projeto')) targetPath = '/financeiro/custos-projeto';
       else if (can('fornecedores')) targetPath = '/producao/fornecedores';
       else return;
     } else if (sectionId === 'financeiro') {
       if (isAdmin) targetPath = '/financeiro';
+      else if (can('custos_projeto')) targetPath = '/financeiro/custos-projeto';
       else if (can('reembolso')) targetPath = '/financeiro/reembolso';
       else return;
     } else if (sectionId === 'configuracoes') {
