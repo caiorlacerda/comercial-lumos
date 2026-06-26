@@ -191,9 +191,26 @@ function VersionWatcher() {
   const [updatePending, setUpdatePending] = useState(false);
   const lastCheckedRef = useRef<number>(Date.now());
   const isFirstRender = useRef(true);
+  const latestServerVersionRef = useRef<string | null>(null);
+
+  // No boot da aplicação, verifica se atualizamos com sucesso
+  useEffect(() => {
+    if (typeof __APP_VERSION__ === 'undefined' || __APP_VERSION__ === 'dev') return;
+
+    try {
+      const pendingVersion = sessionStorage.getItem('lumos_pending_reload_version');
+      if (pendingVersion === __APP_VERSION__) {
+        console.log('[VersionWatcher] Version updated successfully to:', __APP_VERSION__);
+        sessionStorage.removeItem('lumos_pending_reload_version');
+        sessionStorage.removeItem('lumos_reload_count');
+      }
+    } catch (err) {
+      // Ignora silenciosamente erros de acesso ao sessionStorage (ex: modo anônimo super restrito)
+    }
+  }, []);
 
   const checkVersion = async () => {
-    // Skip checking in development mode
+    // Evita rodar em desenvolvimento
     if (typeof __APP_VERSION__ === 'undefined' || __APP_VERSION__ === 'dev') return;
 
     try {
@@ -210,6 +227,20 @@ function VersionWatcher() {
       if (data && data.version && data.version !== __APP_VERSION__) {
         console.log('[VersionWatcher] New version detected on server:', data.version);
         
+        // Proteção contra loop: verifica se já tentamos recarregar para essa mesma versão e falhou
+        try {
+          const pendingVersion = sessionStorage.getItem('lumos_pending_reload_version');
+          const reloadCount = parseInt(sessionStorage.getItem('lumos_reload_count') || '0', 10);
+          if (pendingVersion === data.version && reloadCount >= 2) {
+            console.warn('[VersionWatcher] New version is available, but reload has already been attempted 2 times. Aborting automatic reload to prevent loop.');
+            return;
+          }
+        } catch (e) {
+          // Ignora
+        }
+
+        latestServerVersionRef.current = data.version;
+
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
           const registration = await navigator.serviceWorker.getRegistration();
           if (registration) {
@@ -239,10 +270,10 @@ function VersionWatcher() {
       navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
     }
 
-    // Initial check after 5 seconds
+    // Primeira checagem após 5 segundos
     const initTimeout = setTimeout(checkVersion, 5000);
 
-    // Periodic check every 2 minutes
+    // Checagem periódica a cada 2 minutos
     const interval = setInterval(checkVersion, 2 * 60 * 1000);
 
     return () => {
@@ -254,7 +285,7 @@ function VersionWatcher() {
     };
   }, []);
 
-  // Navigation check: if route/pathname changes
+  // Monitora a troca de rota
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -263,11 +294,28 @@ function VersionWatcher() {
 
     if (updatePending) {
       console.log('[VersionWatcher] Navigation detected and update is pending. Reloading page...');
+      
+      try {
+        const targetVersion = latestServerVersionRef.current;
+        if (targetVersion) {
+          const currentPending = sessionStorage.getItem('lumos_pending_reload_version');
+          if (currentPending === targetVersion) {
+            const count = parseInt(sessionStorage.getItem('lumos_reload_count') || '0', 10);
+            sessionStorage.setItem('lumos_reload_count', (count + 1).toString());
+          } else {
+            sessionStorage.setItem('lumos_pending_reload_version', targetVersion);
+            sessionStorage.setItem('lumos_reload_count', '1');
+          }
+        }
+      } catch (e) {
+        // Ignora
+      }
+
       window.location.reload();
       return;
     }
 
-    // Check if we should do a throttled check on navigation (min 30s interval)
+    // Checagem na navegação (throttled: mínimo 30s de intervalo)
     const now = Date.now();
     if (now - lastCheckedRef.current > 30 * 1000) {
       lastCheckedRef.current = now;
