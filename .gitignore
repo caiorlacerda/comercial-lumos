@@ -7,3 +7,4 @@ dist
 client_secret_*.json
 .claude/
 .gemini/
+/public/version.json

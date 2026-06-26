@@ -186,9 +186,102 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+function VersionWatcher() {
+  const location = useLocation();
+  const [updatePending, setUpdatePending] = useState(false);
+  const lastCheckedRef = useRef<number>(Date.now());
+  const isFirstRender = useRef(true);
+
+  const checkVersion = async () => {
+    // Skip checking in development mode
+    if (typeof __APP_VERSION__ === 'undefined' || __APP_VERSION__ === 'dev') return;
+
+    try {
+      const res = await fetch(`/version.json?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data && data.version && data.version !== __APP_VERSION__) {
+        console.log('[VersionWatcher] New version detected on server:', data.version);
+        
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) {
+            console.log('[VersionWatcher] Triggering service worker update check...');
+            await registration.update();
+          } else {
+            setUpdatePending(true);
+          }
+        } else {
+          setUpdatePending(true);
+        }
+      }
+    } catch (err) {
+      console.warn('[VersionWatcher] Failed to check version (ignoring silently):', err);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof __APP_VERSION__ === 'undefined' || __APP_VERSION__ === 'dev') return;
+
+    const handleControllerChange = () => {
+      console.log('[VersionWatcher] Service Worker controller changed (new version activated)!');
+      setUpdatePending(true);
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+    }
+
+    // Initial check after 5 seconds
+    const initTimeout = setTimeout(checkVersion, 5000);
+
+    // Periodic check every 2 minutes
+    const interval = setInterval(checkVersion, 2 * 60 * 1000);
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+      }
+      clearTimeout(initTimeout);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Navigation check: if route/pathname changes
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (updatePending) {
+      console.log('[VersionWatcher] Navigation detected and update is pending. Reloading page...');
+      window.location.reload();
+      return;
+    }
+
+    // Check if we should do a throttled check on navigation (min 30s interval)
+    const now = Date.now();
+    if (now - lastCheckedRef.current > 30 * 1000) {
+      lastCheckedRef.current = now;
+      checkVersion();
+    }
+  }, [location.pathname, updatePending]);
+
+  return null;
+}
+
 function AppContent() {
   return (
     <Router>
+      <VersionWatcher />
       <div className="min-h-screen bg-lumos-bg">
         <Routes>
           <Route path="/login" element={<Login />} />
