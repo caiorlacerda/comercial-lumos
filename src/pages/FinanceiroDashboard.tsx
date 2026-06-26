@@ -18,7 +18,10 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
-  Plus
+  Plus,
+  FileText,
+  TrendingDown,
+  FolderOpen
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
@@ -91,6 +94,30 @@ const DASHBOARD_BLOCKS_CATALOG: DashboardBlockDef[] = [
     defaultActive: true
   },
   {
+    id: 'kpi-impostos',
+    title: 'Provisão de Impostos',
+    description: 'Estimativa de impostos incidentes sobre o faturamento do período (18%).',
+    group: 'rentabilidade',
+    defaultSize: 'small',
+    defaultActive: false
+  },
+  {
+    id: 'kpi-receita-liquida',
+    title: 'Receita Líquida',
+    description: 'Receita bruta deduzindo a estimativa de impostos incidentes.',
+    group: 'rentabilidade',
+    defaultSize: 'small',
+    defaultActive: false
+  },
+  {
+    id: 'kpi-custos-projetos',
+    title: 'Custos de Projetos',
+    description: 'Total acumulado de custos de produção lançados nos projetos do período.',
+    group: 'rentabilidade',
+    defaultSize: 'small',
+    defaultActive: false
+  },
+  {
     id: 'kpi-projeto-top',
     title: 'Projeto Mais Rentável',
     description: 'Destaque para o projeto que obteve o maior lucro líquido real no período.',
@@ -113,6 +140,38 @@ const DASHBOARD_BLOCKS_CATALOG: DashboardBlockDef[] = [
     group: 'resultado',
     defaultSize: 'full',
     defaultActive: true
+  },
+  {
+    id: 'chart-desempenho-cliente',
+    title: 'Gráfico: Desempenho por Cliente',
+    description: 'Visão de faturamento e lucro acumulados por cliente no período.',
+    group: 'resultado',
+    defaultSize: 'medium',
+    defaultActive: false
+  },
+  {
+    id: 'chart-matriz-categoria',
+    title: 'Gráfico: Matriz por Categoria',
+    description: 'Faturamento bruto e lucro gerado agrupados por categoria de projeto (Digital / Filme / Live).',
+    group: 'resultado',
+    defaultSize: 'medium',
+    defaultActive: false
+  },
+  {
+    id: 'panel-icp',
+    title: 'Painel ICP (Foco por Perfil)',
+    description: 'Divisão de lucro e margem média por perfil de cliente (ICP 1, ICP 2, etc.).',
+    group: 'resultado',
+    defaultSize: 'medium',
+    defaultActive: false
+  },
+  {
+    id: 'table-detalhamento',
+    title: 'Tabela: Detalhamento de Projetos',
+    description: 'Planilha completa detalhando faturamento, custos e lucratividade projeto a projeto.',
+    group: 'resultado',
+    defaultSize: 'full',
+    defaultActive: false
   },
   {
     id: 'panel-titulos-atrasados',
@@ -320,7 +379,7 @@ export default function FinanceiroDashboard() {
       const [rentRes, payablesRes, receivablesRes] = await Promise.all([
         supabase
           .from('vw_rentabilidade')
-          .select('*, client:clients(name)')
+          .select('*, client:clients(name), categoria:categorias(nome), tipo_servico:tipos_servico(nome)')
           .or(`data_recebimento_negociada.gte.${startDate},created_at.gte.${startDate}`),
         supabase.from('payables').select('amount, due_date, paid_at'),
         supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at')
@@ -378,7 +437,9 @@ export default function FinanceiroDashboard() {
       faturamento: 0,
       lucro: 0,
       custos: 0,
-      margem: 0
+      margem: 0,
+      nfTotal: 0,
+      receitaLiquida: 0
     };
 
     let maxLucro = -Infinity;
@@ -386,15 +447,21 @@ export default function FinanceiroDashboard() {
     let topProjectValue = 0;
 
     const clientBilling: Record<string, { name: string; total: number }> = {};
+    const categoryGroups: Record<string, { name: string; Faturamento: number; Lucro: number }> = {};
+    const clientGroups: Record<string, { name: string; Faturamento: number; Lucro: number }> = {};
 
     rawProjects.forEach(item => {
       const val = Number(item.valor_vendido || 0);
       const profit = Number(item.lucro_liquido || 0);
       const cost = Number(item.custos_total || 0);
+      const nf = Number(item.valor_nf || 0);
+      const netReceita = Number(item.receita_liquida || 0);
 
       totals.faturamento += val;
       totals.lucro += profit;
       totals.custos += cost;
+      totals.nfTotal += nf;
+      totals.receitaLiquida += netReceita;
 
       // Projeto Top
       if (profit > maxLucro) {
@@ -403,7 +470,7 @@ export default function FinanceiroDashboard() {
         topProjectValue = profit;
       }
 
-      // Cliente Top
+      // Cliente Top (KPI)
       if (item.cliente_id) {
         const cId = item.cliente_id;
         const cName = item.client?.name || 'Cliente';
@@ -412,6 +479,24 @@ export default function FinanceiroDashboard() {
         }
         clientBilling[cId].total += val;
       }
+
+      // Agrupamento categoria
+      const catName = item.categoria?.nome || 'Sem Categoria';
+      const catId = item.categoria_id || 'unmapped';
+      if (!categoryGroups[catId]) {
+        categoryGroups[catId] = { name: catName, Faturamento: 0, Lucro: 0 };
+      }
+      categoryGroups[catId].Faturamento += val;
+      categoryGroups[catId].Lucro += profit;
+
+      // Agrupamento cliente (Desempenho por Cliente)
+      const cliName = item.client?.name || 'Cliente Desconhecido';
+      const cliId = item.cliente_id || 'unmapped';
+      if (!clientGroups[cliId]) {
+        clientGroups[cliId] = { name: cliName, Faturamento: 0, Lucro: 0 };
+      }
+      clientGroups[cliId].Faturamento += val;
+      clientGroups[cliId].Lucro += profit;
     });
 
     totals.margem = totals.faturamento > 0 ? (totals.lucro / totals.faturamento) * 100 : 0;
@@ -462,6 +547,45 @@ export default function FinanceiroDashboard() {
 
     const totalOverdue = overdueList.reduce((acc, o) => acc + o.amount, 0);
 
+    // Gráficos extras
+    const categoryChartData = Object.values(categoryGroups).sort((a, b) => b.Lucro - a.Lucro);
+    const clientChartData = Object.values(clientGroups).sort((a, b) => b.Lucro - a.Lucro).slice(0, 8);
+
+    // ICP Metrics
+    const icp1Data = rawProjects.filter(d => d.icp === 'icp_1');
+    const icp2Data = rawProjects.filter(d => d.icp === 'icp_2');
+    const icpUnmappedData = rawProjects.filter(d => !d.icp);
+
+    const computeMetrics = (list: any[]) => {
+      const totalVal = list.reduce((acc, i) => acc + Number(i.valor_vendido || 0), 0);
+      const totalLucro = list.reduce((acc, i) => acc + Number(i.lucro_liquido || 0), 0);
+      const avgMargin = totalVal > 0 ? (totalLucro / totalVal) * 100 : 0;
+      return { totalVal, totalLucro, avgMargin };
+    };
+
+    const icpMetrics = {
+      icp1: computeMetrics(icp1Data),
+      icp2: computeMetrics(icp2Data),
+      unmapped: computeMetrics(icpUnmappedData)
+    };
+
+    // Detail list
+    const detailList = rawProjects.map(proj => ({
+      id: proj.id,
+      clientName: proj.client?.name || 'Sem Cliente',
+      categoriaName: proj.categoria?.nome || 'Sem Categ.',
+      servicoName: proj.tipo_servico?.nome || 'Sem Serv.',
+      icp: proj.icp,
+      valorVendido: Number(proj.valor_vendido || 0),
+      valorNf: Number(proj.valor_nf || 0),
+      custosTotal: Number(proj.custos_total || 0),
+      lucroLiquido: Number(proj.lucro_liquido || 0),
+      margem: Number(proj.margem || 0) * 100,
+      statusTitulo: proj.status_titulo,
+      vencido: proj.vencido,
+      dataRecebimento: proj.data_recebimento_negociada
+    }));
+
     return {
       totals,
       topProject: { name: topProjectName, val: topProjectValue },
@@ -470,7 +594,11 @@ export default function FinanceiroDashboard() {
       receberSemana,
       overdueList,
       totalOverdue,
-      chartData: sortedProjects
+      chartData: sortedProjects,
+      categoryChartData,
+      clientChartData,
+      icpMetrics,
+      detailList
     };
   }, [rawProjects, payables, receivables]);
 
@@ -735,6 +863,256 @@ export default function FinanceiroDashboard() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* KPI Impostos */}
+                    {catalogBlock.id === 'kpi-impostos' && (
+                      <div>
+                        <div className="p-2 bg-purple-500/10 rounded-lumos text-purple-500 w-fit mb-4">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Provisão de Impostos (18%)</p>
+                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                          {formatBRL(dashboardData.totals.nfTotal)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* KPI Receita Líquida */}
+                    {catalogBlock.id === 'kpi-receita-liquida' && (
+                      <div>
+                        <div className="p-2 bg-cyan-500/10 rounded-lumos text-cyan-500 w-fit mb-4">
+                          <TrendingUp className="w-5 h-5" />
+                        </div>
+                        <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Receita Líquida</p>
+                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                          {formatBRL(dashboardData.totals.receitaLiquida)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* KPI Custos de Projetos */}
+                    {catalogBlock.id === 'kpi-custos-projetos' && (
+                      <div>
+                        <div className="p-2 bg-red-500/10 rounded-lumos text-red-500 w-fit mb-4">
+                          <TrendingDown className="w-5 h-5" />
+                        </div>
+                        <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Custos de Projetos</p>
+                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                          {formatBRL(dashboardData.totals.custos)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Gráfico Desempenho por Cliente */}
+                    {catalogBlock.id === 'chart-desempenho-cliente' && (
+                      <div className="w-full">
+                        <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <Users className="w-4 h-4 text-lumos-yellow" /> Desempenho por Cliente (Top 8)
+                        </h3>
+                        {dashboardData.clientChartData.length === 0 ? (
+                          <div className="text-center py-16 text-xs text-lumos-text-secondary italic">Nenhum faturamento por cliente no período.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={dashboardData.clientChartData} barGap={4}>
+                              <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#888' }} axisLine={false} tickLine={false} />
+                              <YAxis tickFormatter={(v) => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={{ fontSize: 9, fill: '#888' }} axisLine={false} tickLine={false} width={45} />
+                              <Tooltip
+                                content={({ active, payload, label }) => {
+                                  if (!active || !payload?.length) return null;
+                                  return (
+                                    <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3 shadow-xl text-xs font-work-sans">
+                                      <p className="font-black uppercase text-lumos-text-secondary mb-1.5">{label}</p>
+                                      {payload.map((p: any) => (
+                                        <p key={p.name} style={{ color: p.fill }} className="font-bold">
+                                          {p.name}: {formatBRL(p.value)}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  );
+                                }}
+                                cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                              />
+                              <Legend formatter={(v) => <span className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider">{v}</span>} />
+                              <Bar dataKey="Faturamento" name="Faturamento" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                              <Bar dataKey="Lucro" name="Lucro Líquido" fill="#EFC700" radius={[2, 2, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Gráfico Matriz por Categoria */}
+                    {catalogBlock.id === 'chart-matriz-categoria' && (
+                      <div className="w-full">
+                        <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <FolderOpen className="w-4 h-4 text-lumos-yellow" /> Matriz por Categoria
+                        </h3>
+                        {dashboardData.categoryChartData.length === 0 ? (
+                          <div className="text-center py-16 text-xs text-lumos-text-secondary italic">Sem dados de categorias no período.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={dashboardData.categoryChartData} barGap={4}>
+                              <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#888' }} axisLine={false} tickLine={false} />
+                              <YAxis tickFormatter={(v) => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={{ fontSize: 9, fill: '#888' }} axisLine={false} tickLine={false} width={45} />
+                              <Tooltip
+                                content={({ active, payload, label }) => {
+                                  if (!active || !payload?.length) return null;
+                                  return (
+                                    <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3 shadow-xl text-xs font-work-sans">
+                                      <p className="font-black uppercase text-lumos-text-secondary mb-1.5">{label}</p>
+                                      {payload.map((p: any) => (
+                                        <p key={p.name} style={{ color: p.fill }} className="font-bold">
+                                          {p.name}: {formatBRL(p.value)}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  );
+                                }}
+                                cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                              />
+                              <Legend formatter={(v) => <span className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider">{v}</span>} />
+                              <Bar dataKey="Faturamento" name="Faturamento" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                              <Bar dataKey="Lucro" name="Lucro Líquido" fill="#EFC700" radius={[2, 2, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Painel ICP (Foco por Perfil) */}
+                    {catalogBlock.id === 'panel-icp' && (
+                      <div className="w-full space-y-4">
+                        <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest flex items-center gap-2 border-b border-lumos-border pb-3">
+                          <Award className="w-4 h-4 text-lumos-yellow" /> Resposta CEO: ICP
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          {/* ICP 1 */}
+                          <div className="p-4 bg-lumos-yellow/5 border border-lumos-yellow/20 rounded-lumos">
+                            <p className="text-[10px] font-black text-lumos-yellow uppercase tracking-widest">ICP 1 (Principal)</p>
+                            <div className="grid grid-cols-2 gap-4 mt-3">
+                              <div>
+                                <p className="text-[9px] text-lumos-text-secondary uppercase font-bold">Lucro Líquido</p>
+                                <p className="text-sm font-black text-lumos-text-primary tracking-tight mt-0.5">{formatBRL(dashboardData.icpMetrics.icp1.totalLucro)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-lumos-text-secondary uppercase font-bold">Margem Líquida</p>
+                                <p className="text-sm font-black text-lumos-text-primary tracking-tight mt-0.5">{dashboardData.icpMetrics.icp1.avgMargin.toFixed(1)}%</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ICP 2 */}
+                          <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-lumos">
+                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">ICP 2 (Secundário)</p>
+                            <div className="grid grid-cols-2 gap-4 mt-3">
+                              <div>
+                                <p className="text-[9px] text-lumos-text-secondary uppercase font-bold">Lucro Líquido</p>
+                                <p className="text-sm font-black text-lumos-text-primary tracking-tight mt-0.5">{formatBRL(dashboardData.icpMetrics.icp2.totalLucro)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-lumos-text-secondary uppercase font-bold">Margem Líquida</p>
+                                <p className="text-sm font-black text-lumos-text-primary tracking-tight mt-0.5">{dashboardData.icpMetrics.icp2.avgMargin.toFixed(1)}%</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Unmapped */}
+                          <div className="p-4 bg-lumos-border/30 border border-lumos-border/50 rounded-lumos">
+                            <p className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Sem Classificação</p>
+                            <div className="grid grid-cols-2 gap-4 mt-3">
+                              <div>
+                                <p className="text-[9px] text-lumos-text-secondary uppercase font-bold">Lucro Líquido</p>
+                                <p className="text-sm font-black text-lumos-text-primary tracking-tight mt-0.5">{formatBRL(dashboardData.icpMetrics.unmapped.totalLucro)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-lumos-text-secondary uppercase font-bold">Margem Líquida</p>
+                                <p className="text-sm font-black text-lumos-text-primary tracking-tight mt-0.5">{dashboardData.icpMetrics.unmapped.avgMargin.toFixed(1)}%</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tabela de Detalhamento dos Dados */}
+                    {catalogBlock.id === 'table-detalhamento' && (
+                      <div className="w-full space-y-4">
+                        <div className="flex justify-between items-center border-b border-lumos-border pb-3">
+                          <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-lumos-yellow" /> Detalhamento de Projetos (Período)
+                          </h3>
+                          <span className="text-[10px] bg-lumos-yellow/10 text-lumos-yellow px-2 py-0.5 rounded-full font-bold">
+                            {dashboardData.detailList.length} projetos
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto custom-scrollbar">
+                          <table className="w-full text-left text-xs font-medium border-collapse">
+                            <thead>
+                              <tr className="bg-lumos-surface/40 text-[9px] font-black text-lumos-text-secondary uppercase tracking-wider border-b border-lumos-border">
+                                <th className="py-2.5 px-3">Projeto / Cliente</th>
+                                <th className="py-2.5 px-3">Dimensões</th>
+                                <th className="py-2.5 px-3 text-right">Fat. Bruto</th>
+                                <th className="py-2.5 px-3 text-right">NF (18%)</th>
+                                <th className="py-2.5 px-3 text-right">Custos</th>
+                                <th className="py-2.5 px-3 text-right">Lucro Líquido</th>
+                                <th className="py-2.5 px-3 text-right">Margem %</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-lumos-border/40">
+                              {dashboardData.detailList.length === 0 ? (
+                                <tr>
+                                  <td colSpan={7} className="py-8 text-center text-xs text-lumos-text-secondary italic">Nenhum projeto encontrado para este período.</td>
+                                </tr>
+                              ) : (
+                                dashboardData.detailList.map(proj => (
+                                  <tr key={proj.id} className="hover:bg-white/[0.02] transition-colors">
+                                    <td className="py-2.5 px-3">
+                                      <p className="font-bold text-lumos-text-primary">{proj.clientName}</p>
+                                      <p className="text-[9px] text-lumos-text-secondary mt-0.5 flex items-center gap-1">
+                                        {proj.statusTitulo === 'pagamento_recebido' && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                                        {(proj.statusTitulo === 'pagamento_atraso' || proj.vencido) && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                                        {proj.statusTitulo === 'emitir_nf' && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />}
+                                        {proj.statusTitulo === 'pedido_nf_feito' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                                        {proj.statusTitulo === 'esperando_pagamento' && !proj.vencido && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
+                                        {proj.statusTitulo === 'pagamento_recebido' ? 'Recebido' :
+                                         proj.statusTitulo === 'pagamento_atraso' || proj.vencido ? 'Atrasado' :
+                                         proj.statusTitulo === 'emitir_nf' ? 'Emitir NF' :
+                                         proj.statusTitulo === 'pedido_nf_feito' ? 'NF Solicitada' : 'Esperando Pgto'}
+                                        {proj.dataRecebimento && ` · Vence ${new Date(proj.dataRecebimento + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                                      </p>
+                                    </td>
+                                    <td className="py-2.5 px-3 space-y-0.5">
+                                      <span className="inline-block text-[8px] bg-lumos-border/60 text-lumos-text-primary px-1.5 py-0.2 rounded mr-1 uppercase font-bold">
+                                        {proj.categoriaName}
+                                      </span>
+                                      {proj.icp && (
+                                        <span className="inline-block text-[8px] bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.2 rounded uppercase font-bold">
+                                          {proj.icp === 'icp_1' ? 'ICP 1' : 'ICP 2'}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-bold text-lumos-text-primary">{formatBRL(proj.valorVendido)}</td>
+                                    <td className="py-2.5 px-3 text-right text-purple-400 font-bold">{formatBRL(proj.valorNf)}</td>
+                                    <td className="py-2.5 px-3 text-right text-red-400 font-bold">{formatBRL(proj.custosTotal)}</td>
+                                    <td className={`py-2.5 px-3 text-right font-black ${proj.lucroLiquido >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {formatBRL(proj.lucroLiquido)}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-black">
+                                      <span className={`px-1.5 py-0.2 rounded text-[9px] ${proj.margem >= 40 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                                        {proj.margem.toFixed(1)}%
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
                   </SortableBlockWrapper>
