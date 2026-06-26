@@ -454,12 +454,12 @@ export default function CronogramaEdicao() {
   const getPriorityBadge = (prio: Edicao['prioridade']) => {
     switch (prio) {
       case 'alta':
-        return 'bg-red-500/10 text-red-500 border border-red-500/20';
+        return 'bg-red-500/10 text-red-600 dark:text-red-500 border border-red-500/20';
       case 'baixa':
-        return 'bg-green-500/10 text-green-400 border border-green-500/20';
+        return 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20';
       case 'media':
       default:
-        return 'bg-yellow-500/10 text-lumos-yellow border border-lumos-yellow/20';
+        return 'bg-amber-500/10 dark:bg-yellow-500/10 text-amber-600 dark:text-lumos-yellow border border-amber-500/20 dark:border-lumos-yellow/20';
     }
   };
 
@@ -476,10 +476,10 @@ export default function CronogramaEdicao() {
 
   const getStatusColor = (st: Edicao['status']) => {
     switch (st) {
-      case 'concluido': return 'text-green-400 bg-green-500/10 border-green-500/20';
-      case 'aprovacao_cliente': return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-      case 'revisao_interna': return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
-      case 'em_andamento': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+      case 'concluido': return 'text-green-600 dark:text-green-400 bg-green-500/10 border-green-500/20';
+      case 'aprovacao_cliente': return 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20';
+      case 'revisao_interna': return 'text-orange-600 dark:text-orange-400 bg-orange-500/10 border-orange-500/20';
+      case 'em_andamento': return 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20';
       case 'nao_iniciado':
       default:
         return 'text-lumos-text-secondary bg-lumos-text-secondary/10 border-lumos-border';
@@ -496,11 +496,11 @@ export default function CronogramaEdicao() {
     return (
       <span className={clsx(
         "flex items-center gap-1.5 text-xs font-bold",
-        isUrgent ? "text-red-500" : isWarning ? "text-orange-400" : "text-lumos-text-secondary"
+        isUrgent ? "text-red-600 dark:text-red-500" : isWarning ? "text-orange-600 dark:text-orange-400" : "text-lumos-text-secondary"
       )}>
         <Clock className="w-3.5 h-3.5" />
         Prazo: {formatted}
-        {isUrgent && <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />}
+        {isUrgent && <AlertTriangle className="w-3 h-3 text-red-600 dark:text-red-500 animate-pulse" />}
       </span>
     );
   };
@@ -553,13 +553,13 @@ export default function CronogramaEdicao() {
   }
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 text-white max-w-7xl mx-auto font-work-sans">
+    <div className="p-4 lg:p-8 space-y-6 text-lumos-text-primary max-w-7xl mx-auto font-work-sans">
       
       {/* CABEÇALHO */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-lumos-border pb-6">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-            <Calendar className="w-8 h-8 text-lumos-yellow" />
+          <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-lumos-text-primary flex items-center gap-3">
+            <Calendar className="w-8 h-8 text-amber-600 dark:text-lumos-yellow" />
             Cronograma de Edição
           </h1>
           <p className="text-lumos-text-secondary text-sm mt-1">
@@ -573,12 +573,12 @@ export default function CronogramaEdicao() {
               onClick={() => setIsEditorListOpen(true)}
               className="px-4 py-2 bg-lumos-surface border border-lumos-border hover:bg-lumos-text-secondary/5 text-lumos-text-primary rounded-lumos font-bold text-xs lg:text-sm transition-all cursor-pointer flex items-center gap-2"
             >
-              <Users className="w-4 h-4 text-lumos-yellow" />
+              <Users className="w-4 h-4 text-amber-600 dark:text-lumos-yellow" />
               Gerenciar Editores
             </button>
             <button
               onClick={() => openTaskForm()}
-              className="px-4 py-2 bg-lumos-yellow hover:bg-lumos-yellow/90 text-lumos-bg rounded-lumos font-bold text-xs lg:text-sm transition-all cursor-pointer flex items-center gap-2"
+              className="px-4 py-2 bg-lumos-yellow hover:bg-lumos-yellow/90 text-black rounded-lumos font-bold text-xs lg:text-sm transition-all cursor-pointer flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Nova Edição
@@ -591,8 +591,8 @@ export default function CronogramaEdicao() {
       <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden shadow-2xl">
         <div className="p-5 border-b border-lumos-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-lumos-bg/25 font-work-sans">
           <div>
-            <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-lumos-yellow" />
+            <h2 className="text-lg font-black text-lumos-text-primary uppercase tracking-tight flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-amber-600 dark:text-lumos-yellow" />
               Grade Semanal de Edições
             </h2>
             <p className="text-xs text-lumos-text-secondary mt-1">
@@ -615,7 +615,7 @@ export default function CronogramaEdicao() {
             >
               Hoje
             </button>
-            <span className="text-xs font-black text-white px-2.5 py-1.5 rounded uppercase tracking-wide bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20">
+            <span className="text-xs font-black px-2.5 py-1.5 rounded uppercase tracking-wide bg-amber-500/10 dark:bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-amber-500/20 dark:border-lumos-yellow/20">
               {formatWeekPeriod()}
             </span>
             <button 
@@ -631,16 +631,16 @@ export default function CronogramaEdicao() {
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
-              <tr className="border-b border-lumos-border text-lumos-text-secondary font-black uppercase tracking-wider text-[10px] bg-lumos-bg/10">
-                <th className="py-3 px-4 w-48 border-r border-lumos-border/50">Editor</th>
+              <tr className="border-b border-lumos-border text-lumos-text-secondary font-black uppercase tracking-wider text-[10px] bg-lumos-bg/50 dark:bg-lumos-bg/25">
+                <th className="py-3 px-4 w-48 border-r border-lumos-border">Editor</th>
                 {weekDays.map((day, i) => {
                   const isDayToday = isSameDay(day, new Date());
                   return (
                     <th 
                       key={i} 
                       className={clsx(
-                        "py-3 px-3 text-center border-r border-lumos-border/50 last:border-r-0",
-                        isDayToday && "bg-lumos-yellow/5 text-lumos-yellow"
+                        "py-3 px-3 text-center border-r border-lumos-border last:border-r-0",
+                        isDayToday && "bg-amber-500/5 dark:bg-lumos-yellow/5 text-amber-600 dark:text-lumos-yellow"
                       )}
                     >
                       <div className="font-black text-xs">
@@ -654,7 +654,7 @@ export default function CronogramaEdicao() {
                 })}
               </tr>
             </thead>
-            <tbody className="divide-y divide-lumos-border/40">
+            <tbody className="divide-y divide-lumos-border">
               {editores.filter(ed => ed.status === 'ativo').length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-lumos-text-secondary text-xs">
@@ -665,14 +665,14 @@ export default function CronogramaEdicao() {
                 editores.filter(ed => ed.status === 'ativo').map((editor) => (
                   <tr key={editor.id} className="hover:bg-lumos-text-secondary/[0.02] transition-colors min-h-[120px]">
                     {/* Nome do Editor */}
-                    <td className="py-4 px-4 font-bold border-r border-lumos-border/50 align-top bg-lumos-bg/5">
+                    <td className="py-4 px-4 font-bold border-r border-lumos-border align-top bg-lumos-bg/10 dark:bg-lumos-bg/5">
                       <div className="space-y-1 mt-1">
-                        <div className="text-white text-sm leading-tight">{editor.nome}</div>
+                        <div className="text-lumos-text-primary text-sm leading-tight">{editor.nome}</div>
                         <span className={clsx(
                           "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider",
                           editor.tipo === 'interno' 
-                            ? "bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20" 
-                            : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                            ? "bg-amber-500/10 dark:bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-amber-500/20 dark:border-lumos-yellow/20" 
+                            : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
                         )}>
                           {editor.tipo}
                         </span>
@@ -690,7 +690,7 @@ export default function CronogramaEdicao() {
                         <td 
                           key={i} 
                           className={clsx(
-                            "p-2 border-r border-lumos-border/50 last:border-r-0 align-top min-h-[120px] w-[12%] text-center",
+                            "p-2 border-r border-lumos-border last:border-r-0 align-top min-h-[120px] w-[12%] text-center",
                             isDayToday && "bg-lumos-yellow/[0.01]"
                           )}
                         >
@@ -711,19 +711,19 @@ export default function CronogramaEdicao() {
                                       ? "bg-orange-500/5 hover:bg-orange-500/10 border-orange-500/30 hover:border-orange-500/50"
                                       : task.status === 'em_andamento'
                                       ? "bg-blue-500/5 hover:bg-blue-500/10 border-blue-500/30 hover:border-blue-500/50"
-                                      : "bg-lumos-bg/30 hover:bg-lumos-bg/55 border-lumos-border hover:border-lumos-yellow/30"
+                                      : "bg-lumos-surface hover:bg-lumos-surface/90 border-lumos-border hover:border-amber-500/30 dark:hover:border-lumos-yellow/30"
                                   )}
                                 >
                                   {/* Checkmark e status para concluidas */}
                                   <div className="flex items-start justify-between gap-1">
                                     <span className={clsx(
                                       "text-[10px] font-black leading-tight tracking-tight block break-words",
-                                      isTaskConcluida ? "text-green-400 line-through opacity-80" : "text-white"
+                                      isTaskConcluida ? "text-green-600 dark:text-green-400 line-through opacity-85" : "text-lumos-text-primary"
                                     )}>
                                       {task.titulo}
                                     </span>
                                     {isTaskConcluida && (
-                                      <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
+                                      <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                                     )}
                                   </div>
 
@@ -737,7 +737,7 @@ export default function CronogramaEdicao() {
                                   )}
 
                                   {/* Badges de rodapé do card */}
-                                  <div className="flex items-center justify-between gap-1 mt-2 pt-1 border-t border-white/[0.04]">
+                                  <div className="flex items-center justify-between gap-1 mt-2 pt-1 border-t border-lumos-border">
                                     <span className={clsx(
                                       "text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wide",
                                       getPriorityBadge(task.prioridade)
@@ -746,7 +746,7 @@ export default function CronogramaEdicao() {
                                     </span>
                                     <span className={clsx(
                                       "text-[8px] font-bold",
-                                      isTaskConcluida ? "text-green-400" : "text-lumos-text-secondary"
+                                      isTaskConcluida ? "text-green-600 dark:text-green-400" : "text-lumos-text-secondary"
                                     )}>
                                       {getStatusLabel(task.status)}
                                     </span>
@@ -767,13 +767,13 @@ export default function CronogramaEdicao() {
       </div>
 
       {/* ÁREA PRINCIPAL: GRID DE 2 COLUNAS (ABAIXO DA GRADE) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-lumos-border/50">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-lumos-border">
         
         {/* COLUNA ESQUERDA: BACKLOG / ITENS EM ESPERA (LARGURA 2 COLUNAS) */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2 uppercase">
-              <Inbox className="w-5 h-5 text-lumos-yellow" />
+            <h2 className="text-lg font-black text-lumos-text-primary tracking-tight flex items-center gap-2 uppercase">
+              <Inbox className="w-5 h-5 text-amber-600 dark:text-lumos-yellow" />
               Itens em Espera (Backlog)
               <span className="text-xs px-2 py-0.5 rounded-full bg-lumos-text-secondary/15 text-lumos-text-secondary font-bold">
                 {backlogEditions.length}
@@ -795,7 +795,7 @@ export default function CronogramaEdicao() {
 
           {backlogEditions.length === 0 ? (
             <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-12 text-center space-y-3">
-              <div className="w-12 h-12 bg-lumos-text-secondary/5 rounded-full flex items-center justify-center mx-auto border border-lumos-border/40">
+              <div className="w-12 h-12 bg-lumos-text-secondary/5 rounded-full flex items-center justify-center mx-auto border border-lumos-border">
                 <Sparkles className="w-5 h-5 text-lumos-text-secondary/50" />
               </div>
               <h3 className="text-sm font-bold text-lumos-text-primary">Nenhum item pendente</h3>
@@ -809,11 +809,11 @@ export default function CronogramaEdicao() {
                 <div 
                   key={task.id} 
                   onClick={() => openBriefingModal(task)}
-                  className="bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/20 rounded-lumos p-5 transition-all flex flex-col justify-between space-y-4 hover:shadow-xl hover:shadow-black/20 cursor-pointer"
+                  className="bg-lumos-surface border border-lumos-border hover:border-amber-500/20 dark:hover:border-lumos-yellow/20 rounded-lumos p-5 transition-all flex flex-col justify-between space-y-4 hover:shadow-xl hover:shadow-black/20 cursor-pointer"
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-3">
-                      <h4 className="text-sm font-bold text-white leading-snug tracking-tight">
+                      <h4 className="text-sm font-bold text-lumos-text-primary leading-snug tracking-tight">
                         {task.titulo}
                       </h4>
                       {canManage && (
@@ -823,7 +823,7 @@ export default function CronogramaEdicao() {
                               e.stopPropagation();
                               openTaskForm(task);
                             }}
-                            className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded-lumos transition-colors cursor-pointer"
+                            className="p-1.5 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 rounded-lumos transition-colors cursor-pointer"
                             title="Editar Edição"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
@@ -844,8 +844,8 @@ export default function CronogramaEdicao() {
 
                     {/* Vínculo de Projeto */}
                     {task.projects && (
-                      <div className="text-xs text-lumos-text-secondary flex flex-wrap items-center gap-1 bg-lumos-bg/30 px-2.5 py-1.5 rounded border border-lumos-border/30 w-fit">
-                        <span className="font-bold text-lumos-yellow">
+                      <div className="text-xs text-lumos-text-secondary flex flex-wrap items-center gap-1 bg-lumos-bg/30 px-2.5 py-1.5 rounded border border-lumos-border w-fit">
+                        <span className="font-bold text-amber-600 dark:text-lumos-yellow">
                           {task.projects.code ? `#${task.projects.code}` : 'PROJETO'}:
                         </span>
                         <span>{task.projects.name}</span>
@@ -859,7 +859,7 @@ export default function CronogramaEdicao() {
                   </div>
 
                   {/* Detalhes do Card */}
-                  <div className="border-t border-lumos-border/50 pt-3 flex flex-col gap-2">
+                  <div className="border-t border-lumos-border pt-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       {formatDeadline(task.prazo)}
                       <span className={clsx(
@@ -896,8 +896,8 @@ export default function CronogramaEdicao() {
 
         {/* COLUNA DIREITA: RECURSOS / EDITORES CADASTRADOS (LARGURA 1 COLUNA) */}
         <div className="space-y-4">
-          <h2 className="text-lg font-black text-white tracking-tight uppercase flex items-center gap-2">
-            <Users className="w-5 h-5 text-lumos-yellow" />
+          <h2 className="text-lg font-black text-lumos-text-primary tracking-tight uppercase flex items-center gap-2">
+            <Users className="w-5 h-5 text-amber-600 dark:text-lumos-yellow" />
             Editores Ativos
             <span className="text-xs px-2 py-0.5 rounded-full bg-lumos-text-secondary/15 text-lumos-text-secondary font-bold">
               {editores.filter(ed => ed.status === 'ativo').length}
@@ -910,7 +910,7 @@ export default function CronogramaEdicao() {
                 Nenhum editor cadastrado na plataforma.
               </p>
             ) : (
-              <div className="divide-y divide-lumos-border/50">
+              <div className="divide-y divide-lumos-border">
                 {editores.map((ed) => (
                   <div key={ed.id} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-3 group">
                     <div className="space-y-1">
@@ -921,7 +921,7 @@ export default function CronogramaEdicao() {
                         )} />
                         <span className={clsx(
                           "text-sm font-bold",
-                          ed.status === 'ativo' ? "text-white" : "text-lumos-text-secondary/60 line-through"
+                          ed.status === 'ativo' ? "text-lumos-text-primary" : "text-lumos-text-secondary/60 line-through"
                         )}>
                           {ed.nome}
                         </span>
@@ -931,15 +931,15 @@ export default function CronogramaEdicao() {
                         <span className={clsx(
                           "text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
                           ed.tipo === 'interno' 
-                            ? "bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20" 
-                            : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                            ? "bg-amber-500/10 dark:bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-amber-500/20 dark:border-lumos-yellow/20" 
+                            : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
                         )}>
                           {ed.tipo}
                         </span>
                         
                         {ed.tipo === 'interno' && ed.auth_user_id && (
                           <span className="text-[10px] text-lumos-text-secondary flex items-center gap-1 opacity-70">
-                            <Link2 className="w-2.5 h-2.5 text-lumos-yellow/50" />
+                            <Link2 className="w-2.5 h-2.5 text-amber-600/50 dark:text-lumos-yellow/50" />
                             Usuário Vinculado
                           </span>
                         )}
@@ -949,7 +949,7 @@ export default function CronogramaEdicao() {
                     {canManage && (
                       <button
                         onClick={() => openEditorForm(ed)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded transition-all cursor-pointer flex-shrink-0"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 rounded transition-all cursor-pointer flex-shrink-0"
                         title="Editar Editor"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -981,7 +981,7 @@ export default function CronogramaEdicao() {
               </p>
               <button
                 onClick={() => openEditorForm()}
-                className="px-3 py-1.5 bg-lumos-yellow text-lumos-bg rounded-lumos font-bold text-xs flex items-center gap-1 hover:bg-lumos-yellow/90 transition-colors cursor-pointer"
+                className="px-3 py-1.5 bg-lumos-yellow text-black rounded-lumos font-bold text-xs flex items-center gap-1 hover:bg-lumos-yellow/90 transition-colors cursor-pointer"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 Novo Editor
@@ -999,7 +999,7 @@ export default function CronogramaEdicao() {
                     <th className="py-2 px-3 text-right">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-lumos-border/30">
+                <tbody className="divide-y divide-lumos-border">
                   {editores.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-4 text-center text-lumos-text-secondary">
@@ -1011,11 +1011,13 @@ export default function CronogramaEdicao() {
                       const associatedUser = users.find(u => u.auth_user_id === ed.auth_user_id);
                       return (
                         <tr key={ed.id} className="hover:bg-lumos-text-secondary/5 transition-colors">
-                          <td className="py-3 px-3 font-bold text-white">{ed.nome}</td>
+                          <td className="py-3 px-3 font-bold text-lumos-text-primary">{ed.nome}</td>
                           <td className="py-3 px-3">
                             <span className={clsx(
                               "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
-                              ed.tipo === 'interno' ? "text-lumos-yellow bg-lumos-yellow/10" : "text-blue-400 bg-blue-500/10"
+                              ed.tipo === 'interno' 
+                                ? "text-amber-600 dark:text-lumos-yellow bg-amber-500/10 dark:bg-lumos-yellow/10" 
+                                : "text-blue-600 dark:text-blue-400 bg-blue-500/10"
                             )}>
                               {ed.tipo}
                             </span>
@@ -1024,11 +1026,11 @@ export default function CronogramaEdicao() {
                             {ed.tipo === 'interno' ? (
                               associatedUser ? (
                                 <span className="flex flex-col">
-                                  <span className="text-white font-bold">{associatedUser.full_name}</span>
+                                  <span className="text-lumos-text-primary font-bold">{associatedUser.full_name}</span>
                                   <span className="text-[10px] opacity-70">{associatedUser.email}</span>
                                 </span>
                               ) : (
-                                <span className="text-red-400 italic">Usuário não vinculado</span>
+                                <span className="text-red-600 dark:text-red-400 italic">Usuário não vinculado</span>
                               )
                             ) : (
                               <span className="opacity-40">-</span>
@@ -1043,7 +1045,7 @@ export default function CronogramaEdicao() {
                           <td className="py-3 px-3 text-right">
                             <button
                               onClick={() => openEditorForm(ed)}
-                              className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded cursor-pointer transition-colors"
+                              className="p-1.5 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 rounded cursor-pointer transition-colors"
                               title="Editar"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -1118,9 +1120,9 @@ export default function CronogramaEdicao() {
 
             {/* Vínculo de Usuário: Apenas para Editores Internos */}
             {editorFormData.tipo === 'interno' && (
-              <div className="space-y-2 border-t border-lumos-border/50 pt-4">
+              <div className="space-y-2 border-t border-lumos-border pt-4">
                 <label className="text-xs font-bold text-lumos-text-secondary uppercase flex items-center gap-1.5">
-                  <Link2 className="w-3.5 h-3.5 text-lumos-yellow" />
+                  <Link2 className="w-3.5 h-3.5 text-amber-600 dark:text-lumos-yellow" />
                   Usuário Autenticado do Sistema
                 </label>
                 <select
@@ -1143,7 +1145,7 @@ export default function CronogramaEdicao() {
             )}
 
             {/* Botões do Rodapé */}
-            <div className="flex items-center justify-end gap-2 border-t border-lumos-border/50 pt-4 mt-6">
+            <div className="flex items-center justify-end gap-2 border-t border-lumos-border pt-4 mt-6">
               <button
                 type="button"
                 onClick={() => {
@@ -1156,7 +1158,7 @@ export default function CronogramaEdicao() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-lumos-yellow text-lumos-bg rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs"
+                className="px-4 py-2 bg-lumos-yellow text-black rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs"
               >
                 {selectedEditor ? "Atualizar" : "Salvar"}
               </button>
@@ -1286,8 +1288,8 @@ export default function CronogramaEdicao() {
             </div>
 
             {/* Informações de Briefing Extras */}
-            <div className="border-t border-lumos-border/50 pt-4 space-y-4">
-              <span className="text-[10px] text-lumos-yellow font-black uppercase tracking-wider block">Briefing Detalhado (Opcional)</span>
+            <div className="border-t border-lumos-border pt-4 space-y-4">
+              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block">Briefing Detalhado (Opcional)</span>
               
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -1395,7 +1397,7 @@ export default function CronogramaEdicao() {
             </div>
 
             {/* Botões do Rodapé */}
-            <div className="flex items-center justify-end gap-2 border-t border-lumos-border/50 pt-4 mt-6">
+            <div className="flex items-center justify-end gap-2 border-t border-lumos-border pt-4 mt-6">
               <button
                 type="button"
                 onClick={() => {
@@ -1408,7 +1410,7 @@ export default function CronogramaEdicao() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-lumos-yellow text-lumos-bg rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs"
+                className="px-4 py-2 bg-lumos-yellow text-black rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs"
               >
                 {selectedTask ? "Atualizar" : "Salvar"}
               </button>
@@ -1436,14 +1438,14 @@ export default function CronogramaEdicao() {
             <div className="bg-lumos-bg/40 border border-lumos-border rounded-lumos p-5 space-y-4">
               <div className="flex items-start justify-between gap-4 border-b border-lumos-border pb-3">
                 <div>
-                  <span className="text-[10px] text-lumos-yellow font-black uppercase tracking-wider block">Briefing da Edição</span>
-                  <h3 className="text-base font-bold text-white mt-1">{briefingTask.titulo}</h3>
+                  <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block">Briefing da Edição</span>
+                  <h3 className="text-base font-bold text-lumos-text-primary mt-1">{briefingTask.titulo}</h3>
                 </div>
                 {canManage && (
                   <button
                     type="button"
                     onClick={handleEditFromBriefing}
-                    className="px-2.5 py-1.5 bg-lumos-surface border border-lumos-border hover:bg-lumos-text-secondary/5 text-lumos-yellow rounded-lumos font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                    className="px-2.5 py-1.5 bg-lumos-surface border border-lumos-border hover:bg-lumos-text-secondary/5 text-amber-600 dark:text-lumos-yellow rounded-lumos font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                     Editar Briefing
@@ -1455,10 +1457,10 @@ export default function CronogramaEdicao() {
                 {/* Projeto */}
                 <div className="space-y-1">
                   <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Projeto Vinculado</span>
-                  <div className="text-white font-medium">
+                  <div className="text-lumos-text-primary font-medium">
                     {briefingTask.projects ? (
                       <span className="flex items-center gap-1">
-                        <Link2 className="w-3.5 h-3.5 text-lumos-yellow/70" />
+                        <Link2 className="w-3.5 h-3.5 text-amber-600/70 dark:text-lumos-yellow/70" />
                         {briefingTask.projects.code ? `#${briefingTask.projects.code} - ` : ''}
                         {briefingTask.projects.name} 
                         {briefingTask.projects.clients ? ` (${briefingTask.projects.clients.name})` : ''}
@@ -1472,7 +1474,7 @@ export default function CronogramaEdicao() {
                 {/* Editor Designado */}
                 <div className="space-y-1">
                   <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Editor Responsável</span>
-                  <div className="text-white font-medium">
+                  <div className="text-lumos-text-primary font-medium">
                     {briefingTask.editores?.nome ? briefingTask.editores.nome : <span className="italic text-lumos-text-secondary">Sem Designação (Backlog)</span>}
                   </div>
                 </div>
@@ -1480,8 +1482,8 @@ export default function CronogramaEdicao() {
                 {/* Prazo Final */}
                 <div className="space-y-1">
                   <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Prazo Final de Entrega</span>
-                  <div className="text-white font-bold flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-lumos-yellow" />
+                  <div className="text-lumos-text-primary font-bold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-lumos-yellow" />
                     {format(new Date(briefingTask.prazo), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                   </div>
                 </div>
@@ -1502,30 +1504,30 @@ export default function CronogramaEdicao() {
                 {/* Formato, Duração, Legenda */}
                 <div className="space-y-1">
                   <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Formato & Duração</span>
-                  <div className="text-white font-medium">
+                  <div className="text-lumos-text-primary font-medium">
                     {briefingTask.formato || 'Não especificado'} | {briefingTask.duracao || 'Não especificada'}
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Legenda</span>
-                  <div className="text-white font-medium">
+                  <div className="text-lumos-text-primary font-medium">
                     {briefingTask.legenda === null ? 'Não especificado' : briefingTask.legenda ? 'Sim' : 'Não'}
                   </div>
                 </div>
               </div>
 
               {/* Links de Briefing */}
-              <div className="border-t border-lumos-border/50 pt-4 space-y-3">
+              <div className="border-t border-lumos-border pt-4 space-y-3">
                 <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Links e Materiais de Apoio</span>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* Link Referência */}
-                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border flex items-center justify-between gap-2">
                     <div className="truncate">
                       <span className="text-[9px] text-lumos-text-secondary uppercase block">Referência</span>
                       {briefingTask.link_referencia ? (
-                        <a href={briefingTask.link_referencia} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                        <a href={briefingTask.link_referencia} target="_blank" rel="noopener noreferrer" className="text-[11px] text-amber-600 dark:text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
                           Acessar Link <ExternalLink className="w-3 h-3 flex-shrink-0" />
                         </a>
                       ) : (
@@ -1535,11 +1537,11 @@ export default function CronogramaEdicao() {
                   </div>
 
                   {/* Link Roteiro */}
-                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border flex items-center justify-between gap-2">
                     <div className="truncate">
                       <span className="text-[9px] text-lumos-text-secondary uppercase block">Roteiro</span>
                       {briefingTask.link_roteiro ? (
-                        <a href={briefingTask.link_roteiro} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                        <a href={briefingTask.link_roteiro} target="_blank" rel="noopener noreferrer" className="text-[11px] text-amber-600 dark:text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
                           Acessar Roteiro <ExternalLink className="w-3 h-3 flex-shrink-0" />
                         </a>
                       ) : (
@@ -1549,11 +1551,11 @@ export default function CronogramaEdicao() {
                   </div>
 
                   {/* Link Brutos */}
-                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border flex items-center justify-between gap-2">
                     <div className="truncate">
                       <span className="text-[9px] text-lumos-text-secondary uppercase block">Material Bruto</span>
                       {briefingTask.link_brutos ? (
-                        <a href={briefingTask.link_brutos} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                        <a href={briefingTask.link_brutos} target="_blank" rel="noopener noreferrer" className="text-[11px] text-amber-600 dark:text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
                           Pasta de Brutos <ExternalLink className="w-3 h-3 flex-shrink-0" />
                         </a>
                       ) : (
@@ -1563,11 +1565,11 @@ export default function CronogramaEdicao() {
                   </div>
 
                   {/* Link Artes */}
-                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border flex items-center justify-between gap-2">
                     <div className="truncate">
                       <span className="text-[9px] text-lumos-text-secondary uppercase block">Artes & Assets</span>
                       {briefingTask.link_artes ? (
-                        <a href={briefingTask.link_artes} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                        <a href={briefingTask.link_artes} target="_blank" rel="noopener noreferrer" className="text-[11px] text-amber-600 dark:text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
                           Pasta de Artes <ExternalLink className="w-3 h-3 flex-shrink-0" />
                         </a>
                       ) : (
@@ -1580,8 +1582,8 @@ export default function CronogramaEdicao() {
             </div>
 
             {/* Bloco 2: Entrega e Status (Editável pelo Editor) */}
-            <div className="space-y-4 border-t border-lumos-border/50 pt-4">
-              <span className="text-[10px] text-lumos-yellow font-black uppercase tracking-wider block">Área de Entrega (Editor)</span>
+            <div className="space-y-4 border-t border-lumos-border pt-4">
+              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block">Área de Entrega (Editor)</span>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2 col-span-1">
@@ -1623,7 +1625,7 @@ export default function CronogramaEdicao() {
             </div>
 
             {/* Botões */}
-            <div className="flex items-center justify-end gap-2 border-t border-lumos-border/50 pt-4 mt-6">
+            <div className="flex items-center justify-end gap-2 border-t border-lumos-border pt-4 mt-6">
               <button
                 type="button"
                 onClick={() => {
@@ -1636,7 +1638,7 @@ export default function CronogramaEdicao() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-lumos-yellow text-lumos-bg rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs flex items-center gap-1.5"
+                className="px-4 py-2 bg-lumos-yellow text-black rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs flex items-center gap-1.5"
               >
                 <CheckCircle className="w-3.5 h-3.5" />
                 Salvar Entrega
