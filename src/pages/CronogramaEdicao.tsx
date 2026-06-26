@@ -18,11 +18,12 @@ import {
   Link2,
   CheckCircle,
   ExternalLink,
+  ChevronLeft,
   ChevronRight,
   TrendingUp,
   Inbox
 } from 'lucide-react';
-import { format, isPast, isToday, addDays } from 'date-fns';
+import { format, isPast, isToday, addDays, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
 
@@ -64,6 +65,14 @@ interface Edicao {
   observacoes: string | null;
   created_by: string | null;
   created_at: string;
+  formato: string | null;
+  duracao: string | null;
+  legenda: boolean | null;
+  link_editado: string | null;
+  link_referencia: string | null;
+  link_roteiro: string | null;
+  link_brutos: string | null;
+  link_artes: string | null;
   projects?: Project | null;
   editores?: {
     id: string;
@@ -110,7 +119,29 @@ export default function CronogramaEdicao() {
     prazo: '',
     status: 'nao_iniciado' as Edicao['status'],
     prioridade: 'media' as Edicao['prioridade'],
-    observacoes: ''
+    observacoes: '',
+    formato: '',
+    duracao: '',
+    legenda: false,
+    link_editado: '',
+    link_referencia: '',
+    link_roteiro: '',
+    link_brutos: '',
+    link_artes: ''
+  });
+
+  // Controle de Semana Ativa
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
+    return startOfWeek(new Date(), { weekStartsOn: 1 }); // 1 = Segunda-feira
+  });
+
+  // Modal de Briefing e Entrega (Visualização / Editor)
+  const [isBriefingModalOpen, setIsBriefingModalOpen] = useState(false);
+  const [briefingTask, setBriefingTask] = useState<Edicao | null>(null);
+  const [briefingFormData, setBriefingFormData] = useState({
+    status: 'nao_iniciado' as Edicao['status'],
+    observacoes: '',
+    link_editado: ''
   });
 
   // 1. CARREGAR DADOS
@@ -256,6 +287,14 @@ export default function CronogramaEdicao() {
         status: taskFormData.status,
         prioridade: taskFormData.prioridade,
         observacoes: taskFormData.observacoes || null,
+        formato: taskFormData.formato || null,
+        duracao: taskFormData.duracao || null,
+        legenda: taskFormData.legenda,
+        link_editado: taskFormData.link_editado || null,
+        link_referencia: taskFormData.link_referencia || null,
+        link_roteiro: taskFormData.link_roteiro || null,
+        link_brutos: taskFormData.link_brutos || null,
+        link_artes: taskFormData.link_artes || null,
         ...(selectedTask ? {} : { created_by: user?.id })
       };
 
@@ -295,7 +334,15 @@ export default function CronogramaEdicao() {
         prazo: task.prazo,
         status: task.status,
         prioridade: task.prioridade,
-        observacoes: task.observacoes || ''
+        observacoes: task.observacoes || '',
+        formato: task.formato || '',
+        duracao: task.duracao || '',
+        legenda: task.legenda === null ? false : task.legenda,
+        link_editado: task.link_editado || '',
+        link_referencia: task.link_referencia || '',
+        link_roteiro: task.link_roteiro || '',
+        link_brutos: task.link_brutos || '',
+        link_artes: task.link_artes || ''
       });
     } else {
       setSelectedTask(null);
@@ -307,7 +354,15 @@ export default function CronogramaEdicao() {
         prazo: '',
         status: 'nao_iniciado',
         prioridade: 'media',
-        observacoes: ''
+        observacoes: '',
+        formato: '',
+        duracao: '',
+        legenda: false,
+        link_editado: '',
+        link_referencia: '',
+        link_roteiro: '',
+        link_brutos: '',
+        link_artes: ''
       });
     }
     setIsTaskFormOpen(true);
@@ -330,6 +385,54 @@ export default function CronogramaEdicao() {
       console.error('Error deleting task:', err);
       toast.error('Não foi possível excluir a tarefa.');
     }
+  };
+
+  // Abrir Modal de Briefing & Entrega (Editor / Visualização)
+  const openBriefingModal = (task: Edicao) => {
+    setBriefingTask(task);
+    setBriefingFormData({
+      status: task.status,
+      observacoes: task.observacoes || '',
+      link_editado: task.link_editado || ''
+    });
+    setIsBriefingModalOpen(true);
+  };
+
+  // Submit da Entrega / Status no Modal de Briefing
+  const handleBriefingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!briefingTask) return;
+
+    try {
+      const payload = {
+        status: briefingFormData.status,
+        observacoes: briefingFormData.observacoes || null,
+        link_editado: briefingFormData.link_editado || null
+      };
+
+      const { error } = await supabase
+        .from('edicoes_cronograma')
+        .update(payload)
+        .eq('id', briefingTask.id);
+
+      if (error) throw error;
+      toast.success('Edição atualizada com sucesso!');
+      setIsBriefingModalOpen(false);
+      setBriefingTask(null);
+      fetchData();
+    } catch (err: any) {
+      console.error('Error saving briefing/delivery update:', err);
+      toast.error('Erro ao atualizar a entrega da edição.');
+    }
+  };
+
+  // Alternar do modal de briefing para o modal completo de edição (admin/producao)
+  const handleEditFromBriefing = () => {
+    if (!briefingTask) return;
+    const taskToEdit = briefingTask;
+    setIsBriefingModalOpen(false);
+    setBriefingTask(null);
+    openTaskForm(taskToEdit);
   };
 
   // Filtragem e Agrupamento do Backlog (Gaveta/Coluna)
@@ -418,6 +521,29 @@ export default function CronogramaEdicao() {
     });
   };
 
+  // Dias da Semana visualizada baseados na currentWeekStart
+  const weekDays = eachDayOfInterval({
+    start: currentWeekStart,
+    end: endOfWeek(currentWeekStart, { weekStartsOn: 1 })
+  });
+
+  const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
+  const formatWeekPeriod = () => {
+    const startStr = format(currentWeekStart, "dd 'de' MMM", { locale: ptBR });
+    const endStr = format(weekEnd, "dd 'de' MMM", { locale: ptBR });
+    const yearStr = format(currentWeekStart, "yyyy");
+    return `Semana de ${startStr} a ${endStr} de ${yearStr}`;
+  };
+
+  // Filtragem de edições pertencentes à grade do cronograma (que têm editor_id e semana_inicio)
+  const cronogramaEdicoes = edicoes.filter(e => e.editor_id && e.semana_inicio);
+
+  const isEdicaoOnDay = (ed: Edicao, day: Date) => {
+    if (!ed.prazo) return false;
+    const taskDate = parseISO(ed.prazo);
+    return isSameDay(taskDate, day);
+  };
+
   if (loading && edicoes.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -461,8 +587,187 @@ export default function CronogramaEdicao() {
         )}
       </div>
 
-      {/* ÁREA PRINCIPAL: GRID DE 2 COLUNAS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* GRADE SEMANAL (LARGURA COMPLETA) */}
+      <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden shadow-2xl">
+        <div className="p-5 border-b border-lumos-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-lumos-bg/25 font-work-sans">
+          <div>
+            <h2 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-lumos-yellow" />
+              Grade Semanal de Edições
+            </h2>
+            <p className="text-xs text-lumos-text-secondary mt-1">
+              Acompanhamento de entregas por editor por dia da semana (prazo final).
+            </p>
+          </div>
+          
+          {/* Navegação de Semanas */}
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button 
+              onClick={() => setCurrentWeekStart(prev => subWeeks(prev, 1))}
+              className="p-1.5 bg-lumos-surface border border-lumos-border hover:bg-lumos-text-secondary/5 text-lumos-text-primary rounded-lumos transition-colors cursor-pointer"
+              title="Semana Anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+              className="px-3 py-1.5 bg-lumos-surface border border-lumos-border hover:bg-lumos-text-secondary/5 text-lumos-text-primary rounded-lumos font-bold text-xs transition-colors cursor-pointer"
+            >
+              Hoje
+            </button>
+            <span className="text-xs font-black text-white px-2.5 py-1.5 rounded uppercase tracking-wide bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20">
+              {formatWeekPeriod()}
+            </span>
+            <button 
+              onClick={() => setCurrentWeekStart(prev => addWeeks(prev, 1))}
+              className="p-1.5 bg-lumos-surface border border-lumos-border hover:bg-lumos-text-secondary/5 text-lumos-text-primary rounded-lumos transition-colors cursor-pointer"
+              title="Próxima Semana"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
+            <thead>
+              <tr className="border-b border-lumos-border text-lumos-text-secondary font-black uppercase tracking-wider text-[10px] bg-lumos-bg/10">
+                <th className="py-3 px-4 w-48 border-r border-lumos-border/50">Editor</th>
+                {weekDays.map((day, i) => {
+                  const isDayToday = isSameDay(day, new Date());
+                  return (
+                    <th 
+                      key={i} 
+                      className={clsx(
+                        "py-3 px-3 text-center border-r border-lumos-border/50 last:border-r-0",
+                        isDayToday && "bg-lumos-yellow/5 text-lumos-yellow"
+                      )}
+                    >
+                      <div className="font-black text-xs">
+                        {format(day, "EEEE", { locale: ptBR })}
+                      </div>
+                      <div className="text-[10px] font-medium opacity-60">
+                        {format(day, "dd/MM")}
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-lumos-border/40">
+              {editores.filter(ed => ed.status === 'ativo').length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-lumos-text-secondary text-xs">
+                    Nenhum editor ativo cadastrado. Clique em "Gerenciar Editores" para cadastrar recursos no sistema.
+                  </td>
+                </tr>
+              ) : (
+                editores.filter(ed => ed.status === 'ativo').map((editor) => (
+                  <tr key={editor.id} className="hover:bg-lumos-text-secondary/[0.02] transition-colors min-h-[120px]">
+                    {/* Nome do Editor */}
+                    <td className="py-4 px-4 font-bold border-r border-lumos-border/50 align-top bg-lumos-bg/5">
+                      <div className="space-y-1 mt-1">
+                        <div className="text-white text-sm leading-tight">{editor.nome}</div>
+                        <span className={clsx(
+                          "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider",
+                          editor.tipo === 'interno' 
+                            ? "bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20" 
+                            : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                        )}>
+                          {editor.tipo}
+                        </span>
+                      </div>
+                    </td>
+                    
+                    {/* Dias da Semana */}
+                    {weekDays.map((day, i) => {
+                      const isDayToday = isSameDay(day, new Date());
+                      const dayEditions = cronogramaEdicoes.filter(
+                        ed => ed.editor_id === editor.id && isEdicaoOnDay(ed, day)
+                      );
+                      
+                      return (
+                        <td 
+                          key={i} 
+                          className={clsx(
+                            "p-2 border-r border-lumos-border/50 last:border-r-0 align-top min-h-[120px] w-[12%] text-center",
+                            isDayToday && "bg-lumos-yellow/[0.01]"
+                          )}
+                        >
+                          <div className="space-y-2 flex flex-col items-center">
+                            {dayEditions.map((task) => {
+                              const isTaskConcluida = task.status === 'concluido';
+                              return (
+                                <div
+                                  key={task.id}
+                                  onClick={() => openBriefingModal(task)}
+                                  className={clsx(
+                                    "text-left w-full p-2.5 rounded border transition-all cursor-pointer select-none relative group/card hover:shadow-lg hover:scale-[1.02]",
+                                    isTaskConcluida 
+                                      ? "bg-green-500/5 hover:bg-green-500/10 border-green-500/30 hover:border-green-500/50" 
+                                      : task.status === 'aprovacao_cliente'
+                                      ? "bg-purple-500/5 hover:bg-purple-500/10 border-purple-500/30 hover:border-purple-500/50"
+                                      : task.status === 'revisao_interna'
+                                      ? "bg-orange-500/5 hover:bg-orange-500/10 border-orange-500/30 hover:border-orange-500/50"
+                                      : task.status === 'em_andamento'
+                                      ? "bg-blue-500/5 hover:bg-blue-500/10 border-blue-500/30 hover:border-blue-500/50"
+                                      : "bg-lumos-bg/30 hover:bg-lumos-bg/55 border-lumos-border hover:border-lumos-yellow/30"
+                                  )}
+                                >
+                                  {/* Checkmark e status para concluidas */}
+                                  <div className="flex items-start justify-between gap-1">
+                                    <span className={clsx(
+                                      "text-[10px] font-black leading-tight tracking-tight block break-words",
+                                      isTaskConcluida ? "text-green-400 line-through opacity-80" : "text-white"
+                                    )}>
+                                      {task.titulo}
+                                    </span>
+                                    {isTaskConcluida && (
+                                      <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
+                                    )}
+                                  </div>
+
+                                  {/* Projeto/Cliente */}
+                                  {task.projects && (
+                                    <div className="text-[9px] text-lumos-text-secondary mt-1 font-semibold truncate">
+                                      {task.projects.code ? `#${task.projects.code} ` : ''}
+                                      {task.projects.name}
+                                      {task.projects.clients ? ` (${task.projects.clients.name})` : ''}
+                                    </div>
+                                  )}
+
+                                  {/* Badges de rodapé do card */}
+                                  <div className="flex items-center justify-between gap-1 mt-2 pt-1 border-t border-white/[0.04]">
+                                    <span className={clsx(
+                                      "text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wide",
+                                      getPriorityBadge(task.prioridade)
+                                    )}>
+                                      {task.prioridade}
+                                    </span>
+                                    <span className={clsx(
+                                      "text-[8px] font-bold",
+                                      isTaskConcluida ? "text-green-400" : "text-lumos-text-secondary"
+                                    )}>
+                                      {getStatusLabel(task.status)}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ÁREA PRINCIPAL: GRID DE 2 COLUNAS (ABAIXO DA GRADE) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 border-t border-lumos-border/50">
         
         {/* COLUNA ESQUERDA: BACKLOG / ITENS EM ESPERA (LARGURA 2 COLUNAS) */}
         <div className="lg:col-span-2 space-y-4">
@@ -503,7 +808,8 @@ export default function CronogramaEdicao() {
               {backlogEditions.map((task) => (
                 <div 
                   key={task.id} 
-                  className="bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/20 rounded-lumos p-5 transition-all flex flex-col justify-between space-y-4 hover:shadow-xl hover:shadow-black/20"
+                  onClick={() => openBriefingModal(task)}
+                  className="bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/20 rounded-lumos p-5 transition-all flex flex-col justify-between space-y-4 hover:shadow-xl hover:shadow-black/20 cursor-pointer"
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-3">
@@ -513,14 +819,20 @@ export default function CronogramaEdicao() {
                       {canManage && (
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button 
-                            onClick={() => openTaskForm(task)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openTaskForm(task);
+                            }}
                             className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 rounded-lumos transition-colors cursor-pointer"
                             title="Editar Edição"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button 
-                            onClick={() => handleTaskDelete(task.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTaskDelete(task.id);
+                            }}
                             className="p-1.5 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-lumos transition-colors cursor-pointer"
                             title="Excluir Edição"
                           >
@@ -973,12 +1285,110 @@ export default function CronogramaEdicao() {
               </div>
             </div>
 
+            {/* Informações de Briefing Extras */}
+            <div className="border-t border-lumos-border/50 pt-4 space-y-4">
+              <span className="text-[10px] text-lumos-yellow font-black uppercase tracking-wider block">Briefing Detalhado (Opcional)</span>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Formato</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 16:9, 9:16"
+                    className="input-lumos w-full"
+                    value={taskFormData.formato}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, formato: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Duração Est.</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 00h02m30s"
+                    className="input-lumos w-full"
+                    value={taskFormData.duracao}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, duracao: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Legenda?</label>
+                  <select
+                    className="input-lumos w-full"
+                    value={taskFormData.legenda ? 'sim' : 'nao'}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, legenda: e.target.value === 'sim' })}
+                  >
+                    <option value="nao">Não</option>
+                    <option value="sim">Sim</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Link de Referência</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    className="input-lumos w-full"
+                    value={taskFormData.link_referencia}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, link_referencia: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Link do Roteiro</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    className="input-lumos w-full"
+                    value={taskFormData.link_roteiro}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, link_roteiro: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Material Bruto</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    className="input-lumos w-full"
+                    value={taskFormData.link_brutos}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, link_brutos: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Artes & Assets</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    className="input-lumos w-full"
+                    value={taskFormData.link_artes}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, link_artes: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Link do Vídeo Editado (Entrega)</label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  className="input-lumos w-full"
+                  value={taskFormData.link_editado}
+                  onChange={(e) => setTaskFormData({ ...taskFormData, link_editado: e.target.value })}
+                />
+              </div>
+            </div>
+
             {/* Observações */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Observações / Direcionamentos</label>
               <textarea
-                placeholder="Insira detalhes da edição, link de referências, etc."
-                className="input-lumos w-full h-24 resize-none"
+                placeholder="Insira detalhes da edição, direcionamentos especiais, etc."
+                className="input-lumos w-full h-20 resize-none"
                 value={taskFormData.observacoes}
                 onChange={(e) => setTaskFormData({ ...taskFormData, observacoes: e.target.value })}
               />
@@ -1001,6 +1411,235 @@ export default function CronogramaEdicao() {
                 className="px-4 py-2 bg-lumos-yellow text-lumos-bg rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs"
               >
                 {selectedTask ? "Atualizar" : "Salvar"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 7. MODAL: DETALHES DE BRIEFING E ENTREGA (EDITOR / VISUALIZAÇÃO) */}
+      {/* ==================================================================== */}
+      {isBriefingModalOpen && briefingTask && (
+        <Modal
+          isOpen={isBriefingModalOpen}
+          onClose={() => {
+            setIsBriefingModalOpen(false);
+            setBriefingTask(null);
+          }}
+          title="Briefing e Entrega da Tarefa"
+          maxWidth="max-w-2xl"
+        >
+          <form onSubmit={handleBriefingSubmit} className="space-y-6">
+            
+            {/* Bloco 1: Informações Gerais / Briefing (Somente Leitura para Editores) */}
+            <div className="bg-lumos-bg/40 border border-lumos-border rounded-lumos p-5 space-y-4">
+              <div className="flex items-start justify-between gap-4 border-b border-lumos-border pb-3">
+                <div>
+                  <span className="text-[10px] text-lumos-yellow font-black uppercase tracking-wider block">Briefing da Edição</span>
+                  <h3 className="text-base font-bold text-white mt-1">{briefingTask.titulo}</h3>
+                </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={handleEditFromBriefing}
+                    className="px-2.5 py-1.5 bg-lumos-surface border border-lumos-border hover:bg-lumos-text-secondary/5 text-lumos-yellow rounded-lumos font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Editar Briefing
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs">
+                {/* Projeto */}
+                <div className="space-y-1">
+                  <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Projeto Vinculado</span>
+                  <div className="text-white font-medium">
+                    {briefingTask.projects ? (
+                      <span className="flex items-center gap-1">
+                        <Link2 className="w-3.5 h-3.5 text-lumos-yellow/70" />
+                        {briefingTask.projects.code ? `#${briefingTask.projects.code} - ` : ''}
+                        {briefingTask.projects.name} 
+                        {briefingTask.projects.clients ? ` (${briefingTask.projects.clients.name})` : ''}
+                      </span>
+                    ) : (
+                      <span className="italic text-lumos-text-secondary">Tarefa Avulsa (Sem Projeto)</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Editor Designado */}
+                <div className="space-y-1">
+                  <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Editor Responsável</span>
+                  <div className="text-white font-medium">
+                    {briefingTask.editores?.nome ? briefingTask.editores.nome : <span className="italic text-lumos-text-secondary">Sem Designação (Backlog)</span>}
+                  </div>
+                </div>
+
+                {/* Prazo Final */}
+                <div className="space-y-1">
+                  <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Prazo Final de Entrega</span>
+                  <div className="text-white font-bold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-lumos-yellow" />
+                    {format(new Date(briefingTask.prazo), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                  </div>
+                </div>
+
+                {/* Prioridade */}
+                <div className="space-y-1">
+                  <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Prioridade</span>
+                  <div>
+                    <span className={clsx(
+                      "text-[9px] px-2 py-0.5 rounded font-black uppercase tracking-wider",
+                      getPriorityBadge(briefingTask.prioridade)
+                    )}>
+                      {briefingTask.prioridade}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Formato, Duração, Legenda */}
+                <div className="space-y-1">
+                  <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Formato & Duração</span>
+                  <div className="text-white font-medium">
+                    {briefingTask.formato || 'Não especificado'} | {briefingTask.duracao || 'Não especificada'}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Legenda</span>
+                  <div className="text-white font-medium">
+                    {briefingTask.legenda === null ? 'Não especificado' : briefingTask.legenda ? 'Sim' : 'Não'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Links de Briefing */}
+              <div className="border-t border-lumos-border/50 pt-4 space-y-3">
+                <span className="text-lumos-text-secondary font-bold uppercase tracking-wider block text-[10px]">Links e Materiais de Apoio</span>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Link Referência */}
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                    <div className="truncate">
+                      <span className="text-[9px] text-lumos-text-secondary uppercase block">Referência</span>
+                      {briefingTask.link_referencia ? (
+                        <a href={briefingTask.link_referencia} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                          Acessar Link <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-lumos-text-secondary italic font-semibold">Sem link</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Link Roteiro */}
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                    <div className="truncate">
+                      <span className="text-[9px] text-lumos-text-secondary uppercase block">Roteiro</span>
+                      {briefingTask.link_roteiro ? (
+                        <a href={briefingTask.link_roteiro} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                          Acessar Roteiro <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-lumos-text-secondary italic font-semibold">Sem link</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Link Brutos */}
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                    <div className="truncate">
+                      <span className="text-[9px] text-lumos-text-secondary uppercase block">Material Bruto</span>
+                      {briefingTask.link_brutos ? (
+                        <a href={briefingTask.link_brutos} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                          Pasta de Brutos <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-lumos-text-secondary italic font-semibold">Sem link</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Link Artes */}
+                  <div className="bg-lumos-bg/20 p-2.5 rounded border border-lumos-border/30 flex items-center justify-between gap-2">
+                    <div className="truncate">
+                      <span className="text-[9px] text-lumos-text-secondary uppercase block">Artes & Assets</span>
+                      {briefingTask.link_artes ? (
+                        <a href={briefingTask.link_artes} target="_blank" rel="noopener noreferrer" className="text-[11px] text-lumos-yellow hover:underline flex items-center gap-1 font-semibold truncate">
+                          Pasta de Artes <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-lumos-text-secondary italic font-semibold">Sem link</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco 2: Entrega e Status (Editável pelo Editor) */}
+            <div className="space-y-4 border-t border-lumos-border/50 pt-4">
+              <span className="text-[10px] text-lumos-yellow font-black uppercase tracking-wider block">Área de Entrega (Editor)</span>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2 col-span-1">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status Atual</label>
+                  <select
+                    className="input-lumos w-full"
+                    value={briefingFormData.status}
+                    onChange={(e) => setBriefingFormData({ ...briefingFormData, status: e.target.value as Edicao['status'] })}
+                  >
+                    <option value="nao_iniciado">Fila (Não Iniciado)</option>
+                    <option value="em_andamento">Editando</option>
+                    <option value="revisao_interna">Revisão Interna</option>
+                    <option value="aprovacao_cliente">Aprovação Cliente</option>
+                    <option value="concluido">Aprovado (Concluído)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Link do Vídeo Editado</label>
+                  <input
+                    type="url"
+                    placeholder="https://exemplo.com/video-editado"
+                    className="input-lumos w-full"
+                    value={briefingFormData.link_editado}
+                    onChange={(e) => setBriefingFormData({ ...briefingFormData, link_editado: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Observações / Notas de Entrega</label>
+                <textarea
+                  placeholder="Instruções sobre cortes, feedbacks recebidos ou notas do editor..."
+                  className="input-lumos w-full h-20 resize-none"
+                  value={briefingFormData.observacoes}
+                  onChange={(e) => setBriefingFormData({ ...briefingFormData, observacoes: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div className="flex items-center justify-end gap-2 border-t border-lumos-border/50 pt-4 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBriefingModalOpen(false);
+                  setBriefingTask(null);
+                }}
+                className="px-4 py-2 bg-lumos-surface border border-lumos-border text-lumos-text-secondary rounded-lumos font-bold hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all text-xs"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-lumos-yellow text-lumos-bg rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs flex items-center gap-1.5"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                Salvar Entrega
               </button>
             </div>
           </form>
