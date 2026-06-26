@@ -55,6 +55,7 @@ type PeriodType = 'semana' | 'mes' | 'trimestre' | 'semestre' | 'ano';
 interface BlockPreference {
   id: string;
   visible: boolean;
+  size?: 'small' | 'medium' | 'full';
 }
 
 // Catálogo estático de blocos disponíveis
@@ -138,7 +139,7 @@ const DASHBOARD_BLOCKS_CATALOG: DashboardBlockDef[] = [
     title: 'Gráfico: Faturamento vs Lucro',
     description: 'Comparação mensal visual de receita versus rentabilidade líquida dos projetos.',
     group: 'resultado',
-    defaultSize: 'full',
+    defaultSize: 'medium',
     defaultActive: true
   },
   {
@@ -203,13 +204,13 @@ const DASHBOARD_BLOCKS_CATALOG: DashboardBlockDef[] = [
 ];
 
 const DEFAULT_PREFERENCES: BlockPreference[] = [
-  { id: 'kpi-faturamento', visible: true },
-  { id: 'kpi-lucro-liquido', visible: true },
-  { id: 'kpi-margem-media', visible: true },
-  { id: 'kpi-projeto-top', visible: true },
-  { id: 'kpi-cliente-top', visible: true },
-  { id: 'chart-fat-vs-lucro', visible: true },
-  { id: 'panel-titulos-atrasados', visible: true }
+  { id: 'kpi-faturamento', visible: true, size: 'small' },
+  { id: 'kpi-lucro-liquido', visible: true, size: 'small' },
+  { id: 'kpi-margem-media', visible: true, size: 'small' },
+  { id: 'kpi-projeto-top', visible: true, size: 'medium' },
+  { id: 'kpi-cliente-top', visible: true, size: 'medium' },
+  { id: 'chart-fat-vs-lucro', visible: true, size: 'medium' },
+  { id: 'panel-titulos-atrasados', visible: true, size: 'full' }
 ];
 
 export default function FinanceiroDashboard() {
@@ -326,7 +327,13 @@ export default function FinanceiroDashboard() {
 
   // Une as preferências do usuário com novos blocos que surgirem no catálogo futuramente
   function applyPreferencesMerge(saved: BlockPreference[]) {
-    const merged = [...saved];
+    const merged = saved.map(p => {
+      const catBlock = DASHBOARD_BLOCKS_CATALOG.find(c => c.id === p.id);
+      return {
+        ...p,
+        size: p.size || (catBlock?.defaultSize as any) || 'medium'
+      };
+    });
 
     // Adiciona blocos do catálogo que não existem nas preferências salvas
     DASHBOARD_BLOCKS_CATALOG.forEach(catalogBlock => {
@@ -337,7 +344,8 @@ export default function FinanceiroDashboard() {
       if (!exists) {
         merged.push({
           id: catalogBlock.id,
-          visible: catalogBlock.defaultActive
+          visible: catalogBlock.defaultActive,
+          size: catalogBlock.defaultSize as any
         });
       }
     });
@@ -417,6 +425,12 @@ export default function FinanceiroDashboard() {
   const toggleBlockVisibility = (id: string) => {
     setTempPreferences(prev =>
       prev.map(p => (p.id === id ? { ...p, visible: !p.visible } : p))
+    );
+  };
+
+  const changeBlockSize = (id: string, size: 'small' | 'medium' | 'full') => {
+    setTempPreferences(prev =>
+      prev.map(p => (p.id === id ? { ...p, size } : p))
     );
   };
 
@@ -713,12 +727,16 @@ export default function FinanceiroDashboard() {
                 const catalogBlock = DASHBOARD_BLOCKS_CATALOG.find(c => c.id === blockPref.id);
                 if (!catalogBlock) return null;
 
+                const prefSize = blockPref.size || catalogBlock.defaultSize;
+
                 return (
                   <SortableBlockWrapper
                     key={catalogBlock.id}
                     block={catalogBlock}
+                    size={prefSize as any}
                     isEditing={isEditing}
                     onHide={() => toggleBlockVisibility(catalogBlock.id)}
+                    onChangeSize={(newSize) => changeBlockSize(catalogBlock.id, newSize)}
                   >
                     {/* KPI Faturamento */}
                     {catalogBlock.id === 'kpi-faturamento' && (
@@ -1315,12 +1333,14 @@ export default function FinanceiroDashboard() {
 // Wrapper Sortable com o useSortable do dnd-kit
 interface SortableBlockWrapperProps {
   block: DashboardBlockDef;
+  size: 'small' | 'medium' | 'full';
   isEditing: boolean;
   onHide: () => void;
+  onChangeSize: (size: 'small' | 'medium' | 'full') => void;
   children: React.ReactNode;
 }
 
-function SortableBlockWrapper({ block, isEditing, onHide, children }: SortableBlockWrapperProps) {
+function SortableBlockWrapper({ block, size, isEditing, onHide, onChangeSize, children }: SortableBlockWrapperProps) {
   const {
     attributes,
     listeners,
@@ -1337,21 +1357,19 @@ function SortableBlockWrapper({ block, isEditing, onHide, children }: SortableBl
     zIndex: isDragging ? 50 : 'auto'
   };
 
-  // Mapeamento dinâmico de largura com base no defaultSize
+  // Mapeamento dinâmico de largura com base no size (com fallback responsivo)
   const colSpanClass = useMemo(() => {
-    switch (block.defaultSize) {
+    switch (size) {
       case 'small':
-        return 'col-span-1 md:col-span-2 lg:col-span-1';
+        return 'col-span-1 md:col-span-1 lg:col-span-1';
       case 'medium':
         return 'col-span-1 md:col-span-2 lg:col-span-2';
-      case 'large':
-        return 'col-span-1 md:col-span-3 lg:col-span-3';
       case 'full':
-        return 'col-span-1 md:col-span-4 lg:col-span-4';
+        return 'col-span-1 md:col-span-2 lg:col-span-4';
       default:
         return 'col-span-1';
     }
-  }, [block.defaultSize]);
+  }, [size]);
 
   return (
     <div
@@ -1366,19 +1384,46 @@ function SortableBlockWrapper({ block, isEditing, onHide, children }: SortableBl
       {/* Botões do modo de edição */}
       {isEditing && (
         <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-90 z-20">
+          {/* Seletor de Tamanho P / M / G */}
+          <div className="flex bg-lumos-bg/95 border border-lumos-border/60 rounded p-0.5 items-center gap-0.5 shadow-md">
+            {(['small', 'medium', 'full'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => onChangeSize(s)}
+                className={`w-5 h-5 flex items-center justify-center rounded text-[9px] font-black uppercase transition-all ${
+                  size === s
+                    ? 'bg-lumos-yellow text-lumos-bg'
+                    : 'text-lumos-text-secondary hover:text-lumos-text-primary'
+                }`}
+                title={
+                  s === 'small'
+                    ? 'Tamanho Pequeno (1/4 da linha)'
+                    : s === 'medium'
+                    ? 'Tamanho Médio (2/4 da linha)'
+                    : 'Tamanho Grande (Largura total)'
+                }
+              >
+                {s === 'small' && 'P'}
+                {s === 'medium' && 'M'}
+                {s === 'full' && 'G'}
+              </button>
+            ))}
+          </div>
+
           {/* Botão de Drag Handle */}
           <div
             {...attributes}
             {...listeners}
-            className="p-1 rounded bg-lumos-bg/90 border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/40 cursor-grab active:cursor-grabbing transition-all"
+            className="p-1 rounded bg-lumos-bg/90 border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/40 cursor-grab active:cursor-grabbing transition-all h-6 flex items-center justify-center"
             title="Arraste para reordenar"
           >
             <GripVertical className="w-3.5 h-3.5" />
           </div>
+
           {/* Botão de Ocultar (X) */}
           <button
             onClick={onHide}
-            className="p-1 rounded bg-lumos-bg/90 border border-lumos-border text-lumos-text-secondary hover:text-red-400 hover:border-red-400/40 transition-all"
+            className="p-1 rounded bg-lumos-bg/90 border border-lumos-border text-lumos-text-secondary hover:text-red-400 hover:border-red-400/40 transition-all h-6 flex items-center justify-center"
             title="Ocultar bloco"
           >
             <X className="w-3.5 h-3.5" />
