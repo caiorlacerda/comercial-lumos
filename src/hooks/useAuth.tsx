@@ -6,7 +6,7 @@ export interface AppUserProfile {
   id: string;
   full_name: string;
   email: string;
-  role: 'admin' | 'producao' | 'basico';
+  role: 'admin' | 'producao' | 'basico' | 'editor';
   job_title: string | null;
   status: 'ativo' | 'inativo';
   custom_permissions: Record<string, boolean>;
@@ -136,8 +136,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     const defaults: Record<string, string[]> = {
       admin: ['*'],
-      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores'],
+      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
       basico: ['reembolso'],
+      editor: ['cronograma_edicao'],
     };
     const rolePermissions = defaults[profile.role] || [];
     return rolePermissions.includes('*') || rolePermissions.includes(permission);

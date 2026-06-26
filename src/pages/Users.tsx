@@ -28,7 +28,7 @@ import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
 
-type UserRole = 'admin' | 'producao' | 'basico';
+type UserRole = 'admin' | 'producao' | 'basico' | 'editor';
 type UserStatus = 'ativo' | 'inativo';
 
 export default function UsersPage() {
@@ -336,6 +336,7 @@ export default function UsersPage() {
             <option value="admin">Admin</option>
             <option value="producao">Produção</option>
             <option value="basico">Básico</option>
+            <option value="editor">Editor</option>
           </select>
           <select 
             className="input-lumos text-sm h-10 px-4"
@@ -587,6 +588,7 @@ export default function UsersPage() {
               >
                 <option value="basico">Básico</option>
                 <option value="producao">Produção</option>
+                <option value="editor">Editor</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -672,6 +674,7 @@ export default function UsersPage() {
               >
                 <option value="basico">Básico</option>
                 <option value="producao">Produção</option>
+                <option value="editor">Editor</option>
                 <option value="admin">Admin</option>
               </select>
             </div>

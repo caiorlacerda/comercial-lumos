@@ -31,7 +31,7 @@ export default function MobileTabBar() {
 
 
   const showComercial = isAdmin;
-  const showProducao = can('ordem_do_dia') || can('fornecedores');
+  const showProducao = can('ordem_do_dia') || can('fornecedores') || can('cronograma_edicao');
 
   // Check if current path is in the "Mais" section items
   const isConfigActive = activeSection === 'configuracoes';

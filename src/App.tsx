@@ -38,6 +38,7 @@ import Equipe from '@/pages/Equipe';
 import ProducaoDashboard from '@/pages/ProducaoDashboard';
 import CadastroFornecedorPublico from '@/pages/CadastroFornecedorPublico';
 import ConfiguracoesNotificacoes from '@/pages/ConfiguracoesNotificacoes';
+import CronogramaEdicao from '@/pages/CronogramaEdicao';
 
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
@@ -160,6 +161,9 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   if (profile?.role === 'basico' && location.pathname === '/') {
     return <Navigate to="/financeiro/reembolso" />;
   }
+  if (profile?.role === 'editor' && location.pathname === '/') {
+    return <Navigate to="/producao/cronograma-edicao" />;
+  }
 
   return (
     <LayoutProvider>
@@ -193,42 +197,90 @@ function AppContent() {
           
           <Route 
             path="/" 
-            element={<AuthWrapper><Dashboard /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <Dashboard />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
             path="/orcamentos" 
-            element={<AuthWrapper><Budgets /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <Budgets />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
             path="/clientes" 
-            element={<AuthWrapper><Clients /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <Clients />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
             path="/clientes/:id" 
-            element={<AuthWrapper><ClientProfile /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <ClientProfile />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
             path="/orcamentos/novo" 
-            element={<AuthWrapper><BudgetEditorPage /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <BudgetEditorPage />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
             path="/orcamentos/:id" 
-            element={<AuthWrapper><BudgetEditorPage /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <BudgetEditorPage />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
             path="/catalogo" 
-            element={<AuthWrapper><Catalog /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <Catalog />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
             path="/templates" 
-            element={<AuthWrapper><Templates /></AuthWrapper>} 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <Templates />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
           />
           
           <Route 
@@ -355,6 +407,18 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="ordem_do_dia">
                   <ProducaoDashboard />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
+          {/* PRODUÇÃO — Cronograma de Edição */}
+          <Route
+            path="/producao/cronograma-edicao"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="cronograma_edicao">
+                  <CronogramaEdicao />
                 </PermissionGuard>
               </AuthWrapper>
             }

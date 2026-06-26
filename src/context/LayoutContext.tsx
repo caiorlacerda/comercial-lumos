@@ -131,6 +131,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     } else if (sectionId === 'producao') {
       if (can('ordem_do_dia')) targetPath = '/producao/dashboard';
       else if (can('fornecedores')) targetPath = '/producao/fornecedores';
+      else if (can('cronograma_edicao')) targetPath = '/producao/cronograma-edicao';
       else return;
     } else if (sectionId === 'financeiro') {
       if (isAdmin) targetPath = '/financeiro';
