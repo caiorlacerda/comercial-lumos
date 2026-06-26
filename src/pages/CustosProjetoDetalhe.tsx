@@ -189,6 +189,7 @@ export default function CustosProjetoDetalhe() {
       if (projectError) throw projectError;
 
       let budgetItems: any[] = [];
+      let activeVersionData: any = null;
       let receivableAmount = 0;
       let budgetId = projectData.budget_id || null;
 
@@ -196,11 +197,12 @@ export default function CustosProjetoDetalhe() {
       if (budgetId) {
         const { data: budgetData } = await supabase
           .from('budgets')
-          .select('active_version_id, receivable:receivables(total_amount)')
+          .select('active_version_id, active_version:budget_versions!active_version_id(id, margin_pct, nf_pct, discount_value), receivable:receivables(total_amount)')
           .eq('id', budgetId)
           .single();
 
         if (budgetData) {
+          activeVersionData = (budgetData as any).active_version;
           receivableAmount =
             (budgetData.receivable as any)?.total_amount ||
             (Array.isArray(budgetData.receivable) ? budgetData.receivable[0]?.total_amount : 0) ||
@@ -331,7 +333,13 @@ export default function CustosProjetoDetalhe() {
         }
       }
 
-      setProject({ ...projectData, budget_items: budgetItems, receivable_amount: receivableAmount, budget_id: budgetId });
+      setProject({ 
+        ...projectData, 
+        budget_items: budgetItems, 
+        active_version: activeVersionData,
+        receivable_amount: receivableAmount, 
+        budget_id: budgetId 
+      });
 
     } catch (error) {
       console.error('Erro ao carregar projeto:', error);
@@ -588,19 +596,29 @@ export default function CustosProjetoDetalhe() {
       </div>
     );
 
-  // production_value manual do projeto sobrescreve o cálculo do orçamento, se setado
-  const budgetProductionValue = (project.budget_items || []).reduce(
-    (acc: number, item: any) => acc + item.unit_cost * item.quantity,
+  // 1. Cálculos de Custos Reais
+  const totalCosts = costs.reduce((acc, c) => acc + Number(c.amount || 0), 0);
+
+  // 2. Cálculos de Custos Estimados do Orçamento (Teto do Produtor)
+  const estimatedCost = (project.budget_items || []).reduce(
+    (acc: number, item: any) => acc + Number(item.unit_cost || 0) * Number(item.quantity || 0),
     0
   );
-  const totalProductionValue =
-    project.production_value && project.production_value > 0
-      ? Number(project.production_value)
-      : budgetProductionValue;
-  const totalCosts = costs.reduce((acc, c) => acc + c.amount, 0);
+
+  const defaultNfPercent = projectFinanceiro?.nf_percent ?? 0.18;
+  const defaultMarginPercent = 0.40; // 40%
+
+  const tetoCustos = project.budget_id
+    ? estimatedCost
+    : (projectFinanceiro?.valor_vendido || Number(project.production_value || 0)) * (1 - defaultNfPercent) / (1 + defaultMarginPercent);
+
+  const remainingCosts = tetoCustos - totalCosts;
+  const consumptionPercentProd = tetoCustos > 0 ? (totalCosts / tetoCustos) * 100 : 0;
+
+  // 3. Cálculos de Faturamento e Margem (Apenas Administradores)
+  const totalProductionValue = projectFinanceiro?.valor_vendido ?? Number(project.production_value || 0);
   const margin = totalProductionValue - totalCosts;
-  const consumptionPercent =
-    totalProductionValue > 0 ? (totalCosts / totalProductionValue) * 100 : 0;
+  const consumptionPercentAdmin = totalProductionValue > 0 ? (totalCosts / totalProductionValue) * 100 : 0;
 
   return (
     <div className="space-y-6 font-work-sans">
@@ -655,25 +673,26 @@ export default function CustosProjetoDetalhe() {
         </div>
       </div>
 
-      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercent > 90 && (
+      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercentAdmin > 90 && (
         <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-lumos flex items-center gap-3 animate-pulse">
           <AlertTriangle className="w-5 h-5 text-red-500" />
           <p className="text-sm font-bold text-red-500 uppercase">
-            Atenção Crítica: Consumo de {consumptionPercent.toFixed(1)}%!
+            Atenção Crítica: Consumo de {consumptionPercentAdmin.toFixed(1)}%!
           </p>
         </div>
       )}
-      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercent > 70 && consumptionPercent <= 90 && (
+      {profile?.role === 'admin' && totalProductionValue > 0 && consumptionPercentAdmin > 70 && consumptionPercentAdmin <= 90 && (
         <div className="bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-lumos flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-yellow-500" />
           <p className="text-sm font-bold text-yellow-500 uppercase">
-            Aviso: Consumo de {consumptionPercent.toFixed(1)}%.
+            Aviso: Consumo de {consumptionPercentAdmin.toFixed(1)}%.
           </p>
         </div>
       )}
 
-      <div className={`grid grid-cols-1 gap-4 ${profile?.role === 'admin' && totalProductionValue > 0 ? 'md:grid-cols-3' : 'md:grid-cols-1'}`}>
-        {profile?.role === 'admin' && totalProductionValue > 0 && (
+      {/* Grid de Cards Superiores condicional por Permissão/Papel */}
+      {profile?.role === 'admin' ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="card p-6">
             <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
               Valor Disponível para Produção
@@ -682,48 +701,95 @@ export default function CustosProjetoDetalhe() {
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProductionValue)}
             </p>
           </div>
-        )}
-        <div className="card p-6">
-          <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
-            {profile?.role === 'admin' ? 'Total de Custos' : 'Custos Registrados'}
-          </p>
-          <p className="text-2xl font-black text-lumos-text-primary tracking-tight">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
-          </p>
-        </div>
-        {profile?.role === 'admin' && (
           <div className="card p-6">
             <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
-              {totalProductionValue > 0 ? 'Margem Real (Produção)' : 'Saldo de Custos'}
+              Total de Custos
             </p>
-            <p className={`text-2xl font-black tracking-tight ${totalProductionValue > 0 ? (margin >= 0 ? 'text-green-500' : 'text-red-500') : 'text-lumos-text-primary'}`}>
-              {totalProductionValue > 0
-                ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(margin)
-                : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
+            <p className="text-2xl font-black text-lumos-text-primary tracking-tight">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
             </p>
           </div>
-        )}
-      </div>
-
-      {profile?.role === 'admin' && totalProductionValue > 0 && (
-        <div className="card p-6 space-y-4">
-          <div className="flex justify-between items-end">
-            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Saúde do Orçamento</p>
-            <p className="text-xs font-black text-lumos-text-primary">{consumptionPercent.toFixed(1)}%</p>
-          </div>
-          <div className="w-full h-4 bg-lumos-text-primary/5 rounded-full overflow-hidden border border-lumos-border p-0.5">
-            <div
-              className={`h-full rounded-full transition-all duration-1000 ${
-                consumptionPercent > 90
-                  ? 'bg-red-500'
-                  : consumptionPercent > 70
-                  ? 'bg-yellow-500'
-                  : 'bg-green-500'
-              }`}
-              style={{ width: `${Math.min(consumptionPercent, 100)}%` }}
-            />
+          <div className="card p-6">
+            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
+              Margem Real (Produção)
+            </p>
+            <p className={`text-2xl font-black tracking-tight ${margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(margin)}
+            </p>
           </div>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card p-6">
+            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
+              Budget Disponível (Teto)
+            </p>
+            <p className="text-2xl font-black text-lumos-text-primary tracking-tight">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tetoCustos)}
+            </p>
+          </div>
+          <div className="card p-6">
+            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
+              Custos Registrados (Gasto)
+            </p>
+            <p className="text-2xl font-black text-lumos-text-primary tracking-tight">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
+            </p>
+          </div>
+          <div className="card p-6">
+            <p className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1">
+              Saldo Restante
+            </p>
+            <p className={`text-2xl font-black tracking-tight ${remainingCosts >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingCosts)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Barra de Progresso/Saúde condicional por Permissão/Papel */}
+      {profile?.role === 'admin' ? (
+        totalProductionValue > 0 && (
+          <div className="card p-6 space-y-4">
+            <div className="flex justify-between items-end">
+              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Saúde do Orçamento</p>
+              <p className="text-xs font-black text-lumos-text-primary">{consumptionPercentAdmin.toFixed(1)}%</p>
+            </div>
+            <div className="w-full h-4 bg-lumos-text-primary/5 rounded-full overflow-hidden border border-lumos-border p-0.5">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ${
+                  consumptionPercentAdmin > 90
+                    ? 'bg-red-500'
+                    : consumptionPercentAdmin > 70
+                    ? 'bg-yellow-500'
+                    : 'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(consumptionPercentAdmin, 100)}%` }}
+              />
+            </div>
+          </div>
+        )
+      ) : (
+        tetoCustos > 0 && (
+          <div className="card p-6 space-y-4">
+            <div className="flex justify-between items-end">
+              <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Uso do Budget da Produção</p>
+              <p className="text-xs font-black text-lumos-text-primary">{consumptionPercentProd.toFixed(1)}%</p>
+            </div>
+            <div className="w-full h-4 bg-lumos-text-primary/5 rounded-full overflow-hidden border border-lumos-border p-0.5">
+              <div
+                className={`h-full rounded-full transition-all duration-1000 ${
+                  consumptionPercentProd > 90
+                    ? 'bg-red-500'
+                    : consumptionPercentProd > 70
+                    ? 'bg-yellow-500'
+                    : 'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(consumptionPercentProd, 100)}%` }}
+              />
+            </div>
+          </div>
+        )
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
