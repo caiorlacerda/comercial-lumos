@@ -1354,120 +1354,116 @@ export default function CronogramaEdicao() {
             setSelectedTask(null);
           }}
           title={selectedTask ? "Editar Edição" : "Nova Edição"}
-          maxWidth="max-w-lg"
+          maxWidth="max-w-4xl"
         >
-          <form onSubmit={handleTaskSubmit} className="space-y-4">
+          <form onSubmit={handleTaskSubmit} className="space-y-6">
             
-            {/* Vínculo de Projeto */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase">Vincular a Projeto (Opcional)</label>
-              <select
-                className="input-lumos w-full"
-                value={taskFormData.project_id}
-                onChange={(e) => handleProjectChange(e.target.value)}
-              >
-                <option value="">-- Tarefa Avulsa (Sem Projeto) --</option>
-                {projects.map((p) => {
-                  const clientText = p.clients?.name ? ` [${p.clients.name}]` : '';
-                  const codeText = p.code ? `#${p.code} - ` : '';
-                  return (
-                    <option key={p.id} value={p.id}>
-                      {codeText}{p.name}{clientText}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+            {/* Seção 1: Identificação */}
+            <div className="space-y-4">
+              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block border-b border-lumos-border pb-1">1. Identificação</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Vínculo de Projeto */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Vincular a Projeto (Opcional)</label>
+                  <select
+                    className="input-lumos w-full"
+                    value={taskFormData.project_id}
+                    onChange={(e) => handleProjectChange(e.target.value)}
+                  >
+                    <option value="">-- Tarefa Avulsa (Sem Projeto) --</option>
+                    {projects.map((p) => {
+                      const clientText = p.clients?.name ? ` [${p.clients.name}]` : '';
+                      const codeText = p.code ? `#${p.code} - ` : '';
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {codeText}{p.name}{clientText}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
 
-            {/* Título */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase">Título da Edição</label>
-              <input
-                required
-                type="text"
-                placeholder="Ex: Edição - Vídeo Corporativo Lumos"
-                className="input-lumos w-full"
-                value={taskFormData.titulo}
-                onChange={(e) => setTaskFormData({ ...taskFormData, titulo: e.target.value })}
-              />
-            </div>
-
-            {/* Editor Responsável & Semana de Início */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Designar Editor (Opcional)</label>
-                <select
-                  className="input-lumos w-full"
-                  value={taskFormData.editor_id}
-                  onChange={(e) => setTaskFormData({ ...taskFormData, editor_id: e.target.value })}
-                >
-                  <option value="">-- Ficar no Backlog (Sem Designar) --</option>
-                  {editores.filter(ed => ed.status === 'ativo').map((ed) => (
-                    <option key={ed.id} value={ed.id}>
-                      {ed.nome} ({ed.tipo})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Semana de Início (Opcional)</label>
-                <input
-                  type="date"
-                  className="input-lumos w-full"
-                  value={taskFormData.semana_inicio}
-                  onChange={(e) => setTaskFormData({ ...taskFormData, semana_inicio: e.target.value })}
-                />
+                {/* Título */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Título da Edição</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Ex: Edição - Vídeo Corporativo Lumos"
+                    className="input-lumos w-full"
+                    value={taskFormData.titulo}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, titulo: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Prazo Final, Prioridade, Status */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2 col-span-1">
-                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Prazo Final</label>
-                <input
-                  required
-                  type="date"
-                  className="input-lumos w-full"
-                  value={taskFormData.prazo}
-                  onChange={(e) => setTaskFormData({ ...taskFormData, prazo: e.target.value })}
-                />
-              </div>
+            {/* Seção 2: Atribuição & Prazos */}
+            <div className="space-y-4">
+              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block border-b border-lumos-border pb-1">2. Atribuição & Prazos</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                {/* Editor Responsável */}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Designar Editor (Opcional)</label>
+                  <select
+                    className="input-lumos w-full"
+                    value={taskFormData.editor_id}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, editor_id: e.target.value })}
+                  >
+                    <option value="">-- Ficar no Backlog (Sem Designar) --</option>
+                    {editores.filter(ed => ed.status === 'ativo').map((ed) => (
+                      <option key={ed.id} value={ed.id}>
+                        {ed.nome} ({ed.tipo})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="space-y-2 col-span-1">
-                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Prioridade</label>
-                <select
-                  className="input-lumos w-full"
-                  value={taskFormData.prioridade}
-                  onChange={(e) => setTaskFormData({ ...taskFormData, prioridade: e.target.value as Edicao['prioridade'] })}
-                >
-                  <option value="baixa">Baixa</option>
-                  <option value="media">Média</option>
-                  <option value="alta">Alta</option>
-                </select>
-              </div>
+                {/* Semana de Início */}
+                <div className="space-y-2 md:col-span-1">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Semana de Início</label>
+                  <input
+                    type="date"
+                    className="input-lumos w-full"
+                    value={taskFormData.semana_inicio}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, semana_inicio: e.target.value })}
+                  />
+                </div>
 
-              <div className="space-y-2 col-span-1">
-                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status</label>
-                <select
-                  className="input-lumos w-full"
-                  value={taskFormData.status}
-                  onChange={(e) => setTaskFormData({ ...taskFormData, status: e.target.value as Edicao['status'] })}
-                >
-                  <option value="nao_iniciado">Fila (Não Iniciado)</option>
-                  <option value="em_andamento">Editando</option>
-                  <option value="revisao_interna">Revisão Interna</option>
-                  <option value="aprovacao_cliente">Aprovação Cliente</option>
-                  <option value="concluido">Aprovado (Concluído)</option>
-                </select>
+                {/* Prazo Final */}
+                <div className="space-y-2 md:col-span-1">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Prazo Final</label>
+                  <input
+                    required
+                    type="date"
+                    className="input-lumos w-full"
+                    value={taskFormData.prazo}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, prazo: e.target.value })}
+                  />
+                </div>
+
+                {/* Prioridade */}
+                <div className="space-y-2 md:col-span-1">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Prioridade</label>
+                  <select
+                    className="input-lumos w-full"
+                    value={taskFormData.prioridade}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, prioridade: e.target.value as Edicao['prioridade'] })}
+                  >
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </div>
               </div>
             </div>
 
-            {/* Informações de Briefing Extras */}
-            <div className="border-t border-lumos-border pt-4 space-y-4">
-              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block">Briefing Detalhado (Opcional)</span>
+            {/* Seção 3: Briefing Detalhado */}
+            <div className="space-y-4">
+              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block border-b border-lumos-border pb-1">3. Briefing Detalhado (Opcional)</span>
               
-              <div className="grid grid-cols-3 gap-4">
+              {/* Formato, Duração, Legenda, Status */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-lumos-text-secondary uppercase">Formato</label>
                   <input
@@ -1501,9 +1497,25 @@ export default function CronogramaEdicao() {
                     <option value="sim">Sim</option>
                   </select>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status</label>
+                  <select
+                    className="input-lumos w-full"
+                    value={taskFormData.status}
+                    onChange={(e) => setTaskFormData({ ...taskFormData, status: e.target.value as Edicao['status'] })}
+                  >
+                    <option value="nao_iniciado">Fila (Não Iniciado)</option>
+                    <option value="em_andamento">Editando</option>
+                    <option value="revisao_interna">Revisão Interna</option>
+                    <option value="aprovacao_cliente">Aprovação Cliente</option>
+                    <option value="concluido">Aprovado (Concluído)</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Grid de Links */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-lumos-text-secondary uppercase">Link de Referência</label>
                   <input
@@ -1548,7 +1560,11 @@ export default function CronogramaEdicao() {
                   />
                 </div>
               </div>
+            </div>
 
+            {/* Seção 4: Entrega */}
+            <div className="space-y-4">
+              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block border-b border-lumos-border pb-1">4. Entrega (Editor)</span>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-lumos-text-secondary uppercase">Link do Vídeo Editado (Entrega)</label>
                 <input
@@ -1561,35 +1577,55 @@ export default function CronogramaEdicao() {
               </div>
             </div>
 
-            {/* Observações */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase">Observações / Direcionamentos</label>
-              <textarea
-                placeholder="Insira detalhes da edição, direcionamentos especiais, etc."
-                className="input-lumos w-full h-20 resize-none"
-                value={taskFormData.observacoes}
-                onChange={(e) => setTaskFormData({ ...taskFormData, observacoes: e.target.value })}
-              />
+            {/* Seção 5: Observações */}
+            <div className="space-y-4">
+              <span className="text-[10px] text-amber-600 dark:text-lumos-yellow font-black uppercase tracking-wider block border-b border-lumos-border pb-1">5. Notas & Direcionamentos</span>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-lumos-text-secondary uppercase">Observações / Direcionamentos</label>
+                <textarea
+                  placeholder="Insira detalhes da edição, direcionamentos especiais, etc."
+                  className="input-lumos w-full h-20 resize-none"
+                  value={taskFormData.observacoes}
+                  onChange={(e) => setTaskFormData({ ...taskFormData, observacoes: e.target.value })}
+                />
+              </div>
             </div>
 
             {/* Botões do Rodapé */}
-            <div className="flex items-center justify-end gap-2 border-t border-lumos-border pt-4 mt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsTaskFormOpen(false);
-                  setSelectedTask(null);
-                }}
-                className="px-4 py-2 bg-lumos-surface border border-lumos-border text-lumos-text-secondary rounded-lumos font-bold hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all text-xs"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-lumos-yellow text-black rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs"
-              >
-                {selectedTask ? "Atualizar" : "Salvar"}
-              </button>
+            <div className="flex items-center justify-between border-t border-lumos-border pt-4 mt-6">
+              <div>
+                {selectedTask && canManage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTaskFormOpen(false);
+                      handleTaskDelete(selectedTask.id);
+                    }}
+                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-600 hover:text-white border border-red-500/20 hover:border-red-500 rounded-lumos font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir Edição
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTaskFormOpen(false);
+                    setSelectedTask(null);
+                  }}
+                  className="px-4 py-2 bg-lumos-surface border border-lumos-border text-lumos-text-secondary rounded-lumos font-bold hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-lumos-yellow text-black rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs"
+                >
+                  {selectedTask ? "Atualizar" : "Salvar"}
+                </button>
+              </div>
             </div>
           </form>
         </Modal>
