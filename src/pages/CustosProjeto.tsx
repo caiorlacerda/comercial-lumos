@@ -36,6 +36,8 @@ export default function CustosProjeto() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null); // null = criação
   const [editProjectData, setEditProjectData] = useState({ name: '', code: '', client_id: '', production_value: 0 });
+  const [sortBy, setSortBy] = useState<'recente' | 'valor_vendido' | 'lucro_liquido' | 'maior_custo' | 'budget_disponivel'>('recente');
+  const [groupByClient, setGroupByClient] = useState(false);
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -146,7 +148,8 @@ export default function CustosProjeto() {
           icp: p.icp,
           vencido: p.vencido,
           pendente_preenchimento: p.pendente_preenchimento,
-          tetoCustos
+          tetoCustos,
+          created_at: p.created_at
         };
       });
 
@@ -256,6 +259,232 @@ export default function CustosProjeto() {
     return matchSearch && matchClient;
   });
 
+  const sortedProjects = React.useMemo(() => {
+    const list = [...filtered];
+    return list.sort((a, b) => {
+      if (sortBy === 'recente') {
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      }
+      if (sortBy === 'valor_vendido') {
+        return (b.totalProductionValue || 0) - (a.totalProductionValue || 0);
+      }
+      if (sortBy === 'lucro_liquido') {
+        return (b.margin || 0) - (a.margin || 0);
+      }
+      if (sortBy === 'maior_custo') {
+        return (b.totalCosts || 0) - (a.totalCosts || 0);
+      }
+      if (sortBy === 'budget_disponivel') {
+        return (b.tetoCustos || 0) - (a.tetoCustos || 0);
+      }
+      return 0;
+    });
+  }, [filtered, sortBy]);
+
+  const groupedProjects = React.useMemo(() => {
+    if (!groupByClient) return null;
+    const groups: { [key: string]: typeof projects } = {};
+    
+    sortedProjects.forEach(p => {
+      const clientName = p.client?.name || 'Sem Cliente';
+      if (!groups[clientName]) {
+        groups[clientName] = [];
+      }
+      groups[clientName].push(p);
+    });
+
+    return Object.entries(groups).map(([clientName, items]) => {
+      const totalVendidos = items.reduce((sum, item) => sum + (item.totalProductionValue || 0), 0);
+      const totalCustos = items.reduce((sum, item) => sum + (item.totalCosts || 0), 0);
+      const totalLucro = items.reduce((sum, item) => sum + (item.margin || 0), 0);
+      const totalTeto = items.reduce((sum, item) => sum + (item.tetoCustos || 0), 0);
+      
+      return {
+        clientName,
+        items,
+        totals: {
+          totalVendidos,
+          totalCustos,
+          totalLucro,
+          totalTeto
+        }
+      };
+    });
+  }, [sortedProjects, groupByClient]);
+
+  const renderProjectCard = (p: any) => {
+    const isPendente = p.pendente_preenchimento;
+    const isVencido = p.vencido;
+    const isSelected = selectedIds.has(p.id);
+
+    // Margem cor baseada em faixas
+    let marginBadgeClass = "bg-lumos-text-secondary/10 text-lumos-text-secondary";
+    if (p.totalProductionValue > 0) {
+      if (p.marginPercent >= 30) {
+        marginBadgeClass = "bg-green-500/10 text-green-500 border border-green-500/20";
+      } else if (p.marginPercent >= 15) {
+        marginBadgeClass = "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20";
+      } else {
+        marginBadgeClass = "bg-red-500/10 text-red-500 border border-red-500/20";
+      }
+    }
+
+    return (
+      <div
+        key={p.id}
+        onClick={() => navigate(`/financeiro/custos-projeto/${p.project_id}`)}
+        className={clsx(
+          'bg-lumos-surface border rounded-lumos p-5 cursor-pointer transition-all duration-300 relative group flex flex-col justify-between hover:shadow-2xl hover:-translate-y-0.5',
+          isSelected 
+            ? 'border-amber-500/50 dark:border-lumos-yellow/50 bg-amber-500/[0.02] dark:bg-lumos-yellow/[0.02]' 
+            : isPendente
+            ? 'border-red-500/40 dark:border-red-500/30 bg-red-500/[0.02]'
+            : 'border-lumos-border hover:border-amber-500/30 dark:hover:border-lumos-yellow/30'
+        )}
+      >
+        {/* Selo Pendente Info ou Atrasado no topo direito */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+          {isPendente && (
+            <span className="flex items-center gap-1 text-[9px] font-black bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 px-2 py-0.5 rounded uppercase tracking-wide animate-pulse">
+              <AlertTriangle className="w-3 h-3" /> PENDENTE INFO
+            </span>
+          )}
+          {isVencido && (
+            <span className="text-[9px] font-black bg-red-600 text-white px-2 py-0.5 rounded uppercase tracking-wide">
+              Atrasado
+            </span>
+          )}
+        </div>
+
+        {/* Info do Projeto */}
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 pr-24">
+            {isAdmin && (
+              <div
+                onClick={e => toggleSelect(p.id, e)}
+                className={clsx(
+                  'w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0 mt-1',
+                  isSelected
+                    ? 'bg-amber-600 dark:bg-lumos-yellow border-amber-600 dark:border-lumos-yellow text-white dark:text-black'
+                    : 'border-lumos-border group-hover:border-amber-500/50 dark:group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
+                  selectedIds.size > 0 && 'opacity-100'
+                )}
+              >
+                {isSelected && <Check className="w-3 h-3" />}
+              </div>
+            )}
+            
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {p.code && (
+                  <span className="text-[10px] font-black text-amber-600 dark:text-lumos-yellow bg-amber-500/10 dark:bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tight">
+                    {p.code}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-sm font-bold text-lumos-text-primary group-hover:text-amber-600 dark:group-hover:text-lumos-yellow transition-colors mt-1 line-clamp-2">
+                {p.name}
+              </h3>
+              <p className="text-[11px] text-lumos-text-secondary flex items-center gap-1 mt-1 truncate">
+                <Target className="w-3.5 h-3.5 text-lumos-text-secondary" /> {p.client?.name || 'Sem Cliente'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Métricas e Ações */}
+        <div className="border-t border-lumos-border/50 pt-4 mt-4 space-y-4">
+          {isAdmin ? (
+            /* Layout Admin: 2x2 Grid para Métricas de Faturamento, Custos, Lucro e Margem */
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] font-bold text-lumos-text-secondary uppercase">Vendido</span>
+                  {!p.budget_id && (
+                    <span className="text-[8px] font-black bg-amber-500/10 dark:bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
+                  )}
+                </div>
+                <p className="text-xs font-black text-lumos-text-primary mt-0.5 truncate">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalProductionValue)}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-bold text-lumos-text-secondary uppercase">Custos</span>
+                <p className="text-xs font-black text-lumos-text-primary mt-0.5 truncate">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] font-bold text-lumos-text-secondary uppercase">Lucro Líq.</span>
+                  {!p.budget_id && (
+                    <span className="text-[8px] font-black bg-amber-500/10 dark:bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
+                  )}
+                </div>
+                <p className={`text-xs font-black mt-0.5 truncate ${p.margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.margin)}
+                </p>
+              </div>
+
+              <div className="flex flex-col justify-end items-end">
+                {p.totalProductionValue > 0 ? (
+                  <div className={clsx("flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-black", marginBadgeClass)}>
+                    {p.marginPercent.toFixed(1)}%
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-black bg-lumos-text-secondary/15 text-lumos-text-secondary border border-lumos-border">
+                    S/ Proposta
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Layout Produção (Restrito): Sem faturamento/lucro/margem. Apenas Budget vs Custos */
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] font-bold text-lumos-text-secondary uppercase">Budget Disp.</span>
+                  {!p.budget_id && (
+                    <span className="text-[8px] font-black bg-amber-500/10 dark:bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
+                  )}
+                </div>
+                <p className="text-xs font-black text-lumos-text-primary mt-0.5 truncate">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.tetoCustos)}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-bold text-lumos-text-secondary uppercase">Custos Regist.</span>
+                <p className="text-xs font-black text-lumos-text-primary mt-0.5 truncate">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Rodapé do Card com Ação */}
+          <div className="flex items-center justify-between border-t border-lumos-border/30 pt-3 text-[10px] font-bold text-lumos-text-secondary uppercase">
+            <span className="flex items-center gap-1 text-[9px] tracking-wider text-amber-600 dark:text-lumos-yellow">
+              Ver Detalhes <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </span>
+
+            {isAdmin && (
+              <button
+                onClick={e => openEditModal(p, e)}
+                className="p-1.5 rounded-full hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow transition-all"
+                title="Editar projeto"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -273,30 +502,35 @@ export default function CustosProjeto() {
         )}
       </div>
 
-      <div className="card p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="md:col-span-2 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+      {/* BARRA DE CONTROLES */}
+      <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-5 space-y-4 shadow-xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+          
+          {/* Busca (5 colunas) */}
+          <div className="lg:col-span-5 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-lumos-text-secondary" />
             <input
               type="text"
               placeholder="Buscar por código, projeto ou cliente..."
-              className="input-lumos pl-10 w-full h-10"
+              className="input-lumos pl-10 w-full h-10 text-sm font-medium"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="relative">
+
+          {/* Filtro Cliente (3 colunas) */}
+          <div className="lg:col-span-3 relative">
             <select
-              className="input-lumos w-full h-10 appearance-none pr-9"
+              className="input-lumos w-full h-10 text-sm font-medium pr-10 appearance-none bg-no-repeat cursor-pointer"
               value={clientFilter}
               onChange={e => setClientFilter(e.target.value)}
             >
-              <option value="">Todos os clientes</option>
+              <option value="">Todos os Clientes</option>
               {clients.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            {clientFilter && (
+            {clientFilter ? (
               <button
                 onClick={() => setClientFilter('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary"
@@ -304,167 +538,159 @@ export default function CustosProjeto() {
               >
                 <X className="w-4 h-4" />
               </button>
+            ) : (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-lumos-text-secondary w-0 h-0" />
             )}
           </div>
+
+          {/* Ordenação (2 colunas) */}
+          <div className="lg:col-span-2 relative">
+            <select
+              className="input-lumos w-full h-10 text-sm font-medium pr-10 appearance-none cursor-pointer"
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+            >
+              <option value="recente">Mais Recente</option>
+              <option value="maior_custo">Maior Custo</option>
+              {isAdmin ? (
+                <>
+                  <option value="valor_vendido">Maior Valor</option>
+                  <option value="lucro_liquido">Maior Lucro</option>
+                </>
+              ) : (
+                <option value="budget_disponivel">Maior Budget</option>
+              )}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-lumos-text-secondary w-0 h-0" />
+          </div>
+
+          {/* Toggle Agrupar por Cliente (2 colunas) */}
+          <div className="lg:col-span-2 flex items-center justify-between lg:justify-end gap-3 border-t lg:border-t-0 border-lumos-border pt-3 lg:pt-0">
+            <span className="text-xs font-bold text-lumos-text-secondary uppercase select-none">Agrupar</span>
+            <button
+              type="button"
+              onClick={() => setGroupByClient(!groupByClient)}
+              className={clsx(
+                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                groupByClient ? "bg-amber-600 dark:bg-lumos-yellow" : "bg-lumos-border"
+              )}
+            >
+              <span
+                className={clsx(
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                  groupByClient ? "translate-x-5" : "translate-x-0"
+                )}
+              />
+            </button>
+          </div>
+
         </div>
-        {(searchTerm || clientFilter) && (
-          <div className="flex items-center justify-between text-xs text-lumos-text-secondary">
+
+        {(searchTerm || clientFilter || sortBy !== 'recente' || groupByClient) && (
+          <div className="flex items-center justify-between text-xs text-lumos-text-secondary pt-1 border-t border-lumos-border/50">
             <span>
               Mostrando <strong className="text-lumos-text-primary">{filtered.length}</strong> de {projects.length} projetos
             </span>
             <button
-              onClick={() => { setSearchTerm(''); setClientFilter(''); }}
-              className="text-lumos-yellow hover:underline font-bold uppercase tracking-widest text-[10px]"
+              onClick={() => {
+                setSearchTerm('');
+                setClientFilter('');
+                setSortBy('recente');
+                setGroupByClient(false);
+              }}
+              className="text-amber-600 dark:text-lumos-yellow hover:underline font-bold uppercase tracking-widest text-[10px]"
             >
-              Limpar filtros
+              Limpar filtros e ordenação
             </button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      {/* RENDERIZAÇÃO DOS PROJETOS */}
+      <div className="space-y-6">
         {loading ? (
-          <div className="card p-12 text-center">
+          <div className="card p-12 text-center bg-lumos-surface border border-lumos-border rounded-lumos">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">
-            Nenhum projeto.
+          <div className="card p-12 text-center text-lumos-text-secondary text-sm italic bg-lumos-surface border border-lumos-border rounded-lumos">
+            Nenhum projeto encontrado.
           </div>
-        ) : (
-          filtered.map(p => (
-            <div
-              key={p.id}
-              onClick={() => navigate(`/financeiro/custos-projeto/${p.project_id}`)}
-              className={clsx(
-                'card p-6 flex flex-col md:flex-row items-center gap-6 hover:border-lumos-yellow/30 cursor-pointer group relative transition-all',
-                selectedIds.has(p.id) && 'border-lumos-yellow/50 bg-lumos-yellow/[0.02]'
-              )}
-            >
-              {isAdmin && (
-                <div
-                  onClick={e => toggleSelect(p.id, e)}
-                  className={clsx(
-                    'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0',
-                    selectedIds.has(p.id)
-                      ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
-                      : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
-                    selectedIds.size > 0 && 'opacity-100'
-                  )}
-                >
-                  {selectedIds.has(p.id) && <Check className="w-3.5 h-3.5" />}
-                </div>
-              )}
+        ) : groupByClient && groupedProjects ? (
+          // Exibição Agrupada por Cliente
+          groupedProjects.map((group: any) => {
+            const { clientName, items, totals } = group;
+            return (
+              <div key={clientName} className="space-y-4">
+                {/* Cabeçalho do Cliente com Subtotais */}
+                <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md bg-lumos-bg/10">
+                  <div>
+                    <h2 className="text-sm font-black text-lumos-text-primary uppercase tracking-tight flex items-center gap-2">
+                      <Target className="w-4 h-4 text-amber-600 dark:text-lumos-yellow" />
+                      {clientName}
+                    </h2>
+                    <p className="text-[10px] text-lumos-text-secondary uppercase font-bold mt-0.5">
+                      {items.length} {items.length === 1 ? 'projeto' : 'projetos'}
+                    </p>
+                  </div>
 
-              <div className="flex-1 w-full">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  {p.code && (
-                    <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tighter">
-                      {p.code}
-                    </span>
-                  )}
-                  <h3 className="text-lg font-bold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">
-                    {p.name}
-                  </h3>
-                  {p.pendente_preenchimento && (
-                    <span className="flex items-center gap-1 text-[9px] font-black bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded uppercase tracking-wide">
-                      <AlertTriangle className="w-3 h-3" /> Pendente Info
-                    </span>
-                  )}
-                  {p.vencido && (
-                    <span className="text-[9px] font-black bg-red-500 text-white px-2 py-0.5 rounded uppercase tracking-wide">
-                      Atrasado
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-lumos-text-secondary flex items-center gap-1">
-                  <Target className="w-3 h-3" /> {p.client?.name || '—'}
-                </p>
-              </div>
-
-              {/* Conditional columns display for RLS visual implementation */}
-              {isAdmin ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Valor Vendido</p>
-                      {!p.budget_id && (
-                        <span className="text-[8px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
-                      )}
-                    </div>
-                    <p className="text-sm font-bold text-lumos-text-primary">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalProductionValue)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Totais</p>
-                    <p className="text-sm font-bold text-lumos-text-primary">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
-                    </p>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Lucro Líquido</p>
-                      {!p.budget_id && (
-                        <span className="text-[8px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
-                      )}
-                    </div>
-                    <p className={`text-sm font-black ${p.margin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.margin)}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-end">
-                    {p.totalProductionValue > 0 ? (
-                      <div
-                        className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black ${
-                          p.marginPercent > 30
-                            ? 'bg-green-500/10 text-green-500'
-                            : 'bg-yellow-500/10 text-yellow-500'
-                        }`}
-                      >
-                        {p.marginPercent.toFixed(1)}%
-                      </div>
+                  {/* Subtotais do Cliente */}
+                  <div className="flex items-center gap-6 text-xs font-bold uppercase tracking-wider flex-wrap border-t md:border-t-0 border-lumos-border/50 pt-3 md:pt-0">
+                    {isAdmin ? (
+                      <>
+                        <div>
+                          <span className="text-[9px] text-lumos-text-secondary block">Vendido Total</span>
+                          <span className="text-lumos-text-primary font-black">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalVendidos)}
+                          </span>
+                        </div>
+                        <div className="w-px h-6 bg-lumos-border hidden sm:block" />
+                        <div>
+                          <span className="text-[9px] text-lumos-text-secondary block">Custos Total</span>
+                          <span className="text-lumos-text-primary font-black">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalCustos)}
+                          </span>
+                        </div>
+                        <div className="w-px h-6 bg-lumos-border hidden sm:block" />
+                        <div>
+                          <span className="text-[9px] text-lumos-text-secondary block">Lucro Total</span>
+                          <span className={`font-black ${totals.totalLucro >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalLucro)}
+                          </span>
+                        </div>
+                      </>
                     ) : (
-                      <div className="flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black bg-lumos-text-secondary/10 text-lumos-text-secondary">
-                        S/ Orçamento
-                      </div>
+                      <>
+                        <div>
+                          <span className="text-[9px] text-lumos-text-secondary block">Budget Total</span>
+                          <span className="text-lumos-text-primary font-black">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalTeto)}
+                          </span>
+                        </div>
+                        <div className="w-px h-6 bg-lumos-border" />
+                        <div>
+                          <span className="text-[9px] text-lumos-text-secondary block">Custos Total</span>
+                          <span className="text-lumos-text-primary font-black">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals.totalCustos)}
+                          </span>
+                        </div>
+                      </>
                     )}
-                    <button
-                      onClick={e => openEditModal(p, e)}
-                      className="ml-4 p-2 rounded-full hover:bg-lumos-yellow/10 text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-                      title="Editar projeto"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <ChevronRight className="w-5 h-5 text-lumos-text-secondary ml-1 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-8 w-full md:w-auto border-t md:border-t-0 md:border-l border-lumos-border pt-4 md:pt-0 md:pl-8">
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Budget Disponível</p>
-                      {!p.budget_id && (
-                        <span className="text-[8px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1 py-0.2 rounded uppercase scale-90">Est.</span>
-                      )}
-                    </div>
-                    <p className="text-sm font-bold text-lumos-text-primary">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.tetoCustos)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">Custos Registrados</p>
-                    <p className="text-sm font-bold text-lumos-text-primary">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.totalCosts)}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-end">
-                    <ChevronRight className="w-5 h-5 text-lumos-text-secondary group-hover:translate-x-1 transition-transform" />
-                  </div>
+
+                {/* Grid de Cards do Cliente */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {items.map((p: any) => renderProjectCard(p))}
                 </div>
-              )}
-            </div>
-          ))
+              </div>
+            );
+          })
+        ) : (
+          // Exibição Corrida (Grid Simples)
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sortedProjects.map(p => renderProjectCard(p))}
+          </div>
         )}
       </div>
 
