@@ -26,6 +26,16 @@ import {
 import { format, isPast, isToday, addDays, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
+import {
+  DndContext,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  DragEndEvent,
+  useDraggable,
+  useDroppable
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Editor {
   id: string;
@@ -80,12 +90,276 @@ interface Edicao {
   } | null;
 }
 
+interface DraggableCardProps {
+  task: Edicao;
+  canManage: boolean;
+  onOpenBriefing: (task: Edicao) => void;
+  getPriorityBadge: (prio: Edicao['prioridade']) => string;
+  getStatusLabel: (st: Edicao['status']) => string;
+  formatDeadline: (dateStr: string) => React.ReactNode;
+  showActions?: boolean;
+  onEdit?: (task: Edicao) => void;
+  onDelete?: (id: string) => void;
+}
+
+function DraggableCard({ 
+  task, 
+  canManage, 
+  onOpenBriefing, 
+  getPriorityBadge, 
+  getStatusLabel, 
+  formatDeadline,
+  showActions = false,
+  onEdit,
+  onDelete
+}: DraggableCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: task.id,
+    disabled: !canManage,
+  });
+
+  const style = transform ? {
+    transform: CSS.Transform.toString(transform),
+  } : undefined;
+
+  const isTaskConcluida = task.status === 'concluido';
+  const isOverdue = !isTaskConcluida && isPast(parseISO(task.prazo)) && !isToday(parseISO(task.prazo));
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...(canManage ? attributes : {})}
+      {...(canManage ? listeners : {})}
+      onClick={() => onOpenBriefing(task)}
+      className={clsx(
+        "text-left w-full p-2.5 rounded border transition-all select-none relative group/card hover:shadow-lg hover:scale-[1.02]",
+        canManage ? "cursor-grab active:cursor-grabbing touch-none animate-none" : "cursor-pointer",
+        isDragging ? "opacity-45 scale-95 shadow-none border-dashed border-amber-500/50 dark:border-lumos-yellow/50 bg-lumos-surface/40 z-50 pointer-events-none" : "",
+        !isDragging && (
+          isTaskConcluida 
+            ? "bg-green-500/5 hover:bg-green-500/10 border-green-500/30 hover:border-green-500/50" 
+            : task.status === 'aprovacao_cliente'
+            ? "bg-purple-500/5 hover:bg-purple-500/10 border-purple-500/30 hover:border-purple-500/50"
+            : task.status === 'revisao_interna'
+            ? "bg-orange-500/5 hover:bg-orange-500/10 border-orange-500/30 hover:border-orange-500/50"
+            : task.status === 'em_andamento'
+            ? "bg-blue-500/5 hover:bg-blue-500/10 border-blue-500/30 hover:border-blue-500/50"
+            : "bg-lumos-surface hover:bg-lumos-surface/90 border-lumos-border hover:border-amber-500/30 dark:hover:border-lumos-yellow/30"
+        ),
+        isOverdue && "border-red-500/40 bg-red-500/[0.02] hover:bg-red-500/[0.05]"
+      )}
+    >
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex items-center gap-1 min-w-0 flex-1">
+          {isOverdue && (
+            <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-500 flex-shrink-0 animate-pulse" />
+          )}
+          <span className={clsx(
+            "text-[10px] font-black leading-tight tracking-tight block break-words truncate",
+            isTaskConcluida ? "text-green-600 dark:text-green-400 line-through opacity-85" : "text-lumos-text-primary"
+          )}>
+            {task.titulo}
+          </span>
+        </div>
+        
+        {showActions && canManage && (
+          <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onEdit) onEdit(task);
+              }}
+              className="p-1 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 rounded transition-colors cursor-pointer"
+              title="Editar Edição"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onDelete) onDelete(task.id);
+              }}
+              className="p-1 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded transition-colors cursor-pointer"
+              title="Excluir Edição"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {isTaskConcluida && !showActions && (
+          <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+        )}
+      </div>
+
+      {task.projects && (
+        <div className="text-[9px] text-lumos-text-secondary mt-1 font-semibold truncate">
+          {task.projects.code ? `#${task.projects.code} ` : ''}
+          {task.projects.name}
+          {task.projects.clients ? ` (${task.projects.clients.name})` : ''}
+        </div>
+      )}
+
+      {showActions && task.observacoes && (
+        <p className="text-[10px] text-lumos-text-secondary italic leading-relaxed border-l-2 border-lumos-border pl-2 mt-2 truncate max-w-full">
+          "{task.observacoes}"
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-lumos-border">
+        {showActions ? (
+          <div className="flex items-center justify-between">
+            {formatDeadline(task.prazo)}
+            <span className={clsx(
+              "text-[8px] px-1.5 py-0.2 rounded font-black uppercase tracking-wide",
+              getPriorityBadge(task.prioridade)
+            )}>
+              {task.prioridade}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-1">
+            <span className={clsx(
+              "text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wide",
+              getPriorityBadge(task.prioridade)
+            )}>
+              {task.prioridade}
+            </span>
+            <span className={clsx(
+              "text-[8px] font-bold",
+              isTaskConcluida ? "text-green-600 dark:text-green-400" : "text-lumos-text-secondary"
+            )}>
+              {getStatusLabel(task.status)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface DroppableCellProps {
+  id: string;
+  className?: string;
+  children: React.ReactNode;
+  canManage: boolean;
+}
+
+function DroppableCell({ id, className, children, canManage }: DroppableCellProps) {
+  const { isOver, setNodeRef } = useDroppable({
+    id,
+    disabled: !canManage,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={clsx(
+        className,
+        isOver && "bg-amber-500/10 dark:bg-lumos-yellow/10 border-2 border-dashed border-amber-500/50 dark:border-lumos-yellow/50 rounded-lumos scale-[0.99] transition-all"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function CronogramaEdicao() {
   const { user, profile } = useAuth();
   const toast = useToast();
 
   // Permissão de escrita (Gestão)
   const canManage = profile?.role === 'admin' || profile?.role === 'producao';
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    if (!canManage) return;
+
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const overId = over.id as string;
+
+    const task = edicoes.find(e => e.id === taskId);
+    if (!task) return;
+
+    const previousEdicoes = [...edicoes];
+    let updatedPayload: any = {};
+
+    if (overId === 'droppable-backlog') {
+      if (!task.editor_id || !task.semana_inicio) return;
+      updatedPayload = {
+        editor_id: null,
+        semana_inicio: null,
+      };
+    } else if (overId.startsWith('cell__')) {
+      const parts = overId.split('__');
+      const newEditorId = parts[1];
+      const newPrazo = parts[2];
+      
+      const targetDate = parseISO(newPrazo);
+      const targetWeekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
+      const newSemanaInicio = format(targetWeekStart, 'yyyy-MM-dd');
+
+      if (
+        task.editor_id === newEditorId &&
+        task.prazo === newPrazo &&
+        task.semana_inicio === newSemanaInicio
+      ) {
+        return;
+      }
+
+      updatedPayload = {
+        editor_id: newEditorId,
+        prazo: newPrazo,
+        semana_inicio: newSemanaInicio,
+      };
+    } else {
+      return;
+    }
+
+    try {
+      // 1. Atualização Otimista
+      setEdicoes(prev => 
+        prev.map(e => 
+          e.id === taskId 
+            ? { 
+                ...e, 
+                ...updatedPayload, 
+                editores: updatedPayload.editor_id 
+                  ? editores.find(ed => ed.id === updatedPayload.editor_id) || null
+                  : null
+              } 
+            : e
+        )
+      );
+
+      // 2. Persistência
+      const { error } = await supabase
+        .from('edicoes_cronograma')
+        .update(updatedPayload)
+        .eq('id', taskId);
+
+      if (error) throw error;
+      toast.success('Cronograma atualizado com sucesso!');
+      
+      // Sincroniza em background
+      fetchData();
+    } catch (err: any) {
+      console.error('Error handling drag end:', err);
+      toast.error('Erro ao mover a tarefa no banco de dados. Revertendo...');
+      setEdicoes(previousEdicoes);
+    }
+  };
 
   // Estados de Dados
   const [editores, setEditores] = useState<Editor[]>([]);
@@ -143,6 +417,12 @@ export default function CronogramaEdicao() {
     observacoes: '',
     link_editado: ''
   });
+
+  // Busca o editor associado ao usuário atual (caso seja da role editor)
+  const currentEditor = editores.find(ed => ed.auth_user_id === user?.id);
+  
+  // Permissão para salvar entrega
+  const canEditDelivery = canManage || (profile?.role === 'editor' && briefingTask?.editor_id === currentEditor?.id);
 
   // 1. CARREGAR DADOS
   const fetchData = useCallback(async () => {
@@ -553,7 +833,8 @@ export default function CronogramaEdicao() {
   }
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 text-lumos-text-primary max-w-7xl mx-auto font-work-sans">
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <div className="p-4 lg:p-8 space-y-6 text-lumos-text-primary max-w-7xl mx-auto font-work-sans">
       
       {/* CABEÇALHO */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-lumos-border pb-6">
@@ -694,67 +975,23 @@ export default function CronogramaEdicao() {
                             isDayToday && "bg-lumos-yellow/[0.01]"
                           )}
                         >
-                          <div className="space-y-2 flex flex-col items-center">
-                            {dayEditions.map((task) => {
-                              const isTaskConcluida = task.status === 'concluido';
-                              return (
-                                <div
-                                  key={task.id}
-                                  onClick={() => openBriefingModal(task)}
-                                  className={clsx(
-                                    "text-left w-full p-2.5 rounded border transition-all cursor-pointer select-none relative group/card hover:shadow-lg hover:scale-[1.02]",
-                                    isTaskConcluida 
-                                      ? "bg-green-500/5 hover:bg-green-500/10 border-green-500/30 hover:border-green-500/50" 
-                                      : task.status === 'aprovacao_cliente'
-                                      ? "bg-purple-500/5 hover:bg-purple-500/10 border-purple-500/30 hover:border-purple-500/50"
-                                      : task.status === 'revisao_interna'
-                                      ? "bg-orange-500/5 hover:bg-orange-500/10 border-orange-500/30 hover:border-orange-500/50"
-                                      : task.status === 'em_andamento'
-                                      ? "bg-blue-500/5 hover:bg-blue-500/10 border-blue-500/30 hover:border-blue-500/50"
-                                      : "bg-lumos-surface hover:bg-lumos-surface/90 border-lumos-border hover:border-amber-500/30 dark:hover:border-lumos-yellow/30"
-                                  )}
-                                >
-                                  {/* Checkmark e status para concluidas */}
-                                  <div className="flex items-start justify-between gap-1">
-                                    <span className={clsx(
-                                      "text-[10px] font-black leading-tight tracking-tight block break-words",
-                                      isTaskConcluida ? "text-green-600 dark:text-green-400 line-through opacity-85" : "text-lumos-text-primary"
-                                    )}>
-                                      {task.titulo}
-                                    </span>
-                                    {isTaskConcluida && (
-                                      <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                                    )}
-                                  </div>
-
-                                  {/* Projeto/Cliente */}
-                                  {task.projects && (
-                                    <div className="text-[9px] text-lumos-text-secondary mt-1 font-semibold truncate">
-                                      {task.projects.code ? `#${task.projects.code} ` : ''}
-                                      {task.projects.name}
-                                      {task.projects.clients ? ` (${task.projects.clients.name})` : ''}
-                                    </div>
-                                  )}
-
-                                  {/* Badges de rodapé do card */}
-                                  <div className="flex items-center justify-between gap-1 mt-2 pt-1 border-t border-lumos-border">
-                                    <span className={clsx(
-                                      "text-[8px] px-1 py-0.2 rounded font-black uppercase tracking-wide",
-                                      getPriorityBadge(task.prioridade)
-                                    )}>
-                                      {task.prioridade}
-                                    </span>
-                                    <span className={clsx(
-                                      "text-[8px] font-bold",
-                                      isTaskConcluida ? "text-green-600 dark:text-green-400" : "text-lumos-text-secondary"
-                                    )}>
-                                      {getStatusLabel(task.status)}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <DroppableCell 
+                            id={`cell__${editor.id}__${format(day, 'yyyy-MM-dd')}`}
+                            className="space-y-2 flex flex-col items-center min-h-[100px] w-full"
+                            canManage={canManage}
+                          >
+                            {dayEditions.map((task) => (
+                              <DraggableCard
+                                key={task.id}
+                                task={task}
+                                canManage={canManage}
+                                onOpenBriefing={openBriefingModal}
+                                getPriorityBadge={getPriorityBadge}
+                                getStatusLabel={getStatusLabel}
+                                formatDeadline={formatDeadline}
+                              />
+                            ))}
+                          </DroppableCell>
                         </td>
                       );
                     })}
@@ -794,103 +1031,42 @@ export default function CronogramaEdicao() {
           </div>
 
           {backlogEditions.length === 0 ? (
-            <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-12 text-center space-y-3">
-              <div className="w-12 h-12 bg-lumos-text-secondary/5 rounded-full flex items-center justify-center mx-auto border border-lumos-border">
-                <Sparkles className="w-5 h-5 text-lumos-text-secondary/50" />
-              </div>
-              <h3 className="text-sm font-bold text-lumos-text-primary">Nenhum item pendente</h3>
-              <p className="text-xs text-lumos-text-secondary max-w-sm mx-auto">
-                {searchBacklog ? 'Nenhuma edição corresponde ao termo pesquisado.' : 'Todas as tarefas de edição cadastradas já estão vinculadas a um editor e a uma semana de início no cronograma.'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {backlogEditions.map((task) => (
-                <div 
-                  key={task.id} 
-                  onClick={() => openBriefingModal(task)}
-                  className="bg-lumos-surface border border-lumos-border hover:border-amber-500/20 dark:hover:border-lumos-yellow/20 rounded-lumos p-5 transition-all flex flex-col justify-between space-y-4 hover:shadow-xl hover:shadow-black/20 cursor-pointer"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <h4 className="text-sm font-bold text-lumos-text-primary leading-snug tracking-tight">
-                        {task.titulo}
-                      </h4>
-                      {canManage && (
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openTaskForm(task);
-                            }}
-                            className="p-1.5 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 rounded-lumos transition-colors cursor-pointer"
-                            title="Editar Edição"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTaskDelete(task.id);
-                            }}
-                            className="p-1.5 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-lumos transition-colors cursor-pointer"
-                            title="Excluir Edição"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Vínculo de Projeto */}
-                    {task.projects && (
-                      <div className="text-xs text-lumos-text-secondary flex flex-wrap items-center gap-1 bg-lumos-bg/30 px-2.5 py-1.5 rounded border border-lumos-border w-fit">
-                        <span className="font-bold text-amber-600 dark:text-lumos-yellow">
-                          {task.projects.code ? `#${task.projects.code}` : 'PROJETO'}:
-                        </span>
-                        <span>{task.projects.name}</span>
-                        {task.projects.clients && (
-                          <span className="opacity-60">
-                            ({task.projects.clients.name})
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Detalhes do Card */}
-                  <div className="border-t border-lumos-border pt-3 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      {formatDeadline(task.prazo)}
-                      <span className={clsx(
-                        "text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider",
-                        getPriorityBadge(task.prioridade)
-                      )}>
-                        {task.prioridade}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-lumos-text-secondary pt-1">
-                      <span className="flex items-center gap-1">
-                        Status: 
-                        <span className={clsx(
-                          "px-2 py-0.5 rounded border text-[10px] font-bold", 
-                          getStatusColor(task.status)
-                        )}>
-                          {getStatusLabel(task.status)}
-                        </span>
-                      </span>
-                    </div>
-
-                    {task.observacoes && (
-                      <p className="text-[11px] text-lumos-text-secondary italic leading-relaxed border-l-2 border-lumos-border pl-2 mt-1">
-                        "{task.observacoes}"
-                      </p>
-                    )}
-                  </div>
+            <DroppableCell
+              id="droppable-backlog"
+              className="w-full min-h-[150px]"
+              canManage={canManage}
+            >
+              <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-12 text-center space-y-3 h-full">
+                <div className="w-12 h-12 bg-lumos-text-secondary/5 rounded-full flex items-center justify-center mx-auto border border-lumos-border">
+                  <Sparkles className="w-5 h-5 text-lumos-text-secondary/50" />
                 </div>
+                <h3 className="text-sm font-bold text-lumos-text-primary">Nenhum item pendente</h3>
+                <p className="text-xs text-lumos-text-secondary max-w-sm mx-auto">
+                  {searchBacklog ? 'Nenhuma edição corresponde ao termo pesquisado.' : 'Todas as tarefas de edição cadastradas já estão vinculadas a um editor e a uma semana de início no cronograma.'}
+                </p>
+              </div>
+            </DroppableCell>
+          ) : (
+            <DroppableCell
+              id="droppable-backlog"
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[150px]"
+              canManage={canManage}
+            >
+              {backlogEditions.map((task) => (
+                <DraggableCard
+                  key={task.id}
+                  task={task}
+                  canManage={canManage}
+                  onOpenBriefing={openBriefingModal}
+                  getPriorityBadge={getPriorityBadge}
+                  getStatusLabel={getStatusLabel}
+                  formatDeadline={formatDeadline}
+                  showActions={true}
+                  onEdit={openTaskForm}
+                  onDelete={handleTaskDelete}
+                />
               ))}
-            </div>
+            </DroppableCell>
           )}
         </div>
 
@@ -1589,7 +1765,8 @@ export default function CronogramaEdicao() {
                 <div className="space-y-2 col-span-1">
                   <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status Atual</label>
                   <select
-                    className="input-lumos w-full"
+                    disabled={!canEditDelivery}
+                    className="input-lumos w-full disabled:opacity-60 disabled:cursor-not-allowed"
                     value={briefingFormData.status}
                     onChange={(e) => setBriefingFormData({ ...briefingFormData, status: e.target.value as Edicao['status'] })}
                   >
@@ -1604,9 +1781,10 @@ export default function CronogramaEdicao() {
                 <div className="space-y-2 col-span-2">
                   <label className="text-xs font-bold text-lumos-text-secondary uppercase">Link do Vídeo Editado</label>
                   <input
+                    disabled={!canEditDelivery}
                     type="url"
                     placeholder="https://exemplo.com/video-editado"
-                    className="input-lumos w-full"
+                    className="input-lumos w-full disabled:opacity-60 disabled:cursor-not-allowed"
                     value={briefingFormData.link_editado}
                     onChange={(e) => setBriefingFormData({ ...briefingFormData, link_editado: e.target.value })}
                   />
@@ -1616,8 +1794,9 @@ export default function CronogramaEdicao() {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-lumos-text-secondary uppercase">Observações / Notas de Entrega</label>
                 <textarea
+                  disabled={!canEditDelivery}
                   placeholder="Instruções sobre cortes, feedbacks recebidos ou notas do editor..."
-                  className="input-lumos w-full h-20 resize-none"
+                  className="input-lumos w-full h-20 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                   value={briefingFormData.observacoes}
                   onChange={(e) => setBriefingFormData({ ...briefingFormData, observacoes: e.target.value })}
                 />
@@ -1634,20 +1813,23 @@ export default function CronogramaEdicao() {
                 }}
                 className="px-4 py-2 bg-lumos-surface border border-lumos-border text-lumos-text-secondary rounded-lumos font-bold hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all text-xs"
               >
-                Cancelar
+                {canEditDelivery ? "Cancelar" : "Fechar"}
               </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-lumos-yellow text-black rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs flex items-center gap-1.5"
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-                Salvar Entrega
-              </button>
+              {canEditDelivery && (
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-lumos-yellow text-black rounded-lumos font-bold hover:bg-lumos-yellow/90 transition-all text-xs flex items-center gap-1.5"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Salvar Entrega
+                </button>
+              )}
             </div>
           </form>
         </Modal>
       )}
 
-    </div>
+      </div>
+    </DndContext>
   );
 }
