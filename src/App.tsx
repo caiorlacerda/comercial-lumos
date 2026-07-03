@@ -39,6 +39,7 @@ import ProducaoDashboard from '@/pages/ProducaoDashboard';
 import CadastroFornecedorPublico from '@/pages/CadastroFornecedorPublico';
 import ConfiguracoesNotificacoes from '@/pages/ConfiguracoesNotificacoes';
 import CronogramaEdicao from '@/pages/CronogramaEdicao';
+import Projetos from '@/pages/Projetos';
 
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
@@ -560,6 +561,18 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="cronograma_edicao">
                   <CronogramaEdicao />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
+          {/* PRODUÇÃO — Gerenciador de Projetos */}
+          <Route
+            path="/producao/projetos"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <Projetos />
                 </PermissionGuard>
               </AuthWrapper>
             }
