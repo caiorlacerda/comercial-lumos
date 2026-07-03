@@ -58,7 +58,7 @@ import { pdf } from '@react-pdf/renderer';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import GoogleDriveAuthModal from '@/components/editor/GoogleDriveAuthModal';
 import { formatBudgetCode } from '@/utils/formatters';
-import { handleBudgetApproval } from '@/utils/financeiro';
+import { syncBudgetApprovalFlow } from '@/utils/financeiro';
 import { getPdfFileName } from '@/utils/pdfFileName';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
@@ -525,8 +525,7 @@ export default function BudgetEditorPage() {
       }
 
       if (budget.status === 'aprovado' && financials) {
-        await syncReceivable(currentBudgetId, currentVersionId, budget.project_name, budget.client_id || '', financials.valorFinal);
-        await syncProject(currentBudgetId, budget.project_name, budget.client_id || '', budget.code || '');
+        await syncBudgetApprovalFlow(currentBudgetId, financials.valorFinal);
       }
 
       isDirty.current = false;
@@ -539,77 +538,7 @@ export default function BudgetEditorPage() {
     }
   };
 
-  const syncReceivable = async (budgetId: string, versionId: string, projectName: string, clientId: string, totalAmount: number) => {
-    if (!totalAmount || totalAmount <= 0) return;
-    try {
-      const { data: existing } = await supabase
-        .from('receivables')
-        .select('id, total_amount, status')
-        .eq('budget_id', budgetId)
-        .maybeSingle();
 
-      if (existing) {
-        // Always keep total_amount in sync with the budget's final value
-        // (unless the receivable is already fully received)
-        if (existing.status !== 'recebido') {
-          await supabase.from('receivables').update({
-            total_amount: totalAmount,
-            budget_version_id: versionId,
-            updated_at: new Date().toISOString()
-          }).eq('id', existing.id);
-        }
-      } else {
-        const { error: insErr } = await supabase.from('receivables').insert([{
-          budget_id: budgetId,
-          budget_version_id: versionId,
-          description: projectName,
-          client_id: clientId,
-          total_amount: totalAmount,
-          status: 'aguardando',
-          created_by: user?.id
-        }]);
-        if (insErr) {
-          if (insErr.code === '23505') {
-            console.log('[syncReceivable] Unique violation, ignoring gracefully.');
-          } else {
-            console.error('Error inserting receivable:', insErr);
-          }
-        }
-      }
-
-      // Sync projects_financeiro (Fase 1)
-      await handleBudgetApproval(budgetId, totalAmount);
-    } catch (err) {
-      console.error('Error syncing receivable:', err);
-    }
-  };
-
-  const syncProject = async (budgetId: string, projectName: string, clientId: string, code: string) => {
-    try {
-      const { data: existing } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('budget_id', budgetId)
-        .maybeSingle();
-      if (!existing) {
-        const { error: insErr } = await supabase.from('projects').insert([{
-          name: projectName,
-          code,
-          budget_id: budgetId,
-          client_id: clientId || null,
-        }]);
-        if (insErr) {
-          if (insErr.code === '23505') {
-            console.log('[syncProject] Unique violation, ignoring gracefully.');
-          } else {
-            console.error('Error inserting project:', insErr);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error syncing project:', err);
-    }
-  };
 
   // Optimized Partial Saves
   const savePartialBudget = async (updates: Partial<Budget>) => {
@@ -621,14 +550,7 @@ export default function BudgetEditorPage() {
       
       // Sync to Receivables if approved
       if (updates.status === 'aprovado' && financials) {
-        await syncReceivable(
-          budget.id,
-          version?.id || '',
-          budget.project_name,
-          budget.client_id,
-          financials.valorFinal
-        );
-        await syncProject(budget.id, budget.project_name, budget.client_id || '', budget.code || '');
+        await syncBudgetApprovalFlow(budget.id, financials.valorFinal);
 
         // Trigger notification ORCAMENTO_APROVADO
         const creatorProfileId = await getProfileIdByAuthUserId(budget.created_by);

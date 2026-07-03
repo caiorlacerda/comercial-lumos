@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
-import { handleBudgetApproval } from '@/utils/financeiro';
+import { syncBudgetApprovalFlow } from '@/utils/financeiro';
 import type { BudgetVersion, BudgetItem } from '@/utils/financials';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { notify, getAdminUserIds, getProfileIdByAuthUserId } from '@/lib/notifications/notify';
@@ -161,7 +161,7 @@ export default function AprovacaoPublica() {
       if (approved) {
         const fin = calcFinancials(items, version);
         if (version.budget_id) {
-          await handleBudgetApproval(version.budget_id, fin.valorFinal);
+          await syncBudgetApprovalFlow(version.budget_id, fin.valorFinal);
 
           // Trigger notification ORCAMENTO_APROVADO
           const creatorProfileId = await getProfileIdByAuthUserId(budget?.created_by);
