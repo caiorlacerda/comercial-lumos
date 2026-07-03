@@ -20,7 +20,14 @@ import {
   Briefcase,
   AlertCircle,
   Clock,
-  Loader2
+  Loader2,
+  Trash2,
+  Columns,
+  Layers,
+  ArrowRight,
+  User,
+  PlusCircle,
+  HelpCircle
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -51,6 +58,24 @@ interface TaskSummary {
   status: string;
 }
 
+interface Task {
+  id: string;
+  project_id: string;
+  titulo: string;
+  descricao: string | null;
+  status: 'a_fazer' | 'em_andamento' | 'concluido';
+  prioridade: 'baixa' | 'media' | 'alta';
+  ordem: number;
+  data_inicio: string | null;
+  data_fim: string | null;
+  responsavel_id: string | null;
+}
+
+interface TeamUser {
+  id: string;
+  full_name: string;
+}
+
 export default function Projetos() {
   const { can, isAdmin } = useAuth();
   const toast = useToast();
@@ -62,6 +87,7 @@ export default function Projetos() {
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
+  const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   // UI Selection States
@@ -70,6 +96,13 @@ export default function Projetos() {
   const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({});
   const [showConcludedProjects, setShowConcludedProjects] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Project Tasks Panel States (Phase 5)
+  const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'lista' | 'kanban' | 'gantt'>('lista');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [isConfirmTemplateOpen, setIsConfirmTemplateOpen] = useState(false);
 
   // PDF Generation State
   const [isGeneratingOS, setIsGeneratingOS] = useState<string | null>(null);
@@ -89,6 +122,14 @@ export default function Projetos() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchProjectTasks(selectedProjectId);
+    } else {
+      setProjectTasks([]);
+    }
+  }, [selectedProjectId]);
 
   async function fetchData() {
     setLoading(true);
@@ -113,9 +154,18 @@ export default function Projetos() {
         .select('id, project_id, status');
       if (tErr) throw tErr;
 
+      // 4. Fetch Active Team Users (for assignee dropdown)
+      const { data: usersData, error: uErr } = await supabase
+        .from('app_users')
+        .select('id, full_name')
+        .eq('status', 'ativo')
+        .order('full_name', { ascending: true });
+      if (uErr) throw uErr;
+
       setClients(clientsData || []);
       setProjects(projectsData || []);
       setTasks(tasksData || []);
+      setTeamUsers(usersData || []);
     } catch (err: any) {
       console.error('Error fetching project data:', err);
       toast.error('Erro ao carregar dados dos projetos.');
@@ -123,6 +173,24 @@ export default function Projetos() {
       setLoading(false);
     }
   }
+
+  const fetchProjectTasks = async (projectId: string) => {
+    setTasksLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('project_tasks')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('ordem', { ascending: true });
+      if (error) throw error;
+      setProjectTasks(data || []);
+    } catch (err: any) {
+      console.error('Error fetching tasks:', err);
+      toast.error('Erro ao carregar tarefas.');
+    } finally {
+      setTasksLoading(false);
+    }
+  };
 
   // Toggle client accordion expansion
   const toggleClientExpanded = (clientId: string) => {
@@ -148,6 +216,178 @@ export default function Projetos() {
     } catch (err: any) {
       console.error('Error updating project status:', err);
       toast.error('Erro ao atualizar status do projeto.');
+    }
+  };
+
+  // Inline update task details
+  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      // Optimistic update locally
+      setProjectTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+
+      const { error } = await supabase
+        .from('project_tasks')
+        .update(updates)
+        .eq('id', taskId);
+      
+      if (error) throw error;
+
+      // Sync summary local stats without full query
+      setTasks(prev => {
+        if (updates.status === undefined) return prev;
+        return prev.map(t => t.id === taskId ? { ...t, status: updates.status! } : t);
+      });
+    } catch (err: any) {
+      console.error('Error updating task:', err);
+      toast.error('Erro ao atualizar tarefa.');
+      if (selectedProjectId) fetchProjectTasks(selectedProjectId);
+    }
+  };
+
+  // Quick Task Creation (input + enter)
+  const handleQuickAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim() || !selectedProjectId) return;
+
+    // Calculate next order (max order + 10)
+    const nextOrder = projectTasks.length > 0 
+      ? Math.max(...projectTasks.map(t => t.ordem)) + 10 
+      : 10;
+
+    try {
+      const { data: newTask, error } = await supabase
+        .from('project_tasks')
+        .insert({
+          project_id: selectedProjectId,
+          titulo: newTaskTitle.trim(),
+          descricao: '',
+          status: 'a_fazer',
+          prioridade: 'media',
+          ordem: nextOrder,
+          data_inicio: null,
+          data_fim: null
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success('Tarefa adicionada!');
+      setNewTaskTitle('');
+      
+      // Refresh local tasks and global lists
+      await fetchProjectTasks(selectedProjectId);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Error adding task:', err);
+      toast.error('Erro ao adicionar tarefa.');
+    }
+  };
+
+  // Delete task
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta tarefa?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('project_tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      toast.success('Tarefa excluída.');
+      setProjectTasks(prev => prev.filter(t => t.id !== taskId));
+      
+      // Update local task stats summary
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    } catch (err: any) {
+      console.error('Error deleting task:', err);
+      toast.error('Erro ao excluir tarefa.');
+    }
+  };
+
+  // Trigger Apply template
+  const handleApplyTemplateTrigger = () => {
+    if (!selectedProject) return;
+    
+    // Check if project already has tasks
+    if (projectTasks.length > 0) {
+      setIsConfirmTemplateOpen(true);
+    } else {
+      executeApplyTemplate(false); // Overwrite (doesn't matter if empty)
+    }
+  };
+
+  // Apply project segment template tasks
+  const executeApplyTemplate = async (append: boolean, overwrite: boolean = false) => {
+    if (!selectedProject || !selectedProjectId) return;
+    setIsConfirmTemplateOpen(false);
+    setTasksLoading(true);
+
+    try {
+      const category = selectedProject.category || selectedProject.budget?.category;
+      if (!category) {
+        toast.error('Este projeto não possui um segmento definido para aplicar o template.');
+        setTasksLoading(false);
+        return;
+      }
+
+      // 1. Delete old tasks if overwrite
+      if (overwrite) {
+        const { error: delErr } = await supabase
+          .from('project_tasks')
+          .delete()
+          .eq('project_id', selectedProjectId);
+        if (delErr) throw delErr;
+      }
+
+      // 2. Fetch template tasks
+      const { data: templates, error: tempErr } = await supabase
+        .from('project_task_templates')
+        .select('*')
+        .eq('segmento', category)
+        .order('ordem', { ascending: true });
+
+      if (tempErr) throw tempErr;
+
+      if (!templates || templates.length === 0) {
+        toast.warning(`Nenhum template encontrado para o segmento "${category}".`);
+        setTasksLoading(false);
+        return;
+      }
+
+      // 3. Setup next order offsets
+      const startOrder = append && projectTasks.length > 0 
+        ? Math.max(...projectTasks.map(t => t.ordem)) + 10 
+        : 10;
+
+      const tasksToInsert = templates.map((t, index) => ({
+        project_id: selectedProjectId,
+        titulo: t.titulo,
+        descricao: t.descricao,
+        status: 'a_fazer',
+        prioridade: t.prioridade,
+        ordem: startOrder + (index * 10),
+        data_inicio: null,
+        data_fim: null
+      }));
+
+      // 4. Batch Insert
+      const { error: insErr } = await supabase
+        .from('project_tasks')
+        .insert(tasksToInsert);
+
+      if (insErr) throw insErr;
+
+      toast.success('Template de segmento aplicado!');
+      await fetchProjectTasks(selectedProjectId);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Error applying template:', err);
+      toast.error('Erro ao aplicar o template: ' + err.message);
+    } finally {
+      setTasksLoading(false);
     }
   };
 
@@ -303,9 +543,9 @@ export default function Projetos() {
   });
 
   const getProjectTasksStats = (projectId: string) => {
-    const projectTasks = tasks.filter(t => t.project_id === projectId);
-    const total = projectTasks.length;
-    const completed = projectTasks.filter(t => t.status === 'concluido').length;
+    const projectTasksList = tasks.filter(t => t.project_id === projectId);
+    const total = projectTasksList.length;
+    const completed = projectTasksList.filter(t => t.status === 'concluido').length;
     return {
       total,
       completed,
@@ -323,6 +563,32 @@ export default function Projetos() {
         return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
       default:
         return 'bg-lumos-border/20 text-lumos-text-secondary border border-lumos-border/30';
+    }
+  };
+
+  const getPriorityTheme = (priority: 'baixa' | 'media' | 'alta') => {
+    switch (priority) {
+      case 'baixa':
+        return 'text-lumos-text-secondary border border-lumos-border/40 bg-lumos-border/10';
+      case 'media':
+        return 'text-lumos-yellow border border-lumos-yellow/20 bg-lumos-yellow/5';
+      case 'alta':
+        return 'text-red-400 border border-red-500/20 bg-red-500/5';
+      default:
+        return '';
+    }
+  };
+
+  const getStatusTheme = (status: 'a_fazer' | 'em_andamento' | 'concluido') => {
+    switch (status) {
+      case 'a_fazer':
+        return 'text-lumos-text-secondary border border-lumos-border/40';
+      case 'em_andamento':
+        return 'text-amber-400 border border-amber-500/20 bg-amber-500/5';
+      case 'concluido':
+        return 'text-green-400 border border-green-500/20 bg-green-500/5';
+      default:
+        return '';
     }
   };
 
@@ -369,7 +635,7 @@ export default function Projetos() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-[600px] items-start">
           
           {/* Panel 1: Collapsible Folders (Lateral Esquerda) */}
-          <div className="lg:col-span-1 card border border-lumos-border bg-lumos-surface/40 flex flex-col p-4 space-y-4 h-[600px]">
+          <div className="lg:col-span-1 card border border-lumos-border bg-lumos-surface/40 flex flex-col p-4 space-y-4 h-[650px]">
             {/* Panel Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
@@ -477,7 +743,7 @@ export default function Projetos() {
           <div className="lg:col-span-3 space-y-6 min-h-[600px]">
             
             {selectedProjectId && selectedProject ? (
-              /* ================= SELECTED PROJECT DETAILS ================= */
+              /* ================= SELECTED PROJECT DETAILS & TASKS ================= */
               <div className="card border border-lumos-border bg-lumos-surface flex flex-col p-6 space-y-6">
                 
                 {/* Project Detail Header */}
@@ -536,6 +802,16 @@ export default function Projetos() {
 
                     {canManage && (
                       <button
+                        onClick={handleApplyTemplateTrigger}
+                        className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-lumos-yellow" />
+                        Aplicar Template do Segmento
+                      </button>
+                    )}
+
+                    {canManage && (
+                      <button
                         onClick={() => handleToggleProjectStatus(selectedProject.id, selectedProject.status)}
                         className={clsx(
                           "btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold text-white",
@@ -588,14 +864,14 @@ export default function Projetos() {
                 )}
 
                 {/* Progress bar info */}
-                <div className="space-y-2">
+                <div className="space-y-2 pb-2">
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-lumos-text-secondary">Progresso do Workflow</span>
-                    <span className="text-lumos-text-primary">
+                    <span className="text-lumos-text-primary font-bold">
                       {getProjectTasksStats(selectedProject.id).completed} de {getProjectTasksStats(selectedProject.id).total} concluídas ({getProjectTasksStats(selectedProject.id).pct}%)
                     </span>
                   </div>
-                  <div className="w-full bg-lumos-border/30 h-2.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-lumos-border/30 h-2 rounded-full overflow-hidden">
                     <div 
                       className="bg-lumos-yellow h-full transition-all duration-500" 
                       style={{ width: `${getProjectTasksStats(selectedProject.id).pct}%` }}
@@ -603,13 +879,236 @@ export default function Projetos() {
                   </div>
                 </div>
 
-                {/* Placeholder of Tasks List (Phase 5) */}
-                <div className="flex-1 border border-dashed border-lumos-border/50 rounded-lumos flex flex-col justify-center items-center text-center p-8 bg-lumos-bg/25">
-                  <Clock className="w-8 h-8 text-lumos-text-secondary opacity-50 mb-3" />
-                  <h4 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">Visualização de Tarefas</h4>
-                  <p className="text-xs text-lumos-text-secondary mt-1 max-w-sm">
-                    A listagem de tarefas interativa deste projeto (Fase 5) será exibida aqui, permitindo preencher os prazos manuais e delegar responsáveis.
-                  </p>
+                {/* ================= TABS FOR TASK VIEWS ================= */}
+                <div className="flex items-center justify-between border-b border-lumos-border/50">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setActiveTab('lista')}
+                      className={clsx(
+                        "px-4 py-2 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px",
+                        activeTab === 'lista'
+                          ? "border-lumos-yellow text-lumos-yellow font-black"
+                          : "border-transparent text-lumos-text-secondary hover:text-lumos-text-primary"
+                      )}
+                    >
+                      Lista
+                    </button>
+                    <button
+                      disabled
+                      onClick={() => setActiveTab('kanban')}
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary/40 cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      Kanban
+                      <span className="text-[7px] font-black tracking-normal px-1 py-0.2 bg-lumos-border/50 text-lumos-text-secondary rounded uppercase">Em breve</span>
+                    </button>
+                    <button
+                      disabled
+                      onClick={() => setActiveTab('gantt')}
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary/40 cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      Gantt
+                      <span className="text-[7px] font-black tracking-normal px-1 py-0.2 bg-lumos-border/50 text-lumos-text-secondary rounded uppercase">Em breve</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab Content */}
+                <div className="flex-1 min-h-[300px] flex flex-col">
+                  {tasksLoading ? (
+                    <div className="flex-grow flex items-center justify-center py-16">
+                      <Loader2 className="w-8 h-8 animate-spin text-lumos-yellow" />
+                    </div>
+                  ) : activeTab === 'lista' ? (
+                    /* ================= LIST VIEW (ACTIVE) ================= */
+                    <div className="space-y-4 flex-grow flex flex-col justify-between">
+                      
+                      {projectTasks.length === 0 ? (
+                        <div className="flex-grow border border-dashed border-lumos-border/50 rounded-lumos flex flex-col justify-center items-center text-center p-8 bg-lumos-bg/10 py-16">
+                          <ClipboardList className="w-8 h-8 text-lumos-text-secondary opacity-30 mb-3" />
+                          <h4 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">Nenhuma tarefa ativa</h4>
+                          <p className="text-xs text-lumos-text-secondary mt-1 max-w-xs">
+                            Comece aplicando o template padrão para este segmento ou digite uma tarefa na linha abaixo.
+                          </p>
+                          {canManage && (
+                            <button
+                              onClick={handleApplyTemplateTrigger}
+                              className="btn-secondary text-xs mt-4 py-1.5 px-3 flex items-center gap-1.5"
+                            >
+                              <Layers className="w-3.5 h-3.5 text-lumos-yellow" />
+                              Aplicar Template
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="border-b border-lumos-border/40 text-lumos-text-secondary font-black uppercase tracking-wider text-[9px] opacity-70">
+                                <th className="py-2.5 px-2 w-8 text-center">Ok</th>
+                                <th className="py-2.5 px-2 min-w-[200px]">Título da Tarefa</th>
+                                <th className="py-2.5 px-2 w-32">Status</th>
+                                <th className="py-2.5 px-2 w-28">Prioridade</th>
+                                <th className="py-2.5 px-2 w-44">Responsável</th>
+                                <th className="py-2.5 px-2 w-32">Início</th>
+                                <th className="py-2.5 px-2 w-32">Fim (Prazo)</th>
+                                {canManage && <th className="py-2.5 px-2 w-10 text-center">Ações</th>}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-lumos-border/20">
+                              {projectTasks.map((task) => {
+                                const isTaskCompleted = task.status === 'concluido';
+                                return (
+                                  <tr 
+                                    key={task.id} 
+                                    className={clsx(
+                                      "hover:bg-lumos-surface/40 transition-all group/row",
+                                      isTaskCompleted && "bg-green-500/[0.01]"
+                                    )}
+                                  >
+                                    {/* Done check checkbox toggle */}
+                                    <td className="py-2 px-2 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={isTaskCompleted}
+                                        disabled={!canManage}
+                                        onChange={() => handleUpdateTask(task.id, { 
+                                          status: isTaskCompleted ? 'a_fazer' : 'concluido' 
+                                        })}
+                                        className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer disabled:cursor-not-allowed"
+                                      />
+                                    </td>
+
+                                    {/* Task Title Input */}
+                                    <td className="py-2 px-2">
+                                      <input
+                                        type="text"
+                                        value={task.titulo}
+                                        disabled={!canManage}
+                                        onChange={(e) => handleUpdateTask(task.id, { titulo: e.target.value })}
+                                        className={clsx(
+                                          "w-full bg-transparent border-b border-transparent focus:border-lumos-yellow outline-none px-1 py-0.5 text-xs font-semibold transition-all text-lumos-text-primary",
+                                          isTaskCompleted && "line-through text-lumos-text-secondary/50 opacity-60"
+                                        )}
+                                      />
+                                    </td>
+
+                                    {/* Status Badge Dropdown */}
+                                    <td className="py-2 px-2">
+                                      <select
+                                        value={task.status}
+                                        disabled={!canManage}
+                                        onChange={(e) => handleUpdateTask(task.id, { status: e.target.value as any })}
+                                        className={clsx(
+                                          "bg-transparent border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full max-w-[110px]",
+                                          getStatusTheme(task.status)
+                                        )}
+                                      >
+                                        <option value="a_fazer">A Fazer</option>
+                                        <option value="em_andamento">Em Andamento</option>
+                                        <option value="concluido">Concluído</option>
+                                      </select>
+                                    </td>
+
+                                    {/* Priority Badge Dropdown */}
+                                    <td className="py-2 px-2">
+                                      <select
+                                        value={task.prioridade}
+                                        disabled={!canManage}
+                                        onChange={(e) => handleUpdateTask(task.id, { prioridade: e.target.value as any })}
+                                        className={clsx(
+                                          "bg-transparent border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full max-w-[90px]",
+                                          getPriorityTheme(task.prioridade)
+                                        )}
+                                      >
+                                        <option value="baixa">Baixa</option>
+                                        <option value="media">Média</option>
+                                        <option value="alta">Alta</option>
+                                      </select>
+                                    </td>
+
+                                    {/* Assignee Select Dropdown */}
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center gap-1.5 min-w-[130px] border border-transparent hover:border-lumos-border/30 rounded px-1">
+                                        <User className="w-3 h-3 text-lumos-text-secondary opacity-50 flex-shrink-0" />
+                                        <select
+                                          value={task.responsavel_id || ''}
+                                          disabled={!canManage}
+                                          onChange={(e) => handleUpdateTask(task.id, { responsavel_id: e.target.value || null })}
+                                          className="bg-transparent border-none text-[11px] font-medium text-lumos-text-primary outline-none cursor-pointer w-full py-0.5"
+                                        >
+                                          <option value="">Sem responsável</option>
+                                          {teamUsers.map(user => (
+                                            <option key={user.id} value={user.id}>{user.full_name}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </td>
+
+                                    {/* Date Picker Start */}
+                                    <td className="py-2 px-2">
+                                      <input
+                                        type="date"
+                                        value={task.data_inicio || ''}
+                                        disabled={!canManage}
+                                        onChange={(e) => handleUpdateTask(task.id, { data_inicio: e.target.value || null })}
+                                        className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-lumos-text-primary px-1.5 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
+                                      />
+                                    </td>
+
+                                    {/* Date Picker End */}
+                                    <td className="py-2 px-2">
+                                      <input
+                                        type="date"
+                                        value={task.data_fim || ''}
+                                        disabled={!canManage}
+                                        onChange={(e) => handleUpdateTask(task.id, { data_fim: e.target.value || null })}
+                                        className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-lumos-text-primary px-1.5 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
+                                      />
+                                    </td>
+
+                                    {/* Actions Delete button */}
+                                    {canManage && (
+                                      <td className="py-2 px-2 text-center">
+                                        <button
+                                          onClick={() => handleDeleteTask(task.id)}
+                                          className="p-1 text-lumos-text-secondary hover:text-red-500 rounded hover:bg-red-500/10 opacity-0 group-hover/row:opacity-100 transition-all"
+                                          title="Excluir tarefa"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Quick Add Row (Input + Enter) */}
+                      {canManage && (
+                        <form onSubmit={handleQuickAddTask} className="flex items-center gap-3 pt-3 border-t border-lumos-border/40 mt-2">
+                          <input
+                            type="text"
+                            placeholder="Digitar nova tarefa... (Pressione Enter para adicionar)"
+                            value={newTaskTitle}
+                            onChange={e => setNewTaskTitle(e.target.value)}
+                            className="input-lumos flex-grow h-10 text-xs font-semibold"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!newTaskTitle.trim()}
+                            className="btn-primary h-10 px-4 flex items-center gap-1.5 text-xs shadow-md disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed"
+                          >
+                            <PlusCircle className="w-4 h-4" />
+                            Adicionar
+                          </button>
+                        </form>
+                      )}
+
+                    </div>
+                  ) : null}
                 </div>
 
               </div>
@@ -943,6 +1442,47 @@ export default function Projetos() {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CONFIRM APPLY TEMPLATE MODAL ================= */}
+      {isConfirmTemplateOpen && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary text-center">
+            <div className="mx-auto w-12 h-12 bg-lumos-yellow/10 border border-lumos-yellow/20 text-lumos-yellow rounded-full flex items-center justify-center">
+              <HelpCircle className="w-6 h-6" />
+            </div>
+            
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold uppercase tracking-tight text-lumos-text-primary">
+                Este projeto já possui tarefas
+              </h3>
+              <p className="text-xs text-lumos-text-secondary leading-relaxed">
+                Você deseja carregar o template padrão deste segmento? Escolha se quer acumular as novas tarefas ou substituir todo o workflow atual.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-3">
+              <button
+                onClick={() => executeApplyTemplate(true)}
+                className="btn-primary text-xs w-full py-2.5 font-bold"
+              >
+                Acumular / Adicionar
+              </button>
+              <button
+                onClick={() => executeApplyTemplate(false, true)}
+                className="btn-secondary text-xs w-full py-2.5 font-bold hover:bg-red-500/10 hover:border-red-500/30 text-white"
+              >
+                Substituir Existentes
+              </button>
+              <button
+                onClick={() => setIsConfirmTemplateOpen(false)}
+                className="btn-secondary text-xs w-full py-2.5 font-bold text-lumos-text-secondary"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}
