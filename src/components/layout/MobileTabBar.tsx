@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell } from 'lucide-react';
+import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell, Home as HomeIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
@@ -40,6 +40,21 @@ export default function MobileTabBar() {
     <>
       <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-lumos-surface border-t border-lumos-border pb-[env(safe-area-inset-bottom)] transition-colors duration-300">
         <div className="h-14 flex items-center justify-around">
+          {/* Home Tab */}
+          <button
+            onClick={() => handleNavClick('home')}
+            className={clsx(
+              "flex flex-col items-center justify-center flex-1 h-full relative transition-colors",
+              activeSection === 'home' ? "text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+          >
+            {activeSection === 'home' && (
+              <span className="absolute top-0 inset-x-4 h-[2px] bg-lumos-yellow rounded-full" />
+            )}
+            <HomeIcon className="w-5 h-5 mb-0.5" />
+            <span className="text-[9px] font-bold uppercase tracking-wider">Início</span>
+          </button>
+
           {/* Comercial Tab */}
           {showComercial && (
             <button

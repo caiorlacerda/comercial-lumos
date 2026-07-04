@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 
-export type SectionType = 'comercial' | 'producao' | 'financeiro' | 'configuracoes';
+export type SectionType = 'home' | 'comercial' | 'producao' | 'financeiro' | 'configuracoes';
 
 interface LayoutContextType {
   activeSection: SectionType;
@@ -18,6 +18,7 @@ interface LayoutContextType {
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 
 export function getSectionFromPath(path: string): SectionType {
+  if (path === '/' || path === '/home') return 'home';
   if (path.startsWith('/financeiro')) return 'financeiro';
   if (path.startsWith('/ordem-do-dia') || path.startsWith('/producao')) return 'producao';
   if (
@@ -125,8 +126,10 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const navigateToSection = (sectionId: SectionType) => {
     let targetPath = '/';
 
-    if (sectionId === 'comercial') {
-      if (isAdmin) targetPath = '/';
+    if (sectionId === 'home') {
+      targetPath = '/';
+    } else if (sectionId === 'comercial') {
+      if (isAdmin) targetPath = '/comercial';
       else return;
     } else if (sectionId === 'producao') {
       if (can('ordem_do_dia')) targetPath = '/producao/dashboard';

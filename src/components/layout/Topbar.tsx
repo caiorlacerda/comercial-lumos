@@ -35,6 +35,7 @@ export default function Topbar() {
 
   // Section buttons data
   const sections = [
+    { id: 'home' as SectionType, label: 'Início', visible: true },
     { id: 'comercial' as SectionType, label: 'Comercial', visible: isAdmin },
     { id: 'producao' as SectionType, label: 'Produção', visible: can('ordem_do_dia') || can('fornecedores') || can('cronograma_edicao') },
     { id: 'financeiro' as SectionType, label: 'Financeiro', visible: true },

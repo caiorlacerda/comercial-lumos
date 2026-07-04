@@ -13,7 +13,7 @@ export default function MobileHeader() {
   const [profileOpen, setProfileOpen] = useState(false);
 
   const mainScreens = [
-    '/', '/orcamentos', '/clientes', '/catalogo', '/templates', '/configuracoes', '/equipe',
+    '/', '/comercial', '/orcamentos', '/clientes', '/catalogo', '/templates', '/configuracoes', '/equipe',
     '/financeiro', '/financeiro/contas-pagar', '/financeiro/contas-receber', '/financeiro/reembolso',
     '/financeiro/custos-projeto', '/financeiro/fluxo-de-caixa', '/financeiro/custos-fixos',
     '/financeiro/configuracao', '/financeiro/relatorios', '/producao/dashboard', '/ordem-do-dia',
@@ -23,7 +23,8 @@ export default function MobileHeader() {
   const isDetailPage = !mainScreens.includes(location.pathname);
 
   const getPageTitle = (path: string) => {
-    if (path === '/') return 'Dashboard';
+    if (path === '/') return 'Início';
+    if (path === '/comercial') return 'Dashboard Comercial';
     if (path === '/orcamentos') return 'Orçamentos';
     if (path === '/clientes') return 'Clientes';
     if (path === '/catalogo') return 'Catálogo';

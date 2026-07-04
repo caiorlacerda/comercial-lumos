@@ -61,6 +61,8 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     </div>
   );
 
+  const isHome = activeSection === 'home';
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-lumos-bg transition-colors duration-300 font-work-sans">
       {/* Fixed Topbar */}
@@ -69,12 +71,17 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex w-64 bg-lumos-surface border-r border-lumos-border flex-col fixed inset-y-0 top-16 shadow-sm z-30 transition-colors duration-300">
-          {sidebarContent}
-        </aside>
+        {!isHome && (
+          <aside className="hidden lg:flex w-64 bg-lumos-surface border-r border-lumos-border flex-col fixed inset-y-0 top-16 shadow-sm z-30 transition-colors duration-300 animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </aside>
+        )}
 
         {/* Main Content */}
-        <main className="flex-1 lg:ml-64 overflow-y-auto bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0">
+        <main className={clsx(
+          "flex-1 overflow-y-auto bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0",
+          !isHome && "lg:ml-64"
+        )}>
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <div className="w-full p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
