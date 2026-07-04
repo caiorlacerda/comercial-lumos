@@ -29,7 +29,8 @@ import {
   PlusCircle,
   HelpCircle,
   CornerDownRight,
-  MessageSquare
+  MessageSquare,
+  Edit2
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -364,10 +365,14 @@ export default function Projetos() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isConfirmTemplateOpen, setIsConfirmTemplateOpen] = useState(false);
 
-  // Task Details Drawer States
+  // Task Details Modal States
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [descHTML, setDescHTML] = useState('');
   const [isSavingDesc, setIsSavingDesc] = useState(false);
+
+  // Right-click context menu states
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
+  const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
 
   // PDF Generation State
   const [isGeneratingOS, setIsGeneratingOS] = useState<string | null>(null);
@@ -394,13 +399,12 @@ export default function Projetos() {
     } else {
       setProjectTasks([]);
     }
-    // Fechar gaveta de tarefas ao trocar de projeto
     setSelectedTaskId(null);
   }, [selectedProjectId]);
 
   const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
 
-  // Reset/Sincronizar editor de descrição no Drawer
+  // Sincronizar editor de descrição no modal
   useEffect(() => {
     if (selectedTask) {
       setDescHTML(selectedTask.descricao || '');
@@ -408,6 +412,38 @@ export default function Projetos() {
       setDescHTML('');
     }
   }, [selectedTaskId, selectedTask?.id]);
+
+  // Global listeners for ESC key and closing context menus
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (renamingTaskId) {
+          setRenamingTaskId(null);
+        } else if (selectedTaskId) {
+          const taskObj = projectTasks.find(t => t.id === selectedTaskId);
+          if (taskObj && descHTML !== (taskObj.descricao || '')) {
+            if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
+              setSelectedTaskId(null);
+            }
+          } else {
+            setSelectedTaskId(null);
+          }
+        }
+      }
+    };
+    
+    const handleGlobalClick = () => {
+      setContextMenu(null);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('click', handleGlobalClick);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('click', handleGlobalClick);
+    };
+  }, [selectedTaskId, renamingTaskId, descHTML, projectTasks]);
 
   async function fetchData() {
     setLoading(true);
@@ -496,7 +532,6 @@ export default function Projetos() {
   // Inline update task details
   const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
     try {
-      // Optimistic update locally
       setProjectTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
 
       const { error } = await supabase
@@ -506,7 +541,6 @@ export default function Projetos() {
       
       if (error) throw error;
 
-      // Sync summary local stats without full query
       setTasks(prev => {
         if (updates.status === undefined) return prev;
         return prev.map(t => t.id === taskId ? { ...t, status: updates.status! } : t);
@@ -1091,7 +1125,7 @@ export default function Projetos() {
                       )}
                       <span className={clsx(
                         "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider",
-                        selectedProject.status === 'concluido' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'
+                        selectedProject.status === 'concluido' ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'
                       )}>
                         {selectedProject.status}
                       </span>
@@ -1286,6 +1320,15 @@ export default function Projetos() {
                                 return (
                                   <tr 
                                     key={task.id} 
+                                    onContextMenu={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setContextMenu({
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        taskId: task.id
+                                      });
+                                    }}
                                     className={clsx(
                                       "hover:bg-lumos-surface/40 transition-all group/row",
                                       isTaskCompleted && "bg-green-500/[0.01]",
@@ -1305,18 +1348,50 @@ export default function Projetos() {
                                       />
                                     </td>
 
-                                    {/* Task Title Input */}
-                                    <td className="py-2 px-2">
-                                      <input
-                                        type="text"
-                                        value={task.titulo}
-                                        disabled={!canManage}
-                                        onChange={(e) => handleUpdateTask(task.id, { titulo: e.target.value })}
-                                        className={clsx(
-                                          "w-full bg-transparent border-b border-transparent focus:border-lumos-yellow outline-none px-1 py-0.5 text-xs font-semibold transition-all text-lumos-text-primary",
+                                    {/* Task Title (Static by default, input if renaming) */}
+                                    <td 
+                                      className="py-2 px-2 cursor-pointer"
+                                      onClick={() => {
+                                        if (renamingTaskId !== task.id) {
+                                          setSelectedTaskId(task.id);
+                                        }
+                                      }}
+                                    >
+                                      {renamingTaskId === task.id ? (
+                                        <input
+                                          type="text"
+                                          defaultValue={task.titulo}
+                                          autoFocus
+                                          onBlur={(e) => {
+                                            const val = e.target.value.trim();
+                                            if (val && val !== task.titulo) {
+                                              handleUpdateTask(task.id, { titulo: val });
+                                            }
+                                            setRenamingTaskId(null);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              const val = (e.target as HTMLInputElement).value.trim();
+                                              if (val && val !== task.titulo) {
+                                                handleUpdateTask(task.id, { titulo: val });
+                                              }
+                                              setRenamingTaskId(null);
+                                            }
+                                            if (e.key === 'Escape') {
+                                              setRenamingTaskId(null);
+                                            }
+                                          }}
+                                          onClick={(e) => e.stopPropagation()} // Prevent modal opening
+                                          className="w-full bg-lumos-bg border border-lumos-yellow rounded px-1.5 py-0.5 text-xs font-semibold outline-none text-lumos-text-primary"
+                                        />
+                                      ) : (
+                                        <span className={clsx(
+                                          "font-semibold text-xs text-lumos-text-primary transition-all hover:text-lumos-yellow",
                                           isTaskCompleted && "line-through text-lumos-text-secondary/50 opacity-60"
-                                        )}
-                                      />
+                                        )}>
+                                          {task.titulo}
+                                        </span>
+                                      )}
                                     </td>
 
                                     {/* Status Badge Dropdown */}
@@ -1429,7 +1504,7 @@ export default function Projetos() {
                         </div>
                       )}
 
-                      {/* Quick Add Row (Input + Enter) */}
+                      {/* Quick Add Row */}
                       {canManage && (
                         <form onSubmit={handleQuickAddTask} className="flex items-center gap-3 pt-3 border-t border-lumos-border/40 mt-2">
                           <input
@@ -1619,10 +1694,10 @@ export default function Projetos() {
         </div>
       )}
 
-      {/* ================= GAVETA LATERAL: DETALHES DA TAREFA (FASE 2) ================= */}
+      {/* ================= MODAL CENTRAL: DETALHES DA TAREFA (STYLE CLICKUP) ================= */}
       {selectedTaskId && selectedTask && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop Overlay */}
           <div 
             onClick={() => {
               if (!canManage || descHTML === (selectedTask.descricao || '')) {
@@ -1633,196 +1708,245 @@ export default function Projetos() {
                 }
               }
             }} 
-            className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+            className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
           />
 
-          {/* Sliding Panel */}
-          <div className="fixed inset-y-0 right-0 z-[140] w-full sm:w-[450px] md:w-[500px] bg-lumos-surface border-l border-lumos-border shadow-2xl p-6 flex flex-col justify-between animate-in slide-in-from-right duration-300 text-lumos-text-primary">
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-1">
+          {/* Centered Modal popup */}
+          <div className="fixed inset-4 sm:inset-10 md:inset-16 lg:inset-20 z-[140] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-lumos-text-primary max-w-6xl mx-auto my-auto h-[80vh]">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-lumos-border/50 bg-lumos-surface flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-lumos-yellow" />
+                <span className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                  Detalhes da Tarefa
+                </span>
+                {selectedProject && (
+                  <>
+                    <span className="text-lumos-text-secondary">/</span>
+                    <span className="text-[10px] font-bold text-lumos-text-primary uppercase tracking-wider">
+                      {selectedProject.name}
+                    </span>
+                  </>
+                )}
+              </div>
               
-              {/* Header Drawer */}
-              <div className="flex items-center justify-between pb-3 border-b border-lumos-border/50">
-                <div className="flex items-center gap-2">
-                  <ClipboardList className="w-4 h-4 text-lumos-yellow" />
-                  <span className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-widest">
-                    Detalhes da Tarefa
-                  </span>
-                </div>
-                
-                <button 
-                  onClick={() => {
-                    if (!canManage || descHTML === (selectedTask.descricao || '')) {
+              <button 
+                onClick={() => {
+                  if (!canManage || descHTML === (selectedTask.descricao || '')) {
+                    setSelectedTaskId(null);
+                  } else {
+                    if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
                       setSelectedTaskId(null);
-                    } else {
-                      if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
-                        setSelectedTaskId(null);
-                      }
                     }
-                  }}
-                  className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-                  title="Fechar"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+                  }
+                }}
+                className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              {/* Task Title (Editable) */}
-              <div className="space-y-1">
-                <input
-                  type="text"
-                  value={selectedTask.titulo}
-                  disabled={!canManage}
-                  onChange={(e) => handleUpdateTask(selectedTask.id, { titulo: e.target.value })}
-                  className="w-full text-lg font-black bg-transparent border-b border-transparent focus:border-lumos-yellow outline-none py-1 text-lumos-text-primary uppercase tracking-tight"
-                />
-              </div>
-
-              {/* Task Metadata Editor (Grid) */}
-              <div className="grid grid-cols-2 gap-4 bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border/40 text-xs">
+            {/* Modal Columns Grid (Left: Description/Meta; Right: Comments Feed) */}
+            <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3 h-full">
+              
+              {/* Left Column (Details and Editor - 2/3 width) */}
+              <div className="lg:col-span-2 overflow-y-auto custom-scrollbar p-6 space-y-6 border-r border-lumos-border/40">
                 
-                {/* Status Selector */}
+                {/* Title */}
                 <div className="space-y-1">
-                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Status</span>
-                  <select
-                    value={selectedTask.status}
-                    disabled={!canManage}
-                    onChange={(e) => handleUpdateTask(selectedTask.id, { status: e.target.value })}
-                    className={clsx(
-                      "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
-                      getStatusDetails(selectedTask.status).color
-                    )}
-                  >
-                    <optgroup label="Não Iniciado" className="bg-lumos-surface text-lumos-text-primary">
-                      <option value="iniciar">Iniciar</option>
-                      <option value="pausado">Pausado</option>
-                      <option value="aguard_captacao">Aguard. Captação</option>
-                      <option value="aguard_material">Aguard. Material</option>
-                    </optgroup>
-                    <optgroup label="Ativo" className="bg-lumos-surface text-lumos-text-primary">
-                      <option value="na_fila">Na Fila</option>
-                      <option value="em_progresso">Em Progresso</option>
-                      <option value="revisao_interna">Revisão Interna</option>
-                      <option value="aprov_interna">Aprov. Interna</option>
-                      <option value="revisao_cliente">Revisão do Cliente</option>
-                      <option value="alteracoes">Alterações</option>
-                    </optgroup>
-                    <optgroup label="Concluído" className="bg-lumos-surface text-lumos-text-primary">
-                      <option value="entregue">Entregue</option>
-                      <option value="concluido">Concluído</option>
-                    </optgroup>
-                  </select>
-                </div>
-
-                {/* Priority Selector */}
-                <div className="space-y-1">
-                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prioridade</span>
-                  <select
-                    value={selectedTask.prioridade}
-                    disabled={!canManage}
-                    onChange={(e) => handleUpdateTask(selectedTask.id, { prioridade: e.target.value as any })}
-                    className={clsx(
-                      "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
-                      getPriorityTheme(selectedTask.prioridade)
-                    )}
-                  >
-                    <option value="baixa">Baixa</option>
-                    <option value="media">Média</option>
-                    <option value="alta">Alta</option>
-                  </select>
-                </div>
-
-                {/* Assignee Selector */}
-                <div className="space-y-1">
-                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Responsável</span>
-                  <div className="flex items-center gap-1.5 border border-lumos-border/40 rounded px-2 py-0.5">
-                    <User className="w-3.5 h-3.5 text-lumos-text-secondary opacity-50 flex-shrink-0" />
-                    <select
-                      value={selectedTask.responsavel_id || ''}
-                      disabled={!canManage}
-                      onChange={(e) => handleUpdateTask(selectedTask.id, { responsavel_id: e.target.value || null })}
-                      className="bg-transparent border-none text-[11px] font-medium text-lumos-text-primary outline-none cursor-pointer w-full py-0.5"
-                    >
-                      <option value="">Sem responsável</option>
-                      {teamUsers.map(user => (
-                        <option key={user.id} value={user.id}>{user.full_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Deadline Picker */}
-                <div className="space-y-1">
-                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prazo</span>
                   <input
-                    type="date"
-                    value={selectedTask.data_fim || ''}
+                    type="text"
+                    value={selectedTask.titulo}
                     disabled={!canManage}
-                    onChange={(e) => handleUpdateTask(selectedTask.id, { data_fim: e.target.value || null })}
-                    className="bg-transparent border border-lumos-border/40 rounded text-[10px] font-bold text-lumos-text-primary px-2.5 py-1.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
+                    onChange={(e) => handleUpdateTask(selectedTask.id, { titulo: e.target.value })}
+                    className="w-full text-xl font-black bg-transparent border-b border-transparent focus:border-lumos-yellow outline-none py-1 text-lumos-text-primary uppercase tracking-tight"
                   />
                 </div>
 
-              </div>
-
-              {/* Rich Text Editor for Task Description */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
-                    Descrição da Tarefa
-                  </span>
+                {/* Metadata Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border/40 text-xs">
                   
-                  {canManage && descHTML !== (selectedTask.descricao || '') && (
-                    <button
-                      onClick={handleSaveDescription}
-                      disabled={isSavingDesc}
-                      className="text-[10px] font-bold bg-lumos-yellow text-black px-2.5 py-1 rounded hover:bg-yellow-400 disabled:opacity-50 transition-all flex items-center gap-1 shadow-md shadow-lumos-yellow/10"
-                    >
-                      {isSavingDesc ? (
-                        <>
-                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                          Salvando...
-                        </>
-                      ) : (
-                        'Salvar Descrição'
+                  {/* Status */}
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Status</span>
+                    <select
+                      value={selectedTask.status}
+                      disabled={!canManage}
+                      onChange={(e) => handleUpdateTask(selectedTask.id, { status: e.target.value })}
+                      className={clsx(
+                        "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
+                        getStatusDetails(selectedTask.status).color
                       )}
-                    </button>
+                    >
+                      <optgroup label="Não Iniciado" className="bg-lumos-surface text-lumos-text-primary">
+                        <option value="iniciar">Iniciar</option>
+                        <option value="pausado">Pausado</option>
+                        <option value="aguard_captacao">Aguard. Captação</option>
+                        <option value="aguard_material">Aguard. Material</option>
+                      </optgroup>
+                      <optgroup label="Ativo" className="bg-lumos-surface text-lumos-text-primary">
+                        <option value="na_fila">Na Fila</option>
+                        <option value="em_progresso">Em Progresso</option>
+                        <option value="revisao_interna">Revisão Interna</option>
+                        <option value="aprov_interna">Aprov. Interna</option>
+                        <option value="revisao_cliente">Revisão do Cliente</option>
+                        <option value="alteracoes">Alterações</option>
+                      </optgroup>
+                      <optgroup label="Concluído" className="bg-lumos-surface text-lumos-text-primary">
+                        <option value="entregue">Entregue</option>
+                        <option value="concluido">Concluído</option>
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  {/* Priority */}
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prioridade</span>
+                    <select
+                      value={selectedTask.prioridade}
+                      disabled={!canManage}
+                      onChange={(e) => handleUpdateTask(selectedTask.id, { prioridade: e.target.value as any })}
+                      className={clsx(
+                        "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
+                        getPriorityTheme(selectedTask.prioridade)
+                      )}
+                    >
+                      <option value="baixa">Baixa</option>
+                      <option value="media">Média</option>
+                      <option value="alta">Alta</option>
+                    </select>
+                  </div>
+
+                  {/* Assignee */}
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Responsável</span>
+                    <div className="flex items-center gap-1.5 border border-lumos-border/40 rounded px-2.5 py-1">
+                      <User className="w-3.5 h-3.5 text-lumos-text-secondary opacity-50 flex-shrink-0" />
+                      <select
+                        value={selectedTask.responsavel_id || ''}
+                        disabled={!canManage}
+                        onChange={(e) => handleUpdateTask(selectedTask.id, { responsavel_id: e.target.value || null })}
+                        className="bg-transparent border-none text-[11px] font-medium text-lumos-text-primary outline-none cursor-pointer w-full py-0.5"
+                      >
+                        <option value="">Sem responsável</option>
+                        {teamUsers.map(user => (
+                          <option key={user.id} value={user.id}>{user.full_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Prazo */}
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prazo</span>
+                    <input
+                      type="date"
+                      value={selectedTask.data_fim || ''}
+                      disabled={!canManage}
+                      onChange={(e) => handleUpdateTask(selectedTask.id, { data_fim: e.target.value || null })}
+                      className="bg-transparent border border-lumos-border/40 rounded text-[10px] font-bold text-lumos-text-primary px-2.5 py-1.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
+                    />
+                  </div>
+
+                </div>
+
+                {/* Description */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                      Descrição da Tarefa
+                    </span>
+                    
+                    {canManage && descHTML !== (selectedTask.descricao || '') && (
+                      <button
+                        onClick={handleSaveDescription}
+                        disabled={isSavingDesc}
+                        className="text-[10px] font-bold bg-lumos-yellow text-black px-2.5 py-1 rounded hover:bg-yellow-400 disabled:opacity-50 transition-all flex items-center gap-1 shadow-md shadow-lumos-yellow/10"
+                      >
+                        {isSavingDesc ? (
+                          <>
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            Salvando...
+                          </>
+                        ) : (
+                          'Salvar Descrição'
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {canManage ? (
+                    <TipTapEditor
+                      content={descHTML}
+                      onChange={(html) => setDescHTML(html)}
+                      editable={true}
+                    />
+                  ) : (
+                    <div 
+                      className="p-3 border border-lumos-border rounded-lumos bg-lumos-bg/20 text-xs text-lumos-text-primary leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar ProseMirror"
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTask.descricao || '<p className="italic text-lumos-text-secondary">Sem descrição cadastrada.</p>') }}
+                    />
                   )}
                 </div>
 
-                {canManage ? (
-                  <TipTapEditor
-                    content={descHTML}
-                    onChange={(html) => setDescHTML(html)}
-                    editable={true}
-                  />
-                ) : (
-                  /* Safe display of saved HTML content with DOMPurify sanitization */
-                  <div 
-                    className="p-3 border border-lumos-border rounded-lumos bg-lumos-bg/20 text-xs text-lumos-text-primary leading-relaxed max-h-56 overflow-y-auto custom-scrollbar ProseMirror"
-                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTask.descricao || '<p className="italic text-lumos-text-secondary">Sem descrição cadastrada.</p>') }}
-                  />
-                )}
               </div>
 
-              {/* Placeholder for comments feed */}
-              <div className="space-y-3 pt-4 border-t border-lumos-border/50">
-                <div className="flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-lumos-text-secondary opacity-60" />
-                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
-                    Comentários
-                  </span>
-                </div>
-                
-                <div className="flex flex-col items-center justify-center py-8 bg-lumos-bg/10 rounded-lumos border border-dashed border-lumos-border/40 text-center text-lumos-text-secondary/50">
-                  <MessageSquare className="w-6 h-6 mb-2 opacity-20" />
-                  <p className="text-[10px] font-bold uppercase tracking-wider">Comentários em breve</p>
-                  <p className="text-[9px] mt-0.5">As conversações e menções de equipe serão exibidas aqui.</p>
+              {/* Right Column (Comments Sidebar - 1/3 width) */}
+              <div className="lg:col-span-1 bg-lumos-surface/30 p-6 flex flex-col justify-between overflow-y-auto custom-scrollbar h-full">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-1.5 pb-3 border-b border-lumos-border/50">
+                    <MessageSquare className="w-4 h-4 text-lumos-text-secondary opacity-60" />
+                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                      Comentários
+                    </span>
+                  </div>
+                  
+                  <div className="flex flex-col items-center justify-center py-16 bg-lumos-bg/10 rounded-lumos border border-dashed border-lumos-border/40 text-center text-lumos-text-secondary/50">
+                    <MessageSquare className="w-6 h-6 mb-2 opacity-20" />
+                    <p className="text-[10px] font-bold uppercase tracking-wider">Comentários em breve</p>
+                    <p className="text-[9px] mt-0.5">As conversações e menções de equipe serão exibidas aqui.</p>
+                  </div>
                 </div>
               </div>
 
             </div>
           </div>
         </>
+      )}
+
+      {/* ================= RIGHT-CLICK TASK CONTEXT MENU ================= */}
+      {contextMenu && (
+        <div 
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed z-[200] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1 flex flex-col min-w-[120px]"
+          onClick={(e) => e.stopPropagation()} // Prevent closing instantly
+        >
+          <button
+            onClick={() => {
+              setRenamingTaskId(contextMenu.taskId);
+              setContextMenu(null);
+            }}
+            className="px-3 py-1.5 text-[11px] font-semibold text-left text-lumos-text-primary hover:bg-lumos-bg rounded transition-all flex items-center gap-1.5"
+          >
+            <Edit2 className="w-3.5 h-3.5 text-lumos-yellow" />
+            Renomear
+          </button>
+          
+          {canManage && (
+            <button
+              onClick={() => {
+                handleDeleteTask(contextMenu.taskId);
+                setContextMenu(null);
+              }}
+              className="px-3 py-1.5 text-[11px] font-semibold text-left text-red-400 hover:bg-red-500/10 rounded transition-all flex items-center gap-1.5 border-t border-lumos-border/10 mt-0.5"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              Excluir
+            </button>
+          )}
+        </div>
       )}
 
       {/* ================= MANUAL CREATE MODAL ================= */}
