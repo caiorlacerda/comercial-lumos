@@ -40,6 +40,7 @@ import CadastroFornecedorPublico from '@/pages/CadastroFornecedorPublico';
 import ConfiguracoesNotificacoes from '@/pages/ConfiguracoesNotificacoes';
 import CronogramaEdicao from '@/pages/CronogramaEdicao';
 import Projetos from '@/pages/Projetos';
+import Home from '@/pages/Home';
 
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
@@ -433,6 +434,11 @@ function AppContent() {
           <Route 
             path="/configuracoes/notificacoes" 
             element={<AuthWrapper><ConfiguracoesNotificacoes /></AuthWrapper>} 
+          />
+
+          <Route 
+            path="/home" 
+            element={<AuthWrapper><Home /></AuthWrapper>} 
           />
 
 
