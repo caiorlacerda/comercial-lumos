@@ -153,8 +153,12 @@ serve(async (req) => {
       </html>
     `
 
+    const responseHeaders = new Headers()
+    Object.entries(corsHeaders).forEach(([k, v]) => responseHeaders.set(k, v))
+    responseHeaders.set('content-type', 'text/html; charset=utf-8')
+
     return new Response(htmlSuccess, {
-      headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=UTF-8' },
+      headers: responseHeaders,
       status: 200,
     })
   } catch (error: any) {
