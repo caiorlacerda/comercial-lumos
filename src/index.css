@@ -101,4 +101,33 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* TipTap ProseMirror Editor Styles */
+.ProseMirror {
+  outline: none;
+  min-height: 150px;
+}
+.ProseMirror p {
+  margin-bottom: 0.5rem;
+}
+.ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid #facc15;
+  padding-left: 0.75rem;
+  font-style: italic;
+  margin-bottom: 0.5rem;
+}
+.ProseMirror a {
+  color: #facc15;
+  text-decoration: underline;
+}
+
 

@@ -27,10 +27,21 @@ import {
   ArrowRight,
   User,
   PlusCircle,
-  HelpCircle
+  HelpCircle,
+  CornerDownRight,
+  MessageSquare
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatBudgetCode } from '@/utils/formatters';
+
+// TipTap and DOMPurify imports for Rich Text
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import Color from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style';
+import DOMPurify from 'dompurify';
 
 interface Client {
   id: string;
@@ -106,6 +117,225 @@ interface TeamUser {
   full_name: string;
 }
 
+// -------------------------------------------------------------
+// Componente TipTapEditor (Rich Text)
+// -------------------------------------------------------------
+interface TipTapEditorProps {
+  content: string;
+  onChange: (html: string) => void;
+  editable: boolean;
+}
+
+function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Color,
+      TextStyle,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          class: 'text-lumos-yellow underline hover:text-yellow-400'
+        }
+      })
+    ],
+    content: content || '',
+    editable: editable,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    }
+  });
+
+  useEffect(() => {
+    if (editor) {
+      if (editor.getHTML() !== (content || '')) {
+        editor.commands.setContent(content || '');
+      }
+      editor.setEditable(editable);
+    }
+  }, [content, editable, editor]);
+
+  if (!editor) return null;
+
+  const addLink = () => {
+    const previousUrl = editor.getAttributes('link').href;
+    const url = window.prompt('Inserir URL:', previousUrl);
+    if (url === null) return;
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  };
+
+  return (
+    <div className="border border-lumos-border rounded-lumos overflow-hidden bg-lumos-bg/30">
+      {editable && (
+        <div className="flex flex-wrap gap-1 p-1 bg-lumos-surface border-b border-lumos-border items-center">
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[10px] font-black transition-all",
+              editor.isActive('bold') ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
+            )}
+            title="Negrito"
+          >
+            B
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[10px] italic transition-all",
+              editor.isActive('italic') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Itálico"
+          >
+            I
+          </button>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[10px] underline transition-all",
+              editor.isActive('underline') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Sublinhado"
+          >
+            U
+          </button>
+
+          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-black transition-all",
+              editor.isActive('heading', { level: 1 }) ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
+            )}
+            title="Título 1"
+          >
+            H1
+          </button>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-black transition-all",
+              editor.isActive('heading', { level: 2 }) ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
+            )}
+            title="Título 2"
+          >
+            H2
+          </button>
+
+          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
+              editor.isActive('bulletList') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Marcadores"
+          >
+            • Lista
+          </button>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
+              editor.isActive('orderedList') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Numerada"
+          >
+            1. Lista
+          </button>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
+              editor.isActive('blockquote') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Citação"
+          >
+            “ Citação
+          </button>
+
+          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
+
+          <button
+            type="button"
+            onClick={addLink}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
+              editor.isActive('link') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Link"
+          >
+            Link
+          </button>
+
+          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setColor('#facc15').run()}
+            className="w-3 h-3 rounded-full bg-yellow-400 border border-black/40 hover:scale-110 transition-all"
+            title="Amarelo Lumos"
+          />
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setColor('#ffffff').run()}
+            className="w-3 h-3 rounded-full bg-white border border-black/40 hover:scale-110 transition-all"
+            title="Branco"
+          />
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setColor('#9ca3af').run()}
+            className="w-3 h-3 rounded-full bg-gray-400 border border-black/40 hover:scale-110 transition-all"
+            title="Cinza"
+          />
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setColor('#f87171').run()}
+            className="w-3 h-3 rounded-full bg-red-400 border border-black/40 hover:scale-110 transition-all"
+            title="Vermelho"
+          />
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().unsetColor().run()}
+            className="text-[9px] text-lumos-text-secondary hover:text-lumos-text-primary ml-1"
+            title="Limpar Cor"
+          >
+            Limpar
+          </button>
+        </div>
+      )}
+
+      <div className="p-3 min-h-[120px] text-xs leading-relaxed text-lumos-text-primary focus-within:outline-none bg-transparent">
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Componente Projetos (Página Principal)
+// -------------------------------------------------------------
 export default function Projetos() {
   const { can, isAdmin } = useAuth();
   const toast = useToast();
@@ -127,12 +357,17 @@ export default function Projetos() {
   const [showConcludedProjects, setShowConcludedProjects] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Project Tasks Panel States (Phase 5)
+  // Project Tasks Panel States
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'lista' | 'kanban' | 'gantt'>('lista');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [isConfirmTemplateOpen, setIsConfirmTemplateOpen] = useState(false);
+
+  // Task Details Drawer States
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [descHTML, setDescHTML] = useState('');
+  const [isSavingDesc, setIsSavingDesc] = useState(false);
 
   // PDF Generation State
   const [isGeneratingOS, setIsGeneratingOS] = useState<string | null>(null);
@@ -159,32 +394,41 @@ export default function Projetos() {
     } else {
       setProjectTasks([]);
     }
+    // Fechar gaveta de tarefas ao trocar de projeto
+    setSelectedTaskId(null);
   }, [selectedProjectId]);
+
+  const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
+
+  // Reset/Sincronizar editor de descrição no Drawer
+  useEffect(() => {
+    if (selectedTask) {
+      setDescHTML(selectedTask.descricao || '');
+    } else {
+      setDescHTML('');
+    }
+  }, [selectedTaskId, selectedTask?.id]);
 
   async function fetchData() {
     setLoading(true);
     try {
-      // 1. Fetch Clients
       const { data: clientsData, error: cErr } = await supabase
         .from('clients')
         .select('id, name')
         .order('name', { ascending: true });
       if (cErr) throw cErr;
 
-      // 2. Fetch Projects (resolving original budget category too)
       const { data: projectsData, error: pErr } = await supabase
         .from('projects')
         .select('*, budget:budgets(category)')
         .order('created_at', { ascending: false });
       if (pErr) throw pErr;
 
-      // 3. Fetch Tasks summary
       const { data: tasksData, error: tErr } = await supabase
         .from('project_tasks')
         .select('id, project_id, status');
       if (tErr) throw tErr;
 
-      // 4. Fetch Active Team Users (for assignee dropdown)
       const { data: usersData, error: uErr } = await supabase
         .from('app_users')
         .select('id, full_name')
@@ -274,12 +518,26 @@ export default function Projetos() {
     }
   };
 
+  // Save Task Rich Text Description
+  const handleSaveDescription = async () => {
+    if (!selectedTaskId) return;
+    setIsSavingDesc(true);
+    try {
+      await handleUpdateTask(selectedTaskId, { descricao: descHTML });
+      toast.success('Descrição da tarefa atualizada!');
+    } catch (err: any) {
+      console.error('Error saving task description:', err);
+      toast.error('Erro ao salvar descrição.');
+    } finally {
+      setIsSavingDesc(false);
+    }
+  };
+
   // Quick Task Creation (input + enter)
   const handleQuickAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim() || !selectedProjectId) return;
 
-    // Calculate next order (max order + 10)
     const nextOrder = projectTasks.length > 0 
       ? Math.max(...projectTasks.map(t => t.ordem)) + 10 
       : 10;
@@ -305,7 +563,6 @@ export default function Projetos() {
       toast.success('Tarefa adicionada!');
       setNewTaskTitle('');
       
-      // Refresh local tasks and global lists
       await fetchProjectTasks(selectedProjectId);
       await fetchData();
     } catch (err: any) {
@@ -327,9 +584,10 @@ export default function Projetos() {
       if (error) throw error;
 
       toast.success('Tarefa excluída.');
+      if (selectedTaskId === taskId) {
+        setSelectedTaskId(null);
+      }
       setProjectTasks(prev => prev.filter(t => t.id !== taskId));
-      
-      // Update local task stats summary
       setTasks(prev => prev.filter(t => t.id !== taskId));
     } catch (err: any) {
       console.error('Error deleting task:', err);
@@ -340,12 +598,10 @@ export default function Projetos() {
   // Trigger Apply template
   const handleApplyTemplateTrigger = () => {
     if (!selectedProject) return;
-    
-    // Check if project already has tasks
     if (projectTasks.length > 0) {
       setIsConfirmTemplateOpen(true);
     } else {
-      executeApplyTemplate(false); // Overwrite (doesn't matter if empty)
+      executeApplyTemplate(false);
     }
   };
 
@@ -363,16 +619,15 @@ export default function Projetos() {
         return;
       }
 
-      // 1. Delete old tasks if overwrite
       if (overwrite) {
         const { error: delErr } = await supabase
           .from('project_tasks')
           .delete()
           .eq('project_id', selectedProjectId);
         if (delErr) throw delErr;
+        setSelectedTaskId(null);
       }
 
-      // 2. Fetch template tasks
       const { data: templates, error: tempErr } = await supabase
         .from('project_task_templates')
         .select('*')
@@ -387,7 +642,6 @@ export default function Projetos() {
         return;
       }
 
-      // 3. Setup next order offsets
       const startOrder = append && projectTasks.length > 0 
         ? Math.max(...projectTasks.map(t => t.ordem)) + 10 
         : 10;
@@ -403,7 +657,6 @@ export default function Projetos() {
         data_fim: null
       }));
 
-      // 4. Batch Insert
       const { error: insErr } = await supabase
         .from('project_tasks')
         .insert(tasksToInsert);
@@ -488,7 +741,6 @@ export default function Projetos() {
 
     setModalLoading(true);
     try {
-      // 1. Insert Project
       const { data: newProj, error: pErr } = await supabase
         .from('projects')
         .insert({
@@ -506,7 +758,6 @@ export default function Projetos() {
 
       if (pErr) throw pErr;
 
-      // 2. Auto template population (Phase 2 feature integrated)
       if (applyTemplate && newProj) {
         const { data: templates } = await supabase
           .from('project_task_templates')
@@ -540,7 +791,6 @@ export default function Projetos() {
       toast.success('Projeto criado com sucesso!');
       setIsModalOpen(false);
       
-      // Reset Form
       setNewProjName('');
       setNewProjClient('');
       setNewProjCode('');
@@ -559,16 +809,13 @@ export default function Projetos() {
     }
   };
 
-  // Filter clients and projects based on search query
   const filteredClients = clients.filter(c => {
     const clientProjects = projects.filter(p => p.client_id === c.id);
     const clientMatches = c.name.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const projectMatches = clientProjects.some(p => 
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-
     return clientMatches || projectMatches;
   });
 
@@ -612,7 +859,6 @@ export default function Projetos() {
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
-  // Projects to display in grid for selected client (filtering status)
   const clientProjectsFiltered = projects.filter(p => {
     if (p.client_id !== selectedClientId) return false;
     if (!showConcludedProjects && p.status === 'concluido') return false;
@@ -682,7 +928,6 @@ export default function Projetos() {
 
                   return (
                     <div key={client.id} className="space-y-1">
-                      {/* Client Header Item */}
                       <div 
                         onClick={() => {
                           setSelectedClientId(client.id);
@@ -713,14 +958,13 @@ export default function Projetos() {
                         </div>
                       </div>
 
-                      {/* Client Projects List (Submenu) - Visually Separated */}
+                      {/* Client Projects List (Submenu) */}
                       {isExpanded && (
                         <div className="pl-6 pr-1 py-1 space-y-1 border-l border-lumos-border/30 ml-5">
                           {activeProjects.length === 0 && concludedProjects.length === 0 ? (
                             <span className="text-[10px] text-lumos-text-secondary/50 italic block py-1">Sem projetos</span>
                           ) : (
                             <>
-                              {/* Active Projects */}
                               {activeProjects.map((proj) => {
                                 const isProjSelected = selectedProjectId === proj.id;
                                 return (
@@ -748,7 +992,6 @@ export default function Projetos() {
                                 );
                               })}
 
-                              {/* Concluded Projects Sub-section */}
                               {showConcludedProjects && concludedProjects.length > 0 && (
                                 <div className="space-y-1 mt-2 pt-1 border-t border-lumos-border/10">
                                   <div className="text-[8px] font-black uppercase text-lumos-text-secondary opacity-40 tracking-wider pb-1">
@@ -804,7 +1047,6 @@ export default function Projetos() {
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 pb-5 border-b border-lumos-border/50">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Segment Selector for category (Digital, Filme, Live) */}
                       {canManage ? (
                         <select
                           value={selectedProject.category || selectedProject.budget?.category || ''}
@@ -865,7 +1107,6 @@ export default function Projetos() {
                   </div>
 
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {/* Dynamic OS download */}
                     {selectedProject.budget_id && (
                       <button
                         onClick={() => handleDownloadOS(selectedProject.id, selectedProject.budget_id!)}
@@ -1036,7 +1277,7 @@ export default function Projetos() {
                                 <th className="py-2.5 px-2 w-28">Prioridade</th>
                                 <th className="py-2.5 px-2 w-44">Responsável</th>
                                 <th className="py-2.5 px-2 w-32">Prazo</th>
-                                {canManage && <th className="py-2.5 px-2 w-10 text-center">Ações</th>}
+                                <th className="py-2.5 px-2 w-16 text-center">Ações</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-lumos-border/20">
@@ -1047,7 +1288,8 @@ export default function Projetos() {
                                     key={task.id} 
                                     className={clsx(
                                       "hover:bg-lumos-surface/40 transition-all group/row",
-                                      isTaskCompleted && "bg-green-500/[0.01]"
+                                      isTaskCompleted && "bg-green-500/[0.01]",
+                                      selectedTaskId === task.id && "bg-lumos-yellow/[0.03]"
                                     )}
                                   >
                                     {/* Done check checkbox toggle */}
@@ -1077,7 +1319,7 @@ export default function Projetos() {
                                       />
                                     </td>
 
-                                    {/* Status Badge Dropdown (12 Rich Statuses Grouped) */}
+                                    {/* Status Badge Dropdown */}
                                     <td className="py-2 px-2">
                                       <select
                                         value={task.status}
@@ -1155,18 +1397,30 @@ export default function Projetos() {
                                       />
                                     </td>
 
-                                    {/* Actions Delete button */}
-                                    {canManage && (
-                                      <td className="py-2 px-2 text-center">
+                                    {/* Actions cell */}
+                                    <td className="py-2 px-2 text-center">
+                                      <div className="flex items-center justify-center gap-1.5">
                                         <button
-                                          onClick={() => handleDeleteTask(task.id)}
-                                          className="p-1 text-lumos-text-secondary hover:text-red-500 rounded hover:bg-red-500/10 opacity-0 group-hover/row:opacity-100 transition-all"
-                                          title="Excluir tarefa"
+                                          type="button"
+                                          onClick={() => setSelectedTaskId(task.id)}
+                                          className="p-1 text-lumos-text-secondary hover:text-lumos-yellow rounded hover:bg-lumos-border/20 transition-all"
+                                          title="Ver detalhes da tarefa"
                                         >
-                                          <Trash2 className="w-3.5 h-3.5" />
+                                          <ArrowRight className="w-3.5 h-3.5" />
                                         </button>
-                                      </td>
-                                    )}
+                                        
+                                        {canManage && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteTask(task.id)}
+                                            className="p-1 text-lumos-text-secondary hover:text-red-500 rounded hover:bg-red-500/10 opacity-0 group-hover/row:opacity-100 transition-all"
+                                            title="Excluir tarefa"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1205,7 +1459,6 @@ export default function Projetos() {
               /* ================= DOCK PROJECTS OF SELECTED CLIENT ================= */
               <div className="space-y-6">
                 
-                {/* Client Folder header info */}
                 <div className="flex items-center justify-between pb-4 border-b border-lumos-border">
                   <div>
                     <h2 className="text-xl font-black text-lumos-text-primary uppercase tracking-tight">
@@ -1237,7 +1490,6 @@ export default function Projetos() {
                   </div>
                 </div>
 
-                {/* Projects Grid list */}
                 {clientProjectsFiltered.length === 0 ? (
                   <div className="card border border-lumos-border text-center py-16">
                     <Briefcase className="w-10 h-10 text-lumos-text-secondary opacity-30 mx-auto mb-3" />
@@ -1290,7 +1542,6 @@ export default function Projetos() {
                             )}
                           </div>
 
-                          {/* Progress bar */}
                           <div className="space-y-1.5 pt-2">
                             <div className="flex justify-between text-[10px] font-semibold text-lumos-text-secondary">
                               <span>Progresso</span>
@@ -1344,15 +1595,13 @@ export default function Projetos() {
 
               </div>
             ) : (
-              /* ================= DEFAULT WORKSPACE LANDING ================= */
+              /* ================= DEFAULT LANDING ================= */
               <div className="card border border-lumos-border bg-lumos-surface flex flex-col justify-center items-center text-center p-8 h-[600px] relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-96 h-96 bg-lumos-yellow/5 rounded-full blur-3xl pointer-events-none"></div>
-                
                 <div className="max-w-md space-y-4 relative z-10">
                   <div className="mx-auto w-14 h-14 bg-lumos-yellow/10 border border-lumos-yellow/20 rounded-full flex items-center justify-center text-lumos-yellow shadow-lg shadow-lumos-yellow/5">
                     <ClipboardList className="w-7 h-7" />
                   </div>
-                  
                   <div className="space-y-2">
                     <h3 className="text-lg font-bold text-lumos-text-primary uppercase tracking-tight">
                       Selecione um Cliente
@@ -1370,12 +1619,217 @@ export default function Projetos() {
         </div>
       )}
 
+      {/* ================= GAVETA LATERAL: DETALHES DA TAREFA (FASE 2) ================= */}
+      {selectedTaskId && selectedTask && (
+        <>
+          {/* Backdrop */}
+          <div 
+            onClick={() => {
+              if (!canManage || descHTML === (selectedTask.descricao || '')) {
+                setSelectedTaskId(null);
+              } else {
+                if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
+                  setSelectedTaskId(null);
+                }
+              }
+            }} 
+            className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+          />
+
+          {/* Sliding Panel */}
+          <div className="fixed inset-y-0 right-0 z-[140] w-full sm:w-[450px] md:w-[500px] bg-lumos-surface border-l border-lumos-border shadow-2xl p-6 flex flex-col justify-between animate-in slide-in-from-right duration-300 text-lumos-text-primary">
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-1">
+              
+              {/* Header Drawer */}
+              <div className="flex items-center justify-between pb-3 border-b border-lumos-border/50">
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-lumos-yellow" />
+                  <span className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                    Detalhes da Tarefa
+                  </span>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    if (!canManage || descHTML === (selectedTask.descricao || '')) {
+                      setSelectedTaskId(null);
+                    } else {
+                      if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
+                        setSelectedTaskId(null);
+                      }
+                    }
+                  }}
+                  className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
+                  title="Fechar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Task Title (Editable) */}
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  value={selectedTask.titulo}
+                  disabled={!canManage}
+                  onChange={(e) => handleUpdateTask(selectedTask.id, { titulo: e.target.value })}
+                  className="w-full text-lg font-black bg-transparent border-b border-transparent focus:border-lumos-yellow outline-none py-1 text-lumos-text-primary uppercase tracking-tight"
+                />
+              </div>
+
+              {/* Task Metadata Editor (Grid) */}
+              <div className="grid grid-cols-2 gap-4 bg-lumos-bg/30 p-4 rounded-lumos border border-lumos-border/40 text-xs">
+                
+                {/* Status Selector */}
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Status</span>
+                  <select
+                    value={selectedTask.status}
+                    disabled={!canManage}
+                    onChange={(e) => handleUpdateTask(selectedTask.id, { status: e.target.value })}
+                    className={clsx(
+                      "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
+                      getStatusDetails(selectedTask.status).color
+                    )}
+                  >
+                    <optgroup label="Não Iniciado" className="bg-lumos-surface text-lumos-text-primary">
+                      <option value="iniciar">Iniciar</option>
+                      <option value="pausado">Pausado</option>
+                      <option value="aguard_captacao">Aguard. Captação</option>
+                      <option value="aguard_material">Aguard. Material</option>
+                    </optgroup>
+                    <optgroup label="Ativo" className="bg-lumos-surface text-lumos-text-primary">
+                      <option value="na_fila">Na Fila</option>
+                      <option value="em_progresso">Em Progresso</option>
+                      <option value="revisao_interna">Revisão Interna</option>
+                      <option value="aprov_interna">Aprov. Interna</option>
+                      <option value="revisao_cliente">Revisão do Cliente</option>
+                      <option value="alteracoes">Alterações</option>
+                    </optgroup>
+                    <optgroup label="Concluído" className="bg-lumos-surface text-lumos-text-primary">
+                      <option value="entregue">Entregue</option>
+                      <option value="concluido">Concluído</option>
+                    </optgroup>
+                  </select>
+                </div>
+
+                {/* Priority Selector */}
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prioridade</span>
+                  <select
+                    value={selectedTask.prioridade}
+                    disabled={!canManage}
+                    onChange={(e) => handleUpdateTask(selectedTask.id, { prioridade: e.target.value as any })}
+                    className={clsx(
+                      "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
+                      getPriorityTheme(selectedTask.prioridade)
+                    )}
+                  >
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </div>
+
+                {/* Assignee Selector */}
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Responsável</span>
+                  <div className="flex items-center gap-1.5 border border-lumos-border/40 rounded px-2 py-0.5">
+                    <User className="w-3.5 h-3.5 text-lumos-text-secondary opacity-50 flex-shrink-0" />
+                    <select
+                      value={selectedTask.responsavel_id || ''}
+                      disabled={!canManage}
+                      onChange={(e) => handleUpdateTask(selectedTask.id, { responsavel_id: e.target.value || null })}
+                      className="bg-transparent border-none text-[11px] font-medium text-lumos-text-primary outline-none cursor-pointer w-full py-0.5"
+                    >
+                      <option value="">Sem responsável</option>
+                      {teamUsers.map(user => (
+                        <option key={user.id} value={user.id}>{user.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Deadline Picker */}
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prazo</span>
+                  <input
+                    type="date"
+                    value={selectedTask.data_fim || ''}
+                    disabled={!canManage}
+                    onChange={(e) => handleUpdateTask(selectedTask.id, { data_fim: e.target.value || null })}
+                    className="bg-transparent border border-lumos-border/40 rounded text-[10px] font-bold text-lumos-text-primary px-2.5 py-1.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
+                  />
+                </div>
+
+              </div>
+
+              {/* Rich Text Editor for Task Description */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                    Descrição da Tarefa
+                  </span>
+                  
+                  {canManage && descHTML !== (selectedTask.descricao || '') && (
+                    <button
+                      onClick={handleSaveDescription}
+                      disabled={isSavingDesc}
+                      className="text-[10px] font-bold bg-lumos-yellow text-black px-2.5 py-1 rounded hover:bg-yellow-400 disabled:opacity-50 transition-all flex items-center gap-1 shadow-md shadow-lumos-yellow/10"
+                    >
+                      {isSavingDesc ? (
+                        <>
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        'Salvar Descrição'
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {canManage ? (
+                  <TipTapEditor
+                    content={descHTML}
+                    onChange={(html) => setDescHTML(html)}
+                    editable={true}
+                  />
+                ) : (
+                  /* Safe display of saved HTML content with DOMPurify sanitization */
+                  <div 
+                    className="p-3 border border-lumos-border rounded-lumos bg-lumos-bg/20 text-xs text-lumos-text-primary leading-relaxed max-h-56 overflow-y-auto custom-scrollbar ProseMirror"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTask.descricao || '<p className="italic text-lumos-text-secondary">Sem descrição cadastrada.</p>') }}
+                  />
+                )}
+              </div>
+
+              {/* Placeholder for comments feed */}
+              <div className="space-y-3 pt-4 border-t border-lumos-border/50">
+                <div className="flex items-center gap-1.5">
+                  <MessageSquare className="w-4 h-4 text-lumos-text-secondary opacity-60" />
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                    Comentários
+                  </span>
+                </div>
+                
+                <div className="flex flex-col items-center justify-center py-8 bg-lumos-bg/10 rounded-lumos border border-dashed border-lumos-border/40 text-center text-lumos-text-secondary/50">
+                  <MessageSquare className="w-6 h-6 mb-2 opacity-20" />
+                  <p className="text-[10px] font-bold uppercase tracking-wider">Comentários em breve</p>
+                  <p className="text-[9px] mt-0.5">As conversações e menções de equipe serão exibidas aqui.</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ================= MANUAL CREATE MODAL ================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="w-full max-w-lg bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-6 text-lumos-text-primary">
             
-            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-lumos-border">
               <h3 className="text-lg font-black uppercase tracking-tight text-lumos-yellow flex items-center gap-2">
                 <Briefcase className="w-5 h-5" />
@@ -1389,11 +1843,9 @@ export default function Projetos() {
               </button>
             </div>
 
-            {/* Modal Form */}
             <form onSubmit={handleCreateProject} className="space-y-4">
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Project Name */}
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Nome do Projeto *
@@ -1408,7 +1860,6 @@ export default function Projetos() {
                   />
                 </div>
 
-                {/* Client Select */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Cliente *
@@ -1426,7 +1877,6 @@ export default function Projetos() {
                   </select>
                 </div>
 
-                {/* Segment Selector */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Segmento *
@@ -1442,7 +1892,6 @@ export default function Projetos() {
                   </select>
                 </div>
 
-                {/* Project Code */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Código do Projeto (Opcional)
@@ -1456,7 +1905,6 @@ export default function Projetos() {
                   />
                 </div>
 
-                {/* Data Início */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Data de Início (Opcional)
@@ -1469,7 +1917,6 @@ export default function Projetos() {
                   />
                 </div>
 
-                {/* Data Fim */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Data de Término (Opcional)
@@ -1483,7 +1930,6 @@ export default function Projetos() {
                 </div>
               </div>
 
-              {/* Description */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                   Descrição / Notas do Projeto
@@ -1496,7 +1942,6 @@ export default function Projetos() {
                 />
               </div>
 
-              {/* Apply Template Checkbox */}
               <div className="flex items-center gap-2.5 pt-2">
                 <input
                   type="checkbox"
@@ -1510,7 +1955,6 @@ export default function Projetos() {
                 </label>
               </div>
 
-              {/* Form Actions */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-lumos-border">
                 <button
                   type="button"
