@@ -30,7 +30,8 @@ import {
   HelpCircle,
   CornerDownRight,
   MessageSquare,
-  Edit2
+  Edit2,
+  Menu
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -1384,13 +1385,24 @@ export default function Projetos() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight uppercase">
-            Gerenciador de Projetos
-          </h1>
-          <p className="text-sm font-medium text-lumos-text-secondary mt-1">
-            Visualização hierárquica e controle dos fluxos operacionais da Lumos.
-          </p>
+        <div className="flex items-center gap-3">
+          {!isSidebarOpen && !loading && (
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 bg-lumos-surface border border-lumos-border rounded-lumos text-lumos-yellow hover:scale-105 active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
+              title="Expandir painel de clientes"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight uppercase">
+              Gerenciador de Projetos
+            </h1>
+            <p className="text-sm font-medium text-lumos-text-secondary mt-1">
+              Visualização hierárquica e controle dos fluxos operacionais da Lumos.
+            </p>
+          </div>
         </div>
         
         {canManage && (
@@ -1404,17 +1416,6 @@ export default function Projetos() {
         )}
       </div>
 
-      {/* Reopen Sidebar floating button */}
-      {!isSidebarOpen && !loading && (
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed left-6 bottom-10 md:bottom-auto md:top-28 z-40 w-10 h-10 rounded-full bg-lumos-surface border border-lumos-border shadow-2xl flex items-center justify-center text-lumos-yellow hover:scale-105 active:scale-95 transition-all animate-bounce"
-          title="Expandir painel de clientes"
-        >
-          <FolderClosed className="w-5 h-5" />
-        </button>
-      )}
-
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[400px]">
           <Loader2 className="w-10 h-10 animate-spin text-lumos-yellow mb-4" />
@@ -1427,15 +1428,6 @@ export default function Projetos() {
           {isSidebarOpen && (
             <div className="lg:col-span-1 card border border-lumos-border bg-lumos-surface/40 flex flex-col p-4 space-y-4 h-[650px] relative animate-in slide-in-from-left duration-200">
               
-              {/* Collapse button inside sidebar */}
-              <button
-                onClick={() => setIsSidebarOpen(false)}
-                className="absolute -right-3 top-4 z-10 w-6 h-6 rounded-full bg-lumos-surface border border-lumos-border flex items-center justify-center text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-                title="Recolher painel"
-              >
-                <ChevronRight className="w-3.5 h-3.5 rotate-180" />
-              </button>
-
               {/* Panel Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
@@ -1449,9 +1441,18 @@ export default function Projetos() {
               </div>
 
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
-                <span className="text-[9px] font-black tracking-widest text-lumos-text-secondary uppercase opacity-50 px-2 block mb-2">
-                  Pastas de Clientes
-                </span>
+                <div className="flex items-center justify-between px-2 mb-2">
+                  <span className="text-[9px] font-black tracking-widest text-lumos-text-secondary uppercase opacity-50 block">
+                    Pastas de Clientes
+                  </span>
+                  <button
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-border/20 transition-all"
+                    title="Recolher painel"
+                  >
+                    <Menu className="w-3.5 h-3.5" />
+                  </button>
+                </div>
 
                 {filteredClients.length === 0 ? (
                   <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum cliente encontrado.</p>
