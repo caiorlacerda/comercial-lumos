@@ -15,6 +15,8 @@ export const NOTIFICATION_EVENTS = {
   TODO_ATRIBUIDO: { key: 'todo_atribuido', category: 'producao', label: 'Nova tarefa atribuída a você', defaultEnabled: true },
   FORNECEDOR_AUTOCADASTRO: { key: 'fornecedor_autocadastro', category: 'producao', label: 'Fornecedor preencheu cadastro público', defaultEnabled: true },
   MENTION_COMMENT: { key: 'mencao_comentario', category: 'producao', label: 'Menção em comentário', defaultEnabled: true },
+  COMENTARIO_TAREFA: { key: 'comentario_tarefa', category: 'producao', label: 'Novo comentário na sua tarefa', defaultEnabled: true },
+  PROJETO_ENCERRADO: { key: 'projeto_encerrado', category: 'producao', label: 'Projeto encerrado', defaultEnabled: true },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },
