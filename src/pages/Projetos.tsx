@@ -1031,7 +1031,6 @@ export default function Projetos() {
       }
 
       setComments(prev => [...prev, newComment]);
-      toast.success('Comentário enviado!');
     } catch (err: any) {
       console.error('Error sending comment:', err);
       toast.error('Erro ao enviar comentário.');
@@ -1077,7 +1076,6 @@ export default function Projetos() {
       }
 
       setComments(prev => prev.map(c => c.id === comment.id ? { ...c, content: newContent.trim() } : c));
-      toast.success('Comentário atualizado!');
     } catch (err: any) {
       console.error('Error editing comment:', err);
       toast.error('Erro ao editar comentário.');
@@ -1097,7 +1095,6 @@ export default function Projetos() {
       if (error) throw error;
 
       setComments(prev => prev.filter(c => c.id !== commentId));
-      toast.success('Comentário excluído.');
     } catch (err: any) {
       console.error('Error deleting comment:', err);
       toast.error('Erro ao excluir comentário.');
