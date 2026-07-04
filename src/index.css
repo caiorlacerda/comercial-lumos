@@ -130,4 +130,76 @@ body {
   text-decoration: underline;
 }
 
+/* TipTap Heading Sizes */
+.ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 900;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+}
+.ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-top: 0.85rem;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+.ProseMirror h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+  margin-bottom: 0.3rem;
+  text-transform: uppercase;
+}
+
+/* Checklist / Task List styles */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+.ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.ProseMirror ul[data-type="taskList"] li > label {
+  display: flex;
+  align-items: center;
+  user-select: none;
+  margin-top: 0.15rem;
+}
+.ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid #4b5563;
+  width: 14px;
+  height: 14px;
+  background-color: transparent;
+}
+.ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+  background-color: #facc15;
+  border-color: #facc15;
+}
+.ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Callout Block style */
+.ProseMirror div[data-type="callout"] {
+  background-color: rgba(250, 204, 21, 0.1);
+  border-left: 4px solid #facc15;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin: 0.75rem 0;
+  font-style: italic;
+}
+
 

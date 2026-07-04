@@ -42,6 +42,9 @@ import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Color from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import { Node, mergeAttributes } from '@tiptap/core';
 import DOMPurify from 'dompurify';
 
 interface Client {
@@ -118,6 +121,42 @@ interface TeamUser {
   full_name: string;
 }
 
+// Configuração segura para sanitização do HTML (DOMPurify) incluindo novos elementos e classes
+export const DOM_PURIFY_CONFIG = {
+  ADD_TAGS: ['div', 'li', 'ul', 'ol', 'input', 'label', 'hr', 'p', 'h1', 'h2', 'h3', 'blockquote', 'a', 'span'],
+  ADD_ATTR: ['data-type', 'data-checked', 'class', 'type', 'checked', 'disabled', 'href', 'target', 'rel']
+};
+
+// -------------------------------------------------------------
+// Extensão Customizada: Callout (Banner de Destaque)
+// -------------------------------------------------------------
+const Callout = Node.create({
+  name: 'callout',
+  group: 'block',
+  content: 'inline*',
+  defining: true,
+  parseHTML() {
+    return [{ tag: 'div[data-type="callout"]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'div', 
+      mergeAttributes(HTMLAttributes, { 
+        'data-type': 'callout', 
+        class: 'p-3 bg-yellow-500/10 border-l-4 border-yellow-400 rounded text-lumos-text-primary my-2 italic' 
+      }), 
+      0
+    ];
+  },
+  addCommands() {
+    return {
+      toggleCallout: () => ({ commands }: any) => {
+        return commands.toggleNode(this.name, 'paragraph');
+      }
+    } as any;
+  }
+});
+
 // -------------------------------------------------------------
 // Componente TipTapEditor (Rich Text)
 // -------------------------------------------------------------
@@ -127,7 +166,117 @@ interface TipTapEditorProps {
   editable: boolean;
 }
 
+interface SlashCommandItem {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  action: (editor: any, range: { from: number; to: number }) => void;
+}
+
+const ALL_SLASH_COMMANDS: SlashCommandItem[] = [
+  {
+    id: 'text',
+    title: 'Texto Normal',
+    description: 'Transformar em texto comum',
+    icon: 'T',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).setNode('paragraph').run();
+    }
+  },
+  {
+    id: 'h1',
+    title: 'Título H1',
+    description: 'Cabeçalho grande de seção',
+    icon: 'H1',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run();
+    }
+  },
+  {
+    id: 'h2',
+    title: 'Título H2',
+    description: 'Cabeçalho médio de seção',
+    icon: 'H2',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run();
+    }
+  },
+  {
+    id: 'h3',
+    title: 'Título H3',
+    description: 'Cabeçalho pequeno de seção',
+    icon: 'H3',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
+    }
+  },
+  {
+    id: 'checklist',
+    title: 'Checklist',
+    description: 'Lista de tarefas interativas',
+    icon: '☑',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleTaskList().run();
+    }
+  },
+  {
+    id: 'bullet',
+    title: 'Lista de Marcadores',
+    description: 'Lista com marcadores circulares',
+    icon: '•',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleBulletList().run();
+    }
+  },
+  {
+    id: 'ordered',
+    title: 'Lista Numerada',
+    description: 'Lista com números sequenciais',
+    icon: '1.',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleOrderedList().run();
+    }
+  },
+  {
+    id: 'divider',
+    title: 'Divisória',
+    description: 'Linha separadora horizontal',
+    icon: '―',
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).setHorizontalRule().run();
+    }
+  },
+  {
+    id: 'callout',
+    title: 'Banner de Destaque',
+    description: 'Caixa de alerta na cor Lumos',
+    icon: '⚠',
+    action: (editor, range) => {
+      (editor.chain().focus() as any).deleteRange(range).toggleCallout().run();
+    }
+  }
+];
+
 function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
+  const [slashMenu, setSlashMenu] = useState<{ x: number; y: number; text: string; range: { from: number; to: number } } | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const filteredCommands = ALL_SLASH_COMMANDS.filter(cmd =>
+    cmd.title.toLowerCase().includes(slashMenu?.text.toLowerCase() || '') ||
+    cmd.description.toLowerCase().includes(slashMenu?.text.toLowerCase() || '')
+  );
+
+  const slashMenuRef = React.useRef(slashMenu);
+  const selectedIndexRef = React.useRef(selectedIndex);
+  const filteredCommandsRef = React.useRef(filteredCommands);
+
+  React.useEffect(() => {
+    slashMenuRef.current = slashMenu;
+    selectedIndexRef.current = selectedIndex;
+    filteredCommandsRef.current = filteredCommands;
+  }, [slashMenu, selectedIndex, filteredCommands]);
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -141,12 +290,106 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
           rel: 'noopener noreferrer',
           class: 'text-lumos-yellow underline hover:text-yellow-400'
         }
-      })
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: 'flex items-start gap-2 my-1'
+        }
+      }),
+      Callout
     ],
     content: content || '',
     editable: editable,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
+      
+      // Detecção reativa do Slash command "/"
+      const { selection } = editor.state;
+      const $anchor = selection.$anchor;
+      const currentLineText = $anchor.parent.textContent;
+      const textBefore = currentLineText.slice(0, $anchor.parentOffset);
+      const match = textBefore.match(/(^|\s)\/(\w*)$/);
+
+      if (match) {
+        const query = match[2];
+        const slashIndex = textBefore.lastIndexOf('/');
+        const from = $anchor.start() + slashIndex;
+        const to = selection.from;
+        
+        try {
+          const coords = editor.view.coordsAtPos(selection.from);
+          setSlashMenu({
+            x: coords.left,
+            y: coords.bottom + 4,
+            text: query,
+            range: { from, to }
+          });
+          setSelectedIndex(0);
+        } catch (e) {
+          setSlashMenu(null);
+        }
+      } else {
+        setSlashMenu(null);
+      }
+    },
+    onSelectionUpdate: ({ editor }) => {
+      // Fecha o menu de sugestão se mudar a linha ou seleção
+      const { selection } = editor.state;
+      const $anchor = selection.$anchor;
+      const currentLineText = $anchor.parent.textContent;
+      const textBefore = currentLineText.slice(0, $anchor.parentOffset);
+      const match = textBefore.match(/(^|\s)\/(\w*)$/);
+
+      if (match) {
+        const query = match[2];
+        const slashIndex = textBefore.lastIndexOf('/');
+        const from = $anchor.start() + slashIndex;
+        const to = selection.from;
+        
+        try {
+          const coords = editor.view.coordsAtPos(selection.from);
+          setSlashMenu({
+            x: coords.left,
+            y: coords.bottom + 4,
+            text: query,
+            range: { from, to }
+          });
+        } catch (e) {
+          setSlashMenu(null);
+        }
+      } else {
+        setSlashMenu(null);
+      }
+    },
+    editorProps: {
+      handleKeyDown: (view, event) => {
+        if (slashMenuRef.current) {
+          const items = filteredCommandsRef.current;
+          if (event.key === 'ArrowDown') {
+            setSelectedIndex((prev) => (prev + 1) % items.length);
+            return true;
+          }
+          if (event.key === 'ArrowUp') {
+            setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
+            return true;
+          }
+          if (event.key === 'Enter') {
+            const selectedItem = items[selectedIndexRef.current];
+            if (selectedItem && editor) {
+              selectedItem.action(editor, slashMenuRef.current.range);
+              setSlashMenu(null);
+            }
+            return true;
+          }
+          if (event.key === 'Escape') {
+            setSlashMenu(null);
+            return true;
+          }
+        }
+        return false;
+      }
     }
   });
 
@@ -173,7 +416,7 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
   };
 
   return (
-    <div className="border border-lumos-border rounded-lumos overflow-hidden bg-lumos-bg/30">
+    <div className="relative border border-lumos-border rounded-lumos overflow-visible bg-lumos-bg/30">
       {editable && (
         <div className="flex flex-wrap gap-1 p-1 bg-lumos-surface border-b border-lumos-border items-center">
           <button
@@ -238,7 +481,31 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
             H2
           </button>
 
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-black transition-all",
+              editor.isActive('heading', { level: 3 }) ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
+            )}
+            title="Título 3"
+          >
+            H3
+          </button>
+
           <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleTaskList().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
+              editor.isActive('taskList') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Checklist"
+          >
+            ☑ Checklist
+          </button>
 
           <button
             type="button"
@@ -274,6 +541,27 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
             title="Citação"
           >
             “ Citação
+          </button>
+
+          <button
+            type="button"
+            onClick={() => (editor.chain().focus() as any).toggleCallout().run()}
+            className={clsx(
+              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
+              editor.isActive('callout') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
+            )}
+            title="Banner Destaque"
+          >
+            ⚠ Banner
+          </button>
+
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            className="p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold text-lumos-text-secondary transition-all"
+            title="Divisória"
+          >
+            ― Divisória
           </button>
 
           <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
@@ -330,6 +618,54 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
       <div className="p-3 min-h-[120px] text-xs leading-relaxed text-lumos-text-primary focus-within:outline-none bg-transparent">
         <EditorContent editor={editor} />
       </div>
+
+      {/* Floating Slash Commands Menu (estilo ClickUp/Notion) */}
+      {slashMenu && filteredCommands.length > 0 && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            top: `${slashMenu.y}px`, 
+            left: `${slashMenu.x}px` 
+          }}
+          className="z-[250] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1 flex flex-col max-h-60 overflow-y-auto custom-scrollbar w-60 animate-in fade-in zoom-in-95 duration-100"
+        >
+          {filteredCommands.map((cmd, idx) => {
+            const isSelected = idx === selectedIndex;
+            return (
+              <button
+                key={cmd.id}
+                type="button"
+                onClick={() => {
+                  cmd.action(editor, slashMenu.range);
+                  setSlashMenu(null);
+                }}
+                className={clsx(
+                  "px-3 py-1.5 rounded text-[11px] font-semibold text-left transition-all flex items-center gap-2 w-full",
+                  isSelected 
+                    ? "bg-lumos-yellow text-black font-bold animate-pulse-subtle" 
+                    : "text-lumos-text-primary hover:bg-lumos-bg"
+                )}
+              >
+                <span className={clsx(
+                  "w-5 h-5 rounded flex items-center justify-center text-xs font-black",
+                  isSelected ? "bg-black/10 text-black" : "bg-lumos-border/40 text-lumos-text-primary"
+                )}>
+                  {cmd.icon}
+                </span>
+                <div className="flex flex-col">
+                  <span className="leading-tight">{cmd.title}</span>
+                  <span className={clsx(
+                    "text-[8px] leading-tight",
+                    isSelected ? "text-black/60 font-medium" : "text-lumos-text-secondary font-normal"
+                  )}>
+                    {cmd.description}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1886,7 +2222,7 @@ export default function Projetos() {
                   ) : (
                     <div 
                       className="p-3 border border-lumos-border rounded-lumos bg-lumos-bg/20 text-xs text-lumos-text-primary leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar ProseMirror"
-                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTask.descricao || '<p className="italic text-lumos-text-secondary">Sem descrição cadastrada.</p>') }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedTask.descricao || '<p className="italic text-lumos-text-secondary">Sem descrição cadastrada.</p>', DOM_PURIFY_CONFIG) }}
                     />
                   )}
                 </div>
