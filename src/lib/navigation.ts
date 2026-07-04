@@ -32,7 +32,7 @@ export const NAV_SECTIONS: Section[] = [
     title: 'COMERCIAL',
     visibleWhen: ({ isAdmin }) => isAdmin,
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard', path: '/', end: true },
+      { icon: LayoutDashboard, label: 'Dashboard Comercial', path: '/comercial', end: true },
       { icon: Users, label: 'Clientes', path: '/clientes' },
       { icon: BookOpen, label: 'Orçamentos', path: '/orcamentos' },
       { icon: FileText, label: 'Catálogo', path: '/catalogo' },
@@ -44,7 +44,7 @@ export const NAV_SECTIONS: Section[] = [
     title: 'PRODUÇÃO',
     visibleWhen: ({ can }) => can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') || can('cronograma_edicao'),
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard', path: '/producao/dashboard', permission: 'ordem_do_dia' },
+      { icon: LayoutDashboard, label: 'Dashboard Produção', path: '/producao/dashboard', permission: 'ordem_do_dia' },
       { icon: ClipboardList, label: 'Projetos', path: '/producao/projetos', permission: 'ordem_do_dia' },
       { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
       { icon: CalendarDays, label: 'Cronograma Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao' },
@@ -56,7 +56,7 @@ export const NAV_SECTIONS: Section[] = [
     title: 'FINANCEIRO',
     visibleWhen: () => true,
     items: [
-      { icon: BarChart3, label: 'Dashboard', path: '/financeiro', permission: 'financeiro_dashboard', end: true },
+      { icon: BarChart3, label: 'Dashboard Financeiro', path: '/financeiro', permission: 'financeiro_dashboard', end: true },
       { icon: TrendingUp, label: 'Fluxo de Caixa', path: '/financeiro/fluxo-de-caixa', permission: 'financeiro_admin' },
       { icon: Landmark, label: 'Custos Fixos', path: '/financeiro/custos-fixos', permission: 'financeiro_admin' },
       { icon: Briefcase, label: 'Custos de Projeto', path: '/financeiro/custos-projeto', permission: 'custos_projeto' },

@@ -157,15 +157,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (profile?.role === 'producao' && location.pathname === '/') {
-    return <Navigate to="/financeiro/custos-projeto" />;
-  }
-  if (profile?.role === 'basico' && location.pathname === '/') {
-    return <Navigate to="/financeiro/reembolso" />;
-  }
-  if (profile?.role === 'editor' && location.pathname === '/') {
-    return <Navigate to="/producao/cronograma-edicao" />;
-  }
+  // Removed old role-based redirections to allow all roles to land on the Home page (/)
 
   return (
     <LayoutProvider>
@@ -342,6 +334,15 @@ function AppContent() {
             path="/" 
             element={
               <AuthWrapper>
+                <Home />
+              </AuthWrapper>
+            } 
+          />
+
+          <Route 
+            path="/comercial" 
+            element={
+              <AuthWrapper>
                 <PermissionGuard permission="admin">
                   <Dashboard />
                 </PermissionGuard>
@@ -438,7 +439,7 @@ function AppContent() {
 
           <Route 
             path="/home" 
-            element={<AuthWrapper><Home /></AuthWrapper>} 
+            element={<Navigate to="/" replace />} 
           />
 
 
