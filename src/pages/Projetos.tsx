@@ -121,10 +121,48 @@ interface TeamUser {
   full_name: string;
 }
 
+interface TaskComment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    full_name: string;
+    email: string;
+    role: string;
+  } | null;
+}
+
 // Configuração segura para sanitização do HTML (DOMPurify) incluindo novos elementos e classes
 export const DOM_PURIFY_CONFIG = {
   ADD_TAGS: ['div', 'li', 'ul', 'ol', 'input', 'label', 'hr', 'p', 'h1', 'h2', 'h3', 'blockquote', 'a', 'span'],
   ADD_ATTR: ['data-type', 'data-checked', 'class', 'type', 'checked', 'disabled', 'href', 'target', 'rel']
+};
+
+// Helpers para avatar (iniciais) e data de comentários
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return parts[0][0].toUpperCase();
+};
+
+const formatCommentDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  
+  if (diffMins < 1) return 'Agora mesmo';
+  if (diffMins < 60) return `Há ${diffMins} min`;
+  if (diffHours < 24) return `Há ${diffHours} h`;
+  
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
 // -------------------------------------------------------------
@@ -305,7 +343,6 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
       
-      // Detecção reativa do Slash command "/"
       const { selection } = editor.state;
       const $anchor = selection.$anchor;
       const currentLineText = $anchor.parent.textContent;
@@ -335,7 +372,6 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
       }
     },
     onSelectionUpdate: ({ editor }) => {
-      // Fecha o menu de sugestão se mudar a linha ou seleção
       const { selection } = editor.state;
       const $anchor = selection.$anchor;
       const currentLineText = $anchor.parent.textContent;
@@ -619,7 +655,7 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
         <EditorContent editor={editor} />
       </div>
 
-      {/* Floating Slash Commands Menu (estilo ClickUp/Notion) */}
+      {/* Floating Slash Commands Menu */}
       {slashMenu && filteredCommands.length > 0 && (
         <div 
           style={{ 
@@ -642,7 +678,7 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
                 className={clsx(
                   "px-3 py-1.5 rounded text-[11px] font-semibold text-left transition-all flex items-center gap-2 w-full",
                   isSelected 
-                    ? "bg-lumos-yellow text-black font-bold animate-pulse-subtle" 
+                    ? "bg-lumos-yellow text-black font-bold" 
                     : "text-lumos-text-primary hover:bg-lumos-bg"
                 )}
               >
@@ -674,7 +710,7 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
 // Componente Projetos (Página Principal)
 // -------------------------------------------------------------
 export default function Projetos() {
-  const { can, isAdmin } = useAuth();
+  const { can, isAdmin, profile } = useAuth();
   const toast = useToast();
   
   // Permissions
@@ -693,6 +729,7 @@ export default function Projetos() {
   const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({});
   const [showConcludedProjects, setShowConcludedProjects] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   // Project Tasks Panel States
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
@@ -705,6 +742,11 @@ export default function Projetos() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [descHTML, setDescHTML] = useState('');
   const [isSavingDesc, setIsSavingDesc] = useState(false);
+
+  // Task Comments States
+  const [comments, setComments] = useState<TaskComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newCommentText, setNewCommentText] = useState('');
 
   // Right-click context menu states
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
@@ -748,6 +790,15 @@ export default function Projetos() {
       setDescHTML('');
     }
   }, [selectedTaskId, selectedTask?.id]);
+
+  // Carregar comentários quando a tarefa for selecionada
+  useEffect(() => {
+    if (selectedTaskId) {
+      fetchTaskComments(selectedTaskId);
+    } else {
+      setComments([]);
+    }
+  }, [selectedTaskId]);
 
   // Global listeners for ESC key and closing context menus
   useEffect(() => {
@@ -835,6 +886,100 @@ export default function Projetos() {
       toast.error('Erro ao carregar tarefas.');
     } finally {
       setTasksLoading(false);
+    }
+  };
+
+  // Carregar comentários da tarefa
+  const fetchTaskComments = async (taskId: string) => {
+    setCommentsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('task_comments')
+        .select('*, user:app_users(full_name, email, role)')
+        .eq('task_id', taskId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      setComments(data || []);
+    } catch (err: any) {
+      console.error('Error fetching comments:', err);
+      toast.error('Erro ao carregar feed de comentários.');
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  // Enviar novo comentário
+  const handleSendComment = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newCommentText.trim() || !selectedTaskId || !profile) return;
+
+    const text = newCommentText.trim();
+    setNewCommentText('');
+
+    try {
+      const { data, error } = await supabase
+        .from('task_comments')
+        .insert({
+          task_id: selectedTaskId,
+          user_id: profile.id,
+          content: text
+        })
+        .select('*, user:app_users(full_name, email, role)')
+        .single();
+
+      if (error) throw error;
+
+      setComments(prev => [...prev, data]);
+      toast.success('Comentário enviado!');
+    } catch (err: any) {
+      console.error('Error sending comment:', err);
+      toast.error('Erro ao enviar comentário.');
+      setNewCommentText(text); // Recupera o texto no input em caso de falha
+    }
+  };
+
+  // Editar comentário
+  const handleEditComment = async (comment: TaskComment) => {
+    const newContent = window.prompt('Editar comentário:', comment.content);
+    if (newContent === null) return;
+    if (!newContent.trim()) {
+      toast.error('O comentário não pode ficar vazio.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('task_comments')
+        .update({ content: newContent.trim() })
+        .eq('id', comment.id);
+
+      if (error) throw error;
+
+      setComments(prev => prev.map(c => c.id === comment.id ? { ...c, content: newContent.trim() } : c));
+      toast.success('Comentário atualizado!');
+    } catch (err: any) {
+      console.error('Error editing comment:', err);
+      toast.error('Erro ao editar comentário.');
+    }
+  };
+
+  // Excluir comentário
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este comentário?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('task_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      toast.success('Comentário excluído.');
+    } catch (err: any) {
+      console.error('Error deleting comment:', err);
+      toast.error('Erro ao excluir comentário.');
     }
   };
 
@@ -1259,155 +1404,181 @@ export default function Projetos() {
         )}
       </div>
 
+      {/* Reopen Sidebar floating button */}
+      {!isSidebarOpen && !loading && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed left-6 bottom-10 md:bottom-auto md:top-28 z-40 w-10 h-10 rounded-full bg-lumos-surface border border-lumos-border shadow-2xl flex items-center justify-center text-lumos-yellow hover:scale-105 active:scale-95 transition-all animate-bounce"
+          title="Expandir painel de clientes"
+        >
+          <FolderClosed className="w-5 h-5" />
+        </button>
+      )}
+
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[400px]">
           <Loader2 className="w-10 h-10 animate-spin text-lumos-yellow mb-4" />
           <p className="text-xs text-lumos-text-secondary font-semibold uppercase tracking-wider">Carregando painel...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-[600px] items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-[600px] items-start transition-all duration-300">
           
           {/* Panel 1: Collapsible Folders (Lateral Esquerda) */}
-          <div className="lg:col-span-1 card border border-lumos-border bg-lumos-surface/40 flex flex-col p-4 space-y-4 h-[650px]">
-            {/* Panel Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-              <input
-                type="text"
-                placeholder="Buscar cliente ou projeto..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="input-lumos w-full pl-9 h-10 text-xs font-semibold"
-              />
-            </div>
+          {isSidebarOpen && (
+            <div className="lg:col-span-1 card border border-lumos-border bg-lumos-surface/40 flex flex-col p-4 space-y-4 h-[650px] relative animate-in slide-in-from-left duration-200">
+              
+              {/* Collapse button inside sidebar */}
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="absolute -right-3 top-4 z-10 w-6 h-6 rounded-full bg-lumos-surface border border-lumos-border flex items-center justify-center text-lumos-text-secondary hover:text-lumos-yellow transition-all"
+                title="Recolher painel"
+              >
+                <ChevronRight className="w-3.5 h-3.5 rotate-180" />
+              </button>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
-              <span className="text-[9px] font-black tracking-widest text-lumos-text-secondary uppercase opacity-50 px-2 block mb-2">
-                Pastas de Clientes
-              </span>
+              {/* Panel Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+                <input
+                  type="text"
+                  placeholder="Buscar cliente ou projeto..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="input-lumos w-full pl-9 h-10 text-xs font-semibold"
+                />
+              </div>
 
-              {filteredClients.length === 0 ? (
-                <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum cliente encontrado.</p>
-              ) : (
-                filteredClients.map((client) => {
-                  const clientProjects = projects.filter(p => p.client_id === client.id);
-                  const activeProjects = clientProjects.filter(p => p.status === 'ativo');
-                  const concludedProjects = clientProjects.filter(p => p.status === 'concluido');
-                  const isExpanded = !!expandedClients[client.id] || searchTerm.length > 0;
-                  const isClientSelected = selectedClientId === client.id && !selectedProjectId;
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
+                <span className="text-[9px] font-black tracking-widest text-lumos-text-secondary uppercase opacity-50 px-2 block mb-2">
+                  Pastas de Clientes
+                </span>
 
-                  return (
-                    <div key={client.id} className="space-y-1">
-                      <div 
-                        onClick={() => {
-                          setSelectedClientId(client.id);
-                          setSelectedProjectId(null);
-                          toggleClientExpanded(client.id);
-                        }}
-                        className={clsx(
-                          "flex items-center justify-between px-3 py-2 rounded-lumos cursor-pointer transition-all hover:bg-lumos-surface group",
-                          isClientSelected ? "bg-lumos-yellow/10 text-lumos-yellow border-l-2 border-lumos-yellow" : "text-lumos-text-primary"
+                {filteredClients.length === 0 ? (
+                  <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum cliente encontrado.</p>
+                ) : (
+                  filteredClients.map((client) => {
+                    const clientProjects = projects.filter(p => p.client_id === client.id);
+                    const activeProjects = clientProjects.filter(p => p.status === 'ativo');
+                    const concludedProjects = clientProjects.filter(p => p.status === 'concluido');
+                    const isExpanded = !!expandedClients[client.id] || searchTerm.length > 0;
+                    const isClientSelected = selectedClientId === client.id && !selectedProjectId;
+
+                    return (
+                      <div key={client.id} className="space-y-1">
+                        <div 
+                          onClick={() => {
+                            setSelectedClientId(client.id);
+                            setSelectedProjectId(null);
+                            toggleClientExpanded(client.id);
+                          }}
+                          className={clsx(
+                            "flex items-center justify-between px-3 py-2 rounded-lumos cursor-pointer transition-all hover:bg-lumos-surface group",
+                            isClientSelected ? "bg-lumos-yellow/10 text-lumos-yellow border-l-2 border-lumos-yellow" : "text-lumos-text-primary"
+                          )}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {isExpanded ? (
+                              <FolderOpen className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
+                            ) : (
+                              <FolderClosed className="w-4 h-4 text-lumos-text-secondary/70 flex-shrink-0" />
+                            )}
+                            <span className="text-xs font-bold truncate tracking-tight">{client.name}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {activeProjects.length > 0 && (
+                              <span className="text-[9px] font-black bg-lumos-border/50 px-1.5 py-0.5 rounded text-lumos-text-secondary">
+                                {activeProjects.length}
+                              </span>
+                            )}
+                            {isExpanded ? <ChevronDown className="w-3 h-3 text-lumos-text-secondary/55" /> : <ChevronRight className="w-3 h-3 text-lumos-text-secondary/55" />}
+                          </div>
+                        </div>
+
+                        {/* Client Projects List (Submenu) */}
+                        {isExpanded && (
+                          <div className="pl-6 pr-1 py-1 space-y-1 border-l border-lumos-border/30 ml-5">
+                            {activeProjects.length === 0 && concludedProjects.length === 0 ? (
+                              <span className="text-[10px] text-lumos-text-secondary/50 italic block py-1">Sem projetos</span>
+                            ) : (
+                              <>
+                                {activeProjects.map((proj) => {
+                                  const isProjSelected = selectedProjectId === proj.id;
+                                  return (
+                                    <div
+                                      key={proj.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedClientId(client.id);
+                                        setSelectedProjectId(proj.id);
+                                      }}
+                                      className={clsx(
+                                        "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
+                                        isProjSelected 
+                                          ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
+                                          : "text-lumos-text-secondary"
+                                      )}
+                                    >
+                                      <span className="truncate max-w-[80%]">{proj.name}</span>
+                                      {proj.code && (
+                                        <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
+                                          {formatBudgetCode(proj.code)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+
+                                {showConcludedProjects && concludedProjects.length > 0 && (
+                                  <div className="space-y-1 mt-2 pt-1 border-t border-lumos-border/10">
+                                    <div className="text-[8px] font-black uppercase text-lumos-text-secondary opacity-40 tracking-wider pb-1">
+                                      Encerrados
+                                    </div>
+                                    {concludedProjects.map((proj) => {
+                                      const isProjSelected = selectedProjectId === proj.id;
+                                      return (
+                                        <div
+                                          key={proj.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedClientId(client.id);
+                                            setSelectedProjectId(proj.id);
+                                          }}
+                                          className={clsx(
+                                            "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
+                                            isProjSelected 
+                                              ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
+                                              : "text-lumos-text-secondary/40 line-through"
+                                          )}
+                                        >
+                                          <span className="truncate max-w-[80%]">{proj.name}</span>
+                                          {proj.code && (
+                                            <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
+                                              {formatBudgetCode(proj.code)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
                         )}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {isExpanded ? (
-                            <FolderOpen className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
-                          ) : (
-                            <FolderClosed className="w-4 h-4 text-lumos-text-secondary/70 flex-shrink-0" />
-                          )}
-                          <span className="text-xs font-bold truncate tracking-tight">{client.name}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {activeProjects.length > 0 && (
-                            <span className="text-[9px] font-black bg-lumos-border/50 px-1.5 py-0.5 rounded text-lumos-text-secondary">
-                              {activeProjects.length}
-                            </span>
-                          )}
-                          {isExpanded ? <ChevronDown className="w-3 h-3 text-lumos-text-secondary/55" /> : <ChevronRight className="w-3 h-3 text-lumos-text-secondary/55" />}
-                        </div>
                       </div>
-
-                      {/* Client Projects List (Submenu) */}
-                      {isExpanded && (
-                        <div className="pl-6 pr-1 py-1 space-y-1 border-l border-lumos-border/30 ml-5">
-                          {activeProjects.length === 0 && concludedProjects.length === 0 ? (
-                            <span className="text-[10px] text-lumos-text-secondary/50 italic block py-1">Sem projetos</span>
-                          ) : (
-                            <>
-                              {activeProjects.map((proj) => {
-                                const isProjSelected = selectedProjectId === proj.id;
-                                return (
-                                  <div
-                                    key={proj.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedClientId(client.id);
-                                      setSelectedProjectId(proj.id);
-                                    }}
-                                    className={clsx(
-                                      "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
-                                      isProjSelected 
-                                        ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
-                                        : "text-lumos-text-secondary"
-                                    )}
-                                  >
-                                    <span className="truncate max-w-[80%]">{proj.name}</span>
-                                    {proj.code && (
-                                      <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
-                                        {formatBudgetCode(proj.code)}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-
-                              {showConcludedProjects && concludedProjects.length > 0 && (
-                                <div className="space-y-1 mt-2 pt-1 border-t border-lumos-border/10">
-                                  <div className="text-[8px] font-black uppercase text-lumos-text-secondary opacity-40 tracking-wider pb-1">
-                                    Encerrados
-                                  </div>
-                                  {concludedProjects.map((proj) => {
-                                    const isProjSelected = selectedProjectId === proj.id;
-                                    return (
-                                      <div
-                                        key={proj.id}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedClientId(client.id);
-                                          setSelectedProjectId(proj.id);
-                                        }}
-                                        className={clsx(
-                                          "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
-                                          isProjSelected 
-                                            ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
-                                            : "text-lumos-text-secondary/40 line-through"
-                                        )}
-                                      >
-                                        <span className="truncate max-w-[80%]">{proj.name}</span>
-                                        {proj.code && (
-                                          <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
-                                            {formatBudgetCode(proj.code)}
-                                          </span>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Panel 2 & 3: Selected client grid OR Selected project detail (Centro/Direita) */}
-          <div className="lg:col-span-3 space-y-6 min-h-[600px]">
+          <div className={clsx(
+            "space-y-6 min-h-[600px] transition-all duration-300",
+            isSidebarOpen ? "lg:col-span-3" : "lg:col-span-4"
+          )}>
             
             {selectedProjectId && selectedProject ? (
               /* ================= SELECTED PROJECT DETAILS & TASKS ================= */
@@ -2230,21 +2401,96 @@ export default function Projetos() {
               </div>
 
               {/* Right Column (Comments Sidebar - 1/3 width) */}
-              <div className="lg:col-span-1 bg-lumos-surface/30 p-6 flex flex-col justify-between overflow-y-auto custom-scrollbar h-full">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-1.5 pb-3 border-b border-lumos-border/50">
-                    <MessageSquare className="w-4 h-4 text-lumos-text-secondary opacity-60" />
-                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
-                      Comentários
-                    </span>
-                  </div>
-                  
-                  <div className="flex flex-col items-center justify-center py-16 bg-lumos-bg/10 rounded-lumos border border-dashed border-lumos-border/40 text-center text-lumos-text-secondary/50">
-                    <MessageSquare className="w-6 h-6 mb-2 opacity-20" />
-                    <p className="text-[10px] font-bold uppercase tracking-wider">Comentários em breve</p>
-                    <p className="text-[9px] mt-0.5">As conversações e menções de equipe serão exibidas aqui.</p>
-                  </div>
+              <div className="lg:col-span-1 bg-lumos-surface/30 p-6 flex flex-col justify-between overflow-hidden h-full border-l border-lumos-border/40">
+                <div className="flex items-center gap-1.5 pb-3 border-b border-lumos-border/50 flex-shrink-0">
+                  <MessageSquare className="w-4 h-4 text-lumos-text-secondary opacity-60" />
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                    Comentários
+                  </span>
                 </div>
+                
+                {/* Scrollable comments list */}
+                <div className="flex-grow overflow-y-auto custom-scrollbar py-4 space-y-4 min-h-0 text-xs">
+                  {commentsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" />
+                    </div>
+                  ) : comments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center text-lumos-text-secondary/50">
+                      <MessageSquare className="w-6 h-6 mb-2 opacity-20" />
+                      <p className="text-[10px] font-bold uppercase tracking-wider">Nenhum comentário ainda</p>
+                      <p className="text-[9px] mt-0.5">Seja o primeiro a comentar.</p>
+                    </div>
+                  ) : (
+                    comments.map((comment) => {
+                      const isOwner = profile && profile.id === comment.user_id;
+                      return (
+                        <div key={comment.id} className="space-y-1.5 group/comment">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {/* Initials Avatar */}
+                              <div className="w-6 h-6 rounded-full bg-lumos-yellow/10 border border-lumos-yellow/20 flex items-center justify-center text-[10px] font-black text-lumos-yellow">
+                                {getInitials(comment.user?.full_name || 'Usuário')}
+                              </div>
+                              <span className="font-bold text-lumos-text-primary">
+                                {comment.user?.full_name || 'Usuário'}
+                              </span>
+                              <span className="text-[9px] text-lumos-text-secondary opacity-60">
+                                {formatCommentDate(comment.created_at)}
+                              </span>
+                            </div>
+
+                            {/* Comment edit/delete actions */}
+                            {(isOwner || isAdmin) && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover/comment:opacity-100 transition-all">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditComment(comment)}
+                                  className="p-0.5 text-lumos-text-secondary hover:text-lumos-yellow rounded transition-all"
+                                  title="Editar"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="p-0.5 text-lumos-text-secondary hover:text-red-500 rounded transition-all"
+                                  title="Excluir"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pl-8 text-lumos-text-secondary leading-relaxed break-words bg-lumos-bg/20 p-2 rounded border border-lumos-border/20">
+                            {comment.content}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Submit new comment form at bottom */}
+                {profile && (
+                  <form onSubmit={handleSendComment} className="flex items-center gap-2 pt-3 border-t border-lumos-border/50 flex-shrink-0">
+                    <input
+                      type="text"
+                      placeholder="Adicionar comentário..."
+                      value={newCommentText}
+                      onChange={e => setNewCommentText(e.target.value)}
+                      className="input-lumos flex-grow h-10 text-xs font-semibold"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newCommentText.trim()}
+                      className="btn-primary h-10 px-4 text-xs font-bold shadow-md disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed"
+                    >
+                      Enviar
+                    </button>
+                  </form>
+                )}
               </div>
 
             </div>
