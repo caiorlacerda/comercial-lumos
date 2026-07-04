@@ -27,9 +27,12 @@ import {
   Projector, 
   CheckCircle, 
   Circle,
-  Briefcase
+  Briefcase,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import Modal from '@/components/common/Modal';
 interface OrdemDoDiaEvent {
   id: string;
   codigo: string;
@@ -64,6 +67,12 @@ export default function ProducaoDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [todos, setTodos] = useState<ProducaoTodo[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Google Calendar Integration State
+  const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<any | null>(null);
 
   // Form State for new Todo
   const [newTodoDesc, setNewTodoDesc] = useState('');
@@ -74,6 +83,38 @@ export default function ProducaoDashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Busca eventos do Google Calendar ao mudar o mês/dia atual
+  useEffect(() => {
+    const fetchGoogleEvents = async () => {
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(monthStart);
+      const start = startOfWeek(monthStart, { weekStartsOn: 0 });
+      const end = endOfWeek(monthEnd, { weekStartsOn: 0 });
+
+      setLoadingCalendar(true);
+      setCalendarError(null);
+      try {
+        const timeMin = start.toISOString();
+        const timeMax = end.toISOString();
+        
+        const { data, error } = await supabase.functions.invoke(
+          `get-calendar-events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
+          { method: 'GET' }
+        );
+
+        if (error) throw error;
+        setGoogleEvents(data?.events || []);
+      } catch (err: any) {
+        console.error('Error fetching calendar events:', err);
+        setCalendarError(err.message || 'Erro de conexão.');
+      } finally {
+        setLoadingCalendar(false);
+      }
+    };
+
+    fetchGoogleEvents();
+  }, [currentDate]);
 
   async function fetchDashboardData() {
     try {
@@ -131,6 +172,15 @@ export default function ProducaoDashboard() {
       if (!o.data_producao) return false;
       const eventDate = parseISO(o.data_producao);
       return isSameDay(eventDate, day);
+    });
+  };
+
+  const getGoogleEventsForDay = (day: Date) => {
+    const targetStr = day.toLocaleDateString('en-CA');
+    return googleEvents.filter(e => {
+      if (!e.start) return false;
+      const dateStr = e.start.split('T')[0];
+      return dateStr === targetStr;
     });
   };
 
@@ -241,8 +291,11 @@ export default function ProducaoDashboard() {
               <div className="flex items-center justify-between pb-4 border-b border-lumos-border flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-lumos-yellow" />
-                  <h2 className="text-md font-bold text-lumos-text-primary uppercase tracking-wider">
+                  <h2 className="text-md font-bold text-lumos-text-primary uppercase tracking-wider flex items-center gap-2">
                     {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+                    {loadingCalendar && (
+                      <span className="inline-block w-3.5 h-3.5 border-2 border-lumos-yellow border-t-transparent rounded-full animate-spin" />
+                    )}
                   </h2>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -260,6 +313,28 @@ export default function ProducaoDashboard() {
                   </button>
                 </div>
               </div>
+
+              {/* Banner de Aviso de Google Calendar não Conectado ou com Erro */}
+              {calendarError && (
+                <div className="mt-4 p-3 rounded bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-between gap-4 text-xs font-semibold select-none">
+                  <span className="flex items-center gap-2 text-left">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    {calendarError.includes('não configurada') || calendarError.includes('401')
+                      ? 'Calendário Google compartilhado não conectado.'
+                      : `Google Calendar: ${calendarError}`}
+                  </span>
+                  {profile?.role === 'admin' && (calendarError.includes('não configurada') || calendarError.includes('401')) && (
+                    <a
+                      href="https://byntpekyfhzwfihjhzuo.supabase.co/functions/v1/google-auth-start"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap"
+                    >
+                      Conectar
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* Weekday names */}
               <div className="grid grid-cols-7 text-center py-2 flex-shrink-0">
@@ -296,15 +371,30 @@ export default function ProducaoDashboard() {
 
                       {/* Day events/productions */}
                       <div className="mt-1 space-y-1 overflow-y-auto max-h-[70px] custom-scrollbar">
+                        {/* Ordens do Dia Locais */}
                         {dayEvents.map(event => (
                           <Link
                             key={event.id}
                             to={`/ordem-do-dia/${event.id}`}
                             className="block px-1.5 py-0.5 rounded text-[9px] font-black text-black bg-lumos-yellow hover:bg-yellow-400 truncate tracking-tight transition-colors leading-tight"
-                            title={`${event.codigo} - ${event.titulo}`}
+                            title={`Ordem do Dia: ${event.codigo} - ${event.titulo}`}
                           >
-                            {event.codigo}
+                            ☀️ {event.codigo}
                           </Link>
+                        ))}
+                        {/* Eventos do Google Calendar */}
+                        {getGoogleEventsForDay(day).map(event => (
+                          <button
+                            key={event.id}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedGoogleEvent(event);
+                            }}
+                            className="block w-full text-left px-1.5 py-0.5 rounded text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30 truncate tracking-tight transition-colors leading-tight cursor-pointer"
+                            title={`Google: ${event.title}`}
+                          >
+                            📅 {event.title}
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -445,6 +535,66 @@ export default function ProducaoDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Detalhes do Evento do Google Calendar */}
+      {selectedGoogleEvent && (
+        <Modal
+          isOpen={!!selectedGoogleEvent}
+          onClose={() => setSelectedGoogleEvent(null)}
+          title="Detalhes do Evento"
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 text-left font-work-sans">
+            <div>
+              <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Título</span>
+              <h3 className="text-sm font-black text-lumos-text-primary leading-tight mt-0.5">
+                {selectedGoogleEvent.title}
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Início</span>
+                <span className="text-xs font-bold text-lumos-text-primary block mt-0.5">
+                  {selectedGoogleEvent.allDay 
+                    ? new Date(selectedGoogleEvent.start + 'T12:00:00').toLocaleDateString('pt-BR')
+                    : new Date(selectedGoogleEvent.start).toLocaleString('pt-BR')}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Término</span>
+                <span className="text-xs font-bold text-lumos-text-primary block mt-0.5">
+                  {selectedGoogleEvent.allDay
+                    ? new Date(selectedGoogleEvent.end + 'T12:00:00').toLocaleDateString('pt-BR')
+                    : new Date(selectedGoogleEvent.end).toLocaleString('pt-BR')}
+                </span>
+              </div>
+            </div>
+
+            {selectedGoogleEvent.description && (
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Descrição</span>
+                <p className="text-xs text-lumos-text-secondary whitespace-pre-wrap leading-relaxed mt-1 border border-lumos-border/50 bg-lumos-bg/30 p-2.5 rounded">
+                  {selectedGoogleEvent.description}
+                </p>
+              </div>
+            )}
+
+            {selectedGoogleEvent.htmlLink && (
+              <div className="pt-2 border-t border-lumos-border/40 flex justify-end">
+                <a
+                  href={selectedGoogleEvent.htmlLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-lumos-yellow hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Ver no Google Calendar
+                </a>
+              </div>
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   );
