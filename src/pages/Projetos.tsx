@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -164,6 +164,73 @@ const formatCommentDate = (dateStr: string) => {
   if (diffHours < 24) return `Há ${diffHours} h`;
   
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
+// Parser para detectar menções válidas e ordenadas no texto do comentário
+const parseMentions = (text: string, users: TeamUser[]) => {
+  const mentionedIds = new Set<string>();
+  // Ordena os usuários pelo tamanho do nome decrescente para priorizar nomes completos no matching
+  const sortedUsers = [...users].sort((a, b) => b.full_name.length - a.full_name.length);
+  
+  for (const u of sortedUsers) {
+    const mentionTag = `@${u.full_name}`;
+    const escapedTag = mentionTag.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(^|\\s)${escapedTag}(\\s|$|[,.!?])`, 'g');
+    if (regex.test(text)) {
+      mentionedIds.add(u.id);
+    }
+  }
+  return Array.from(mentionedIds);
+};
+
+// Formatador seguro para renderizar o comentário e destacar menções como chips sem perigo de XSS
+const renderCommentTextWithMentions = (content: string, users: TeamUser[]) => {
+  if (!content) return null;
+  
+  const sortedUsers = [...users].sort((a, b) => b.full_name.length - a.full_name.length);
+  let parts: Array<string | React.ReactNode> = [content];
+  
+  for (const u of sortedUsers) {
+    const tag = `@${u.full_name}`;
+    const newParts: Array<string | React.ReactNode> = [];
+    
+    for (const part of parts) {
+      if (typeof part !== 'string') {
+        newParts.push(part);
+        continue;
+      }
+      
+      const index = part.indexOf(tag);
+      if (index === -1) {
+        newParts.push(part);
+      } else {
+        let remaining = part;
+        let counter = 0;
+        while (true) {
+          const idx = remaining.indexOf(tag);
+          if (idx === -1) {
+            newParts.push(remaining);
+            break;
+          }
+          if (idx > 0) {
+            newParts.push(remaining.slice(0, idx));
+          }
+          newParts.push(
+            <span 
+              key={`${u.id}-${idx}-${counter++}`} 
+              className="bg-lumos-yellow/20 text-lumos-yellow font-bold px-1.5 py-0.5 rounded text-[10px] inline-block mx-0.5 border border-lumos-yellow/20"
+            >
+              {tag}
+            </span>
+          );
+          remaining = remaining.slice(idx + tag.length);
+        }
+      }
+    }
+    parts = newParts;
+  }
+  
+  return <>{parts}</>;
 };
 
 // -------------------------------------------------------------
@@ -744,10 +811,15 @@ export default function Projetos() {
   const [descHTML, setDescHTML] = useState('');
   const [isSavingDesc, setIsSavingDesc] = useState(false);
 
-  // Task Comments States
+  // Task Comments & Mentions States
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
+
+  // Comment @mention Autocomplete States
+  const [mentionAutocomplete, setMentionAutocomplete] = useState<{ query: string; start: number; end: number } | null>(null);
+  const [selectedMentionIdx, setSelectedMentionIdx] = useState(0);
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   // Right-click context menu states
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
@@ -767,6 +839,11 @@ export default function Projetos() {
   const [newProjStart, setNewProjStart] = useState('');
   const [newProjEnd, setNewProjEnd] = useState('');
   const [applyTemplate, setApplyTemplate] = useState(true);
+
+  // Filter members on @mention query
+  const filteredMentionUsers = teamUsers.filter(u =>
+    u.full_name.toLowerCase().includes(mentionAutocomplete?.query.toLowerCase() || '')
+  );
 
   useEffect(() => {
     fetchData();
@@ -801,11 +878,13 @@ export default function Projetos() {
     }
   }, [selectedTaskId]);
 
-  // Global listeners for ESC key and closing context menus
+  // Global keydown triggers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (renamingTaskId) {
+        if (mentionAutocomplete) {
+          setMentionAutocomplete(null);
+        } else if (renamingTaskId) {
           setRenamingTaskId(null);
         } else if (selectedTaskId) {
           const taskObj = projectTasks.find(t => t.id === selectedTaskId);
@@ -831,7 +910,7 @@ export default function Projetos() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('click', handleGlobalClick);
     };
-  }, [selectedTaskId, renamingTaskId, descHTML, projectTasks]);
+  }, [selectedTaskId, renamingTaskId, descHTML, projectTasks, mentionAutocomplete]);
 
   async function fetchData() {
     setLoading(true);
@@ -909,16 +988,18 @@ export default function Projetos() {
     }
   };
 
-  // Enviar novo comentário
+  // Enviar novo comentário e processar menções associadas no banco de dados
   const handleSendComment = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newCommentText.trim() || !selectedTaskId || !profile) return;
 
     const text = newCommentText.trim();
     setNewCommentText('');
+    setMentionAutocomplete(null);
 
     try {
-      const { data, error } = await supabase
+      // 1. Inserir comentário na tabela task_comments
+      const { data: newComment, error: cErr } = await supabase
         .from('task_comments')
         .insert({
           task_id: selectedTaskId,
@@ -928,14 +1009,33 @@ export default function Projetos() {
         .select('*, user:app_users(full_name, email, role)')
         .single();
 
-      if (error) throw error;
+      if (cErr) throw cErr;
 
-      setComments(prev => [...prev, data]);
+      // 2. Fazer parse de menções no texto e inserir na tabela task_comment_mentions
+      const mentionedUserIds = parseMentions(text, teamUsers);
+      if (mentionedUserIds.length > 0 && newComment) {
+        const mentionsToInsert = mentionedUserIds.map(uid => ({
+          comment_id: newComment.id,
+          mentioned_user_id: uid,
+          notified: false // Conforme regra: registrado para worker de envio futuro, mas não notifica na UI agora
+        }));
+
+        const { error: mErr } = await supabase
+          .from('task_comment_mentions')
+          .insert(mentionsToInsert);
+
+        if (mErr) {
+          console.error('Error inserting task comment mentions:', mErr);
+          // Não quebramos o fluxo do comentário se as menções derem erro de registro, apenas logamos
+        }
+      }
+
+      setComments(prev => [...prev, newComment]);
       toast.success('Comentário enviado!');
     } catch (err: any) {
       console.error('Error sending comment:', err);
       toast.error('Erro ao enviar comentário.');
-      setNewCommentText(text); // Recupera o texto no input em caso de falha
+      setNewCommentText(text); // Recupera o texto no input em caso de erro
     }
   };
 
@@ -955,6 +1055,26 @@ export default function Projetos() {
         .eq('id', comment.id);
 
       if (error) throw error;
+
+      // Atualiza também os registros na tabela task_comment_mentions correspondentes
+      // 1. Deletar menções antigas deste comentário
+      await supabase
+        .from('task_comment_mentions')
+        .delete()
+        .eq('comment_id', comment.id);
+
+      // 2. Fazer parsing e inserir novas menções detectadas
+      const newMentionedUserIds = parseMentions(newContent.trim(), teamUsers);
+      if (newMentionedUserIds.length > 0) {
+        const newMentions = newMentionedUserIds.map(uid => ({
+          comment_id: comment.id,
+          mentioned_user_id: uid,
+          notified: false
+        }));
+        await supabase
+          .from('task_comment_mentions')
+          .insert(newMentions);
+      }
 
       setComments(prev => prev.map(c => c.id === comment.id ? { ...c, content: newContent.trim() } : c));
       toast.success('Comentário atualizado!');
@@ -981,6 +1101,67 @@ export default function Projetos() {
     } catch (err: any) {
       console.error('Error deleting comment:', err);
       toast.error('Erro ao excluir comentário.');
+    }
+  };
+
+  // Handle Autocomplete Input Key Events
+  const handleCommentInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (mentionAutocomplete && filteredMentionUsers.length > 0) {
+      const items = filteredMentionUsers;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIdx(prev => (prev + 1) % items.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIdx(prev => (prev - 1 + items.length) % items.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const selectedUser = items[selectedMentionIdx];
+        if (selectedUser) {
+          handleSelectMention(selectedUser);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionAutocomplete(null);
+      }
+    }
+  };
+
+  // Handle Autocomplete Input Changes
+  const handleCommentInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setNewCommentText(val);
+    
+    const cursor = e.target.selectionStart || 0;
+    const textBefore = val.slice(0, cursor);
+    const match = textBefore.match(/@(\w*)$/);
+    
+    if (match) {
+      setMentionAutocomplete({
+        query: match[1],
+        start: cursor - match[0].length,
+        end: cursor
+      });
+      setSelectedMentionIdx(0);
+    } else {
+      setMentionAutocomplete(null);
+    }
+  };
+
+  // Select team member from dropdown list
+  const handleSelectMention = (user: TeamUser) => {
+    if (!mentionAutocomplete) return;
+    
+    const text = newCommentText;
+    const start = mentionAutocomplete.start;
+    const end = mentionAutocomplete.end;
+    
+    const newText = text.slice(0, start) + `@${user.full_name} ` + text.slice(end);
+    setNewCommentText(newText);
+    setMentionAutocomplete(null);
+    
+    if (commentInputRef.current) {
+      commentInputRef.current.focus();
     }
   };
 
@@ -2402,7 +2583,7 @@ export default function Projetos() {
               </div>
 
               {/* Right Column (Comments Sidebar - 1/3 width) */}
-              <div className="lg:col-span-1 bg-lumos-surface/30 p-6 flex flex-col justify-between overflow-hidden h-full border-l border-lumos-border/40">
+              <div className="lg:col-span-1 bg-lumos-surface/30 p-6 flex flex-col justify-between overflow-hidden h-full border-l border-lumos-border/40 relative">
                 <div className="flex items-center gap-1.5 pb-3 border-b border-lumos-border/50 flex-shrink-0">
                   <MessageSquare className="w-4 h-4 text-lumos-text-secondary opacity-60" />
                   <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
@@ -2410,7 +2591,7 @@ export default function Projetos() {
                   </span>
                 </div>
                 
-                {/* Scrollable comments list */}
+                {/* Scrollable comments list with highlights */}
                 <div className="flex-grow overflow-y-auto custom-scrollbar py-4 space-y-4 min-h-0 text-xs">
                   {commentsLoading ? (
                     <div className="flex justify-center py-8">
@@ -2465,7 +2646,7 @@ export default function Projetos() {
                           </div>
 
                           <div className="pl-8 text-lumos-text-secondary leading-relaxed break-words bg-lumos-bg/20 p-2 rounded border border-lumos-border/20">
-                            {comment.content}
+                            {renderCommentTextWithMentions(comment.content, teamUsers)}
                           </div>
                         </div>
                       );
@@ -2473,14 +2654,44 @@ export default function Projetos() {
                   )}
                 </div>
 
-                {/* Submit new comment form at bottom */}
+                {/* Autocomplete Mention Popover overlay inside comments wrapper */}
+                {mentionAutocomplete && filteredMentionUsers.length > 0 && (
+                  <div className="absolute bottom-16 left-6 right-6 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1 flex flex-col max-h-40 overflow-y-auto custom-scrollbar z-50 animate-in slide-in-from-bottom-2 duration-100">
+                    {filteredMentionUsers.map((user, idx) => {
+                      const isSelected = idx === selectedMentionIdx;
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => handleSelectMention(user)}
+                          className={clsx(
+                            "px-3 py-1.5 rounded text-[11px] font-semibold text-left transition-all w-full flex items-center gap-2",
+                            isSelected ? "bg-lumos-yellow text-black font-bold" : "text-lumos-text-primary hover:bg-lumos-bg"
+                          )}
+                        >
+                          <span className={clsx(
+                            "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold",
+                            isSelected ? "bg-black/15 text-black" : "bg-lumos-border/50 text-lumos-text-secondary"
+                          )}>
+                            @
+                          </span>
+                          <span>{user.full_name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Submit new comment form at bottom with autocomplete listeners */}
                 {profile && (
                   <form onSubmit={handleSendComment} className="flex items-center gap-2 pt-3 border-t border-lumos-border/50 flex-shrink-0">
                     <input
+                      ref={commentInputRef}
                       type="text"
-                      placeholder="Adicionar comentário..."
+                      placeholder="Adicionar comentário... (Use @ para marcar alguém)"
                       value={newCommentText}
-                      onChange={e => setNewCommentText(e.target.value)}
+                      onKeyDown={handleCommentInputKeyDown}
+                      onChange={handleCommentInputChange}
                       className="input-lumos flex-grow h-10 text-xs font-semibold"
                     />
                     <button
