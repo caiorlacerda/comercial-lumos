@@ -30,6 +30,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { formatBudgetCode } from '@/utils/formatters';
 
 interface Client {
   id: string;
@@ -58,12 +59,41 @@ interface TaskSummary {
   status: string;
 }
 
+export const TASK_STATUS_GROUPS = {
+  nao_iniciado: [
+    { value: 'iniciar', label: 'Iniciar', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' },
+    { value: 'pausado', label: 'Pausado', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' },
+    { value: 'aguard_captacao', label: 'Aguard. Captação', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' },
+    { value: 'aguard_material', label: 'Aguard. Material', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' }
+  ],
+  ativo: [
+    { value: 'na_fila', label: 'Na Fila', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
+    { value: 'em_progresso', label: 'Em Progresso', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+    { value: 'revisao_interna', label: 'Revisão Interna', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+    { value: 'aprov_interna', label: 'Aprov. Interna', color: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
+    { value: 'revisao_cliente', label: 'Revisão do Cliente', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+    { value: 'alteracoes', label: 'Alterações', color: 'bg-red-500/10 text-red-400 border-red-500/20' }
+  ],
+  concluido: [
+    { value: 'entregue', label: 'Entregue', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+    { value: 'concluido', label: 'Concluído', color: 'bg-green-500/10 text-green-400 border-green-500/20' }
+  ]
+};
+
+export const getStatusDetails = (statusVal: string) => {
+  for (const group of Object.values(TASK_STATUS_GROUPS)) {
+    const found = group.find(s => s.value === statusVal);
+    if (found) return found;
+  }
+  return { value: statusVal, label: statusVal, color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' };
+};
+
 interface Task {
   id: string;
   project_id: string;
   titulo: string;
   descricao: string | null;
-  status: 'a_fazer' | 'em_andamento' | 'concluido';
+  status: string;
   prioridade: 'baixa' | 'media' | 'alta';
   ordem: number;
   data_inicio: string | null;
@@ -261,7 +291,7 @@ export default function Projetos() {
           project_id: selectedProjectId,
           titulo: newTaskTitle.trim(),
           descricao: '',
-          status: 'a_fazer',
+          status: 'iniciar',
           prioridade: 'media',
           ordem: nextOrder,
           data_inicio: null,
@@ -366,7 +396,7 @@ export default function Projetos() {
         project_id: selectedProjectId,
         titulo: t.titulo,
         descricao: t.descricao,
-        status: 'a_fazer',
+        status: 'iniciar',
         prioridade: t.prioridade,
         ordem: startOrder + (index * 10),
         data_inicio: null,
@@ -489,7 +519,7 @@ export default function Projetos() {
             project_id: newProj.id,
             titulo: t.titulo,
             descricao: t.descricao,
-            status: 'a_fazer',
+            status: 'iniciar',
             prioridade: t.prioridade,
             ordem: t.ordem,
             data_inicio: null,
@@ -545,7 +575,7 @@ export default function Projetos() {
   const getProjectTasksStats = (projectId: string) => {
     const projectTasksList = tasks.filter(t => t.project_id === projectId);
     const total = projectTasksList.length;
-    const completed = projectTasksList.filter(t => t.status === 'concluido').length;
+    const completed = projectTasksList.filter(t => t.status === 'concluido' || t.status === 'entregue').length;
     return {
       total,
       completed,
@@ -574,19 +604,6 @@ export default function Projetos() {
         return 'text-lumos-yellow border border-lumos-yellow/20 bg-lumos-yellow/5';
       case 'alta':
         return 'text-red-400 border border-red-500/20 bg-red-500/5';
-      default:
-        return '';
-    }
-  };
-
-  const getStatusTheme = (status: 'a_fazer' | 'em_andamento' | 'concluido') => {
-    switch (status) {
-      case 'a_fazer':
-        return 'text-lumos-text-secondary border border-lumos-border/40';
-      case 'em_andamento':
-        return 'text-amber-400 border border-amber-500/20 bg-amber-500/5';
-      case 'concluido':
-        return 'text-green-400 border border-green-500/20 bg-green-500/5';
       default:
         return '';
     }
@@ -659,6 +676,7 @@ export default function Projetos() {
                 filteredClients.map((client) => {
                   const clientProjects = projects.filter(p => p.client_id === client.id);
                   const activeProjects = clientProjects.filter(p => p.status === 'ativo');
+                  const concludedProjects = clientProjects.filter(p => p.status === 'concluido');
                   const isExpanded = !!expandedClients[client.id] || searchTerm.length > 0;
                   const isClientSelected = selectedClientId === client.id && !selectedProjectId;
 
@@ -695,40 +713,76 @@ export default function Projetos() {
                         </div>
                       </div>
 
-                      {/* Client Projects List (Submenu) */}
+                      {/* Client Projects List (Submenu) - Visually Separated */}
                       {isExpanded && (
                         <div className="pl-6 pr-1 py-1 space-y-1 border-l border-lumos-border/30 ml-5">
-                          {clientProjects.length === 0 ? (
+                          {activeProjects.length === 0 && concludedProjects.length === 0 ? (
                             <span className="text-[10px] text-lumos-text-secondary/50 italic block py-1">Sem projetos</span>
                           ) : (
-                            clientProjects.map((proj) => {
-                              const isProjSelected = selectedProjectId === proj.id;
-                              return (
-                                <div
-                                  key={proj.id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedClientId(client.id);
-                                    setSelectedProjectId(proj.id);
-                                  }}
-                                  className={clsx(
-                                    "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
-                                    isProjSelected 
-                                      ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
-                                      : proj.status === 'concluido' 
-                                        ? "text-lumos-text-secondary/40 line-through" 
+                            <>
+                              {/* Active Projects */}
+                              {activeProjects.map((proj) => {
+                                const isProjSelected = selectedProjectId === proj.id;
+                                return (
+                                  <div
+                                    key={proj.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedClientId(client.id);
+                                      setSelectedProjectId(proj.id);
+                                    }}
+                                    className={clsx(
+                                      "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
+                                      isProjSelected 
+                                        ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
                                         : "text-lumos-text-secondary"
-                                  )}
-                                >
-                                  <span className="truncate max-w-[80%]">{proj.name}</span>
-                                  {proj.code && (
-                                    <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
-                                      {proj.code}
-                                    </span>
-                                  )}
+                                    )}
+                                  >
+                                    <span className="truncate max-w-[80%]">{proj.name}</span>
+                                    {proj.code && (
+                                      <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
+                                        {formatBudgetCode(proj.code)}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+
+                              {/* Concluded Projects Sub-section */}
+                              {showConcludedProjects && concludedProjects.length > 0 && (
+                                <div className="space-y-1 mt-2 pt-1 border-t border-lumos-border/10">
+                                  <div className="text-[8px] font-black uppercase text-lumos-text-secondary opacity-40 tracking-wider pb-1">
+                                    Encerrados
+                                  </div>
+                                  {concludedProjects.map((proj) => {
+                                    const isProjSelected = selectedProjectId === proj.id;
+                                    return (
+                                      <div
+                                        key={proj.id}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedClientId(client.id);
+                                          setSelectedProjectId(proj.id);
+                                        }}
+                                        className={clsx(
+                                          "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
+                                          isProjSelected 
+                                            ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
+                                            : "text-lumos-text-secondary/40 line-through"
+                                        )}
+                                      >
+                                        <span className="truncate max-w-[80%]">{proj.name}</span>
+                                        {proj.code && (
+                                          <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
+                                            {formatBudgetCode(proj.code)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -750,15 +804,47 @@ export default function Projetos() {
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 pb-5 border-b border-lumos-border/50">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={clsx(
-                        "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border",
-                        getCategoryTheme(selectedProject.category || selectedProject.budget?.category || null)
-                      )}>
-                        {selectedProject.category || selectedProject.budget?.category || 'Sem Segmento'}
-                      </span>
+                      {/* Segment Selector for category (Digital, Filme, Live) */}
+                      {canManage ? (
+                        <select
+                          value={selectedProject.category || selectedProject.budget?.category || ''}
+                          onChange={async (e) => {
+                            const newCategory = e.target.value as 'digital' | 'filme' | 'live';
+                            try {
+                              const { error } = await supabase
+                                .from('projects')
+                                .update({ category: newCategory })
+                                .eq('id', selectedProject.id);
+                              if (error) throw error;
+                              toast.success('Segmento do projeto atualizado!');
+                              await fetchData();
+                            } catch (err: any) {
+                              console.error('Error updating project category:', err);
+                              toast.error('Erro ao atualizar segmento.');
+                            }
+                          }}
+                          className={clsx(
+                            "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border bg-transparent cursor-pointer outline-none focus:border-lumos-yellow",
+                            getCategoryTheme(selectedProject.category || selectedProject.budget?.category || null)
+                          )}
+                        >
+                          <option value="" className="bg-lumos-surface text-lumos-text-primary">Sem Segmento</option>
+                          <option value="digital" className="bg-lumos-surface text-lumos-text-primary">Digital</option>
+                          <option value="filme" className="bg-lumos-surface text-lumos-text-primary">Filme</option>
+                          <option value="live" className="bg-lumos-surface text-lumos-text-primary">Live</option>
+                        </select>
+                      ) : (
+                        <span className={clsx(
+                          "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border",
+                          getCategoryTheme(selectedProject.category || selectedProject.budget?.category || null)
+                        )}>
+                          {selectedProject.category || selectedProject.budget?.category || 'Sem Segmento'}
+                        </span>
+                      )}
+
                       {selectedProject.code && (
                         <span className="text-[9px] font-black bg-lumos-border/40 text-lumos-text-secondary px-2 py-0.5 rounded tracking-wider uppercase">
-                          Cód: {selectedProject.code}
+                          Cód: {formatBudgetCode(selectedProject.code)}
                         </span>
                       )}
                       <span className={clsx(
@@ -814,7 +900,7 @@ export default function Projetos() {
                       <button
                         onClick={() => handleToggleProjectStatus(selectedProject.id, selectedProject.status)}
                         className={clsx(
-                          "btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold text-white",
+                          "btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold",
                           selectedProject.status === 'ativo' ? "hover:border-red-500/40 hover:bg-red-500/10" : "hover:border-green-500/40 hover:bg-green-500/10"
                         )}
                       >
@@ -945,18 +1031,17 @@ export default function Projetos() {
                             <thead>
                               <tr className="border-b border-lumos-border/40 text-lumos-text-secondary font-black uppercase tracking-wider text-[9px] opacity-70">
                                 <th className="py-2.5 px-2 w-8 text-center">Ok</th>
-                                <th className="py-2.5 px-2 min-w-[200px]">Título da Tarefa</th>
-                                <th className="py-2.5 px-2 w-32">Status</th>
+                                <th className="py-2.5 px-2 min-w-[250px]">Título da Tarefa</th>
+                                <th className="py-2.5 px-2 w-36">Status</th>
                                 <th className="py-2.5 px-2 w-28">Prioridade</th>
                                 <th className="py-2.5 px-2 w-44">Responsável</th>
-                                <th className="py-2.5 px-2 w-32">Início</th>
-                                <th className="py-2.5 px-2 w-32">Fim (Prazo)</th>
+                                <th className="py-2.5 px-2 w-32">Prazo</th>
                                 {canManage && <th className="py-2.5 px-2 w-10 text-center">Ações</th>}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-lumos-border/20">
                               {projectTasks.map((task) => {
-                                const isTaskCompleted = task.status === 'concluido';
+                                const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
                                 return (
                                   <tr 
                                     key={task.id} 
@@ -972,7 +1057,7 @@ export default function Projetos() {
                                         checked={isTaskCompleted}
                                         disabled={!canManage}
                                         onChange={() => handleUpdateTask(task.id, { 
-                                          status: isTaskCompleted ? 'a_fazer' : 'concluido' 
+                                          status: isTaskCompleted ? 'iniciar' : 'concluido' 
                                         })}
                                         className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer disabled:cursor-not-allowed"
                                       />
@@ -992,20 +1077,35 @@ export default function Projetos() {
                                       />
                                     </td>
 
-                                    {/* Status Badge Dropdown */}
+                                    {/* Status Badge Dropdown (12 Rich Statuses Grouped) */}
                                     <td className="py-2 px-2">
                                       <select
                                         value={task.status}
                                         disabled={!canManage}
-                                        onChange={(e) => handleUpdateTask(task.id, { status: e.target.value as any })}
+                                        onChange={(e) => handleUpdateTask(task.id, { status: e.target.value })}
                                         className={clsx(
-                                          "bg-transparent border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full max-w-[110px]",
-                                          getStatusTheme(task.status)
+                                          "bg-transparent border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full max-w-[140px]",
+                                          getStatusDetails(task.status).color
                                         )}
                                       >
-                                        <option value="a_fazer">A Fazer</option>
-                                        <option value="em_andamento">Em Andamento</option>
-                                        <option value="concluido">Concluído</option>
+                                        <optgroup label="Não Iniciado" className="bg-lumos-surface text-lumos-text-primary text-[10px]">
+                                          <option value="iniciar">Iniciar</option>
+                                          <option value="pausado">Pausado</option>
+                                          <option value="aguard_captacao">Aguard. Captação</option>
+                                          <option value="aguard_material">Aguard. Material</option>
+                                        </optgroup>
+                                        <optgroup label="Ativo" className="bg-lumos-surface text-lumos-text-primary text-[10px]">
+                                          <option value="na_fila">Na Fila</option>
+                                          <option value="em_progresso">Em Progresso</option>
+                                          <option value="revisao_interna">Revisão Interna</option>
+                                          <option value="aprov_interna">Aprov. Interna</option>
+                                          <option value="revisao_cliente">Revisão do Cliente</option>
+                                          <option value="alteracoes">Alterações</option>
+                                        </optgroup>
+                                        <optgroup label="Concluído" className="bg-lumos-surface text-lumos-text-primary text-[10px]">
+                                          <option value="entregue">Entregue</option>
+                                          <option value="concluido">Concluído</option>
+                                        </optgroup>
                                       </select>
                                     </td>
 
@@ -1044,18 +1144,7 @@ export default function Projetos() {
                                       </div>
                                     </td>
 
-                                    {/* Date Picker Start */}
-                                    <td className="py-2 px-2">
-                                      <input
-                                        type="date"
-                                        value={task.data_inicio || ''}
-                                        disabled={!canManage}
-                                        onChange={(e) => handleUpdateTask(task.id, { data_inicio: e.target.value || null })}
-                                        className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-lumos-text-primary px-1.5 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
-                                      />
-                                    </td>
-
-                                    {/* Date Picker End */}
+                                    {/* Date Picker End (Prazo) */}
                                     <td className="py-2 px-2">
                                       <input
                                         type="date"
@@ -1190,7 +1279,7 @@ export default function Projetos() {
 
                             {proj.code && (
                               <p className="text-[10px] text-lumos-text-secondary font-semibold">
-                                Código: <span className="text-lumos-text-primary">{proj.code}</span>
+                                Código: <span className="text-lumos-text-primary">{formatBudgetCode(proj.code)}</span>
                               </p>
                             )}
 

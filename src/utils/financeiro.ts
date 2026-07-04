@@ -170,7 +170,7 @@ export async function syncBudgetApprovalFlow(budgetId: string, optionalTotalAmou
           project_id: projectId,
           titulo: t.titulo,
           descricao: t.descricao,
-          status: 'a_fazer',
+          status: 'iniciar',
           prioridade: t.prioridade,
           ordem: t.ordem,
           data_inicio: null,
