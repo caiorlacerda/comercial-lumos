@@ -14,6 +14,7 @@ export const NOTIFICATION_EVENTS = {
   ORDEM_DIA_PUBLICADA: { key: 'ordem_dia_publicada', category: 'producao', label: 'Ordem do Dia publicada', defaultEnabled: true },
   TODO_ATRIBUIDO: { key: 'todo_atribuido', category: 'producao', label: 'Nova tarefa atribuída a você', defaultEnabled: true },
   FORNECEDOR_AUTOCADASTRO: { key: 'fornecedor_autocadastro', category: 'producao', label: 'Fornecedor preencheu cadastro público', defaultEnabled: true },
+  MENTION_COMMENT: { key: 'mencao_comentario', category: 'producao', label: 'Menção em comentário', defaultEnabled: true },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },
