@@ -222,7 +222,7 @@ export default function CustosProjetoDetalhe() {
       const [costsRes, usersRes, clientsRes, fornecedoresRes, finCatsRes, finServicesRes] = await Promise.all([
         supabase
           .from('project_costs')
-          .select('*, responsible:app_users!responsible_id(full_name), fornecedor:fornecedores(nome)')
+          .select('*, responsible:app_users!responsible_id(full_name), paid_by_user:app_users!paid_by(full_name), fornecedor:fornecedores(nome)')
           .eq('project_id', id)
           .order('cost_date', { ascending: false }),
         supabase
@@ -491,6 +491,43 @@ export default function CustosProjetoDetalhe() {
     setDuePreset('30');
     setSelectedFornecedorId('');
     setSelectedServicoId('');
+  };
+
+  const handleTogglePaid = async (costId: string, isPaid: boolean) => {
+    if (!profile) return;
+    
+    const previousCosts = [...costs];
+    
+    // Atualização otimista na tela para resposta instantânea
+    setCosts(prev => prev.map(item => {
+      if (item.id === costId) {
+        return {
+          ...item,
+          status: isPaid ? 'pago' : 'pendente',
+          paid_at: isPaid ? new Date().toISOString() : null,
+          paid_by: isPaid ? profile.id : null,
+          paid_by_user: isPaid ? { full_name: profile.full_name } : null
+        };
+      }
+      return item;
+    }));
+
+    try {
+      const { error } = await supabase
+        .from('project_costs')
+        .update({
+          status: isPaid ? 'pago' : 'pendente',
+          paid_at: isPaid ? new Date().toISOString() : null,
+          paid_by: isPaid ? profile.id : null
+        })
+        .eq('id', costId);
+
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Error toggling cost payment status:', err);
+      toast.error('Erro ao atualizar status de pagamento do custo.');
+      setCosts(previousCosts);
+    }
   };
 
   const handleEdit = (c: any) => {
@@ -956,7 +993,8 @@ export default function CustosProjetoDetalhe() {
                         key={c.id}
                         className={clsx(
                           'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
-                          selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]'
+                          selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]',
+                          (c.status === 'pago' || c.paid_at) && 'opacity-65 hover:opacity-100'
                         )}
                         onClick={() => handleEdit(c)}
                       >
@@ -1010,15 +1048,38 @@ export default function CustosProjetoDetalhe() {
                             <span className="text-lumos-text-secondary/40 italic text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          {c.paid_at ? (
-                            <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full">
-                              Pago
-                            </span>
+                        <td className="px-6 py-4 text-center" onClick={e => e.stopPropagation()}>
+                          {c.status === 'pago' || c.paid_at ? (
+                            <div className="flex flex-col items-center justify-center gap-0.5 group/paid select-none">
+                              <span className="inline-flex items-center text-[9px] font-black text-green-500 uppercase bg-green-500/10 border border-green-500/20 px-2.5 py-0.5 rounded-full">
+                                Pago
+                              </span>
+                              {c.paid_at && (
+                                <span className="text-[8px] text-lumos-text-secondary font-bold tracking-wide mt-0.5">
+                                  {new Date(c.paid_at).toLocaleDateString('pt-BR')}
+                                  {c.paid_by_user?.full_name && ` por ${c.paid_by_user.full_name.split(' ')[0]}`}
+                                </span>
+                              )}
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleTogglePaid(c.id, false);
+                                }}
+                                className="hidden group-hover/paid:inline-flex items-center text-[8px] font-black text-red-500 hover:underline uppercase tracking-wider mt-0.5 cursor-pointer"
+                              >
+                                Desfazer
+                              </button>
+                            </div>
                           ) : (
-                            <span className="inline-flex items-center text-[10px] font-bold text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full">
-                              Pendente
-                            </span>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleTogglePaid(c.id, true);
+                              }}
+                              className="inline-flex items-center text-[9px] font-black text-yellow-500 uppercase bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 hover:border-yellow-500/35 px-2.5 py-1 rounded-full transition-all cursor-pointer"
+                            >
+                              Marcar Pago
+                            </button>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
@@ -1102,7 +1163,8 @@ export default function CustosProjetoDetalhe() {
                         key={c.id}
                         className={clsx(
                           'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
-                          selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]'
+                          selectedIds.has(c.id) && 'bg-lumos-yellow/[0.03]',
+                          (c.status === 'pago' || c.paid_at) && 'opacity-65 hover:opacity-100'
                         )}
                         onClick={() => handleEdit(c)}
                       >
@@ -1156,15 +1218,38 @@ export default function CustosProjetoDetalhe() {
                             <span className="text-lumos-text-secondary/40 italic text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          {c.paid_at ? (
-                            <span className="inline-flex items-center text-[10px] font-bold text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full">
-                              Pago
-                            </span>
+                        <td className="px-6 py-4 text-center" onClick={e => e.stopPropagation()}>
+                          {c.status === 'pago' || c.paid_at ? (
+                            <div className="flex flex-col items-center justify-center gap-0.5 group/paid select-none">
+                              <span className="inline-flex items-center text-[9px] font-black text-green-500 uppercase bg-green-500/10 border border-green-500/20 px-2.5 py-0.5 rounded-full">
+                                Pago
+                              </span>
+                              {c.paid_at && (
+                                <span className="text-[8px] text-lumos-text-secondary font-bold tracking-wide mt-0.5">
+                                  {new Date(c.paid_at).toLocaleDateString('pt-BR')}
+                                  {c.paid_by_user?.full_name && ` por ${c.paid_by_user.full_name.split(' ')[0]}`}
+                                </span>
+                              )}
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleTogglePaid(c.id, false);
+                                }}
+                                className="hidden group-hover/paid:inline-flex items-center text-[8px] font-black text-red-500 hover:underline uppercase tracking-wider mt-0.5 cursor-pointer"
+                              >
+                                Desfazer
+                              </button>
+                            </div>
                           ) : (
-                            <span className="inline-flex items-center text-[10px] font-bold text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full">
-                              Pendente
-                            </span>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleTogglePaid(c.id, true);
+                              }}
+                              className="inline-flex items-center text-[9px] font-black text-yellow-500 uppercase bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 hover:border-yellow-500/35 px-2.5 py-1 rounded-full transition-all cursor-pointer"
+                            >
+                              Marcar Pago
+                            </button>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">
