@@ -58,16 +58,23 @@ export default function ProducaoDashboard() {
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<any | null>(null);
 
-  // Project Manager Tasks State (Third source)
+  // Project Manager Tasks State
   const [projectTasks, setProjectTasks] = useState<any[]>([]);
+  const [noDateTasks, setNoDateTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [taskFilter, setTaskFilter] = useState<'pending' | 'completed' | 'all'>('pending');
+  const [selectedLocalTask, setSelectedLocalTask] = useState<any | null>(null);
 
   // Team Filter State (Responsible filter)
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+
+  // Source Toggles (Legend filter)
+  const [showOrdens, setShowOrdens] = useState(true);
+  const [showGoogle, setShowGoogle] = useState(true);
+  const [showTasks, setShowTasks] = useState(true);
 
   // Carrega Ordens do Dia e lista de equipe (app_users)
   useEffect(() => {
@@ -140,7 +147,7 @@ export default function ProducaoDashboard() {
     fetchGoogleEvents();
   }, [currentDate]);
 
-  // Busca tarefas do Gerenciador de Projetos (project_tasks) com prazo
+  // Busca tarefas do Gerenciador de Projetos (project_tasks) com e sem prazo
   useEffect(() => {
     const fetchProjectTasks = async () => {
       const monthStart = startOfMonth(currentDate);
@@ -151,7 +158,8 @@ export default function ProducaoDashboard() {
       setLoadingTasks(true);
       setTasksError(null);
       try {
-        const { data, error } = await supabase
+        // Query A: Tarefas COM data no intervalo visível
+        const { data: tasksWithDate, error: err1 } = await supabase
           .from('project_tasks')
           .select(`
             id,
@@ -160,6 +168,8 @@ export default function ProducaoDashboard() {
             status,
             data_fim,
             responsavel_id,
+            prioridade,
+            descricao,
             projects (
               id,
               name
@@ -169,8 +179,32 @@ export default function ProducaoDashboard() {
           .gte('data_fim', start.toISOString().split('T')[0])
           .lte('data_fim', end.toISOString().split('T')[0]);
 
-        if (error) throw error;
-        setProjectTasks(data || []);
+        if (err1) throw err1;
+
+        // Query B: Tarefas SEM data_fim e não concluídas
+        const { data: tasksWithoutDate, error: err2 } = await supabase
+          .from('project_tasks')
+          .select(`
+            id,
+            project_id,
+            titulo,
+            status,
+            data_fim,
+            responsavel_id,
+            prioridade,
+            descricao,
+            projects (
+              id,
+              name
+            )
+          `)
+          .is('data_fim', null)
+          .neq('status', 'concluido');
+
+        if (err2) throw err2;
+
+        setProjectTasks(tasksWithDate || []);
+        setNoDateTasks(tasksWithoutDate || []);
       } catch (err: any) {
         console.error('Error fetching project tasks:', err);
         setTasksError(err.message || 'Erro ao carregar tarefas.');
@@ -192,8 +226,24 @@ export default function ProducaoDashboard() {
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
+  // Filtra localmente as tarefas sem prazo pelo responsável selecionado
+  const filteredNoDateTasks = useMemo(() => {
+    return noDateTasks.filter(task => {
+      // Ignora concluídas ou entregues se as tabelas tiverem essa info
+      if (task.status === 'concluido' || task.status === 'entregue') return false;
+
+      // Filtro de Responsável
+      if (selectedUserIds.length > 0) {
+        if (!task.responsavel_id || !selectedUserIds.includes(task.responsavel_id)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [noDateTasks, selectedUserIds]);
+
   // =========================================================================
-  // ARQUITETURA DE MESCLAGEM DE EVENTOS (Três fontes ativas + Filtros de Responsável)
+  // ARQUITETURA DE MESCLAGEM DE EVENTOS (Com filtros combinados de fontes)
   // =========================================================================
   const getNormalizedEventsForDay = useMemo(() => {
     return (day: Date) => {
@@ -201,83 +251,85 @@ export default function ProducaoDashboard() {
       const unifiedEvents: any[] = [];
 
       // 1. Fonte A: Ordens do Dia Locais (Amarelo, ☀️)
-      ordens.forEach(o => {
-        if (o.data_producao) {
-          const dateStr = o.data_producao.split('T')[0];
-          if (dateStr === targetStr) {
-            unifiedEvents.push({
-              id: `local-${o.id}`,
-              title: o.titulo,
-              subtitle: o.codigo,
-              type: 'local',
-              icon: '☀️',
-              colorClass: 'bg-lumos-yellow text-black hover:bg-yellow-400',
-              link: `/ordem-do-dia/${o.id}`
-            });
+      if (showOrdens) {
+        ordens.forEach(o => {
+          if (o.data_producao) {
+            const dateStr = o.data_producao.split('T')[0];
+            if (dateStr === targetStr) {
+              unifiedEvents.push({
+                id: `local-${o.id}`,
+                title: o.titulo,
+                subtitle: o.codigo,
+                type: 'local',
+                icon: '☀️',
+                colorClass: 'bg-lumos-yellow text-black hover:bg-yellow-400',
+                link: `/ordem-do-dia/${o.id}`
+              });
+            }
           }
-        }
-      });
+        });
+      }
 
       // 2. Fonte B: Google Calendar (Azul, 📅)
-      googleEvents.forEach(e => {
-        if (e.start) {
-          const dateStr = e.start.split('T')[0];
-          if (dateStr === targetStr) {
-            unifiedEvents.push({
-              id: `google-${e.id}`,
-              title: e.title,
-              subtitle: 'Google',
-              type: 'google',
-              icon: '📅',
-              colorClass: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30',
-              rawEvent: e
-            });
+      if (showGoogle) {
+        googleEvents.forEach(e => {
+          if (e.start) {
+            const dateStr = e.start.split('T')[0];
+            if (dateStr === targetStr) {
+              unifiedEvents.push({
+                id: `google-${e.id}`,
+                title: e.title,
+                subtitle: 'Google',
+                type: 'google',
+                icon: '📅',
+                colorClass: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 dark:border-blue-500/30',
+                rawEvent: e
+              });
+            }
           }
-        }
-      });
+        });
+      }
 
       // 3. Fonte C: Tarefas do Gerenciador de Projetos (Verde, 📋 ou ✓)
-      projectTasks.forEach(task => {
-        if (task.data_fim) {
-          const dateStr = task.data_fim.split('T')[0];
-          if (dateStr === targetStr) {
-            const isCompleted = task.status === 'concluido' || task.status === 'entregue';
-            
-            // A. Filtro de Status
-            if (taskFilter === 'pending' && isCompleted) return;
-            if (taskFilter === 'completed' && !isCompleted) return;
+      if (showTasks) {
+        projectTasks.forEach(task => {
+          if (task.data_fim) {
+            const dateStr = task.data_fim.split('T')[0];
+            if (dateStr === targetStr) {
+              const isCompleted = task.status === 'concluido' || task.status === 'entregue';
+              
+              // A. Filtro de Status
+              if (taskFilter === 'pending' && isCompleted) return;
+              if (taskFilter === 'completed' && !isCompleted) return;
 
-            // B. Filtro de Responsável (Multi-seleção)
-            // Caso existam pessoas selecionadas, filtramos por elas.
-            // Pessoas não associadas (responsavel_id nulo) aparecem se "Todos" estiver selecionado,
-            // mas somem quando filtramos por pessoas específicas.
-            if (selectedUserIds.length > 0) {
-              if (!task.responsavel_id || !selectedUserIds.includes(task.responsavel_id)) {
-                return;
+              // B. Filtro de Responsável
+              if (selectedUserIds.length > 0) {
+                if (!task.responsavel_id || !selectedUserIds.includes(task.responsavel_id)) {
+                  return;
+                }
               }
+
+              const projectName = task.projects?.name || 'Sem Projeto';
+
+              unifiedEvents.push({
+                id: `task-${task.id}`,
+                title: `${task.titulo} (${projectName})`,
+                subtitle: projectName,
+                type: 'task',
+                icon: isCompleted ? '✓' : '📋',
+                colorClass: isCompleted
+                  ? 'line-through opacity-50 bg-emerald-500/5 text-emerald-700 dark:text-emerald-500/60 border border-emerald-500/10'
+                  : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 dark:border-emerald-500/30',
+                rawTask: task
+              });
             }
-
-            const projectName = task.projects?.name || 'Sem Projeto';
-
-            unifiedEvents.push({
-              id: `task-${task.id}`,
-              title: `${task.titulo} (${projectName})`,
-              subtitle: projectName,
-              type: 'task',
-              icon: isCompleted ? '✓' : '📋',
-              // Riscado/esmaecido se concluído, verde vivo se ativo
-              colorClass: isCompleted
-                ? 'line-through opacity-50 bg-emerald-500/5 text-emerald-700 dark:text-emerald-500/60 border border-emerald-500/10'
-                : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 dark:border-emerald-500/30',
-              link: `/producao/projetos?projectId=${task.project_id}&taskId=${task.id}`
-            });
           }
-        }
-      });
+        });
+      }
 
       return unifiedEvents;
     };
-  }, [ordens, googleEvents, projectTasks, taskFilter, selectedUserIds]);
+  }, [ordens, googleEvents, projectTasks, taskFilter, selectedUserIds, showOrdens, showGoogle, showTasks]);
 
   return (
     <div className="space-y-6 font-work-sans text-lumos-text-primary max-w-7xl mx-auto pb-10">
@@ -311,13 +363,11 @@ export default function ProducaoDashboard() {
 
             {isUserDropdownOpen && (
               <>
-                {/* Overlay transparente para fechar ao clicar fora */}
                 <div 
                   className="fixed inset-0 z-40 cursor-default"
                   onClick={() => setIsUserDropdownOpen(false)}
                 />
                 
-                {/* Painel do Dropdown */}
                 <div className="absolute right-0 mt-1.5 w-56 max-h-72 overflow-y-auto bg-lumos-surface border border-lumos-border rounded-lumos shadow-lg z-50 p-2 space-y-1 custom-scrollbar">
                   <div className="flex items-center justify-between border-b border-lumos-border/40 pb-1.5 mb-1.5 px-2">
                     <span className="text-[10px] font-black uppercase text-lumos-text-secondary">Filtrar por Equipe</span>
@@ -402,21 +452,39 @@ export default function ProducaoDashboard() {
             </button>
           </div>
 
-          {/* Legendas de cores das fontes */}
-          <div className="flex items-center gap-4 bg-lumos-surface border border-lumos-border/50 px-4 py-2 rounded-lumos text-xs font-bold shadow-sm select-none">
-            <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary mr-1">Legenda:</span>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-lumos-yellow inline-block" />
+          {/* Filtros de Fontes (Interativos e Clicáveis) */}
+          <div className="flex items-center gap-2.5 bg-lumos-surface border border-lumos-border/50 px-4 py-2 rounded-lumos text-xs font-bold shadow-sm select-none">
+            <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary mr-1">Fontes:</span>
+            <button
+              onClick={() => setShowOrdens(!showOrdens)}
+              className={clsx(
+                "flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-all cursor-pointer",
+                showOrdens ? "opacity-100 font-black" : "opacity-30 hover:opacity-50"
+              )}
+            >
+              <span className="w-2 h-2 rounded bg-lumos-yellow inline-block" />
               <span>Ordem do Dia</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />
+            </button>
+            <button
+              onClick={() => setShowGoogle(!showGoogle)}
+              className={clsx(
+                "flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-all cursor-pointer",
+                showGoogle ? "opacity-100 font-black" : "opacity-30 hover:opacity-50"
+              )}
+            >
+              <span className="w-2 h-2 rounded bg-blue-500 inline-block" />
               <span>Google Calendar</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" />
-              <span>Tarefas (Prazo)</span>
-            </div>
+            </button>
+            <button
+              onClick={() => setShowTasks(!showTasks)}
+              className={clsx(
+                "flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-all cursor-pointer",
+                showTasks ? "opacity-100 font-black" : "opacity-30 hover:opacity-50"
+              )}
+            >
+              <span className="w-2 h-2 rounded bg-emerald-500 inline-block" />
+              <span>Tarefas</span>
+            </button>
           </div>
 
         </div>
@@ -523,7 +591,7 @@ export default function ProducaoDashboard() {
                   {/* Day events (Unified/Meshed list) */}
                   <div className="mt-2 space-y-1.5 overflow-y-auto max-h-[90px] custom-scrollbar">
                     {dayEvents.map(event => {
-                      if (event.type === 'local' || event.type === 'task') {
+                      if (event.type === 'local') {
                         return (
                           <Link
                             key={event.id}
@@ -534,8 +602,25 @@ export default function ProducaoDashboard() {
                             )}
                             title={event.title}
                           >
-                            {event.icon} {event.title}
+                            {event.icon} {event.subtitle}
                           </Link>
+                        );
+                      } else if (event.type === 'task') {
+                        return (
+                          <button
+                            key={event.id}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedLocalTask(event.rawTask);
+                            }}
+                            className={clsx(
+                              "block w-full text-left px-1.5 py-0.5 rounded text-[9px] font-black truncate tracking-tight transition-colors leading-tight cursor-pointer",
+                              event.colorClass
+                            )}
+                            title={event.title}
+                          >
+                            {event.icon} {event.title}
+                          </button>
                         );
                       } else {
                         return (
@@ -563,6 +648,50 @@ export default function ProducaoDashboard() {
           </div>
         </div>
       )}
+
+      {/* Painel de Tarefas Sem Prazo */}
+      <div className="card p-6 shadow-sm">
+        <h2 className="text-md font-bold text-lumos-text-primary uppercase tracking-wider mb-2 flex items-center gap-2 select-none">
+          📋 Tarefas Sem Prazo ({filteredNoDateTasks.length})
+        </h2>
+        <p className="text-xs text-lumos-text-secondary mb-4">
+          Tarefas operacionais pendentes que ainda não possuem prazo definido. Clique nelas para ver detalhes ou definir datas no gerenciador.
+        </p>
+        
+        {filteredNoDateTasks.length === 0 ? (
+          <div className="p-8 border border-dashed border-lumos-border/50 rounded-lumos text-center text-xs text-lumos-text-secondary">
+            Nenhuma tarefa pendente sem prazo para os filtros selecionados.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 max-h-64 overflow-y-auto pr-1.5 custom-scrollbar">
+            {filteredNoDateTasks.map(task => {
+              const projectName = task.projects?.name || 'Sem Projeto';
+              const responsibleName = users.find(u => u.id === task.responsavel_id)?.full_name || 'Sem responsável';
+              
+              return (
+                <button
+                  key={task.id}
+                  onClick={() => setSelectedLocalTask(task)}
+                  className="p-3 bg-lumos-surface border border-lumos-border hover:border-emerald-500/40 text-left rounded-lumos flex flex-col justify-between transition-colors shadow-xs group cursor-pointer"
+                >
+                  <div>
+                    <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest truncate">{projectName}</span>
+                    <h4 className="text-xs font-bold text-lumos-text-primary mt-1 line-clamp-2 leading-snug group-hover:text-emerald-500 transition-colors">
+                      {task.titulo}
+                    </h4>
+                  </div>
+                  <div className="mt-3.5 pt-2 border-t border-lumos-border/40 flex items-center justify-between text-[9px] text-lumos-text-secondary font-bold">
+                    <span className="truncate max-w-[120px]">👤 {responsibleName}</span>
+                    <span className="uppercase px-1.5 py-0.5 rounded bg-lumos-border/40 text-[8px]">
+                      {task.status === 'em_andamento' ? 'Em andamento' : 'A Fazer'}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Modal de Detalhes do Evento do Google Calendar */}
       {selectedGoogleEvent && (
@@ -620,6 +749,89 @@ export default function ProducaoDashboard() {
                 </a>
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de Detalhes da Tarefa do Gerenciador */}
+      {selectedLocalTask && (
+        <Modal
+          isOpen={!!selectedLocalTask}
+          onClose={() => setSelectedLocalTask(null)}
+          title="Detalhes da Tarefa"
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 text-left font-work-sans">
+            <div>
+              <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto</span>
+              <span className="text-xs font-bold text-lumos-text-primary block mt-0.5 font-black">
+                {selectedLocalTask.projects?.name || 'Sem Projeto'}
+              </span>
+            </div>
+
+            <div>
+              <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Título</span>
+              <h3 className="text-sm font-black text-lumos-text-primary leading-tight mt-0.5">
+                {selectedLocalTask.titulo}
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Prazo</span>
+                <span className="text-xs font-bold text-lumos-text-primary block mt-0.5">
+                  {selectedLocalTask.data_fim 
+                    ? new Date(selectedLocalTask.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')
+                    : 'Sem prazo definido'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Responsável</span>
+                <span className="text-xs font-bold text-lumos-text-primary block mt-0.5">
+                  {users.find(u => u.id === selectedLocalTask.responsavel_id)?.full_name || 'Sem responsável'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Status</span>
+                <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded bg-lumos-border mt-1">
+                  {selectedLocalTask.status === 'concluido' ? 'Concluída' 
+                    : selectedLocalTask.status === 'em_andamento' ? 'Em Andamento' 
+                    : 'A Fazer'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Prioridade</span>
+                <span className={clsx(
+                  "inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded mt-1",
+                  selectedLocalTask.prioridade === 'alta' ? 'bg-red-500/10 text-red-500' :
+                  selectedLocalTask.prioridade === 'media' ? 'bg-amber-500/10 text-amber-500' :
+                  'bg-blue-500/10 text-blue-500'
+                )}>
+                  {selectedLocalTask.prioridade || 'Média'}
+                </span>
+              </div>
+            </div>
+
+            {selectedLocalTask.descricao && (
+              <div>
+                <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Descrição</span>
+                <p className="text-xs text-lumos-text-secondary whitespace-pre-wrap leading-relaxed mt-1 border border-lumos-border/50 bg-lumos-bg/30 p-2.5 rounded max-h-40 overflow-y-auto custom-scrollbar">
+                  {selectedLocalTask.descricao}
+                </p>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-lumos-border/40 flex justify-end">
+              <Link
+                to={`/producao/projetos?projectId=${selectedLocalTask.project_id}&taskId=${selectedLocalTask.id}`}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-lumos-yellow hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Abrir no Gerenciador
+              </Link>
+            </div>
           </div>
         </Modal>
       )}
