@@ -22,7 +22,10 @@ import {
   ChevronRight, 
   Calendar, 
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Users,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
@@ -32,6 +35,11 @@ interface OrdemDoDiaEvent {
   codigo: string;
   titulo: string;
   data_producao: string | null;
+}
+
+interface TeamUser {
+  id: string;
+  full_name: string;
 }
 
 export default function ProducaoDashboard() {
@@ -56,9 +64,15 @@ export default function ProducaoDashboard() {
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [taskFilter, setTaskFilter] = useState<'pending' | 'completed' | 'all'>('pending');
 
-  // Carrega Ordens do Dia Locais
+  // Team Filter State (Responsible filter)
+  const [users, setUsers] = useState<TeamUser[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+
+  // Carrega Ordens do Dia e lista de equipe (app_users)
   useEffect(() => {
     fetchOrdensLocais();
+    fetchTeamUsers();
   }, []);
 
   async function fetchOrdensLocais() {
@@ -76,6 +90,21 @@ export default function ProducaoDashboard() {
       toast.error(`Erro ao carregar dados locais: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchTeamUsers() {
+    try {
+      const { data, error } = await supabase
+        .from('app_users')
+        .select('id, full_name')
+        .eq('status', 'ativo')
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (err: any) {
+      console.error('Error fetching team members:', err);
     }
   }
 
@@ -130,6 +159,7 @@ export default function ProducaoDashboard() {
             titulo,
             status,
             data_fim,
+            responsavel_id,
             projects (
               id,
               name
@@ -163,7 +193,7 @@ export default function ProducaoDashboard() {
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
   // =========================================================================
-  // ARQUITETURA DE MESCLAGEM DE EVENTOS (Três fontes ativas)
+  // ARQUITETURA DE MESCLAGEM DE EVENTOS (Três fontes ativas + Filtros de Responsável)
   // =========================================================================
   const getNormalizedEventsForDay = useMemo(() => {
     return (day: Date) => {
@@ -213,9 +243,19 @@ export default function ProducaoDashboard() {
           if (dateStr === targetStr) {
             const isCompleted = task.status === 'concluido' || task.status === 'entregue';
             
-            // Filtro aplicado localmente
+            // A. Filtro de Status
             if (taskFilter === 'pending' && isCompleted) return;
             if (taskFilter === 'completed' && !isCompleted) return;
+
+            // B. Filtro de Responsável (Multi-seleção)
+            // Caso existam pessoas selecionadas, filtramos por elas.
+            // Pessoas não associadas (responsavel_id nulo) aparecem se "Todos" estiver selecionado,
+            // mas somem quando filtramos por pessoas específicas.
+            if (selectedUserIds.length > 0) {
+              if (!task.responsavel_id || !selectedUserIds.includes(task.responsavel_id)) {
+                return;
+              }
+            }
 
             const projectName = task.projects?.name || 'Sem Projeto';
 
@@ -237,7 +277,7 @@ export default function ProducaoDashboard() {
 
       return unifiedEvents;
     };
-  }, [ordens, googleEvents, projectTasks, taskFilter]);
+  }, [ordens, googleEvents, projectTasks, taskFilter, selectedUserIds]);
 
   return (
     <div className="space-y-6 font-work-sans text-lumos-text-primary max-w-7xl mx-auto pb-10">
@@ -252,9 +292,81 @@ export default function ProducaoDashboard() {
         {/* Controles de Filtros e Legenda */}
         <div className="flex flex-wrap items-center gap-4">
           
-          {/* Filtros de Tarefas */}
+          {/* Filtro por Responsável (Pessoas) */}
+          <div className="relative">
+            <button
+              onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lumos border border-lumos-border/50 bg-lumos-surface text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all select-none cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5 text-emerald-500" />
+              <span>
+                {selectedUserIds.length === 0
+                  ? 'Responsável: Todos'
+                  : selectedUserIds.length === 1
+                  ? `Responsável: ${users.find(u => u.id === selectedUserIds[0])?.full_name || '1 selecionado'}`
+                  : `Responsáveis: (${selectedUserIds.length})`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-lumos-text-secondary" />
+            </button>
+
+            {isUserDropdownOpen && (
+              <>
+                {/* Overlay transparente para fechar ao clicar fora */}
+                <div 
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setIsUserDropdownOpen(false)}
+                />
+                
+                {/* Painel do Dropdown */}
+                <div className="absolute right-0 mt-1.5 w-56 max-h-72 overflow-y-auto bg-lumos-surface border border-lumos-border rounded-lumos shadow-lg z-50 p-2 space-y-1 custom-scrollbar">
+                  <div className="flex items-center justify-between border-b border-lumos-border/40 pb-1.5 mb-1.5 px-2">
+                    <span className="text-[10px] font-black uppercase text-lumos-text-secondary">Filtrar por Equipe</span>
+                    {selectedUserIds.length > 0 && (
+                      <button
+                        onClick={() => setSelectedUserIds([])}
+                        className="text-[9px] font-black uppercase text-red-500 hover:underline cursor-pointer"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                  
+                  {users.length === 0 ? (
+                    <p className="text-[10px] text-lumos-text-secondary italic p-2 text-center">Nenhum membro ativo.</p>
+                  ) : (
+                    users.map(user => {
+                      const isSelected = selectedUserIds.includes(user.id);
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedUserIds(prev => prev.filter(id => id !== user.id));
+                            } else {
+                              setSelectedUserIds(prev => [...prev, user.id]);
+                            }
+                          }}
+                          className={clsx(
+                            "w-full flex items-center justify-between px-2.5 py-1.5 rounded-lumos text-xs font-semibold text-left transition-colors cursor-pointer",
+                            isSelected
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold"
+                              : "hover:bg-lumos-text-secondary/5 text-lumos-text-primary"
+                          )}
+                        >
+                          <span className="truncate">{user.full_name}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Filtros de Status de Tarefas */}
           <div className="flex items-center gap-1 bg-lumos-surface border border-lumos-border/50 p-1 rounded-lumos shadow-sm select-none">
-            <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary px-2">Tarefas:</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary px-2">Status:</span>
             <button
               onClick={() => setTaskFilter('pending')}
               className={clsx(
