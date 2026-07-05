@@ -50,6 +50,12 @@ export default function ProducaoDashboard() {
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<any | null>(null);
 
+  // Project Manager Tasks State (Third source)
+  const [projectTasks, setProjectTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [taskFilter, setTaskFilter] = useState<'pending' | 'completed' | 'all'>('pending');
+
   // Carrega Ordens do Dia Locais
   useEffect(() => {
     fetchOrdensLocais();
@@ -105,6 +111,47 @@ export default function ProducaoDashboard() {
     fetchGoogleEvents();
   }, [currentDate]);
 
+  // Busca tarefas do Gerenciador de Projetos (project_tasks) com prazo
+  useEffect(() => {
+    const fetchProjectTasks = async () => {
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(monthStart);
+      const start = startOfWeek(monthStart, { weekStartsOn: 0 });
+      const end = endOfWeek(monthEnd, { weekStartsOn: 0 });
+
+      setLoadingTasks(true);
+      setTasksError(null);
+      try {
+        const { data, error } = await supabase
+          .from('project_tasks')
+          .select(`
+            id,
+            project_id,
+            titulo,
+            status,
+            data_fim,
+            projects (
+              id,
+              name
+            )
+          `)
+          .not('data_fim', 'is', null)
+          .gte('data_fim', start.toISOString().split('T')[0])
+          .lte('data_fim', end.toISOString().split('T')[0]);
+
+        if (error) throw error;
+        setProjectTasks(data || []);
+      } catch (err: any) {
+        console.error('Error fetching project tasks:', err);
+        setTasksError(err.message || 'Erro ao carregar tarefas.');
+      } finally {
+        setLoadingTasks(false);
+      }
+    };
+
+    fetchProjectTasks();
+  }, [currentDate]);
+
   // Calendar grid math
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
@@ -116,7 +163,7 @@ export default function ProducaoDashboard() {
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
   // =========================================================================
-  // ARQUITETURA DE MESCLAGEM DE EVENTOS (Preparando para futuras fontes)
+  // ARQUITETURA DE MESCLAGEM DE EVENTOS (Três fontes ativas)
   // =========================================================================
   const getNormalizedEventsForDay = useMemo(() => {
     return (day: Date) => {
@@ -159,34 +206,107 @@ export default function ProducaoDashboard() {
         }
       });
 
-      // 3. (Futuro) Fonte C: Tarefas do Gerenciador de Projetos (data_fim)
-      // Adicionar nova lógica aqui futuramente sem alterar a renderização do grid
+      // 3. Fonte C: Tarefas do Gerenciador de Projetos (Verde, 📋 ou ✓)
+      projectTasks.forEach(task => {
+        if (task.data_fim) {
+          const dateStr = task.data_fim.split('T')[0];
+          if (dateStr === targetStr) {
+            const isCompleted = task.status === 'concluido' || task.status === 'entregue';
+            
+            // Filtro aplicado localmente
+            if (taskFilter === 'pending' && isCompleted) return;
+            if (taskFilter === 'completed' && !isCompleted) return;
+
+            const projectName = task.projects?.name || 'Sem Projeto';
+
+            unifiedEvents.push({
+              id: `task-${task.id}`,
+              title: `${task.titulo} (${projectName})`,
+              subtitle: projectName,
+              type: 'task',
+              icon: isCompleted ? '✓' : '📋',
+              // Riscado/esmaecido se concluído, verde vivo se ativo
+              colorClass: isCompleted
+                ? 'line-through opacity-50 bg-emerald-500/5 text-emerald-700 dark:text-emerald-500/60 border border-emerald-500/10'
+                : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 dark:border-emerald-500/30',
+              link: `/producao/projetos?projectId=${task.project_id}&taskId=${task.id}`
+            });
+          }
+        }
+      });
 
       return unifiedEvents;
     };
-  }, [ordens, googleEvents]);
+  }, [ordens, googleEvents, projectTasks, taskFilter]);
 
   return (
     <div className="space-y-6 font-work-sans text-lumos-text-primary max-w-7xl mx-auto pb-10">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-lumos-text-primary tracking-tight">Calendário de Produção</h1>
-          <p className="text-lumos-text-secondary text-sm">Visualização unificada de diárias operacionais e eventos externos integrados.</p>
+          <p className="text-lumos-text-secondary text-sm">Visualização unificada de diárias operacionais, eventos externos e prazos de tarefas.</p>
         </div>
         
-        {/* Legendas de cores das fontes */}
-        <div className="flex items-center gap-4 bg-lumos-surface border border-lumos-border/50 px-4 py-2 rounded-lumos text-xs font-bold shadow-sm">
-          <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary mr-1">Legenda:</span>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded bg-lumos-yellow inline-block" />
-            <span>Ordem do Dia (Lumos)</span>
+        {/* Controles de Filtros e Legenda */}
+        <div className="flex flex-wrap items-center gap-4">
+          
+          {/* Filtros de Tarefas */}
+          <div className="flex items-center gap-1 bg-lumos-surface border border-lumos-border/50 p-1 rounded-lumos shadow-sm select-none">
+            <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary px-2">Tarefas:</span>
+            <button
+              onClick={() => setTaskFilter('pending')}
+              className={clsx(
+                "px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
+                taskFilter === 'pending'
+                  ? "bg-emerald-500 text-black font-black"
+                  : "text-lumos-text-secondary hover:text-lumos-text-primary"
+              )}
+            >
+              Pendentes
+            </button>
+            <button
+              onClick={() => setTaskFilter('completed')}
+              className={clsx(
+                "px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
+                taskFilter === 'completed'
+                  ? "bg-emerald-500 text-black font-black"
+                  : "text-lumos-text-secondary hover:text-lumos-text-primary"
+              )}
+            >
+              Concluídas
+            </button>
+            <button
+              onClick={() => setTaskFilter('all')}
+              className={clsx(
+                "px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
+                taskFilter === 'all'
+                  ? "bg-emerald-500 text-black font-black"
+                  : "text-lumos-text-secondary hover:text-lumos-text-primary"
+              )}
+            >
+              Todas
+            </button>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />
-            <span>Google Calendar</span>
+
+          {/* Legendas de cores das fontes */}
+          <div className="flex items-center gap-4 bg-lumos-surface border border-lumos-border/50 px-4 py-2 rounded-lumos text-xs font-bold shadow-sm select-none">
+            <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary mr-1">Legenda:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-lumos-yellow inline-block" />
+              <span>Ordem do Dia</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" />
+              <span>Google Calendar</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" />
+              <span>Tarefas (Prazo)</span>
+            </div>
           </div>
+
         </div>
       </div>
 
@@ -204,7 +324,7 @@ export default function ProducaoDashboard() {
               <Calendar className="w-5 h-5 text-lumos-yellow" />
               <h2 className="text-md font-bold text-lumos-text-primary uppercase tracking-wider flex items-center gap-2">
                 {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
-                {loadingCalendar && (
+                {(loadingCalendar || loadingTasks) && (
                   <span className="inline-block w-3.5 h-3.5 border-2 border-lumos-yellow border-t-transparent rounded-full animate-spin" />
                 )}
               </h2>
@@ -247,6 +367,14 @@ export default function ProducaoDashboard() {
             </div>
           )}
 
+          {/* Banner de Aviso das Tarefas locais */}
+          {tasksError && (
+            <div className="mt-4 p-3 rounded bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-2 text-xs font-semibold select-none text-left">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>Não foi possível carregar as tarefas do gerenciador: {tasksError}</span>
+            </div>
+          )}
+
           {/* Weekday names */}
           <div className="grid grid-cols-7 text-center py-3 border-b border-lumos-border/30 flex-shrink-0">
             {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
@@ -283,7 +411,7 @@ export default function ProducaoDashboard() {
                   {/* Day events (Unified/Meshed list) */}
                   <div className="mt-2 space-y-1.5 overflow-y-auto max-h-[90px] custom-scrollbar">
                     {dayEvents.map(event => {
-                      if (event.type === 'local') {
+                      if (event.type === 'local' || event.type === 'task') {
                         return (
                           <Link
                             key={event.id}
@@ -292,9 +420,9 @@ export default function ProducaoDashboard() {
                               "block px-1.5 py-0.5 rounded text-[9px] font-black truncate tracking-tight transition-colors leading-tight",
                               event.colorClass
                             )}
-                            title={`Ordem do Dia: ${event.subtitle} - ${event.title}`}
+                            title={event.title}
                           >
-                            {event.icon} {event.subtitle}
+                            {event.icon} {event.title}
                           </Link>
                         );
                       } else {
