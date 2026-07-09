@@ -257,17 +257,18 @@ export default function Reembolso() {
       if (error) throw error;
       
       const item = reimbursements.find(r => r.id === id);
-      if (status === 'aprovado') {
-        if (item) {
-          await supabase.from('payables').insert([{
-            description: `Reembolso — ${item.requester?.full_name || 'Funcionário'}`,
-            amount: item.amount,
-            due_date: new Date().toISOString().split('T')[0],
-            category: 'outro',
-            notes: item.description,
-            created_by: profile?.id
-          }]);
-        }
+      // Só cria a conta a pagar na transição para 'aprovado' (evita payable
+      // duplicado se o item já estava aprovado — não há reimbursement_id para
+      // deduplicar depois).
+      if (status === 'aprovado' && item && item.status !== 'aprovado') {
+        await supabase.from('payables').insert([{
+          description: `Reembolso — ${item.requester?.full_name || 'Funcionário'}`,
+          amount: item.amount,
+          due_date: new Date().toISOString().split('T')[0],
+          category: 'outro',
+          notes: item.description,
+          created_by: profile?.id
+        }]);
       }
 
       // Trigger notifications for approved or rejected
@@ -315,15 +316,20 @@ export default function Reembolso() {
       if (error) throw error;
 
       if (status === 'aprovado') {
-        const payables = toUpdate.map(item => ({
-          description: `Reembolso — ${item.requester?.full_name || 'Funcionário'}`,
-          amount: item.amount,
-          due_date: new Date().toISOString().split('T')[0],
-          category: 'outro',
-          notes: item.description,
-          created_by: profile?.id
-        }));
-        await supabase.from('payables').insert(payables);
+        // Só gera payable para itens que ainda NÃO estavam aprovados (evita
+        // duplicidade ao aprovar em lote itens já aprovados).
+        const newlyApproved = toUpdate.filter(item => item.status !== 'aprovado');
+        if (newlyApproved.length > 0) {
+          const payables = newlyApproved.map(item => ({
+            description: `Reembolso — ${item.requester?.full_name || 'Funcionário'}`,
+            amount: item.amount,
+            due_date: new Date().toISOString().split('T')[0],
+            category: 'outro',
+            notes: item.description,
+            created_by: profile?.id
+          }));
+          await supabase.from('payables').insert(payables);
+        }
       }
 
       // Trigger notifications for approved or rejected
