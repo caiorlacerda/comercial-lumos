@@ -266,6 +266,29 @@ export default function FinanceiroDashboard() {
     return start.toISOString().split('T')[0];
   };
 
+  // Limite SUPERIOR (exclusivo) do período. Para períodos de calendário (mês/ano)
+  // vai até o fim do mês/ano corrente; para os deslizantes vai até hoje (amanhã
+  // exclusivo). Fecha o intervalo para não contar datas fora do período.
+  const getEndExclusive = (periodType: PeriodType): string => {
+    const now = new Date();
+    let end: Date;
+    switch (periodType) {
+      case 'mes':
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        break;
+      case 'ano':
+        end = new Date(now.getFullYear() + 1, 0, 1);
+        break;
+      case 'semana':
+      case 'trimestre':
+      case 'semestre':
+      default:
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        break;
+    }
+    return end.toISOString().split('T')[0];
+  };
+
   async function loadPreferencesAndData() {
     try {
       setLoading(true);
@@ -379,18 +402,14 @@ export default function FinanceiroDashboard() {
 
   async function fetchDashboardData() {
     try {
-      const now = new Date();
-      const nextWeek = new Date();
-      nextWeek.setDate(now.getDate() + 7);
-      const nextWeekStr = nextWeek.toISOString().split('T')[0];
-
       const startDate = getStartDate(period);
+      const endExclusive = getEndExclusive(period);
 
       const [rentRes, payablesRes, receivablesRes] = await Promise.all([
         supabase
           .from('vw_rentabilidade')
           .select('*, client:clients(name), categoria:categorias(nome), tipo_servico:tipos_servico(nome)')
-          .or(`data_recebimento_negociada.gte.${startDate},created_at.gte.${startDate}`),
+          .or(`and(data_recebimento_negociada.gte.${startDate},data_recebimento_negociada.lt.${endExclusive}),and(created_at.gte.${startDate},created_at.lt.${endExclusive})`),
         supabase.from('payables').select('amount, due_date, paid_at'),
         supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at')
       ]);
