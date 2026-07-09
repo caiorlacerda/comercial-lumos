@@ -48,6 +48,7 @@ const OrdemDoDiaEditor = lazy(() => import('@/pages/OrdemDoDiaEditor'));
 const Fornecedores = lazy(() => import('@/pages/Fornecedores'));
 const FornecedorEditor = lazy(() => import('@/pages/FornecedorEditor'));
 const CadastroFornecedorPublico = lazy(() => import('@/pages/CadastroFornecedorPublico'));
+const DefinirSenha = lazy(() => import('@/pages/DefinirSenha'));
 
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
@@ -346,6 +347,7 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/aprovar/:token" element={<AprovacaoPublica />} />
           <Route path="/cadastro-fornecedor" element={<CadastroFornecedorPublico />} />
+          <Route path="/definir-senha" element={<DefinirSenha />} />
           
           <Route 
             path="/" 
