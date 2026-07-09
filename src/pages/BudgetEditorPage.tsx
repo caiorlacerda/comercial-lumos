@@ -63,7 +63,7 @@ import { getPdfFileName } from '@/utils/pdfFileName';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
-import { notify, getAdminUserIds, getProfileIdByAuthUserId } from '@/lib/notifications/notify';
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 
 import Modal from '@/components/common/Modal';
@@ -551,20 +551,8 @@ export default function BudgetEditorPage() {
       // Sync to Receivables if approved
       if (updates.status === 'aprovado' && financials) {
         await syncBudgetApprovalFlow(budget.id, financials.valorFinal);
-
-        // Trigger notification ORCAMENTO_APROVADO
-        const creatorProfileId = await getProfileIdByAuthUserId(budget.created_by);
-        const admins = await getAdminUserIds();
-        const recipientIds = new Set<string>(admins);
-        if (creatorProfileId) recipientIds.add(creatorProfileId);
-
-        await notify({
-          userIds: Array.from(recipientIds),
-          event: NOTIFICATION_EVENTS.ORCAMENTO_APROVADO,
-          title: 'Orçamento aprovado',
-          body: `O orçamento "${budget.project_name}" (#${budget.code}) foi marcado como aprovado por ${profile?.full_name || 'Administrador'}.`,
-          link: `/orcamentos/${budget.id}`
-        });
+        // A notificação ORCAMENTO_APROVADO é disparada pelo trigger de banco
+        // trg_budget_approved_notification. Não notificar aqui para evitar duplicidade.
       }
 
 

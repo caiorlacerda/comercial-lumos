@@ -65,10 +65,11 @@ export async function getUserIdsWithPermission(permission: string): Promise<stri
       }
     }
     
-    // Check default role fallbacks
+    // Check default role fallbacks (mantido em sincronia com can() em useAuth.tsx)
     const defaults: Record<string, string[]> = {
-      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores'],
+      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
       basico: ['reembolso'],
+      editor: ['cronograma_edicao'],
     };
     const rolePermissions = defaults[u.role as string] || [];
     return rolePermissions.includes(permission);
