@@ -1,49 +1,65 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import throttle from 'lodash/throttle';
-import Login from '@/pages/Login';
-import Dashboard from '@/pages/Dashboard';
-import Clients from '@/pages/Clients';
-import Catalog from '@/pages/Catalog';
-import Budgets from '@/pages/Budgets';
-import Settings from '@/pages/Settings';
-import Templates from '@/pages/Templates';
-import BudgetEditorPage from '@/pages/BudgetEditorPage';
-import Sidebar from '@/components/layout/Sidebar';
-import ClientProfile from '@/pages/ClientProfile';
 
+// Shell da aplicação — carregado sempre (eager).
+import Login from '@/pages/Login';
+import Sidebar from '@/components/layout/Sidebar';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PermissionGuard } from '@/components/auth/PermissionGuard';
 import { LayoutProvider } from '@/context/LayoutContext';
 
-// Novas Páginas Financeiras
-import UsersPage from '@/pages/Users';
-import AuditLog from '@/pages/AuditLog';
-import AprovacaoPublica from '@/pages/AprovacaoPublica';
-import FinanceiroDashboard from '@/pages/FinanceiroDashboard';
-import ContasPagar from '@/pages/ContasPagar';
-import ContasReceber from '@/pages/ContasReceber';
-import Reembolso from '@/pages/Reembolso';
-import CustosProjeto from '@/pages/CustosProjeto';
-import CustosProjetoDetalhe from '@/pages/CustosProjetoDetalhe';
-import FluxoDeCaixa from '@/pages/FluxoDeCaixa';
-import CustosFixos from '@/pages/CustosFixos';
-import FinanceiroConfig from '@/pages/FinanceiroConfig';
-import FinanceiroRelatorios from '@/pages/FinanceiroRelatorios';
-import OrdensDoDia from '@/pages/OrdensDoDia';
-import OrdemDoDiaEditor from '@/pages/OrdemDoDiaEditor';
-import Fornecedores from '@/pages/Fornecedores';
-import FornecedorEditor from '@/pages/FornecedorEditor';
-import Equipe from '@/pages/Equipe';
-import ProducaoDashboard from '@/pages/ProducaoDashboard';
-import CadastroFornecedorPublico from '@/pages/CadastroFornecedorPublico';
-import ConfiguracoesNotificacoes from '@/pages/ConfiguracoesNotificacoes';
-import CronogramaEdicao from '@/pages/CronogramaEdicao';
-import Projetos from '@/pages/Projetos';
-import Home from '@/pages/Home';
+// Páginas carregadas sob demanda (code-splitting por rota). Cada uma vira um
+// chunk separado, tirando libs pesadas (PDF, gráficos, Excel, editor) do
+// bundle inicial — a Home carrega leve e o resto vem quando é aberto.
+const Home = lazy(() => import('@/pages/Home'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Clients = lazy(() => import('@/pages/Clients'));
+const ClientProfile = lazy(() => import('@/pages/ClientProfile'));
+const Catalog = lazy(() => import('@/pages/Catalog'));
+const Budgets = lazy(() => import('@/pages/Budgets'));
+const BudgetEditorPage = lazy(() => import('@/pages/BudgetEditorPage'));
+const Templates = lazy(() => import('@/pages/Templates'));
+const Settings = lazy(() => import('@/pages/Settings'));
+const ConfiguracoesNotificacoes = lazy(() => import('@/pages/ConfiguracoesNotificacoes'));
+const UsersPage = lazy(() => import('@/pages/Users'));
+const AuditLog = lazy(() => import('@/pages/AuditLog'));
+const AprovacaoPublica = lazy(() => import('@/pages/AprovacaoPublica'));
+const Equipe = lazy(() => import('@/pages/Equipe'));
+
+// Financeiro
+const FinanceiroDashboard = lazy(() => import('@/pages/FinanceiroDashboard'));
+const ContasPagar = lazy(() => import('@/pages/ContasPagar'));
+const ContasReceber = lazy(() => import('@/pages/ContasReceber'));
+const Reembolso = lazy(() => import('@/pages/Reembolso'));
+const CustosProjeto = lazy(() => import('@/pages/CustosProjeto'));
+const CustosProjetoDetalhe = lazy(() => import('@/pages/CustosProjetoDetalhe'));
+const FluxoDeCaixa = lazy(() => import('@/pages/FluxoDeCaixa'));
+const CustosFixos = lazy(() => import('@/pages/CustosFixos'));
+const FinanceiroConfig = lazy(() => import('@/pages/FinanceiroConfig'));
+const FinanceiroRelatorios = lazy(() => import('@/pages/FinanceiroRelatorios'));
+
+// Produção
+const ProducaoDashboard = lazy(() => import('@/pages/ProducaoDashboard'));
+const Projetos = lazy(() => import('@/pages/Projetos'));
+const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
+const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
+const OrdemDoDiaEditor = lazy(() => import('@/pages/OrdemDoDiaEditor'));
+const Fornecedores = lazy(() => import('@/pages/Fornecedores'));
+const FornecedorEditor = lazy(() => import('@/pages/FornecedorEditor'));
+const CadastroFornecedorPublico = lazy(() => import('@/pages/CadastroFornecedorPublico'));
 
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
+
+// Fallback exibido enquanto o chunk da rota está sendo baixado.
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
+    </div>
+  );
+}
 
 function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { user, profile, loading, profileChecked, error, signOut } = useAuth();
@@ -325,6 +341,7 @@ function AppContent() {
     <Router>
       <VersionWatcher />
       <div className="min-h-screen bg-lumos-bg">
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/aprovar/:token" element={<AprovacaoPublica />} />
@@ -670,6 +687,7 @@ function AppContent() {
             }
           />
         </Routes>
+        </Suspense>
       </div>
     </Router>
   );
