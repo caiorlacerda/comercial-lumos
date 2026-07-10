@@ -13,6 +13,18 @@ function json(body: unknown, status = 200) {
   })
 }
 
+// Extrai uma mensagem legível de qualquer formato de erro (Error, AuthError,
+// PostgrestError, string). JSON.stringify de um Error puro vira "{}", por isso
+// usamos getOwnPropertyNames para capturar message/stack não-enumeráveis.
+function errMsg(e: any): string {
+  if (!e) return 'Erro desconhecido'
+  if (typeof e === 'string') return e
+  return (
+    e.message || e.error_description || e.error || e.msg || e.hint || e.details ||
+    JSON.stringify(e, Object.getOwnPropertyNames(e))
+  )
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -57,7 +69,9 @@ serve(async (req) => {
       data: { full_name, role, job_title },
       redirectTo: `${origin}/definir-senha`,
     })
-    if (inviteError) throw inviteError
+    if (inviteError) {
+      return json({ error: `Falha ao enviar o convite: ${errMsg(inviteError)}` }, 400)
+    }
 
     const invitedUserId = inviteData.user?.id
     if (!invitedUserId) return json({ error: 'Falha ao criar a conta convidada.' }, 400)
@@ -76,11 +90,11 @@ serve(async (req) => {
 
     if (profileError) {
       await adminClient.auth.admin.deleteUser(invitedUserId)
-      return json({ error: `Erro ao criar perfil: ${profileError.message}` }, 400)
+      return json({ error: `Erro ao criar perfil: ${errMsg(profileError)}` }, 400)
     }
 
     return json({ message: 'Convite enviado com sucesso', user: inviteData.user }, 200)
   } catch (error: any) {
-    return json({ error: error.message ?? 'Erro inesperado.' }, 400)
+    return json({ error: errMsg(error) }, 400)
   }
 })
