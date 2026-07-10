@@ -1,32 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 
 interface PageTransitionProps {
   children: React.ReactNode;
 }
 
+// Cross-fade entre páginas (todas as larguras): a página que sai faz fade-out
+// e a que entra faz fade-in, orquestradas pelo AnimatePresence mode="wait" no
+// layout (Sidebar). Apenas opacidade — sem slide, conforme convenção do app.
 export default function PageTransition({ children }: PageTransitionProps) {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  if (!isMobile) {
-    return <>{children}</>;
-  }
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
+      transition={{ duration: 0.18, ease: 'easeInOut' }}
       className="w-full flex flex-col flex-1"
     >
       {children}

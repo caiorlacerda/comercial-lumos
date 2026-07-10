@@ -146,7 +146,7 @@ serve(async (req) => {
       <body>
         <div class="card">
           <h1>Conexão Realizada! 🎉</h1>
-          <p>O Google Calendar compartilhado foi conectado com sucesso à Intranet Lumos. A sincronização de leitura e escrita em background já está ativa.</p>
+          <p>O Google Calendar compartilhado foi conectado com sucesso ao App Lumos. A sincronização de leitura e escrita em background já está ativa.</p>
           <a href="#" onclick="window.close();" class="btn">Fechar Janela</a>
         </div>
       </body>

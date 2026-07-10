@@ -80,8 +80,8 @@ export default function Topbar() {
           />
         </Link>
 
-        {/* Desktop Section Buttons */}
-        <nav className="hidden lg:flex items-center gap-1.5 ml-4">
+        {/* Desktop Section Buttons — centralizados no header */}
+        <nav className="hidden lg:flex items-center gap-1.5 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           {sections.map(
             (sec) =>
               sec.visible && (
