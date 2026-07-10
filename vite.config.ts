@@ -63,6 +63,9 @@ export default defineConfig(({ command }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
+      // Garante uma única cópia de React em dev (evita "Invalid hook call" quando
+      // o otimizador do Vite pré-empacota libs como @react-oauth/google).
+      dedupe: ['react', 'react-dom'],
     },
   };
 })
