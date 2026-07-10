@@ -93,8 +93,19 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         )}>
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
-              <div className="w-full p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                {children}
+              <div className="w-full p-4 lg:p-8">
+                {/* Suspense interno: o carregamento de um chunk lazy mostra o
+                    loader só na área de conteúdo, mantendo topbar/sidebar
+                    estáveis (sem "piscada" de tela inteira) */}
+                <React.Suspense
+                  fallback={
+                    <div className="flex items-center justify-center py-32">
+                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" />
+                    </div>
+                  }
+                >
+                  {children}
+                </React.Suspense>
               </div>
             </PageTransition>
           </AnimatePresence>

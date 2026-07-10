@@ -64,7 +64,7 @@ serve(async (req) => {
     }
 
     // 3. Envia o convite (o usuário define a própria senha ao aceitar).
-    const origin = req.headers.get('origin') ?? 'https://intranet.produtoralumos.com.br'
+    const origin = req.headers.get('origin') ?? 'https://app.produtoralumos.com.br'
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: { full_name, role, job_title },
       redirectTo: `${origin}/definir-senha`,

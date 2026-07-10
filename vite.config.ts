@@ -28,7 +28,7 @@ export default defineConfig(({ command }) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
         manifest: {
-          name: 'Lumos Intranet',
+          name: 'Lumos App',
           short_name: 'Lumos',
           description: 'Plataforma interna da Lumos Studio',
           theme_color: '#0a0a0a',
