@@ -846,9 +846,8 @@ export default function Projetos() {
     u.full_name.toLowerCase().includes(mentionAutocomplete?.query.toLowerCase() || '')
   );
 
-  // Deep-link: consome ?projectId=&taskId= da URL (links de notificação e do Board)
+  // Deep-link: consome ?projectId=&taskId= da URL (notificações, Board e busca Cmd+K)
   const [searchParams, setSearchParams] = useSearchParams();
-  const deepLinkConsumedRef = useRef(false);
   const pendingTaskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -864,23 +863,29 @@ export default function Projetos() {
     setSelectedTaskId(null);
   }, [selectedProjectId]);
 
-  // Abre projeto/tarefa vindos da URL assim que os projetos carregam (uma vez só)
+  // Abre projeto/tarefa vindos da URL assim que os projetos estiverem carregados.
+  // Roda também quando a query muda com a página já aberta (ex.: seleção na
+  // busca Cmd+K). A limpeza da query no final evita reprocessamento em loop.
   useEffect(() => {
-    if (deepLinkConsumedRef.current || projects.length === 0) return;
-    deepLinkConsumedRef.current = true;
+    if (projects.length === 0) return;
 
     const pid = searchParams.get('projectId');
     if (!pid) return;
 
     const proj = projects.find(p => p.id === pid);
     if (proj) {
-      pendingTaskIdRef.current = searchParams.get('taskId');
-      setSelectedClientId(proj.client_id);
-      setSelectedProjectId(proj.id);
+      const tid = searchParams.get('taskId');
+      if (proj.id === selectedProjectId) {
+        // Projeto já aberto: abre a tarefa direto (o efeito de tasks não re-dispara)
+        if (tid) setSelectedTaskId(tid);
+      } else {
+        pendingTaskIdRef.current = tid;
+        setSelectedClientId(proj.client_id);
+        setSelectedProjectId(proj.id);
+      }
     }
-    // Limpa a query para não reprocessar em navegações internas
     setSearchParams({}, { replace: true });
-  }, [projects]);
+  }, [projects, searchParams]);
 
   // Quando as tarefas do projeto deep-linkado chegam, abre a tarefa pendente
   useEffect(() => {

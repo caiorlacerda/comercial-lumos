@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, LogOut } from 'lucide-react';
+import { ChevronLeft, LogOut, Search } from 'lucide-react';
+import { openCommandPalette } from '@/components/common/CommandPalette';
 import { useAuth } from '@/hooks/useAuth';
 import NotificationBell from '@/components/layout/NotificationBell';
 import StatusDot from '@/components/common/StatusDot';
@@ -82,8 +83,16 @@ export default function MobileHeader() {
             )}
           </div>
 
-          {/* Right Actions: Notification Bell + Avatar */}
+          {/* Right Actions: Search + Notification Bell + Avatar */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={openCommandPalette}
+              className="p-1.5 rounded-full text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
+              title="Buscar"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+
             <NotificationBell />
 
             <button

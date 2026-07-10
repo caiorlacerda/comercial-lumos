@@ -7,6 +7,7 @@ import Topbar from '@/components/layout/Topbar';
 import MobileTabBar from '@/components/layout/MobileTabBar';
 import MobileSubNav from '@/components/layout/MobileSubNav';
 import { getVisibleSections, getSectionItems } from '@/lib/navigation';
+import CommandPalette from '@/components/common/CommandPalette';
 import { clsx } from 'clsx';
 import { AnimatePresence } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
@@ -94,6 +95,9 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Bottom Tab Bar */}
       <MobileTabBar />
+
+      {/* Busca global (Cmd+K) */}
+      <CommandPalette />
     </div>
   );
 }
