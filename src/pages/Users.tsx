@@ -199,12 +199,25 @@ export default function UsersPage() {
     if (ids.length === 0) return;
 
     try {
-      const { error } = await supabase
-        .from('app_users')
-        .delete()
-        .in('id', ids);
+      // Exclui pela edge function (service_role): remove a conta de auth E o
+      // perfil de uma vez, sem deixar conta órfã no Supabase.
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { ids },
+      });
 
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* mantém msg genérica */ }
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
+
       setIsBatchDeleteModalOpen(false);
       setSelectedIds(new Set());
       fetchUsers();
