@@ -13,9 +13,7 @@ function json(body: unknown, status = 200) {
   })
 }
 
-// Extrai uma mensagem legível de qualquer formato de erro (Error, AuthError,
-// PostgrestError, string). JSON.stringify de um Error puro vira "{}", por isso
-// usamos getOwnPropertyNames para capturar message/stack não-enumeráveis.
+// Extrai mensagem legível de qualquer formato de erro (Error serializa vazio).
 function errMsg(e: any): string {
   if (!e) return 'Erro desconhecido'
   if (typeof e === 'string') return e
@@ -37,7 +35,7 @@ serve(async (req) => {
 
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
-    // 1. Autoriza: só um admin ativo pode convidar usuários.
+    // 1. Autoriza: só um admin ativo pode excluir usuários.
     const authHeader = req.headers.get('Authorization') ?? ''
     if (!authHeader) return json({ error: 'Não autenticado.' }, 401)
 
@@ -54,46 +52,46 @@ serve(async (req) => {
       .single()
 
     if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'ativo') {
-      return json({ error: 'Apenas administradores podem convidar usuários.' }, 403)
+      return json({ error: 'Apenas administradores podem excluir usuários.' }, 403)
     }
 
-    // 2. Valida o payload.
-    const { email, full_name, role, job_title } = await req.json()
-    if (!email || !full_name || !role) {
-      return json({ error: 'E-mail, nome e cargo são obrigatórios.' }, 400)
+    // 2. Valida os ids (de app_users).
+    const { ids } = await req.json()
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return json({ error: 'Nenhum usuário informado.' }, 400)
     }
 
-    // 3. Envia o convite (o usuário define a própria senha ao aceitar).
-    const origin = req.headers.get('origin') ?? 'https://intranet.produtoralumos.com.br'
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: { full_name, role, job_title },
-      redirectTo: `${origin}/definir-senha`,
-    })
-    if (inviteError) {
-      return json({ error: `Falha ao enviar o convite: ${errMsg(inviteError)}` }, 400)
+    // 3. Nunca exclui a própria conta (evita lockout).
+    const targetIds = ids.filter((id: string) => id !== callerProfile.id)
+    if (targetIds.length === 0) {
+      return json({ error: 'Você não pode excluir a sua própria conta.' }, 400)
     }
 
-    const invitedUserId = inviteData.user?.id
-    if (!invitedUserId) return json({ error: 'Falha ao criar a conta convidada.' }, 400)
+    // 4. Resolve os auth_user_id correspondentes.
+    const { data: rows, error: rowsErr } = await adminClient
+      .from('app_users')
+      .select('id, auth_user_id')
+      .in('id', targetIds)
+    if (rowsErr) return json({ error: errMsg(rowsErr) }, 400)
 
-    // 4. Cria o perfil em app_users (atômico com o convite). Se falhar,
-    //    remove o usuário de auth para não deixar conta órfã.
-    const { error: profileError } = await adminClient.from('app_users').insert([{
-      auth_user_id: invitedUserId,
-      full_name,
-      email,
-      role,
-      job_title: job_title ?? null,
-      status: 'ativo',
-      invited_by: callerProfile.id,
-    }])
-
-    if (profileError) {
-      await adminClient.auth.admin.deleteUser(invitedUserId)
-      return json({ error: `Erro ao criar perfil: ${errMsg(profileError)}` }, 400)
+    // 5. Apaga cada conta de auth (não bloqueia se uma já não existir — cobre
+    //    também a limpeza de contas órfãs de exclusões antigas).
+    const warnings: string[] = []
+    for (const row of rows ?? []) {
+      if (row.auth_user_id) {
+        const { error: delErr } = await adminClient.auth.admin.deleteUser(row.auth_user_id)
+        if (delErr) warnings.push(`${row.id}: ${errMsg(delErr)}`)
+      }
     }
 
-    return json({ message: 'Convite enviado com sucesso', user: inviteData.user }, 200)
+    // 6. Apaga os perfis em app_users (no-op se o cascade já removeu).
+    const { error: profileDelErr } = await adminClient
+      .from('app_users')
+      .delete()
+      .in('id', targetIds)
+    if (profileDelErr) return json({ error: errMsg(profileDelErr) }, 400)
+
+    return json({ message: 'Usuários excluídos', deleted: targetIds.length, warnings }, 200)
   } catch (error: any) {
     return json({ error: errMsg(error) }, 400)
   }

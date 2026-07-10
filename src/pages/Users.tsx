@@ -10,18 +10,13 @@ import {
   Briefcase,
   Check,
   Trash2,
-  AlertTriangle,
-  Copy,
-  Lock,
-  CheckCheck
+  AlertTriangle
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useAuth, AppUserProfile } from '@/hooks/useAuth';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
-const DEFAULT_PASSWORD = 'Lum0s1604!!';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 
@@ -46,10 +41,7 @@ export default function UsersPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUserProfile | null>(null);
   const [formLoading, setFormLoading] = useState(false);
-  
-  
-  
-  const [credentialsCopied, setCredentialsCopied] = useState(false);
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -87,75 +79,55 @@ export default function UsersPage() {
     try {
       setFormLoading(true);
 
-      // Cria usuário no Supabase Auth usando cliente temporário (não afeta a sessão do admin)
-      const tempClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_ANON_KEY,
-        { auth: { persistSession: false, storageKey: `lumos-signup-${Date.now()}` } }
-      );
-
-      const { data: authData, error: authError } = await tempClient.auth.signUp({
-        email: formData.email,
-        password: DEFAULT_PASSWORD,
-        options: { data: { full_name: formData.full_name } }
-      });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Falha ao criar conta. Verifique se o e-mail já está cadastrado.');
-
-      // Confirma o e-mail automaticamente (sem precisar clicar em link de confirmação)
-      await supabase.rpc('confirm_user_email', { user_email: formData.email });
-
-      // Cria o perfil em app_users vinculado ao auth_user_id
-      const { error: dbError } = await supabase
-        .from('app_users')
-        .insert([{
-          auth_user_id: authData.user.id,
-          full_name: formData.full_name,
+      // Envia o convite por e-mail via edge function (service_role). A função
+      // valida que o solicitante é admin, cria a conta de auth, o perfil em
+      // app_users e dispara o e-mail para a pessoa definir a própria senha.
+      const { data, error: fnError } = await supabase.functions.invoke('invite-user', {
+        body: {
           email: formData.email,
+          full_name: formData.full_name,
           role: formData.role,
           job_title: formData.job_title,
-          status: 'ativo',
-          invited_by: currentUserProfile?.id
-        }]);
+        },
+      });
 
-      if (dbError) throw dbError;
+      // supabase-js encapsula erros HTTP; extrai a mensagem real do corpo.
+      if (fnError) {
+        let msg = fnError.message;
+        try {
+          const ctx = (fnError as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* mantém msg genérica */ }
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
 
-      // Copia credenciais automaticamente
-      const credentials = `E-mail: ${formData.email}\nSenha: ${DEFAULT_PASSWORD}`;
-      navigator.clipboard.writeText(credentials).catch(() => {});
+      logAudit('user_created', `Convite enviado para "${formData.full_name}" (${formData.email})`, { email: formData.email, role: formData.role });
 
-      logAudit('user_created', `Usuário "${formData.full_name}" (${formData.email}) criado`, { email: formData.email, role: formData.role });
-      
       // Trigger notification NOVO_USUARIO_ACESSO
       const admins = await getAdminUserIds();
       await notify({
         userIds: admins,
         event: NOTIFICATION_EVENTS.NOVO_USUARIO_ACESSO,
         title: 'Novo acesso solicitado',
-        body: `Perfil criado para o funcionário "${formData.full_name}" (${formData.role}).`,
+        body: `Convite enviado para o funcionário "${formData.full_name}" (${formData.role}).`,
         link: '/usuarios'
       });
 
-      toast.success(`✓ Usuário criado! Credenciais copiadas — cole no WhatsApp/e-mail para a funcionária.`);
-
+      toast.success(`✓ Convite enviado para ${formData.email}. A pessoa vai receber um e-mail para definir a senha.`);
 
       setIsInviteModalOpen(false);
       resetForm();
       fetchUsers();
     } catch (error: any) {
-      console.error('Erro no cadastro:', error);
+      console.error('Erro ao convidar:', error);
       toast.error(`Erro: ${error.message}`);
     } finally {
       setFormLoading(false);
     }
-  };
-
-  const copyCredentials = async (email: string) => {
-    const text = `E-mail: ${email}\nSenha: ${DEFAULT_PASSWORD}`;
-    await navigator.clipboard.writeText(text);
-    setCredentialsCopied(true);
-    setTimeout(() => setCredentialsCopied(false), 2000);
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -227,12 +199,25 @@ export default function UsersPage() {
     if (ids.length === 0) return;
 
     try {
-      const { error } = await supabase
-        .from('app_users')
-        .delete()
-        .in('id', ids);
+      // Exclui pela edge function (service_role): remove a conta de auth E o
+      // perfil de uma vez, sem deixar conta órfã no Supabase.
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { ids },
+      });
 
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* mantém msg genérica */ }
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
+
       setIsBatchDeleteModalOpen(false);
       setSelectedIds(new Set());
       fetchUsers();
@@ -606,34 +591,16 @@ export default function UsersPage() {
               </div>
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Senha Temporária</label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-                <input
-                  readOnly
-                  type="text"
-                  className="input-lumos pl-10 w-full bg-lumos-text-primary/5 cursor-default font-mono tracking-wider"
-                  value={DEFAULT_PASSWORD}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => copyCredentials(formData.email)}
-                className="btn-secondary px-3 flex items-center gap-1.5 text-xs font-bold flex-shrink-0"
-                title="Copiar credenciais"
-              >
-                {credentialsCopied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                {credentialsCopied ? 'Copiado!' : 'Copiar'}
-              </button>
-            </div>
-            <p className="text-[10px] text-lumos-text-secondary">Senha padrão atribuída a todos os novos usuários. As credenciais são copiadas automaticamente ao cadastrar.</p>
+          <div className="p-4 bg-lumos-yellow/5 border border-lumos-yellow/20 rounded-lumos flex items-start gap-3">
+            <Mail className="w-4 h-4 text-lumos-yellow mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-lumos-text-secondary leading-relaxed">
+              Um convite será enviado por e-mail para <span className="font-bold text-lumos-text-primary">{formData.email || 'o endereço informado'}</span>. A pessoa define a própria senha ao aceitar — nenhuma senha é compartilhada.
+            </p>
           </div>
           <div className="pt-4 flex gap-3">
             <button type="button" disabled={formLoading} onClick={() => setIsInviteModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" disabled={formLoading} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2">
-              {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Cadastrar e Copiar Credenciais'}
+              {formLoading ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div> : 'Enviar Convite'}
             </button>
           </div>
         </form>
