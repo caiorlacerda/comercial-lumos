@@ -9,10 +9,11 @@ import {
   endOfMonth, 
   startOfWeek, 
   endOfWeek, 
-  eachDayOfInterval, 
-  isSameDay, 
-  addMonths, 
+  eachDayOfInterval,
+  isSameDay,
+  addMonths,
   subMonths,
+  addDays,
   parseISO,
   isSameMonth
 } from 'date-fns';
@@ -146,10 +147,11 @@ interface DroppableDayProps {
   day: Date;
   isCurrentMonth: boolean;
   isToday: boolean;
+  tall?: boolean;
   children: React.ReactNode;
 }
 
-function DroppableDay({ day, isCurrentMonth, isToday, children }: DroppableDayProps) {
+function DroppableDay({ day, isCurrentMonth, isToday, tall, children }: DroppableDayProps) {
   const dayId = `day-${day.toLocaleDateString('en-CA')}`;
   const { setNodeRef, isOver } = useDroppable({
     id: dayId,
@@ -159,7 +161,8 @@ function DroppableDay({ day, isCurrentMonth, isToday, children }: DroppableDayPr
     <div
       ref={setNodeRef}
       className={clsx(
-        "bg-lumos-surface p-2.5 min-h-[100px] flex flex-col justify-between transition-colors border",
+        "bg-lumos-surface p-2.5 flex flex-col justify-between transition-colors border",
+        tall ? "min-h-[420px]" : "min-h-[100px]",
         isOver ? "border-emerald-500 bg-emerald-500/10 scale-[1.01] shadow-md z-10" : "border-lumos-border/30",
         !isCurrentMonth && "opacity-30 bg-lumos-bg/30",
         isToday && "ring-1 ring-inset ring-lumos-yellow/45 bg-lumos-yellow/[0.01]"
@@ -180,6 +183,7 @@ export default function ProducaoDashboard() {
 
   // State
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [calView, setCalView] = useState<'mes' | 'semana'>('mes');
   const [ordens, setOrdens] = useState<OrdemDoDiaEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -379,15 +383,19 @@ export default function ProducaoDashboard() {
     fetchProjectTasks();
   }, [currentDate]);
 
-  // Calendar grid math
+  // Calendar grid math (mês inteiro ou semana única, conforme o modo)
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
-  const endDate = endOfWeek(monthEnd, { weekStartsOn: 0 });
+  const startDate = calView === 'semana'
+    ? startOfWeek(currentDate, { weekStartsOn: 0 })
+    : startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday
+  const endDate = calView === 'semana'
+    ? endOfWeek(currentDate, { weekStartsOn: 0 })
+    : endOfWeek(monthEnd, { weekStartsOn: 0 });
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
-  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
-  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const prevMonth = () => setCurrentDate(calView === 'semana' ? addDays(currentDate, -7) : subMonths(currentDate, 1));
+  const nextMonth = () => setCurrentDate(calView === 'semana' ? addDays(currentDate, 7) : addMonths(currentDate, 1));
 
   // Filtra localmente as tarefas sem prazo pelo responsável selecionado
   const filteredNoDateTasks = useMemo(() => {
@@ -778,14 +786,31 @@ export default function ProducaoDashboard() {
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-lumos-yellow" />
                 <h2 className="text-md font-bold text-lumos-text-primary uppercase tracking-wider flex items-center gap-2">
-                  {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+                  {calView === 'semana'
+                    ? `${format(startDate, 'dd MMM', { locale: ptBR })} – ${format(endDate, 'dd MMM', { locale: ptBR })}`
+                    : format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
                   {(loadingCalendar || loadingTasks) && (
                     <span className="inline-block w-3.5 h-3.5 border-2 border-lumos-yellow border-t-transparent rounded-full animate-spin" />
                   )}
                 </h2>
               </div>
               <div className="flex items-center gap-1.5">
-                <button 
+                {/* Toggle Semana/Mês */}
+                <div className="flex bg-lumos-surface/40 p-0.5 border border-lumos-border/50 rounded-full mr-1.5">
+                  {(['semana', 'mes'] as const).map(v => (
+                    <button
+                      key={v}
+                      onClick={() => setCalView(v)}
+                      className={clsx(
+                        'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all',
+                        calView === v ? 'bg-lumos-yellow text-lumos-bg shadow-sm' : 'text-lumos-text-secondary hover:text-lumos-text-primary'
+                      )}
+                    >
+                      {v === 'semana' ? 'Semana' : 'Mês'}
+                    </button>
+                  ))}
+                </div>
+                <button
                   onClick={prevMonth}
                   className="p-1.5 rounded-lg border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all cursor-pointer"
                 >
@@ -843,7 +868,8 @@ export default function ProducaoDashboard() {
             <div className="grid grid-cols-7 gap-px bg-lumos-border/50 rounded overflow-hidden flex-1 mt-2">
               {days.map((day, idx) => {
                 const dayEvents = getNormalizedEventsForDay(day);
-                const isCurrentMonth = isSameMonth(day, currentDate);
+                // Na visão semanal todos os dias são "do período" (sem esmaecer)
+                const isCurrentMonth = calView === 'semana' || isSameMonth(day, currentDate);
                 const isToday = isSameDay(day, new Date());
 
                 return (
@@ -852,6 +878,7 @@ export default function ProducaoDashboard() {
                     day={day}
                     isCurrentMonth={isCurrentMonth}
                     isToday={isToday}
+                    tall={calView === 'semana'}
                   >
                     {/* Day number */}
                     <span className={clsx(
@@ -862,7 +889,10 @@ export default function ProducaoDashboard() {
                     </span>
 
                     {/* Day events (Unified/Meshed list) */}
-                    <div className="mt-2 space-y-1.5 overflow-y-auto max-h-[90px] custom-scrollbar">
+                    <div className={clsx(
+                      'mt-2 space-y-1.5 overflow-y-auto custom-scrollbar',
+                      calView === 'semana' ? 'max-h-[370px]' : 'max-h-[90px]'
+                    )}>
                       {dayEvents.map(event => {
                         if (event.type === 'local') {
                           return (
