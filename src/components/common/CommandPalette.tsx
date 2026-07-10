@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Users, BookOpen, Truck, FolderOpen, Check, CornerDownLeft,
+  CalendarDays, Columns3, ChartGantt, Clapperboard,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -70,6 +71,21 @@ export default function CommandPalette() {
         }
       });
     });
+
+    // Views da Produção: não ficam na sidebar (são pills nas páginas), mas
+    // continuam buscáveis aqui
+    if (ctx.isAdmin || ctx.can('ordem_do_dia')) {
+      pages.push(
+        { id: 'page-view-cal', group: 'Páginas', label: 'Calendário', sublabel: 'Produção · view', icon: CalendarDays, path: '/producao/dashboard' },
+        { id: 'page-view-board', group: 'Páginas', label: 'Board', sublabel: 'Produção · view', icon: Columns3, path: '/producao/board' },
+        { id: 'page-view-timeline', group: 'Páginas', label: 'Timeline', sublabel: 'Produção · view', icon: ChartGantt, path: '/producao/schedule' },
+      );
+    }
+    if ((ctx.isAdmin || ctx.can('cronograma_edicao')) && !pages.some(p => p.path === '/producao/cronograma-edicao')) {
+      pages.push(
+        { id: 'page-view-cron', group: 'Páginas', label: 'Cronograma Edição', sublabel: 'Produção · view', icon: Clapperboard, path: '/producao/cronograma-edicao' },
+      );
+    }
 
     const actions: PaletteItem[] = [];
     if (isAdmin) actions.push({ id: 'act-orc', group: 'Ações', label: 'Novo orçamento', icon: Plus, path: '/orcamentos/novo' });

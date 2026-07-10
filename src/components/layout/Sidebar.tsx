@@ -33,28 +33,30 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               {currentSection.title}
             </h3>
             <div className="space-y-1">
-              {getSectionItems(currentSection.id, ctx).map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.end}
-                  className={({ isActive }) => clsx(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lumos text-sm font-bold transition-all group",
-                    isActive
-                      ? "bg-lumos-yellow/10 text-lumos-yellow"
-                      : "text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5"
-                  )}
-                >
-                  <item.icon className="w-4 h-4 flex-shrink-0" />
-                  {item.label}
-                </NavLink>
-              ))}
+              {getSectionItems(currentSection.id, ctx).map((item) => {
+                // Na Produção, o item "Projetos" é um dropdown com a árvore
+                // de clientes → projetos (estilo Momentum)
+                if (currentSection.id === 'producao' && item.path === '/producao/projetos') {
+                  return <SidebarProjectTree key={item.path} />;
+                }
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.end}
+                    className={({ isActive }) => clsx(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lumos text-sm font-bold transition-all group",
+                      isActive
+                        ? "bg-lumos-yellow/10 text-lumos-yellow"
+                        : "text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5"
+                    )}
+                  >
+                    <item.icon className="w-4 h-4 flex-shrink-0" />
+                    {item.label}
+                  </NavLink>
+                );
+              })}
             </div>
-
-            {/* Árvore de clientes → projetos (só na seção Produção) */}
-            {currentSection.id === 'producao' && can('ordem_do_dia') && (
-              <SidebarProjectTree />
-            )}
           </div>
         )}
       </nav>

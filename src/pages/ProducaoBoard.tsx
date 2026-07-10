@@ -16,6 +16,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import ProducaoViewsNav from '@/components/producao/ProducaoViewsNav';
 import { TASK_STATUS_GROUPS } from '@/pages/Projetos';
 
 // -------------------------------------------------------------
@@ -367,6 +368,7 @@ export default function ProducaoBoard() {
 
   return (
     <div className="space-y-5 font-work-sans">
+      <ProducaoViewsNav />
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>

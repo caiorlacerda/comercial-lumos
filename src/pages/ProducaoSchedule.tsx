@@ -9,6 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import ProducaoViewsNav from '@/components/producao/ProducaoViewsNav';
 import { TASK_STATUS_GROUPS, getStatusDetails } from '@/pages/Projetos';
 
 // -------------------------------------------------------------
@@ -312,6 +313,7 @@ export default function ProducaoSchedule() {
   // -----------------------------------------------------------
   return (
     <div className="space-y-5 font-work-sans">
+      <ProducaoViewsNav />
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>

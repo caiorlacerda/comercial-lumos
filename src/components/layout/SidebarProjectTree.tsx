@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, ChevronDown, Layers, Plus } from 'lucide-react';
+import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 
@@ -27,10 +27,13 @@ interface TreeClient {
   projects: TreeProject[];
 }
 
+// Item "Projetos" da sidebar de Produção: um dropdown (como no Momentum) que
+// expande para "Todos os Projetos" + árvore de clientes → projetos ativos.
 export default function SidebarProjectTree() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [open, setOpen] = useState(true);
   const [clients, setClients] = useState<TreeClient[]>([]);
   const [noClientProjects, setNoClientProjects] = useState<TreeProject[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -74,111 +77,129 @@ export default function SidebarProjectTree() {
     navigate(`/producao/projetos?projectId=${projectId}`);
   };
 
-  const isAllActive = location.pathname === '/producao/projetos';
+  const isRouteActive = location.pathname === '/producao/projetos';
 
   return (
-    <div className="mt-6 pt-4 border-t border-lumos-border/40">
-      <h3 className="px-3 text-[10px] font-bold tracking-widest text-lumos-text-secondary mb-2 opacity-50 uppercase">
-        Projetos
-      </h3>
-
-      {/* Todos os Projetos */}
+    <div>
+      {/* Item "Projetos" (header do dropdown) */}
       <button
-        onClick={() => navigate('/producao/projetos')}
+        onClick={() => setOpen(prev => !prev)}
         className={clsx(
-          'w-full flex items-center gap-3 px-3 py-2 rounded-lumos text-sm font-bold transition-all',
-          isAllActive
+          'w-full flex items-center gap-3 px-3 py-2.5 rounded-lumos text-sm font-bold transition-all',
+          isRouteActive
             ? 'bg-lumos-yellow/10 text-lumos-yellow'
             : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
         )}
       >
-        <Layers className="w-4 h-4 flex-shrink-0" />
-        Todos os Projetos
+        <ClipboardList className="w-4 h-4 flex-shrink-0" />
+        <span className="flex-1 text-left">Projetos</span>
+        {open
+          ? <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+          : <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />}
       </button>
 
-      {loading ? (
-        <div className="px-3 py-2 space-y-1.5 animate-pulse">
-          {[0, 1, 2].map(i => <div key={i} className="h-4 bg-lumos-border/30 rounded" />)}
-        </div>
-      ) : (
-        <div className="space-y-0.5 mt-0.5">
-          {clients.map(client => {
-            const isOpen = expanded[client.id] ?? false;
-            return (
-              <div key={client.id}>
-                <button
-                  onClick={() => setExpanded(prev => ({ ...prev, [client.id]: !isOpen }))}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all group"
-                >
-                  {isOpen
-                    ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
-                    : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60" />}
-                  <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', dotColorFor(client.name))} />
-                  <span className="truncate flex-1 text-left">{client.name}</span>
-                  <span className="text-[9px] font-black opacity-40">{client.projects.length}</span>
-                </button>
-
-                {isOpen && (
-                  <div className="ml-[26px] border-l border-lumos-border/40 pl-2 space-y-0.5 py-0.5">
-                    {client.projects.map(proj => (
-                      <button
-                        key={proj.id}
-                        onClick={() => openProject(proj.id)}
-                        title={proj.name}
-                        className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
-                      >
-                        {proj.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Projetos sem cliente */}
-          {noClientProjects.length > 0 && (
-            <div>
-              <button
-                onClick={() => setExpanded(prev => ({ ...prev, __none__: !(prev.__none__ ?? false) }))}
-                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all"
-              >
-                {(expanded.__none__ ?? false)
-                  ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
-                  : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60" />}
-                <span className="w-2 h-2 rounded-full flex-shrink-0 bg-neutral-400" />
-                <span className="truncate flex-1 text-left">Sem cliente</span>
-                <span className="text-[9px] font-black opacity-40">{noClientProjects.length}</span>
-              </button>
-              {(expanded.__none__ ?? false) && (
-                <div className="ml-[26px] border-l border-lumos-border/40 pl-2 space-y-0.5 py-0.5">
-                  {noClientProjects.map(proj => (
-                    <button
-                      key={proj.id}
-                      onClick={() => openProject(proj.id)}
-                      title={proj.name}
-                      className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
-                    >
-                      {proj.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {clients.length === 0 && noClientProjects.length === 0 && (
-            <p className="px-3 py-2 text-[10px] text-lumos-text-secondary/50 italic">Nenhum projeto ativo.</p>
-          )}
-
-          {/* Novo projeto */}
+      {/* Dropdown */}
+      {open && (
+        <div className="ml-3 pl-2 border-l border-lumos-border/40 space-y-0.5 py-1">
+          {/* Todos os Projetos */}
           <button
             onClick={() => navigate('/producao/projetos')}
-            className="w-full flex items-center gap-2 px-3 py-1.5 mt-1 rounded-lumos text-[11px] font-bold text-lumos-text-secondary/60 hover:text-lumos-yellow transition-all"
+            className={clsx(
+              'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold transition-all',
+              isRouteActive
+                ? 'bg-lumos-yellow/10 text-lumos-yellow'
+                : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
+            )}
           >
-            <Plus className="w-3.5 h-3.5 flex-shrink-0" />
-            Novo projeto
+            <Layers className="w-3.5 h-3.5 flex-shrink-0" />
+            Todos os Projetos
           </button>
+
+          {loading ? (
+            <div className="px-2.5 py-2 space-y-1.5 animate-pulse">
+              {[0, 1, 2].map(i => <div key={i} className="h-3.5 bg-lumos-border/30 rounded" />)}
+            </div>
+          ) : (
+            <>
+              {clients.map(client => {
+                const isOpen = expanded[client.id] ?? false;
+                return (
+                  <div key={client.id}>
+                    <button
+                      onClick={() => setExpanded(prev => ({ ...prev, [client.id]: !isOpen }))}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all"
+                    >
+                      {isOpen
+                        ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
+                        : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60" />}
+                      <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', dotColorFor(client.name))} />
+                      <span className="truncate flex-1 text-left">{client.name}</span>
+                      <span className="text-[9px] font-black opacity-40">{client.projects.length}</span>
+                    </button>
+
+                    {isOpen && (
+                      <div className="ml-[22px] border-l border-lumos-border/40 pl-2 space-y-0.5 py-0.5">
+                        {client.projects.map(proj => (
+                          <button
+                            key={proj.id}
+                            onClick={() => openProject(proj.id)}
+                            title={proj.name}
+                            className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
+                          >
+                            {proj.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Projetos sem cliente */}
+              {noClientProjects.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setExpanded(prev => ({ ...prev, __none__: !(prev.__none__ ?? false) }))}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all"
+                  >
+                    {(expanded.__none__ ?? false)
+                      ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
+                      : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60" />}
+                    <span className="w-2 h-2 rounded-full flex-shrink-0 bg-neutral-400" />
+                    <span className="truncate flex-1 text-left">Sem cliente</span>
+                    <span className="text-[9px] font-black opacity-40">{noClientProjects.length}</span>
+                  </button>
+                  {(expanded.__none__ ?? false) && (
+                    <div className="ml-[22px] border-l border-lumos-border/40 pl-2 space-y-0.5 py-0.5">
+                      {noClientProjects.map(proj => (
+                        <button
+                          key={proj.id}
+                          onClick={() => openProject(proj.id)}
+                          title={proj.name}
+                          className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
+                        >
+                          {proj.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {clients.length === 0 && noClientProjects.length === 0 && (
+                <p className="px-2.5 py-2 text-[10px] text-lumos-text-secondary/50 italic">Nenhum projeto ativo.</p>
+              )}
+
+              {/* Novo projeto */}
+              <button
+                onClick={() => navigate('/producao/projetos')}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-[11px] font-bold text-lumos-text-secondary/60 hover:text-lumos-yellow transition-all"
+              >
+                <Plus className="w-3.5 h-3.5 flex-shrink-0" />
+                Novo projeto
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

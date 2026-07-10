@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ShieldCheck, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2, Columns3, ChartGantt
+  CalendarDays, Truck, Users2
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -44,14 +44,16 @@ export const NAV_SECTIONS: Section[] = [
     title: 'PRODUÇÃO',
     visibleWhen: ({ can }) => can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') || can('cronograma_edicao'),
     items: [
+      // Calendário, Board, Timeline e Cronograma são "views" acessadas por
+      // pills no topo das páginas de produção (ProducaoViewsNav), não itens
+      // de sidebar — estilo ClickUp.
       { icon: LayoutDashboard, label: 'Visão Geral', path: '/producao', permission: 'ordem_do_dia', end: true },
-      { icon: CalendarDays, label: 'Calendário', path: '/producao/dashboard', permission: 'ordem_do_dia' },
-      { icon: Columns3, label: 'Board', path: '/producao/board', permission: 'ordem_do_dia' },
-      { icon: ChartGantt, label: 'Timeline', path: '/producao/schedule', permission: 'ordem_do_dia' },
       { icon: ClipboardList, label: 'Projetos', path: '/producao/projetos', permission: 'ordem_do_dia' },
       { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
-      { icon: CalendarDays, label: 'Cronograma Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao' },
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
+      // Só para quem TEM cronograma e NÃO tem as demais views (papel editor):
+      // sem este item, editores ficariam sem porta de entrada na seção.
+      { icon: CalendarDays, label: 'Cronograma Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao_only' },
     ],
   },
   {
@@ -91,6 +93,11 @@ export function getSectionItems(sectionId: SectionType, ctx: NavContext): NavIte
     if (item.permission === 'admin') return ctx.isAdmin;
     if (item.permission === 'financeiro_admin') return ctx.isAdmin;
     if (item.permission === 'financeiro_dashboard') return ctx.isAdmin;
+    // Item exclusivo de quem só tem o cronograma (papel editor): quem tem
+    // ordem_do_dia acessa o Cronograma pelas views, não pela sidebar.
+    if (item.permission === 'cronograma_edicao_only') {
+      return ctx.can('cronograma_edicao') && !ctx.can('ordem_do_dia');
+    }
     return ctx.can(item.permission);
   });
 }
