@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
+import ProducaoViewsNav from '@/components/producao/ProducaoViewsNav';
 
 // DnD Kit imports
 import {
@@ -616,6 +617,7 @@ export default function ProducaoDashboard() {
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="space-y-6 font-work-sans text-lumos-text-primary max-w-7xl mx-auto pb-10">
+        <ProducaoViewsNav />
         
         {/* Header */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">

@@ -799,7 +799,12 @@ export default function Projetos() {
   const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({});
   const [showConcludedProjects, setShowConcludedProjects] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // No desktop a navegação de clientes/projetos vive na sidebar principal
+  // (SidebarProjectTree), então a coluna interna nasce recolhida; no mobile
+  // (sem sidebar principal) ela continua aberta.
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 1024
+  );
   
   // Project Tasks Panel States
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
