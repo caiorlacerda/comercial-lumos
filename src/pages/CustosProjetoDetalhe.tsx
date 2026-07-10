@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -55,6 +55,24 @@ export default function CustosProjetoDetalhe() {
 
   // Módulo Financeiro (Fase 1)
   const [projectFinanceiro, setProjectFinanceiro] = useState<any>(null);
+
+  // Preferência pessoal do admin: o 3º card mostra "Saldo de Produção" ou
+  // "Lucro Líquido Real". Persistida por usuário no localStorage.
+  const [saldoMode, setSaldoMode] = useState<'saldo' | 'lucro'>(() => {
+    try {
+      return localStorage.getItem(`lumos_saldo_mode_${profile?.id ?? 'anon'}`) === 'lucro' ? 'lucro' : 'saldo';
+    } catch {
+      return 'saldo';
+    }
+  });
+
+  const toggleSaldoMode = () => {
+    setSaldoMode(prev => {
+      const next = prev === 'saldo' ? 'lucro' : 'saldo';
+      try { localStorage.setItem(`lumos_saldo_mode_${profile?.id ?? 'anon'}`, next); } catch { /* ignora */ }
+      return next;
+    });
+  };
   const [financeCategorias, setFinanceCategorias] = useState<any[]>([]);
   const [financeTiposServico, setFinanceTiposServico] = useState<any[]>([]);
   const [isEditingFinance, setIsEditingFinance] = useState(false);
@@ -834,19 +852,34 @@ export default function CustosProjetoDetalhe() {
             </p>
           </div>
           <div className="card p-6">
-            <div className="flex justify-between items-start mb-1">
+            <div className="flex justify-between items-start mb-1 gap-2">
               <p className="text-[10px] font-bold text-lumos-text-secondary uppercase">
-                Saldo de Produção (Margem)
+                {saldoMode === 'saldo' ? 'Saldo de Produção (Margem)' : 'Lucro Líquido Real'}
               </p>
-              {!project.budget_id && (
-                <span className="text-[9px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.5 rounded uppercase tracking-wider scale-90">
-                  Estimado
-                </span>
-              )}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {!project.budget_id && (
+                  <span className="text-[9px] font-bold bg-lumos-yellow/10 text-lumos-yellow px-1.5 py-0.5 rounded uppercase tracking-wider scale-90">
+                    Estimado
+                  </span>
+                )}
+                <button
+                  onClick={toggleSaldoMode}
+                  className="text-[8px] font-bold uppercase tracking-wider text-lumos-text-secondary/70 hover:text-lumos-yellow border border-lumos-border hover:border-lumos-yellow/40 rounded-full px-2 py-0.5 transition-colors flex items-center gap-1"
+                  title="Alternar entre Saldo de Produção e Lucro Líquido Real"
+                >
+                  <ArrowLeftRight className="w-2.5 h-2.5" />
+                  {saldoMode === 'saldo' ? 'Lucro' : 'Saldo'}
+                </button>
+              </div>
             </div>
-            <p className={`text-2xl font-black tracking-tight ${remainingCosts >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(remainingCosts)}
-            </p>
+            {(() => {
+              const val = saldoMode === 'saldo' ? remainingCosts : lucroLiquidoReal;
+              return (
+                <p className={`text-2xl font-black tracking-tight ${val >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)}
+                </p>
+              );
+            })()}
           </div>
         </div>
       ) : (
