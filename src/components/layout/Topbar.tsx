@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Menu, Sun, Moon, LogOut, Settings, User, Bell, ChevronDown } from 'lucide-react';
+import { Menu, Sun, Moon, LogOut, Settings, User, Bell, ChevronDown, Search } from 'lucide-react';
+import { openCommandPalette } from '@/components/common/CommandPalette';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
@@ -103,6 +104,16 @@ export default function Topbar() {
 
       {/* Right Actions */}
       <div className="flex items-center gap-4">
+        {/* Busca global (Cmd+K) */}
+        <button
+          onClick={openCommandPalette}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full text-lumos-text-secondary hover:text-lumos-yellow border border-lumos-border hover:border-lumos-yellow/40 transition-all"
+          title="Buscar (Cmd+K)"
+        >
+          <Search className="w-4 h-4" />
+          <kbd className="text-[9px] font-black uppercase tracking-wider opacity-60">⌘K</kbd>
+        </button>
+
         {/* Notification Bell */}
         <NotificationBell />
 
