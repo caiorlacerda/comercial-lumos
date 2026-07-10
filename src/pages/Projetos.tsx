@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
 import { pdf } from '@react-pdf/renderer';
-import { 
-  FolderClosed, 
+import {
+  FolderClosed,
   FolderOpen,
-  Plus, 
+  ExternalLink,
+  Plus,
   ClipboardList, 
   Search, 
   Calendar, 
@@ -847,6 +848,7 @@ export default function Projetos() {
   );
 
   // Deep-link: consome ?projectId=&taskId= da URL (notificações, Board e busca Cmd+K)
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const pendingTaskIdRef = useRef<string | null>(null);
 
@@ -1979,20 +1981,20 @@ export default function Projetos() {
                       Lista
                     </button>
                     <button
-                      disabled
-                      onClick={() => setActiveTab('kanban')}
-                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary/40 cursor-not-allowed flex items-center gap-1.5"
+                      onClick={() => navigate(`/producao/board?projectId=${selectedProjectId}`)}
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 transition-colors"
+                      title="Abrir este projeto no Board de Produção"
                     >
                       Kanban
-                      <span className="text-[7px] font-black tracking-normal px-1 py-0.2 bg-lumos-border/50 text-lumos-text-secondary rounded uppercase">Em breve</span>
+                      <ExternalLink className="w-3 h-3 opacity-50" />
                     </button>
                     <button
-                      disabled
-                      onClick={() => setActiveTab('gantt')}
-                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary/40 cursor-not-allowed flex items-center gap-1.5"
+                      onClick={() => navigate(`/producao/schedule?projectId=${selectedProjectId}`)}
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 transition-colors"
+                      title="Abrir este projeto na Timeline"
                     >
                       Gantt
-                      <span className="text-[7px] font-black tracking-normal px-1 py-0.2 bg-lumos-border/50 text-lumos-text-secondary rounded uppercase">Em breve</span>
+                      <ExternalLink className="w-3 h-3 opacity-50" />
                     </button>
                   </div>
                 </div>

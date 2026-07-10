@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
@@ -200,14 +200,15 @@ export default function ProducaoBoard() {
   const { profile } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [tasks, setTasks] = useState<BoardTask[]>([]);
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filtros
+  // Filtros (?projectId= permite chegar já filtrado, ex.: vindo da tab do projeto)
   const [searchTerm, setSearchTerm] = useState('');
-  const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [projectFilter, setProjectFilter] = useState<string>(() => searchParams.get('projectId') || 'all');
   const [responsavelFilter, setResponsavelFilter] = useState<string>('all');
   const [prioridadeFilter, setPrioridadeFilter] = useState<string>('all');
   const [showConcluded, setShowConcluded] = useState(true);
