@@ -42,6 +42,7 @@ const FinanceiroRelatorios = lazy(() => import('@/pages/FinanceiroRelatorios'));
 // Produção
 const ProducaoDashboard = lazy(() => import('@/pages/ProducaoDashboard'));
 const ProducaoBoard = lazy(() => import('@/pages/ProducaoBoard'));
+const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
 const Projetos = lazy(() => import('@/pages/Projetos'));
 const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
 const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
@@ -609,6 +610,18 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="ordem_do_dia">
                   <ProducaoBoard />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
+          {/* PRODUÇÃO — Timeline (Gantt) */}
+          <Route
+            path="/producao/schedule"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <ProducaoSchedule />
                 </PermissionGuard>
               </AuthWrapper>
             }

@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ShieldCheck, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2, Columns3
+  CalendarDays, Truck, Users2, Columns3, ChartGantt
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -46,6 +46,7 @@ export const NAV_SECTIONS: Section[] = [
     items: [
       { icon: CalendarDays, label: 'Calendário', path: '/producao/dashboard', permission: 'ordem_do_dia' },
       { icon: Columns3, label: 'Board', path: '/producao/board', permission: 'ordem_do_dia' },
+      { icon: ChartGantt, label: 'Timeline', path: '/producao/schedule', permission: 'ordem_do_dia' },
       { icon: ClipboardList, label: 'Projetos', path: '/producao/projetos', permission: 'ordem_do_dia' },
       { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
       { icon: CalendarDays, label: 'Cronograma Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao' },
