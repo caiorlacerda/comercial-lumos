@@ -36,7 +36,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               {getSectionItems(currentSection.id, ctx).map((item) => {
                 // Na Produção, o item "Projetos" é um dropdown com a árvore
                 // de clientes → projetos (estilo Momentum)
-                if (currentSection.id === 'producao' && item.path === '/producao/projetos') {
+                if (currentSection.id === 'producao' && item.path === '/producao') {
                   return <SidebarProjectTree key={item.path} />;
                 }
                 return (

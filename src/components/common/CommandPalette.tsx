@@ -79,6 +79,7 @@ export default function CommandPalette() {
         { id: 'page-view-cal', group: 'Páginas', label: 'Calendário', sublabel: 'Produção · view', icon: CalendarDays, path: '/producao/dashboard' },
         { id: 'page-view-board', group: 'Páginas', label: 'Board', sublabel: 'Produção · view', icon: Columns3, path: '/producao/board' },
         { id: 'page-view-timeline', group: 'Páginas', label: 'Timeline', sublabel: 'Produção · view', icon: ChartGantt, path: '/producao/schedule' },
+        { id: 'page-gerenciador', group: 'Páginas', label: 'Gerenciador de Projetos', sublabel: 'Produção', icon: FolderOpen, path: '/producao/projetos' },
       );
     }
     if ((ctx.isAdmin || ctx.can('cronograma_edicao')) && !pages.some(p => p.path === '/producao/cronograma-edicao')) {

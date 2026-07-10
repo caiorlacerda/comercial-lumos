@@ -46,9 +46,10 @@ export const NAV_SECTIONS: Section[] = [
     items: [
       // Calendário, Board, Timeline e Cronograma são "views" acessadas por
       // pills no topo das páginas de produção (ProducaoViewsNav), não itens
-      // de sidebar — estilo ClickUp.
-      { icon: LayoutDashboard, label: 'Visão Geral', path: '/producao', permission: 'ordem_do_dia', end: true },
-      { icon: ClipboardList, label: 'Projetos', path: '/producao/projetos', permission: 'ordem_do_dia' },
+      // de sidebar — estilo ClickUp. "Projetos" leva à Visão Geral (/producao),
+      // que é a visão "Todos os Projetos"; na sidebar ele vira um dropdown
+      // com a árvore de clientes → projetos.
+      { icon: ClipboardList, label: 'Projetos', path: '/producao', permission: 'ordem_do_dia', end: true },
       { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
       // Só para quem TEM cronograma e NÃO tem as demais views (papel editor):

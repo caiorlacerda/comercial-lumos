@@ -1,18 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus } from 'lucide-react';
+import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/context/ToastContext';
 
-// Paleta de bolinhas por cliente (estilo Momentum) — cor determinística pelo nome
-const DOT_COLORS = [
-  'bg-green-400', 'bg-purple-400', 'bg-orange-400',
-  'bg-blue-400', 'bg-pink-400', 'bg-teal-400',
+// Cores disponíveis para clientes. A chave é o que fica salvo no banco
+// (client_colors.color); a classe é só apresentação.
+export const CLIENT_COLOR_OPTIONS: { key: string; className: string; label: string }[] = [
+  { key: 'green', className: 'bg-green-400', label: 'Verde' },
+  { key: 'purple', className: 'bg-purple-400', label: 'Roxo' },
+  { key: 'orange', className: 'bg-orange-400', label: 'Laranja' },
+  { key: 'blue', className: 'bg-blue-400', label: 'Azul' },
+  { key: 'pink', className: 'bg-pink-400', label: 'Rosa' },
+  { key: 'teal', className: 'bg-teal-400', label: 'Verde-água' },
+  { key: 'red', className: 'bg-red-400', label: 'Vermelho' },
+  { key: 'yellow', className: 'bg-yellow-400', label: 'Amarelo' },
+  { key: 'indigo', className: 'bg-indigo-400', label: 'Índigo' },
+  { key: 'neutral', className: 'bg-neutral-400', label: 'Cinza' },
 ];
-const dotColorFor = (name: string) => {
+
+const classForColorKey = (key: string) =>
+  CLIENT_COLOR_OPTIONS.find(c => c.key === key)?.className || 'bg-neutral-400';
+
+// Fallback automático: cor determinística pelo nome (quando não há cor salva)
+const AUTO_COLORS = CLIENT_COLOR_OPTIONS.slice(0, 6).map(c => c.className);
+const autoColorFor = (name: string) => {
   let sum = 0;
   for (let i = 0; i < name.length; i++) sum += name.charCodeAt(i);
-  return DOT_COLORS[sum % DOT_COLORS.length];
+  return AUTO_COLORS[sum % AUTO_COLORS.length];
 };
 
 interface TreeProject {
@@ -28,24 +44,29 @@ interface TreeClient {
 }
 
 // Item "Projetos" da sidebar de Produção: um dropdown (como no Momentum) que
-// expande para "Todos os Projetos" + árvore de clientes → projetos ativos.
+// expande para "Todos os Projetos" (Visão Geral) + árvore de clientes →
+// projetos ativos. Botão direito num cliente abre o seletor de cor.
 export default function SidebarProjectTree() {
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
 
   const [open, setOpen] = useState(true);
   const [clients, setClients] = useState<TreeClient[]>([]);
   const [noClientProjects, setNoClientProjects] = useState<TreeProject[]>([]);
+  const [colors, setColors] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [colorMenu, setColorMenu] = useState<{ x: number; y: number; clientId: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [projRes, cliRes] = await Promise.all([
+        const [projRes, cliRes, colorRes] = await Promise.all([
           supabase.from('projects').select('id, name, client_id').eq('status', 'ativo').order('name'),
           supabase.from('clients').select('id, name').order('name'),
+          supabase.from('client_colors').select('client_id, color'),
         ]);
         if (cancelled) return;
 
@@ -64,6 +85,13 @@ export default function SidebarProjectTree() {
 
         setClients(tree);
         setNoClientProjects(orphans);
+
+        // Cores personalizadas (tabela pode não existir ainda — ignora erro)
+        if (!colorRes.error && colorRes.data) {
+          const map: Record<string, string> = {};
+          (colorRes.data as { client_id: string; color: string }[]).forEach(r => { map[r.client_id] = r.color; });
+          setColors(map);
+        }
       } catch (err) {
         console.error('Erro ao carregar árvore de projetos:', err);
       } finally {
@@ -73,11 +101,59 @@ export default function SidebarProjectTree() {
     return () => { cancelled = true; };
   }, []);
 
+  // Fecha o menu de cor com Esc
+  useEffect(() => {
+    if (!colorMenu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setColorMenu(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [colorMenu]);
+
+  const dotClassFor = (client: TreeClient) =>
+    colors[client.id] ? classForColorKey(colors[client.id]) : autoColorFor(client.name);
+
+  const setClientColor = async (clientId: string, colorKey: string | null) => {
+    setColorMenu(null);
+    const previous = colors[clientId];
+
+    // Otimista
+    setColors(prev => {
+      const next = { ...prev };
+      if (colorKey) next[clientId] = colorKey;
+      else delete next[clientId];
+      return next;
+    });
+
+    try {
+      if (colorKey) {
+        const { error } = await supabase
+          .from('client_colors')
+          .upsert({ client_id: clientId, color: colorKey, updated_at: new Date().toISOString() }, { onConflict: 'client_id' });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('client_colors').delete().eq('client_id', clientId);
+        if (error) throw error;
+      }
+    } catch (err: any) {
+      console.error('Erro ao salvar cor do cliente:', err);
+      toast.error('Não foi possível salvar a cor do cliente.');
+      // Rollback
+      setColors(prev => {
+        const next = { ...prev };
+        if (previous) next[clientId] = previous;
+        else delete next[clientId];
+        return next;
+      });
+    }
+  };
+
   const openProject = (projectId: string) => {
     navigate(`/producao/projetos?projectId=${projectId}`);
   };
 
-  const isRouteActive = location.pathname === '/producao/projetos';
+  // "Todos os Projetos" = Visão Geral (/producao)
+  const isOverviewActive = location.pathname === '/producao';
+  const isHeaderActive = isOverviewActive || location.pathname === '/producao/projetos';
 
   return (
     <div>
@@ -86,7 +162,7 @@ export default function SidebarProjectTree() {
         onClick={() => setOpen(prev => !prev)}
         className={clsx(
           'w-full flex items-center gap-3 px-3 py-2.5 rounded-lumos text-sm font-bold transition-all',
-          isRouteActive
+          isHeaderActive
             ? 'bg-lumos-yellow/10 text-lumos-yellow'
             : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
         )}
@@ -101,12 +177,12 @@ export default function SidebarProjectTree() {
       {/* Dropdown */}
       {open && (
         <div className="ml-3 pl-2 border-l border-lumos-border/40 space-y-0.5 py-1">
-          {/* Todos os Projetos */}
+          {/* Todos os Projetos → Visão Geral */}
           <button
-            onClick={() => navigate('/producao/projetos')}
+            onClick={() => navigate('/producao')}
             className={clsx(
               'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold transition-all',
-              isRouteActive
+              isOverviewActive
                 ? 'bg-lumos-yellow/10 text-lumos-yellow'
                 : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
             )}
@@ -127,12 +203,17 @@ export default function SidebarProjectTree() {
                   <div key={client.id}>
                     <button
                       onClick={() => setExpanded(prev => ({ ...prev, [client.id]: !isOpen }))}
+                      onContextMenu={e => {
+                        e.preventDefault();
+                        setColorMenu({ x: e.clientX, y: e.clientY, clientId: client.id });
+                      }}
+                      title={`${client.name} — botão direito para escolher a cor`}
                       className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all"
                     >
                       {isOpen
                         ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
                         : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60" />}
-                      <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', dotColorFor(client.name))} />
+                      <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', dotClassFor(client))} />
                       <span className="truncate flex-1 text-left">{client.name}</span>
                       <span className="text-[9px] font-black opacity-40">{client.projects.length}</span>
                     </button>
@@ -201,6 +282,39 @@ export default function SidebarProjectTree() {
             </>
           )}
         </div>
+      )}
+
+      {/* Menu de cor (botão direito no cliente) */}
+      {colorMenu && (
+        <>
+          <div className="fixed inset-0 z-[190]" onClick={() => setColorMenu(null)} onContextMenu={e => { e.preventDefault(); setColorMenu(null); }} />
+          <div
+            className="fixed z-[200] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-100"
+            style={{ left: Math.min(colorMenu.x, window.innerWidth - 200), top: Math.min(colorMenu.y, window.innerHeight - 140) }}
+          >
+            <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary mb-2">Cor do cliente</p>
+            <div className="grid grid-cols-5 gap-1.5">
+              {CLIENT_COLOR_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  title={opt.label}
+                  onClick={() => setClientColor(colorMenu.clientId, opt.key)}
+                  className={clsx(
+                    'w-6 h-6 rounded-full transition-transform hover:scale-110 border-2',
+                    opt.className,
+                    colors[colorMenu.clientId] === opt.key ? 'border-lumos-text-primary' : 'border-transparent'
+                  )}
+                />
+              ))}
+            </div>
+            <button
+              onClick={() => setClientColor(colorMenu.clientId, null)}
+              className="mt-2.5 w-full flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-lumos-text-secondary hover:text-lumos-yellow transition-colors py-1 border-t border-lumos-border/40 pt-2"
+            >
+              <RotateCcw className="w-3 h-3" /> Automática
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
