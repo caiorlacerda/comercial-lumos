@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -845,6 +846,11 @@ export default function Projetos() {
     u.full_name.toLowerCase().includes(mentionAutocomplete?.query.toLowerCase() || '')
   );
 
+  // Deep-link: consome ?projectId=&taskId= da URL (links de notificação e do Board)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkConsumedRef = useRef(false);
+  const pendingTaskIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -857,6 +863,33 @@ export default function Projetos() {
     }
     setSelectedTaskId(null);
   }, [selectedProjectId]);
+
+  // Abre projeto/tarefa vindos da URL assim que os projetos carregam (uma vez só)
+  useEffect(() => {
+    if (deepLinkConsumedRef.current || projects.length === 0) return;
+    deepLinkConsumedRef.current = true;
+
+    const pid = searchParams.get('projectId');
+    if (!pid) return;
+
+    const proj = projects.find(p => p.id === pid);
+    if (proj) {
+      pendingTaskIdRef.current = searchParams.get('taskId');
+      setSelectedClientId(proj.client_id);
+      setSelectedProjectId(proj.id);
+    }
+    // Limpa a query para não reprocessar em navegações internas
+    setSearchParams({}, { replace: true });
+  }, [projects]);
+
+  // Quando as tarefas do projeto deep-linkado chegam, abre a tarefa pendente
+  useEffect(() => {
+    const tid = pendingTaskIdRef.current;
+    if (tid && projectTasks.some(t => t.id === tid)) {
+      pendingTaskIdRef.current = null;
+      setSelectedTaskId(tid);
+    }
+  }, [projectTasks]);
 
   const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
 
