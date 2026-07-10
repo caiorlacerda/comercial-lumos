@@ -721,26 +721,31 @@ export default function CustosProjetoDetalhe() {
 
   // 3. Cálculos de Faturamento, Impostos e Lucro (Cascata Financeira)
   const marginPct = Number(project.active_version?.margin_pct ?? defaultMarginPercent);
-  const nfPct = Number(project.active_version?.nf_pct ?? defaultNfPercent);
   const discountValue = Number(project.active_version?.discount_value ?? 0);
+
+  // Alíquota EFETIVA de NF: prioriza o valor editado nos Dados Financeiros
+  // (projectFinanceiro.nf_percent); cai para a do orçamento e por fim 0.18.
+  const nfPct = Number(projectFinanceiro?.nf_percent ?? project.active_version?.nf_pct ?? 0.18);
+  // Alíquota do ORÇAMENTO: usada apenas para reconstruir o valor de venda, que é
+  // o valor contratado e não muda quando a alíquota efetiva é editada.
+  const budgetNfPct = Number(project.active_version?.nf_pct ?? nfPct);
 
   // Subtotal (Custo + Margem)
   const subtotalOrçado = estimatedCost * (1 + marginPct);
 
-  // Faturamento Bruto (Recalculado de baixo para cima se tiver orçamento)
+  // Faturamento Bruto (venda) — valor contratado, FIXO. Reconstruído com a
+  // alíquota do orçamento (ou o valor de venda registrado). Não muda com a
+  // alíquota efetiva.
   const faturamentoBruto = project.budget_id
-    ? (subtotalOrçado * (1 + nfPct) - discountValue)
+    ? (subtotalOrçado * (1 + budgetNfPct) - discountValue)
     : (projectFinanceiro?.valor_vendido ?? Number(project.production_value || 0));
 
-  // Imposto NF
-  const impostoNF = project.budget_id
-    ? (subtotalOrçado * nfPct)
-    : (faturamentoBruto * nfPct);
+  // Imposto NF — deduzido do faturamento bruto pela alíquota efetiva (embutido).
+  // Menos imposto => sobra mais (Lucro Líquido sobe).
+  const impostoNF = faturamentoBruto - (faturamentoBruto / (1 + nfPct));
 
-  // Faturamento Líquido (Receita sem imposto)
-  const faturamentoLiquido = project.budget_id
-    ? subtotalOrçado
-    : (faturamentoBruto / (1 + nfPct));
+  // Faturamento Líquido (Receita sem imposto) = Bruto − Imposto.
+  const faturamentoLiquido = faturamentoBruto - impostoNF;
 
   // Lucro Líquido Real (com impostos deduzidos)
   const lucroLiquidoReal = faturamentoLiquido - totalCosts;
