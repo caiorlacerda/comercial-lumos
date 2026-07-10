@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   useDraggable,
   useDroppable,
   DragEndEvent,
+  DragStartEvent,
 } from '@dnd-kit/core';
 import { Search, Flag, CalendarDays, Columns3, ExternalLink, X } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -61,44 +63,13 @@ const getInitials = (name: string) => {
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 // -------------------------------------------------------------
-// Card arrastável
+// Conteúdo visual do card (usado no board e no DragOverlay)
 // -------------------------------------------------------------
-function BoardCard({
-  task,
-  responsavelName,
-  disabled,
-  onOpen,
-}: {
-  task: BoardTask;
-  responsavelName: string | null;
-  disabled: boolean;
-  onOpen: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `task-${task.id}`,
-    disabled,
-  });
-
+function BoardCardContent({ task, responsavelName }: { task: BoardTask; responsavelName: string | null }) {
   const isOverdue = !!task.data_fim && task.data_fim < todayStr() && !CONCLUDED_STATUSES.has(task.status);
 
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined;
-
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      onClick={() => { if (!isDragging) onOpen(); }}
-      className={clsx(
-        'group bg-lumos-bg border border-lumos-border rounded-lumos p-3 cursor-pointer select-none transition-shadow',
-        'hover:border-lumos-yellow/40 hover:shadow-md',
-        isDragging && 'opacity-80 shadow-xl ring-1 ring-lumos-yellow/40 relative z-50',
-        !disabled && 'touch-none'
-      )}
-    >
+    <>
       {/* Projeto / Cliente */}
       <p className="text-[9px] font-bold uppercase tracking-wider text-lumos-text-secondary/70 mb-1 line-clamp-1">
         {task.project?.client?.name ? `${task.project.client.name} · ` : ''}{task.project?.name || 'Projeto'}
@@ -136,6 +107,43 @@ function BoardCard({
           </span>
         )}
       </div>
+    </>
+  );
+}
+
+// -------------------------------------------------------------
+// Card arrastável (o visual "voa" via DragOverlay; aqui fica o fantasma)
+// -------------------------------------------------------------
+function BoardCard({
+  task,
+  responsavelName,
+  disabled,
+  onOpen,
+}: {
+  task: BoardTask;
+  responsavelName: string | null;
+  disabled: boolean;
+  onOpen: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `task-${task.id}`,
+    disabled,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={() => { if (!isDragging) onOpen(); }}
+      className={clsx(
+        'group bg-lumos-bg border border-lumos-border rounded-lumos p-3 cursor-pointer select-none transition-shadow',
+        'hover:border-lumos-yellow/40 hover:shadow-md',
+        isDragging && 'opacity-30 border-dashed',
+        !disabled && 'touch-none'
+      )}
+    >
+      <BoardCardContent task={task} responsavelName={responsavelName} />
     </div>
   );
 }
@@ -203,6 +211,9 @@ export default function ProducaoBoard() {
   const [responsavelFilter, setResponsavelFilter] = useState<string>('all');
   const [prioridadeFilter, setPrioridadeFilter] = useState<string>('all');
   const [showConcluded, setShowConcluded] = useState(true);
+
+  // Card em arrasto (renderizado no DragOverlay, acima de todas as colunas)
+  const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
 
   // Mesma regra do calendário: admin e produção movem cards
   const canMove = profile?.role === 'admin' || profile?.role === 'producao';
@@ -299,7 +310,13 @@ export default function ProducaoBoard() {
     return map;
   }, [filteredTasks, columns]);
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const taskId = event.active.id.toString().replace('task-', '');
+    setActiveTask(tasks.find(t => t.id === taskId) ?? null);
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveTask(null);
     const { active, over } = event;
     if (!over) return;
 
@@ -434,7 +451,12 @@ export default function ProducaoBoard() {
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" />
         </div>
       ) : (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveTask(null)}
+        >
           <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar items-start">
             {columns.map(col => {
               const colTasks = tasksByStatus[col.value] || [];
@@ -459,6 +481,18 @@ export default function ProducaoBoard() {
               );
             })}
           </div>
+
+          {/* Card "voando" acima de todas as colunas durante o arrasto */}
+          <DragOverlay dropAnimation={null}>
+            {activeTask ? (
+              <div className="w-[256px] bg-lumos-bg border border-lumos-yellow/50 rounded-lumos p-3 shadow-2xl ring-1 ring-lumos-yellow/30 rotate-2 cursor-grabbing">
+                <BoardCardContent
+                  task={activeTask}
+                  responsavelName={activeTask.responsavel_id ? userNameById[activeTask.responsavel_id] || null : null}
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
     </div>
