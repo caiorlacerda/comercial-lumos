@@ -202,6 +202,7 @@ function VersionWatcher() {
   const [updatePending, setUpdatePending] = useState(false);
   const lastCheckedRef = useRef<number>(Date.now());
   const isFirstRender = useRef(true);
+  const prevPathRef = useRef(location.pathname);
   const latestServerVersionRef = useRef<string | null>(null);
 
   // No boot da aplicação, verifica se atualizamos com sucesso
@@ -298,10 +299,18 @@ function VersionWatcher() {
 
   // Monitora a troca de rota
   useEffect(() => {
+    // Só reage a mudança REAL de rota — não a flips de updatePending. Assim o
+    // reload de nova versão acontece na navegação (na página que o usuário
+    // clicou), e nunca enquanto ele está parado numa página.
+    const pathChanged = prevPathRef.current !== location.pathname;
+    prevPathRef.current = location.pathname;
+
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
+
+    if (!pathChanged) return;
 
     if (updatePending) {
       console.log('[VersionWatcher] Navigation detected and update is pending. Reloading page...');
