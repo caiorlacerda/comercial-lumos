@@ -40,6 +40,7 @@ const FinanceiroConfig = lazy(() => import('@/pages/FinanceiroConfig'));
 const FinanceiroRelatorios = lazy(() => import('@/pages/FinanceiroRelatorios'));
 
 // Produção
+const ProducaoOverview = lazy(() => import('@/pages/ProducaoOverview'));
 const ProducaoDashboard = lazy(() => import('@/pages/ProducaoDashboard'));
 const ProducaoBoard = lazy(() => import('@/pages/ProducaoBoard'));
 const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
@@ -579,6 +580,18 @@ function AppContent() {
               </AuthWrapper>
             }
           />
+          {/* PRODUÇÃO — Visão Geral */}
+          <Route
+            path="/producao"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <ProducaoOverview />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
           {/* PRODUÇÃO — Dashboard */}
           <Route
             path="/producao/dashboard"

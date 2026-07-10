@@ -44,6 +44,7 @@ export const NAV_SECTIONS: Section[] = [
     title: 'PRODUÇÃO',
     visibleWhen: ({ can }) => can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') || can('cronograma_edicao'),
     items: [
+      { icon: LayoutDashboard, label: 'Visão Geral', path: '/producao', permission: 'ordem_do_dia', end: true },
       { icon: CalendarDays, label: 'Calendário', path: '/producao/dashboard', permission: 'ordem_do_dia' },
       { icon: Columns3, label: 'Board', path: '/producao/board', permission: 'ordem_do_dia' },
       { icon: ChartGantt, label: 'Timeline', path: '/producao/schedule', permission: 'ordem_do_dia' },

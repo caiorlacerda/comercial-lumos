@@ -132,7 +132,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
       if (isAdmin) targetPath = '/comercial';
       else return;
     } else if (sectionId === 'producao') {
-      if (can('ordem_do_dia')) targetPath = '/producao/dashboard';
+      if (can('ordem_do_dia')) targetPath = '/producao';
       else if (can('fornecedores')) targetPath = '/producao/fornecedores';
       else if (can('cronograma_edicao')) targetPath = '/producao/cronograma-edicao';
       else return;
