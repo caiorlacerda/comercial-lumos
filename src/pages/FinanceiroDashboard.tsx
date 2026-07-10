@@ -408,7 +408,7 @@ export default function FinanceiroDashboard() {
       const [rentRes, payablesRes, receivablesRes] = await Promise.all([
         supabase
           .from('vw_rentabilidade')
-          .select('*, client:clients(name), categoria:categorias(nome), tipo_servico:tipos_servico(nome)')
+          .select('*, client:clients(name), project:projects(name), categoria:categorias(nome), tipo_servico:tipos_servico(nome)')
           .or(`and(data_recebimento_negociada.gte.${startDate},data_recebimento_negociada.lt.${endExclusive}),and(created_at.gte.${startDate},created_at.lt.${endExclusive})`),
         supabase.from('payables').select('amount, due_date, paid_at'),
         supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at')
@@ -608,6 +608,7 @@ export default function FinanceiroDashboard() {
     const detailList = rawProjects.map(proj => ({
       id: proj.id,
       clientName: proj.client?.name || 'Sem Cliente',
+      projectName: proj.project?.name || '—',
       categoriaName: proj.categoria?.nome || 'Sem Categ.',
       servicoName: proj.tipo_servico?.nome || 'Sem Serv.',
       icp: proj.icp,
@@ -1093,10 +1094,11 @@ export default function FinanceiroDashboard() {
                           <table className="w-full text-left text-xs font-medium border-collapse">
                             <thead>
                               <tr className="bg-lumos-surface/40 text-[9px] font-black text-lumos-text-secondary uppercase tracking-wider border-b border-lumos-border">
-                                <th className="py-2.5 px-3">Projeto / Cliente</th>
-                                <th className="py-2.5 px-3">Dimensões</th>
+                                <th className="py-2.5 px-3">Cliente</th>
+                                <th className="py-2.5 px-3">Projeto</th>
+                                <th className="py-2.5 px-3">Categoria</th>
                                 <th className="py-2.5 px-3 text-right">Fat. Bruto</th>
-                                <th className="py-2.5 px-3 text-right">NF (18%)</th>
+                                <th className="py-2.5 px-3 text-right">Valor de NF aprox.</th>
                                 <th className="py-2.5 px-3 text-right">Custos</th>
                                 <th className="py-2.5 px-3 text-right">Lucro Líquido</th>
                                 <th className="py-2.5 px-3 text-right">Margem %</th>
@@ -1105,13 +1107,16 @@ export default function FinanceiroDashboard() {
                             <tbody className="divide-y divide-lumos-border/40">
                               {dashboardData.detailList.length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="py-8 text-center text-xs text-lumos-text-secondary italic">Nenhum projeto encontrado para este período.</td>
+                                  <td colSpan={8} className="py-8 text-center text-xs text-lumos-text-secondary italic">Nenhum projeto encontrado para este período.</td>
                                 </tr>
                               ) : (
                                 dashboardData.detailList.map(proj => (
                                   <tr key={proj.id} className="hover:bg-white/[0.02] transition-colors">
                                     <td className="py-2.5 px-3">
                                       <p className="font-bold text-lumos-text-primary">{proj.clientName}</p>
+                                    </td>
+                                    <td className="py-2.5 px-3">
+                                      <p className="font-bold text-lumos-text-primary line-clamp-2">{proj.projectName}</p>
                                       <p className="text-[9px] text-lumos-text-secondary mt-0.5 flex items-center gap-1">
                                         {proj.statusTitulo === 'pagamento_recebido' && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
                                         {(proj.statusTitulo === 'pagamento_atraso' || proj.vencido) && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
