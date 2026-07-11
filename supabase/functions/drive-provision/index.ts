@@ -167,20 +167,26 @@ async function folderUnder(folderId: string | null, parentId: string): Promise<b
 
 // Espelha recursivamente um modelo: subpastas são criadas, arquivos são
 // copiados (placeholders/modelos de doc), arquivos de sistema ignorados.
-async function mirrorTemplate(templateFolderId: string, targetFolderId: string): Promise<void> {
+// Otimizado p/ velocidade: os irmãos de cada nível são processados EM PARALELO
+// e, quando o alvo é recém-criado (targetIsFresh), pula-se o findChildFolder
+// (a subpasta ainda não existe) — evita dezenas de listagens sequenciais.
+async function mirrorTemplate(templateFolderId: string, targetFolderId: string, targetIsFresh = false): Promise<void> {
   const children = await listChildren(templateFolderId)
-  for (const child of children) {
-    if (SYSTEM_FILES.has(child.name)) continue
+  await Promise.all(children.map(async (child) => {
+    if (SYSTEM_FILES.has(child.name)) return
     if (child.mimeType === FOLDER_MIME) {
-      const newId = await ensureFolder(targetFolderId, child.name)
-      await mirrorTemplate(child.id, newId)
+      const newId = targetIsFresh
+        ? await createFolder(targetFolderId, child.name)
+        : await ensureFolder(targetFolderId, child.name)
+      // Filhos de uma pasta recém-criada são sempre novos → recursa como fresh.
+      await mirrorTemplate(child.id, newId, true)
     } else {
       await driveFetch(`files/${child.id}/copy?fields=id`, {
         method: 'POST',
         body: JSON.stringify({ name: child.name, parents: [targetFolderId] }),
       })
     }
-  }
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -260,11 +266,12 @@ async function provisionProject(projectId: string): Promise<void> {
     return
   }
 
-  // 3. Pasta do projeto
+  // 3. Pasta do projeto (sabendo se é nova → mirror mais rápido, sem finds)
   const category: string = project.category ?? project.budget?.category ?? 'digital'
   const isLive = category === 'live'
   const folderName = `${jobCode(project.code)}_${slugify(project.name)}${isLive ? '_LIVE' : ''}`
-  const projectFolderId = await ensureFolder(clientFolderId, folderName)
+  const existingFolder = await findChildFolder(clientFolderId, folderName)
+  const projectFolderId = existingFolder ?? await createFolder(clientFolderId, folderName)
 
   // 4. Espelha o template da categoria. Estrutura real do Drive tem um nível a
   //    mais: _TEMPLATE_PROJETO/NNN_NOMEPROJETO (ou _TEMPLATE_LIVE/..._LIVE).
@@ -273,12 +280,19 @@ async function provisionProject(projectId: string): Promise<void> {
   const wrapperId = await findChildFolder(TEMPLATES_FOLDER_ID, wrapperName)
   const templateId = wrapperId ? await findChildFolder(wrapperId, innerName) : null
   if (templateId) {
-    await mirrorTemplate(templateId, projectFolderId)
+    await mirrorTemplate(templateId, projectFolderId, !existingFolder)
   } else {
     await log('project', projectId, 'template_missing', `${wrapperName}/${innerName} não encontrado — pasta criada vazia`, 'error')
   }
 
-  await db.from('projects').update({ drive_folder_id: projectFolderId }).eq('id', projectId)
+  // 5. Localiza o dropzone de upload (06_ENTREGA/01_REVISAO) p/ linkar no app
+  let uploadFolderId: string | null = null
+  const entregaId = await findChildFolder(projectFolderId, '06_ENTREGA')
+  if (entregaId) uploadFolderId = await findChildFolder(entregaId, '01_REVISAO')
+
+  await db.from('projects')
+    .update({ drive_folder_id: projectFolderId, drive_upload_folder_id: uploadFolderId })
+    .eq('id', projectId)
   await log('project', projectId, 'create_folder', `Pasta "${folderName}" criada em "${project.client.name.trim()}" (${projectFolderId})`)
 }
 

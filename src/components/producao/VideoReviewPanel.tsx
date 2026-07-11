@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare } from 'lucide-react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -54,8 +54,14 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [versions, setVersions] = useState<VideoVersion[]>([]);
   const [links, setLinks] = useState<Record<string, { id: string; token: string; watermark: boolean; allow_download: boolean }>>({});
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [driveFolders, setDriveFolders] = useState<{ root: string | null; upload: string | null }>({ root: null, upload: null });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+
+  // Pasta de upload = 06_ENTREGA/01_REVISAO; fallback: raiz do projeto no Drive
+  const uploadFolderUrl = driveFolders.upload || driveFolders.root
+    ? `https://drive.google.com/drive/folders/${driveFolders.upload || driveFolders.root}`
+    : null;
 
   const fetchVersions = useCallback(async () => {
     const { data, error } = await supabase
@@ -113,6 +119,17 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   };
 
   useEffect(() => {
+    supabase
+      .from('projects')
+      .select('drive_folder_id, drive_upload_folder_id')
+      .eq('id', projectId)
+      .single()
+      .then(({ data }) => {
+        if (data) setDriveFolders({ root: (data as any).drive_folder_id ?? null, upload: (data as any).drive_upload_folder_id ?? null });
+      });
+  }, [projectId]);
+
+  useEffect(() => {
     setLoading(true);
     fetchVersions();
     // Realtime: o watcher insere versões / finaliza de forma assíncrona
@@ -168,6 +185,17 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           <Film className="w-4 h-4 text-lumos-yellow" /> Revisão de Vídeo
           <span className="text-lumos-text-secondary/60 font-bold normal-case tracking-normal">· dropzone 06_ENTREGA/01_REVISAO</span>
         </h3>
+
+        {uploadFolderUrl && (
+          <a
+            href={uploadFolderUrl}
+            target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold bg-lumos-yellow text-black hover:brightness-95 transition-all"
+            title="Abre a pasta 06_ENTREGA/01_REVISAO no Google Drive"
+          >
+            <FolderUp className="w-3.5 h-3.5" /> Subir vídeo no Drive
+          </a>
+        )}
 
         {canManage && versions.length > 0 && (
           <label className="flex items-center gap-1.5 text-[10px] font-bold text-lumos-text-secondary">
