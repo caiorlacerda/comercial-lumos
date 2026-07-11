@@ -1,9 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, SlidersHorizontal, X, Upload } from 'lucide-react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, SlidersHorizontal, X, Upload, Play } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import InternalReviewModal from './InternalReviewModal';
 
 type ReviewStatus =
   | 'EM_REVISAO_INTERNA' | 'ALTERACOES_INTERNAS'
@@ -107,6 +108,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [uploadName, setUploadName] = useState('');
   const [fileDragging, setFileDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number } | null>(null);
   const [visibleCols, setVisibleCols] = useState<Set<SortKey>>(() => {
     try { const s = JSON.parse(localStorage.getItem('rev_cols_v1') || 'null'); if (Array.isArray(s)) return new Set(s); } catch { /* ignore */ }
     return new Set(OPTIONAL);
@@ -166,6 +168,22 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     setLinksByGroup(prev => ({ ...prev, [groupId]: { ...link, [field]: next } }));
     const { error } = await supabase.from('review_links').update({ [field]: next }).eq('id', link.id);
     if (error) { toast.error('Não foi possível salvar.'); setLinksByGroup(prev => ({ ...prev, [groupId]: link })); }
+  };
+
+  // Abre a revisão interna (player + comentários do time). Garante um token de
+  // stream (reusa o link do grupo ou cria um) para o <video> conseguir tocar.
+  const openReview = async (g: Group) => {
+    setBusy(g.current.id);
+    let link = linksByGroup[g.id];
+    if (!link) {
+      const { data } = await supabase.from('review_links')
+        .insert([{ video_version_id: g.current.id, group_id: g.id, created_by: profile?.id }])
+        .select('id, token, watermark, allow_download').single();
+      if (data) { link = data as any; setLinksByGroup(prev => ({ ...prev, [g.id]: data as any })); }
+    }
+    setBusy(null);
+    if (!link) { toast.error('Não foi possível abrir a revisão.'); return; }
+    setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao });
   };
 
   const scanNow = async () => {
@@ -358,6 +376,8 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     const v = g.current; const link = linksByGroup[g.id]; const isBusy = busy === v.id;
     return (
       <div className="flex items-center gap-1 justify-end">
+        <IconBtn title="Revisar e comentar (interno)" onClick={() => openReview(g)} className="!text-lumos-yellow !border-lumos-yellow/40"><Play className="w-3.5 h-3.5" /></IconBtn>
+        {canManage && <span className="w-px h-5 bg-lumos-border mx-0.5" />}
         {canManage && v.status === 'EM_REVISAO_INTERNA' && (<>
           <IconBtn title="Aprovar (interno)" disabled={isBusy} onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} className="!text-lumos-yellow"><Check className="w-3.5 h-3.5" /></IconBtn>
           <IconBtn title="Pedir alteração" disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_INTERNAS')} className="!text-red-400"><RotateCcw className="w-3.5 h-3.5" /></IconBtn>
@@ -402,6 +422,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   };
 
   return (
+    <>
     <div className="card p-6 mt-6 relative"
       onDragOver={e => { if (canManage && !uploading && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(true); } }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFileDragging(false); }}
@@ -569,5 +590,16 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         </div>
       )}
     </div>
+
+    {reviewModal && (
+      <InternalReviewModal
+        versionId={reviewModal.versionId}
+        token={reviewModal.token}
+        fileName={reviewModal.fileName}
+        versao={reviewModal.versao}
+        onClose={() => { setReviewModal(null); fetchVersions(); }}
+      />
+    )}
+    </>
   );
 }
