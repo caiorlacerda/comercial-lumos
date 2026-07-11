@@ -66,6 +66,7 @@ export default function RevisaoPublica() {
   const [muted, setMuted] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [isFs, setIsFs] = useState(false);
+  const [ready, setReady] = useState(false);
 
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
@@ -285,15 +286,21 @@ export default function RevisaoPublica() {
       <div className="flex flex-col lg:flex-row" onClick={() => showInfo && setShowInfo(false)}>
         {/* Player */}
         <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0', isFs ? 'bg-black' : 'p-4 gap-2')}>
-          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 flex items-center justify-center' : 'rounded-lumos')}>
+          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 flex items-center justify-center' : 'w-full aspect-video rounded-lumos')}>
             <video
-              ref={videoRef} src={streamUrl}
-              className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full max-h-[68vh] mx-auto')}
+              ref={videoRef} src={streamUrl} preload="metadata"
+              className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full h-full object-cover')}
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
+              onLoadedData={() => setReady(true)} onCanPlay={() => setReady(true)}
               onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
               onClick={togglePlay} playsInline
             />
+            {!ready && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" />
+              </div>
+            )}
             {/* Marca d'água = logo Lumos + nome (atribuição) */}
             {data.link.watermark && (
               <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>

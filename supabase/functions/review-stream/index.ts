@@ -44,10 +44,17 @@ serve(async (req) => {
 
   const wantsDownload = url.searchParams.get('download') === '1'
 
-  // Token → arquivo do Drive (só links ativos)
-  const { data: link } = await db.from('review_links').select('video_version_id, active, allow_download').eq('token', token).eq('active', true).maybeSingle()
+  // Token → arquivo do Drive (só links ativos). O link segue o GRUPO: resolve
+  // sempre a versão mais recente (maior versão) do grupo.
+  const { data: link } = await db.from('review_links').select('*').eq('token', token).eq('active', true).maybeSingle()
   if (!link) return new Response('invalid token', { status: 403, headers: CORS })
-  const { data: version } = await db.from('video_versions').select('drive_file_id, mime_type, file_name').eq('id', link.video_version_id).maybeSingle()
+
+  let versionId = link.video_version_id
+  if (link.group_id) {
+    const { data: cur } = await db.from('video_versions').select('id').eq('group_id', link.group_id).order('versao', { ascending: false }).limit(1).maybeSingle()
+    if (cur?.id) versionId = cur.id
+  }
+  const { data: version } = await db.from('video_versions').select('drive_file_id, mime_type, file_name').eq('id', versionId).maybeSingle()
   if (!version?.drive_file_id) return new Response('not found', { status: 404, headers: CORS })
 
   const gToken = await googleToken()

@@ -97,6 +97,76 @@ async function log(entity_id: string | null, action: string, detail: string, sta
   try { await db.from('drive_sync_log').insert([{ entity_type: 'video', entity_id, action, detail: detail.slice(0, 900), status }]) } catch (_) {}
 }
 
+// --- FPS: lê o cabeçalho (moov) do arquivo no Drive e calcula o frame rate ---
+// O Drive não expõe FPS; parseamos as boxes MP4/MOV via Range (sem baixar tudo).
+function snapFps(x: number): number {
+  const common = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 120]
+  let best = x, bd = Infinity
+  for (const c of common) { const d = Math.abs(c - x); if (d < bd) { bd = d; best = c } }
+  return bd < 0.6 ? best : Math.round(x * 100) / 100
+}
+// Lista as boxes (atoms) filhas dentro de [start,end) de um buffer.
+function mp4Boxes(buf: Uint8Array, start: number, end: number): { type: string; ds: number; de: number }[] {
+  const out: { type: string; ds: number; de: number }[] = []
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  let o = start
+  while (o + 8 <= end) {
+    let size = dv.getUint32(o)
+    const type = String.fromCharCode(buf[o + 4], buf[o + 5], buf[o + 6], buf[o + 7])
+    let hdr = 8
+    if (size === 1) { const hi = dv.getUint32(o + 8), lo = dv.getUint32(o + 12); size = hi * 4294967296 + lo; hdr = 16 }
+    else if (size === 0) size = end - o
+    if (size < hdr || o + size > end) break
+    out.push({ type, ds: o + hdr, de: o + size })
+    o += size
+  }
+  return out
+}
+function fpsFromMoov(buf: Uint8Array, start: number, end: number): number | null {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  for (const trak of mp4Boxes(buf, start, end).filter(b => b.type === 'trak')) {
+    const mdia = mp4Boxes(buf, trak.ds, trak.de).find(b => b.type === 'mdia'); if (!mdia) continue
+    const kids = mp4Boxes(buf, mdia.ds, mdia.de)
+    const hdlr = kids.find(b => b.type === 'hdlr'), mdhd = kids.find(b => b.type === 'mdhd'), minf = kids.find(b => b.type === 'minf')
+    if (!hdlr || !mdhd || !minf) continue
+    const handler = String.fromCharCode(buf[hdlr.ds + 8], buf[hdlr.ds + 9], buf[hdlr.ds + 10], buf[hdlr.ds + 11])
+    if (handler !== 'vide') continue
+    const timescale = buf[mdhd.ds] === 1 ? dv.getUint32(mdhd.ds + 20) : dv.getUint32(mdhd.ds + 12)
+    const stbl = mp4Boxes(buf, minf.ds, minf.de).find(b => b.type === 'stbl'); if (!stbl) continue
+    const stts = mp4Boxes(buf, stbl.ds, stbl.de).find(b => b.type === 'stts'); if (!stts) continue
+    if (dv.getUint32(stts.ds + 4) < 1) continue           // entry_count
+    const sampleDelta = dv.getUint32(stts.ds + 12)        // 1ª entry: count(4) delta(4) após fullbox(4)+count(4)
+    if (!timescale || !sampleDelta) continue
+    return snapFps(timescale / sampleDelta)
+  }
+  return null
+}
+async function probeFps(driveFileId: string): Promise<number | null> {
+  const token = await googleAccessToken()
+  const url = `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media&supportsAllDrives=true`
+  const read = async (a: number, b: number): Promise<Uint8Array> => {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Range: `bytes=${a}-${b}` } })
+    return new Uint8Array(await res.arrayBuffer())
+  }
+  let offset = 0
+  for (let i = 0; i < 96; i++) {
+    const head = await read(offset, offset + 15)
+    if (head.length < 8) break
+    const dv = new DataView(head.buffer, head.byteOffset, head.byteLength)
+    let size = dv.getUint32(0); let hdr = 8
+    const type = String.fromCharCode(head[4], head[5], head[6], head[7])
+    if (size === 1) { const hi = dv.getUint32(8), lo = dv.getUint32(12); size = hi * 4294967296 + lo; hdr = 16 }
+    if (type === 'moov') {
+      if (size > 12_000_000) return null // moov gigante: aborta p/ não baixar demais
+      const moov = await read(offset, offset + size - 1)
+      return fpsFromMoov(moov, hdr, moov.length)
+    }
+    if (size <= 0) break
+    offset += size
+  }
+  return null
+}
+
 // --- Monitor do dropzone --------------------------------------------------
 async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }> {
   let query = db
@@ -114,23 +184,19 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
       const revisaoId = await findChildFolder(entregaId, '01_REVISAO')
       if (!revisaoId) continue
 
-      // Vídeos novos (qualquer nome), ordenados do upload mais antigo p/ o mais
-      // novo, para numerar as versões na ordem em que foram subidos.
+      // Vídeos novos (qualquer nome). Cada upload nasce como um VÍDEO separado
+      // (grupo próprio, versão 1) — a equipe empilha versões manualmente no app.
       const novos = (await listChildren(revisaoId))
         .filter((f: any) => f.mimeType !== FOLDER_MIME && !SYSTEM_FILES.has(f.name) && !knownIds.has(f.id) && isVideoFile(f))
         .sort((a: any, b: any) => String(a.createdTime || '').localeCompare(String(b.createdTime || '')))
       if (!novos.length) continue
 
-      // Próxima versão = maior versão já registrada do projeto + 1
-      const { data: maxRow } = await db
-        .from('video_versions').select('versao').eq('project_id', proj.id).order('versao', { ascending: false }).limit(1)
-      let nextV = (((maxRow?.[0]?.versao as number) ?? 0)) + 1
-
       for (const file of novos) {
         const vmm = file.videoMediaMetadata || {}
+        const fps = await probeFps(file.id).catch(() => null)
         const { error } = await db.from('video_versions').insert([{
           project_id: proj.id,
-          versao: nextV,
+          versao: 1, // grupo próprio → sempre começa em v01 (group_id = DEFAULT)
           file_name: file.name,
           drive_file_id: file.id,
           drive_web_link: file.webViewLink ?? null,
@@ -142,8 +208,9 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
           mime_type: file.mimeType ?? null,
           uploaded_by: file.lastModifyingUser?.displayName ?? file.owners?.[0]?.displayName ?? null,
           uploaded_at: file.createdTime ?? null,
+          fps,
         }])
-        if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Nova versão v${String(nextV).padStart(2, '0')} detectada: ${file.name}`); nextV++ }
+        if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Novo vídeo detectado: ${file.name}`) }
         else if (!String(error.message).includes('duplicate')) await log(proj.id, 'error', `Insert falhou p/ ${file.name}: ${error.message}`, 'error')
       }
     } catch (err: any) {
@@ -189,6 +256,38 @@ async function finalizePending(): Promise<number> {
   return done
 }
 
+// Backfill: preenche quem subiu / data / FPS nos vídeos que ainda não têm.
+// Processa poucos por vez (auto-cura a cada ciclo). Sentinela '' / 0 evita
+// reprocessar arquivos sem info / sem FPS legível para sempre.
+async function backfillMeta(limit = 8): Promise<number> {
+  const { data: rows } = await db
+    .from('video_versions').select('id, drive_file_id, uploaded_by, uploaded_at, fps')
+    .or('uploaded_by.is.null,fps.is.null').limit(limit)
+  let done = 0
+  for (const r of rows || []) {
+    try {
+      const patch: Record<string, unknown> = {}
+      if (!r.uploaded_by || !r.uploaded_at) {
+        const meta = await driveFetch(`files/${r.drive_file_id}?fields=createdTime,owners(displayName),lastModifyingUser(displayName)`)
+        if (!r.uploaded_by) patch.uploaded_by = meta.lastModifyingUser?.displayName ?? meta.owners?.[0]?.displayName ?? ''
+        if (!r.uploaded_at) patch.uploaded_at = meta.createdTime ?? null
+      }
+      if (r.fps == null) patch.fps = (await probeFps(r.drive_file_id).catch(() => null)) ?? 0
+      if (Object.keys(patch).length) { await db.from('video_versions').update(patch).eq('id', r.id); done++ }
+    } catch (_) { /* tenta no próximo ciclo */ }
+  }
+  return done
+}
+
+// Renomeia o arquivo no Drive + espelha o file_name no banco.
+async function renameVersion(versionId: string, newName: string): Promise<void> {
+  const clean = newName.trim(); if (!clean) throw new Error('nome vazio')
+  const { data: v, error } = await db.from('video_versions').select('drive_file_id').eq('id', versionId).single()
+  if (error || !v?.drive_file_id) throw new Error('versão não encontrada')
+  await driveFetch(`files/${v.drive_file_id}?fields=id`, { method: 'PATCH', body: JSON.stringify({ name: clean }) })
+  await db.from('video_versions').update({ file_name: clean }).eq('id', versionId)
+}
+
 // --- HTTP -----------------------------------------------------------------
 serve(async (req) => {
   if (req.method !== 'POST') return new Response('ok', { status: 200 })
@@ -204,16 +303,21 @@ serve(async (req) => {
       await finalizeVersion(payload.version_id)
       return new Response(JSON.stringify({ ok: true, finalized: payload.version_id }), { status: 200 })
     }
+    if (payload?.action === 'rename' && payload?.version_id && payload?.new_name) {
+      await renameVersion(payload.version_id, payload.new_name)
+      return new Response(JSON.stringify({ ok: true, renamed: payload.version_id }), { status: 200 })
+    }
     // Scan sob demanda de um projeto (botão "Verificar agora" no app)
     if (payload?.action === 'scan') {
       const res = await scanDropzones(payload.project_id)
       const finalized = await finalizePending()
       return new Response(JSON.stringify({ ok: true, ...res, finalized }), { status: 200 })
     }
-    // Varredura periódica: detecta novas versões + finaliza aprovadas pendentes
+    // Varredura periódica: detecta novos vídeos + finaliza aprovados + backfill
     const res = await scanDropzones()
     const finalized = await finalizePending()
-    return new Response(JSON.stringify({ ok: true, ...res, finalized }), { status: 200 })
+    const filled = await backfillMeta()
+    return new Response(JSON.stringify({ ok: true, ...res, finalized, filled }), { status: 200 })
   } catch (err: any) {
     console.error('drive-watch falhou:', err)
     await log(null, 'error', String(err?.message || err), 'error')
