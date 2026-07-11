@@ -184,7 +184,10 @@ function jobCode(code: string | null): string {
 async function ensureClientFolder(client: { id: string; name: string; drive_folder_id: string | null }): Promise<string> {
   if (client.drive_folder_id) return client.drive_folder_id
 
-  const folderName = slugify(client.name)
+  // Pasta do cliente usa o nome EXATAMENTE como escrito no app ("Abby", não
+  // "ABBY") — a normalização caixa-alta/sem-acento vale só para a pasta do
+  // projeto e arquivos, conforme o spec.
+  const folderName = client.name.trim() || 'CLIENTE'
   const folderId = await ensureFolder(CLIENTES_FOLDER_ID, folderName)
 
   // Estrutura interna: espelha _TEMPLATES/CLIENTE se existir; senão _ASSETS padrão
@@ -240,7 +243,7 @@ async function provisionProject(projectId: string): Promise<void> {
   }
 
   await db.from('projects').update({ drive_folder_id: projectFolderId }).eq('id', projectId)
-  await log('project', projectId, 'create_folder', `Pasta "${folderName}" criada em ${slugify(project.client.name)} (${projectFolderId})`)
+  await log('project', projectId, 'create_folder', `Pasta "${folderName}" criada em "${project.client.name.trim()}" (${projectFolderId})`)
 }
 
 // ---------------------------------------------------------------------------
