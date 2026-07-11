@@ -838,11 +838,6 @@ export default function Projetos() {
   // Modal State for Manual Creation
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Exclusão definitiva de projeto (admin) — acessada pelo menu discreto que
-  // abre ao clicar no nome do projeto (esquerdo ou direito)
-  const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
-  const [deletingProject, setDeletingProject] = useState(false);
-  const [projectMenu, setProjectMenu] = useState<{ x: number; y: number } | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [newProjName, setNewProjName] = useState('');
   const [newProjClient, setNewProjClient] = useState('');
@@ -1222,27 +1217,6 @@ export default function Projetos() {
   };
 
   // Archive / Conclude Project
-  // Exclui o projeto DEFINITIVAMENTE: as tarefas, comentários e o registro
-  // financeiro caem junto (FKs em cascade). A pasta do Drive NÃO é apagada.
-  const handleDeleteProject = async () => {
-    if (!selectedProjectId || !selectedProject) return;
-    try {
-      setDeletingProject(true);
-      const { error } = await supabase.from('projects').delete().eq('id', selectedProjectId);
-      if (error) throw error;
-
-      toast.success(`Projeto "${selectedProject.name}" excluído.`);
-      setIsDeleteProjectModalOpen(false);
-      setSelectedProjectId(null);
-      await fetchData();
-    } catch (error: any) {
-      console.error('Erro ao excluir projeto:', error);
-      toast.error(`Erro ao excluir: ${error.message}`);
-    } finally {
-      setDeletingProject(false);
-    }
-  };
-
   const handleToggleProjectStatus = async (projectId: string, currentStatus: 'ativo' | 'concluido') => {
     const newStatus = currentStatus === 'ativo' ? 'concluido' : 'ativo';
     try {
@@ -1889,15 +1863,7 @@ export default function Projetos() {
                       </span>
                     </div>
 
-                    <h2
-                      onClick={e => { if (isAdmin) setProjectMenu({ x: e.clientX, y: e.clientY }); }}
-                      onContextMenu={e => { if (isAdmin) { e.preventDefault(); setProjectMenu({ x: e.clientX, y: e.clientY }); } }}
-                      title={isAdmin ? 'Clique para opções do projeto' : undefined}
-                      className={clsx(
-                        'text-2xl font-black text-lumos-text-primary uppercase tracking-tight',
-                        isAdmin && 'cursor-pointer hover:text-lumos-yellow transition-colors select-none'
-                      )}
-                    >
+                    <h2 className="text-2xl font-black text-lumos-text-primary uppercase tracking-tight">
                       {selectedProject.name}
                     </h2>
                     
@@ -2976,75 +2942,6 @@ export default function Projetos() {
       )}
 
       {/* ================= CONFIRM APPLY TEMPLATE MODAL ================= */}
-      {/* Menu discreto do projeto (abre ao clicar no nome; admin) */}
-      {projectMenu && selectedProject && (
-        <>
-          <div
-            className="fixed inset-0 z-[150]"
-            onClick={() => setProjectMenu(null)}
-            onContextMenu={e => { e.preventDefault(); setProjectMenu(null); }}
-          />
-          <div
-            className="fixed z-[155] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1.5 min-w-[190px] animate-in fade-in zoom-in-95 duration-100"
-            style={{ left: Math.min(projectMenu.x, window.innerWidth - 210), top: Math.min(projectMenu.y + 6, window.innerHeight - 80) }}
-          >
-            <button
-              onClick={() => { setProjectMenu(null); setIsDeleteProjectModalOpen(true); }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Excluir projeto…
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* Confirmação de exclusão DEFINITIVA de projeto (admin) */}
-      {isDeleteProjectModalOpen && selectedProject && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-lumos-surface border border-red-500/30 rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary text-center">
-            <div className="mx-auto w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center">
-              <Trash2 className="w-6 h-6" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-base font-bold uppercase tracking-tight text-lumos-text-primary">
-                Excluir "{selectedProject.name}"?
-              </h3>
-              <p className="text-xs text-lumos-text-secondary leading-relaxed">
-                Esta ação é <span className="font-bold text-red-400">definitiva</span> e apaga junto:
-              </p>
-              <ul className="text-xs text-lumos-text-secondary text-left mx-auto max-w-[280px] space-y-1 pt-1">
-                <li>• Todas as <b>tarefas</b> e <b>comentários</b> do projeto</li>
-                <li>• O <b>registro financeiro</b> vinculado (projetos_financeiro)</li>
-              </ul>
-              <p className="text-[11px] text-lumos-text-secondary/70 leading-relaxed pt-1.5">
-                A pasta no <b>Google Drive não</b> é apagada — se precisar, remova-a manualmente. Custos já lançados permanecem no financeiro (vinculados ao orçamento).
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-2.5 pt-3">
-              <button
-                onClick={() => setIsDeleteProjectModalOpen(false)}
-                disabled={deletingProject}
-                className="btn-secondary text-xs w-full py-2.5 font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDeleteProject}
-                disabled={deletingProject}
-                className="w-full py-2.5 text-xs font-bold rounded-lumos bg-red-500 hover:bg-red-600 text-white transition-all flex items-center justify-center gap-2"
-              >
-                {deletingProject
-                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  : 'Sim, excluir definitivamente'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {isConfirmTemplateOpen && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary text-center">

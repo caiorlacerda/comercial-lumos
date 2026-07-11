@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw } from 'lucide-react';
+import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 
 // Cores disponíveis para clientes. A chave é o que fica salvo no banco
@@ -50,6 +51,7 @@ export default function SidebarProjectTree() {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
+  const { isAdmin } = useAuth();
 
   const [open, setOpen] = useState(true);
   const [clients, setClients] = useState<TreeClient[]>([]);
@@ -58,6 +60,10 @@ export default function SidebarProjectTree() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [colorMenu, setColorMenu] = useState<{ x: number; y: number; clientId: string } | null>(null);
+  // Menu de contexto (botão direito) no projeto + exclusão definitiva (admin)
+  const [projMenu, setProjMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +157,40 @@ export default function SidebarProjectTree() {
     navigate(`/producao/projetos?projectId=${projectId}`);
   };
 
+  const openProjMenu = (e: React.MouseEvent, proj: TreeProject) => {
+    if (!isAdmin) return;
+    e.preventDefault();
+    setProjMenu({ x: e.clientX, y: e.clientY, id: proj.id, name: proj.name });
+  };
+
+  // Exclui o projeto DEFINITIVAMENTE (tarefas, comentários e registro
+  // financeiro caem por cascade; a pasta do Drive não é apagada).
+  const handleDeleteProject = async () => {
+    if (!confirmDelete) return;
+    const { id, name } = confirmDelete;
+    try {
+      setDeleting(true);
+      const { error } = await supabase.from('projects').delete().eq('id', id);
+      if (error) throw error;
+
+      // Remove da árvore local; some o cliente que ficar sem projetos ativos
+      setClients(prev => prev
+        .map(c => ({ ...c, projects: c.projects.filter(p => p.id !== id) }))
+        .filter(c => c.projects.length > 0));
+      setNoClientProjects(prev => prev.filter(p => p.id !== id));
+
+      toast.success(`Projeto "${name}" excluído.`);
+      setConfirmDelete(null);
+      // Se estava vendo esse projeto, sai para a Visão Geral
+      navigate('/producao');
+    } catch (err: any) {
+      console.error('Erro ao excluir projeto:', err);
+      toast.error(`Erro ao excluir: ${err.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // "Todos os Projetos" = Visão Geral (/producao)
   const isOverviewActive = location.pathname === '/producao';
   const isHeaderActive = isOverviewActive || location.pathname === '/producao/projetos';
@@ -224,7 +264,8 @@ export default function SidebarProjectTree() {
                           <button
                             key={proj.id}
                             onClick={() => openProject(proj.id)}
-                            title={proj.name}
+                            onContextMenu={e => openProjMenu(e, proj)}
+                            title={isAdmin ? `${proj.name} — botão direito para excluir` : proj.name}
                             className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
                           >
                             {proj.name}
@@ -256,7 +297,8 @@ export default function SidebarProjectTree() {
                         <button
                           key={proj.id}
                           onClick={() => openProject(proj.id)}
-                          title={proj.name}
+                          onContextMenu={e => openProjMenu(e, proj)}
+                          title={isAdmin ? `${proj.name} — botão direito para excluir` : proj.name}
                           className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
                         >
                           {proj.name}
@@ -315,6 +357,69 @@ export default function SidebarProjectTree() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Menu de contexto do projeto (botão direito) */}
+      {projMenu && (
+        <>
+          <div className="fixed inset-0 z-[190]" onClick={() => setProjMenu(null)} onContextMenu={e => { e.preventDefault(); setProjMenu(null); }} />
+          <div
+            className="fixed z-[200] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1.5 min-w-[190px] animate-in fade-in zoom-in-95 duration-100"
+            style={{ left: Math.min(projMenu.x, window.innerWidth - 210), top: Math.min(projMenu.y + 4, window.innerHeight - 80) }}
+          >
+            <button
+              onClick={() => { setConfirmDelete({ id: projMenu.id, name: projMenu.name }); setProjMenu(null); }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Excluir projeto…
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Confirmação de exclusão definitiva */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-lumos-surface border border-red-500/30 rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary text-center">
+            <div className="mx-auto w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold uppercase tracking-tight text-lumos-text-primary">
+                Excluir "{confirmDelete.name}"?
+              </h3>
+              <p className="text-xs text-lumos-text-secondary leading-relaxed">
+                Esta ação é <span className="font-bold text-red-400">definitiva</span> e apaga junto:
+              </p>
+              <ul className="text-xs text-lumos-text-secondary text-left mx-auto max-w-[280px] space-y-1 pt-1">
+                <li>• Todas as <b>tarefas</b> e <b>comentários</b> do projeto</li>
+                <li>• O <b>registro financeiro</b> vinculado (projetos_financeiro)</li>
+              </ul>
+              <p className="text-[11px] text-lumos-text-secondary/70 leading-relaxed pt-1.5">
+                A pasta no <b>Google Drive não</b> é apagada. Custos já lançados permanecem no financeiro (vinculados ao orçamento).
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2.5 pt-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deleting}
+                className="btn-secondary text-xs w-full py-2.5 font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                disabled={deleting}
+                className="w-full py-2.5 text-xs font-bold rounded-lumos bg-red-500 hover:bg-red-600 text-white transition-all flex items-center justify-center gap-2"
+              >
+                {deleting
+                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : 'Sim, excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
