@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -2261,6 +2262,9 @@ export default function Projetos() {
                     </div>
                   ) : null}
                 </div>
+
+                {/* Revisão de vídeo (dropzone 06_ENTREGA/01_REVISAO) */}
+                <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
 
               </div>
             ) : selectedClientId && selectedClient ? (
