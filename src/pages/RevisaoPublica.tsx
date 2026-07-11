@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  Play, Pause, Maximize, Download, MessageSquarePlus, Pencil, MoveUpRight,
-  Square, Eraser, Send, Film, Clock, Check,
+  Play, Pause, Maximize, Download, Pencil, MoveUpRight,
+  Square, Eraser, Send, Clock, Check, Sun, Moon, Volume2, VolumeX, Info, X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/context/ThemeContext';
 
 // ---------------------------------------------------------------------------
 type Point = { x: number; y: number }; // normalizados 0–1
@@ -28,6 +29,7 @@ interface ReviewData {
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 const COLORS = ['#EFC700', '#ef4444', '#3b82f6', '#22c55e', '#ffffff'];
+const LOGO_WATERMARK = '/logo/Logo-Branco-Alpha.svg';
 
 const fmtTime = (ms: number) => {
   const s = Math.floor(ms / 1000);
@@ -39,6 +41,7 @@ const fmtSize = (b: number | null) => b ? `${(b / 1048576).toFixed(1)} MB` : '�
 // ---------------------------------------------------------------------------
 export default function RevisaoPublica() {
   const { token = '' } = useParams();
+  const { theme, toggleTheme } = useTheme();
   const [data, setData] = useState<ReviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +53,20 @@ export default function RevisaoPublica() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
+  const [durationMs, setDurationMs] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
-  // Composição de novo comentário
+  // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [showTools, setShowTools] = useState(false);
   const [tool, setTool] = useState<'draw' | 'arrow' | 'rect' | null>(null);
   const [color, setColor] = useState(COLORS[0]);
   const [shapes, setShapes] = useState<Shape[]>([]);
@@ -71,6 +80,7 @@ export default function RevisaoPublica() {
     const { data: res, error: err } = await supabase.rpc('get_public_review', { p_token: token });
     if (err || !res || (res as any).error) { setError('Link inválido ou expirado.'); setLoading(false); return; }
     setData(res as ReviewData);
+    setDurationMs(prev => prev || (res as ReviewData).video.duration_ms || 0);
     setLoading(false);
   }, [token]);
 
@@ -96,7 +106,23 @@ export default function RevisaoPublica() {
     setSpeed(next); if (videoRef.current) videoRef.current.playbackRate = next;
   };
   const fullscreen = () => wrapRef.current?.requestFullscreen?.();
-  const seekTo = (ms: number) => { const v = videoRef.current; if (v) { v.currentTime = ms / 1000; v.pause(); setPlaying(false); } };
+  const seekTo = (ms: number) => { const v = videoRef.current; if (v) { v.currentTime = ms / 1000; setCurrentMs(ms); v.pause(); setPlaying(false); } };
+
+  const toggleMute = () => { const v = videoRef.current; if (!v) return; const m = !v.muted; v.muted = m; setMuted(m); };
+  const setVol = (val: number) => { const v = videoRef.current; if (v) { v.volume = val; v.muted = val === 0; } setVolume(val); setMuted(val === 0); };
+
+  // Barra de progresso: clicar/arrastar para navegar
+  const seekFromClientX = (clientX: number) => {
+    const r = barRef.current?.getBoundingClientRect(); if (!r || durationMs <= 0) return;
+    const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    const v = videoRef.current; if (v) { v.currentTime = (frac * durationMs) / 1000; setCurrentMs(frac * durationMs); }
+  };
+  const onBarDown = (e: React.PointerEvent) => {
+    seekFromClientX(e.clientX);
+    const move = (ev: PointerEvent) => seekFromClientX(ev.clientX);
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
 
   // --- Canvas: desenho de anotações ---
   const redraw = useCallback(() => {
@@ -134,11 +160,13 @@ export default function RevisaoPublica() {
     if (drawingRef.current) { setShapes(prev => [...prev, drawingRef.current!]); drawingRef.current = null; }
   };
 
-  const startComposing = () => {
+  // Entra em modo de composição (pausa e limpa anotações de leitura)
+  const ensureComposing = () => {
+    if (composing) return;
     if (videoRef.current) { videoRef.current.pause(); setPlaying(false); }
-    setViewingShapes([]); setShapes([]); setComposing(true); setTool(null); setCommentText('');
+    setViewingShapes([]); setShapes([]); setComposing(true);
   };
-  const cancelComposing = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); };
+  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setShowTools(false); setCommentText(''); };
 
   const submitComment = async () => {
     if (!commentText.trim() && shapes.length === 0) return;
@@ -149,12 +177,13 @@ export default function RevisaoPublica() {
     });
     setSending(false);
     if (err) { alert('Erro ao enviar comentário. Tente de novo.'); return; }
-    cancelComposing();
+    resetComposer();
     await load();
   };
 
   const viewComment = (c: Comment) => {
     seekTo(c.timecode_ms);
+    setComposing(false);
     const shs: Shape[] = c.annotations.map(a => ({ type: (a.type as any) || 'draw', color: a.data?.color || COLORS[0], points: a.data?.points || [] }));
     setViewingShapes(shs);
   };
@@ -189,39 +218,71 @@ export default function RevisaoPublica() {
     );
   }
 
-  const specs = [
+  const specs: [string, string][] = [
     ['Projeto', data.video.project_name],
+    ['Arquivo', data.video.file_name],
     ['Versão', `v${String(data.video.versao).padStart(2, '0')}`],
     ['Resolução', data.video.width ? `${data.video.width}×${data.video.height}` : '—'],
-    ['Duração', data.video.duration_ms ? fmtTime(data.video.duration_ms) : '—'],
+    ['Duração', durationMs ? fmtTime(durationMs) : '—'],
     ['Formato', (data.video.mime_type || '').split('/')[1]?.toUpperCase() || '—'],
     ['Tamanho', fmtSize(data.video.size_bytes)],
   ];
+  const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-lumos-bg text-lumos-text-primary font-work-sans">
-      <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80">
-        <span className="text-sm font-black flex items-center gap-2"><Film className="w-4 h-4 text-lumos-yellow" /> {data.video.project_name} · v{String(data.video.versao).padStart(2, '0')}</span>
-        <span className="text-[10px] text-lumos-text-secondary">Você: <b className="text-lumos-text-primary">{viewerName}</b></span>
+      {/* Header (sem logo) */}
+      <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
+        <span className="text-sm font-black truncate">
+          {data.video.project_name} <span className="text-lumos-text-secondary font-bold">· v{String(data.video.versao).padStart(2, '0')}</span>
+        </span>
+        <div className="flex items-center gap-1.5">
+          {/* Info (nome, resolução, tamanho, versão… tudo num lugar só) */}
+          <div className="relative">
+            <button onClick={() => setShowInfo(s => !s)}
+              className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lumos text-[11px] font-bold border transition-colors', showInfo ? 'border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+              <Info className="w-3.5 h-3.5" /> Info
+            </button>
+            {showInfo && (
+              <div className="absolute right-0 top-11 w-64 p-4 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl grid grid-cols-2 gap-x-4 gap-y-2.5 z-40">
+                {specs.map(([k, v]) => (
+                  <div key={k} className={clsx('flex flex-col', (k === 'Projeto' || k === 'Arquivo') && 'col-span-2')}>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-lumos-text-secondary/60">{k}</span>
+                    <span className="text-[11px] font-bold text-lumos-text-primary break-words">{v}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Tema claro/escuro */}
+          <button onClick={toggleTheme} title="Tema claro/escuro"
+            className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors">
+            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+          </button>
+          <span className="text-[10px] text-lumos-text-secondary ml-1 hidden sm:inline">Você: <b className="text-lumos-text-primary">{viewerName}</b></span>
+        </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row">
+      <div className="flex flex-col lg:flex-row" onClick={() => showInfo && setShowInfo(false)}>
         {/* Player */}
-        <div className="flex-1 p-4 space-y-3">
+        <div className="flex-1 p-4 space-y-2">
           <div ref={wrapRef} className="relative bg-black rounded-lumos overflow-hidden select-none">
             <video
-              ref={videoRef} src={streamUrl} className="w-full max-h-[70vh] block"
+              ref={videoRef} src={streamUrl} className="w-full max-h-[68vh] block mx-auto"
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
-              onLoadedMetadata={() => redraw()} onClick={togglePlay} playsInline
+              onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
+              onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
+              onClick={togglePlay} playsInline
             />
-            {/* Marca d'água */}
+            {/* Marca d'água = logo Lumos + nome (atribuição) */}
             {data.link.watermark && (
               <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-                <div className="absolute inset-0 flex flex-wrap gap-x-16 gap-y-10 -rotate-[30deg] scale-150 opacity-[0.13]">
+                <div className="absolute inset-0 flex flex-wrap gap-x-14 gap-y-12 -rotate-[30deg] scale-150 opacity-[0.11]">
                   {Array.from({ length: 40 }).map((_, i) => (
-                    <span key={i} className="text-white text-[11px] font-bold whitespace-nowrap">
-                      {viewerName} · {new Date().toLocaleDateString('pt-BR')}
-                    </span>
+                    <div key={i} className="flex items-center gap-1.5 whitespace-nowrap">
+                      <img src={LOGO_WATERMARK} alt="" className="h-3.5 w-auto" />
+                      <span className="text-white text-[9px] font-bold">{viewerName}</span>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -234,76 +295,60 @@ export default function RevisaoPublica() {
             />
           </div>
 
-          {/* Controles */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={togglePlay} className="p-2 rounded-lumos bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/40">
-              {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            </button>
-            <span className="text-xs font-mono font-bold text-lumos-text-secondary w-24">{fmtTime(currentMs)}{data.video.duration_ms ? ` / ${fmtTime(data.video.duration_ms)}` : ''}</span>
-            <button onClick={changeSpeed} className="px-2.5 py-2 rounded-lumos bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/40 text-[11px] font-black">{speed}x</button>
-            <button onClick={fullscreen} className="p-2 rounded-lumos bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/40"><Maximize className="w-4 h-4" /></button>
-            {data.link.allow_download && (
-              <a href={streamUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lumos bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/40" title="Baixar"><Download className="w-4 h-4" /></a>
-            )}
-            <div className="flex-1" />
-            {!composing && (
-              <button onClick={startComposing} className="btn-primary h-9 px-3 text-xs font-bold flex items-center gap-1.5">
-                <MessageSquarePlus className="w-4 h-4" /> Comentar em {fmtTime(currentMs)}
-              </button>
-            )}
+          {/* Barra de progresso com marcadores de comentário */}
+          <div className="px-1 pt-1">
+            <div ref={barRef} onPointerDown={onBarDown} className="relative h-5 flex items-center cursor-pointer group">
+              <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
+              <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
+              {/* marcadores */}
+              {durationMs > 0 && data.comments.map(c => (
+                <button key={c.id} onClick={e => { e.stopPropagation(); viewComment(c); }}
+                  title={`${c.author_name} · ${fmtTime(c.timecode_ms)}${c.body ? ` — ${c.body}` : ''}`}
+                  className="absolute -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg hover:scale-150 transition-transform z-10"
+                  style={{ left: `${(c.timecode_ms / durationMs) * 100}%` }} />
+              ))}
+              {/* cabeça do scrubber */}
+              <div className="absolute -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-lumos-text-primary shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                style={{ left: `${pct}%` }} />
+            </div>
           </div>
 
-          {/* Barra de ferramentas de anotação (ao compor) */}
-          {composing && (
-            <div className="flex items-center gap-2 flex-wrap p-2 bg-lumos-surface border border-lumos-border rounded-lumos">
-              {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
-                <button key={t} onClick={() => setTool(tool === t ? null : t)}
-                  className={clsx('p-2 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                  <Icon className="w-4 h-4" />
-                </button>
-              ))}
-              <div className="flex items-center gap-1 ml-1">
-                {COLORS.map(c => (
-                  <button key={c} onClick={() => setColor(c)} style={{ background: c }}
-                    className={clsx('w-5 h-5 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />
-                ))}
-              </div>
-              <button onClick={() => setShapes([])} className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400" title="Limpar desenhos"><Eraser className="w-4 h-4" /></button>
+          {/* Controles (estilo Frame.io) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={togglePlay} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
+              {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            </button>
+            {/* Volume */}
+            <div className="flex items-center gap-1.5">
+              <button onClick={toggleMute} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
+                {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+              <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume}
+                onChange={e => setVol(Number(e.target.value))} className="w-16 accent-lumos-yellow cursor-pointer" />
             </div>
-          )}
+            <span className="text-xs font-mono font-bold text-lumos-text-secondary tabular-nums">
+              {fmtTime(currentMs)} <span className="opacity-50">/ {durationMs ? fmtTime(durationMs) : '—'}</span>
+            </span>
+            <div className="flex-1" />
+            <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
+            {data.link.allow_download && (
+              <a href={streamUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar"><Download className="w-4 h-4" /></a>
+            )}
+            <button onClick={fullscreen} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
+          </div>
         </div>
 
         {/* Comentários */}
-        <aside className="w-full lg:w-[360px] border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col max-h-[calc(100vh-3rem)]">
-          {/* Specs */}
-          <div className="p-4 border-b border-lumos-border grid grid-cols-2 gap-x-4 gap-y-1.5">
-            {specs.map(([k, v]) => (
-              <div key={k} className="flex flex-col">
-                <span className="text-[8px] font-black uppercase tracking-widest text-lumos-text-secondary/60">{k}</span>
-                <span className="text-[11px] font-bold text-lumos-text-primary truncate">{v}</span>
-              </div>
-            ))}
+        <aside className="w-full lg:w-[380px] border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:max-h-[calc(100vh-3rem)]">
+          <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários</span>
+            <span className="text-[10px] font-bold text-lumos-text-secondary/70">{data.comments.length}</span>
           </div>
 
-          {/* Compositor */}
-          {composing && (
-            <div className="p-3 border-b border-lumos-border bg-lumos-yellow/[0.03]">
-              <p className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow mb-1.5 flex items-center gap-1"><Clock className="w-3 h-3" /> {fmtTime(currentMs)}</p>
-              <textarea value={commentText} onChange={e => setCommentText(e.target.value)} rows={3}
-                placeholder="Escreva seu comentário… (desenhe no vídeo se quiser)" className="input-lumos w-full text-xs resize-none" autoFocus />
-              <div className="flex items-center gap-2 mt-2">
-                <button onClick={cancelComposing} className="btn-secondary flex-1 h-8 text-xs">Cancelar</button>
-                <button onClick={submitComment} disabled={sending} className="btn-primary flex-1 h-8 text-xs font-bold flex items-center justify-center gap-1.5">
-                  {sending ? <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <><Send className="w-3.5 h-3.5" /> Enviar</>}
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Lista */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 min-h-[120px]">
             {data.comments.length === 0 ? (
-              <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum comentário ainda. Pause no ponto que quiser e clique em “Comentar”.</p>
+              <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.</p>
             ) : (
               data.comments.map(c => (
                 <button key={c.id} onClick={() => viewComment(c)} className="w-full text-left p-2.5 rounded-lumos border border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] transition-all">
@@ -316,6 +361,56 @@ export default function RevisaoPublica() {
                 </button>
               ))
             )}
+          </div>
+
+          {/* Compositor fixo (sempre visível) */}
+          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1">
+                <Clock className="w-3 h-3" /> em {fmtTime(currentMs)}
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => { ensureComposing(); setShowTools(s => !s); if (!showTools && !tool) setTool('draw'); }}
+                  className={clsx('text-[10px] font-bold flex items-center gap-1 px-2 py-1 rounded-full border transition-colors', showTools ? 'border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                  <Pencil className="w-3 h-3" /> Anotar
+                </button>
+                {composing && (
+                  <button onClick={resetComposer} title="Cancelar" className="p-1 rounded-full text-lumos-text-secondary hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+                )}
+              </div>
+            </div>
+
+            {/* Ferramentas de anotação */}
+            {showTools && (
+              <div className="flex items-center gap-1.5 mb-2 flex-wrap p-2 bg-lumos-bg/40 rounded-lumos">
+                {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
+                  <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
+                    className={clsx('p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </button>
+                ))}
+                <div className="flex items-center gap-1 ml-1">
+                  {COLORS.map(c => (
+                    <button key={c} onClick={() => setColor(c)} style={{ background: c }}
+                      className={clsx('w-4 h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />
+                  ))}
+                </div>
+                <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
+              </div>
+            )}
+
+            <div className="flex items-end gap-2">
+              <textarea
+                value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComment(); }}
+                rows={1} placeholder={`Comentar em ${fmtTime(currentMs)}…`}
+                className="input-lumos flex-1 text-xs resize-none min-h-[40px] max-h-28 py-2.5"
+              />
+              <button onClick={submitComment} disabled={sending || (!commentText.trim() && shapes.length === 0)}
+                className="btn-primary h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
+                {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         </aside>
       </div>
