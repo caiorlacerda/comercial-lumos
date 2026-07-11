@@ -68,11 +68,11 @@ async function driveFetch(path: string, init: RequestInit = {}, attempt = 1): Pr
   return body
 }
 
-async function listChildren(parentId: string): Promise<{ id: string; name: string; mimeType: string; webViewLink?: string }[]> {
+async function listChildren(parentId: string): Promise<any[]> {
   const items: any[] = []; let pageToken = ''
   do {
     const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`)
-    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
+    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink,size,videoMediaMetadata),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
     items.push(...(page.files || [])); pageToken = page.nextPageToken || ''
   } while (pageToken)
   return items
@@ -111,6 +111,7 @@ async function scanDropzones(): Promise<{ found: number }> {
         if (knownIds.has(file.id)) continue
         const m = file.name.match(VIDEO_RE)
         if (!m) continue
+        const vmm = file.videoMediaMetadata || {}
         const { error } = await db.from('video_versions').insert([{
           project_id: proj.id,
           versao: parseInt(m[3], 10),
@@ -118,6 +119,11 @@ async function scanDropzones(): Promise<{ found: number }> {
           drive_file_id: file.id,
           drive_web_link: file.webViewLink ?? null,
           status: 'EM_REVISAO_INTERNA',
+          width: vmm.width ?? null,
+          height: vmm.height ?? null,
+          duration_ms: vmm.durationMillis ? Number(vmm.durationMillis) : null,
+          size_bytes: file.size ? Number(file.size) : null,
+          mime_type: file.mimeType ?? null,
         }])
         if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Nova versão detectada: ${file.name}`) }
         else if (!String(error.message).includes('duplicate')) await log(proj.id, 'error', `Insert falhou p/ ${file.name}: ${error.message}`, 'error')

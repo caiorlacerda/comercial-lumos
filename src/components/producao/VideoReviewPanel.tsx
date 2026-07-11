@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2 } from 'lucide-react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,6 +52,8 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const canManage = isAdmin || profile?.role === 'producao';
 
   const [versions, setVersions] = useState<VideoVersion[]>([]);
+  const [links, setLinks] = useState<Record<string, { id: string; token: string; watermark: boolean; allow_download: boolean }>>({});
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -61,9 +63,54 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       .select('*')
       .eq('project_id', projectId)
       .order('versao', { ascending: false });
-    if (!error) setVersions((data as VideoVersion[]) || []);
+    if (!error) {
+      const vs = (data as VideoVersion[]) || [];
+      setVersions(vs);
+      const ids = vs.map(v => v.id);
+      if (ids.length) {
+        const [linkRes, cmtRes] = await Promise.all([
+          supabase.from('review_links').select('id, token, watermark, allow_download, video_version_id').in('video_version_id', ids).eq('active', true),
+          supabase.from('review_comments').select('video_version_id').in('video_version_id', ids),
+        ]);
+        const lmap: Record<string, any> = {};
+        (linkRes.data || []).forEach((l: any) => { lmap[l.video_version_id] = l; });
+        setLinks(lmap);
+        const cmap: Record<string, number> = {};
+        (cmtRes.data || []).forEach((c: any) => { cmap[c.video_version_id] = (cmap[c.video_version_id] || 0) + 1; });
+        setCounts(cmap);
+      }
+    }
     setLoading(false);
   }, [projectId]);
+
+  const publicUrl = (tk: string) => `${window.location.origin}/revisao/${tk}`;
+
+  const generateLink = async (versionId: string) => {
+    setBusy(versionId);
+    const { data, error } = await supabase
+      .from('review_links')
+      .insert([{ video_version_id: versionId, created_by: profile?.id }])
+      .select('id, token, watermark, allow_download')
+      .single();
+    setBusy(null);
+    if (error || !data) { toast.error('Erro ao gerar link.'); return; }
+    setLinks(prev => ({ ...prev, [versionId]: data as any }));
+    await navigator.clipboard.writeText(publicUrl(data.token)).catch(() => {});
+    toast.success('Link do cliente gerado e copiado ✓');
+  };
+
+  const copyLink = async (tk: string) => {
+    await navigator.clipboard.writeText(publicUrl(tk)).catch(() => {});
+    toast.success('Link copiado ✓');
+  };
+
+  const toggleLinkFlag = async (versionId: string, field: 'watermark' | 'allow_download') => {
+    const link = links[versionId]; if (!link) return;
+    const next = !link[field];
+    setLinks(prev => ({ ...prev, [versionId]: { ...link, [field]: next } }));
+    const { error } = await supabase.from('review_links').update({ [field]: next }).eq('id', link.id);
+    if (error) { toast.error('Não foi possível salvar.'); setLinks(prev => ({ ...prev, [versionId]: link })); }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -153,7 +200,8 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             const ui = STATUS_UI[v.status];
             const isBusy = busy === v.id;
             return (
-              <div key={v.id} className="flex items-center gap-3 p-3 rounded-lumos border border-lumos-border/50 bg-lumos-bg/30">
+              <div key={v.id} className="p-3 rounded-lumos border border-lumos-border/50 bg-lumos-bg/30 space-y-2">
+               <div className="flex items-center gap-3">
                 <span className="text-sm font-black text-lumos-text-primary w-10 flex-shrink-0">v{String(v.versao).padStart(2, '0')}</span>
 
                 <div className="flex-1 min-w-0">
@@ -201,6 +249,38 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                     <span className="text-[10px] font-semibold text-lumos-text-secondary/70 italic">Aguardando novo corte</span>
                   )}
                 </div>
+               </div>
+
+               {/* Link do cliente + comentários */}
+               {canManage && (
+                 <div className="flex items-center gap-2 flex-wrap pl-[52px] pt-0.5">
+                   {links[v.id] ? (
+                     <>
+                       <button onClick={() => copyLink(links[v.id].token)} className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1 border border-lumos-border rounded-full px-2 py-1 transition-colors">
+                         <Copy className="w-3 h-3" /> Copiar link
+                       </button>
+                       <a href={`/revisao/${links[v.id].token}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1 border border-lumos-border rounded-full px-2 py-1 transition-colors">
+                         <ExternalLink className="w-3 h-3" /> Abrir
+                       </a>
+                       <button onClick={() => toggleLinkFlag(v.id, 'watermark')} title="Marca d'água" className={clsx('text-[10px] font-bold flex items-center gap-1 rounded-full px-2 py-1 transition-colors border', links[v.id].watermark ? 'text-lumos-yellow border-lumos-yellow/40 bg-lumos-yellow/10' : 'text-lumos-text-secondary/60 border-lumos-border')}>
+                         <Droplet className="w-3 h-3" /> Marca d'água
+                       </button>
+                       <button onClick={() => toggleLinkFlag(v.id, 'allow_download')} title="Permitir download" className={clsx('text-[10px] font-bold flex items-center gap-1 rounded-full px-2 py-1 transition-colors border', links[v.id].allow_download ? 'text-lumos-yellow border-lumos-yellow/40 bg-lumos-yellow/10' : 'text-lumos-text-secondary/60 border-lumos-border')}>
+                         <DownloadCloud className="w-3 h-3" /> Download
+                       </button>
+                     </>
+                   ) : (
+                     <button disabled={isBusy} onClick={() => generateLink(v.id)} className="text-[10px] font-bold text-lumos-yellow hover:bg-lumos-yellow/10 flex items-center gap-1 border border-lumos-yellow/40 rounded-full px-2.5 py-1 transition-colors">
+                       <Link2 className="w-3 h-3" /> Gerar link do cliente
+                     </button>
+                   )}
+                   {(counts[v.id] || 0) > 0 && (
+                     <span className="text-[10px] font-bold text-lumos-text-secondary flex items-center gap-1 ml-auto">
+                       <MessageSquare className="w-3 h-3" /> {counts[v.id]} comentário{counts[v.id] > 1 ? 's' : ''}
+                     </span>
+                   )}
+                 </div>
+               )}
               </div>
             );
           })}
