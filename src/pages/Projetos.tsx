@@ -1611,15 +1611,6 @@ export default function Projetos() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex items-center gap-3">
-          {!isSidebarOpen && !loading && (
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 bg-lumos-surface border border-lumos-border rounded-lumos text-lumos-yellow hover:scale-105 active:scale-95 transition-all flex items-center justify-center flex-shrink-0"
-              title="Expandir painel de clientes"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
           <div>
             <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight uppercase">
               Gerenciador de Projetos
@@ -1647,164 +1638,10 @@ export default function Projetos() {
           <p className="text-xs text-lumos-text-secondary font-semibold uppercase tracking-wider">Carregando painel...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-[600px] items-start transition-all duration-300">
+        <div className="min-h-[600px]">
           
-          {/* Panel 1: Collapsible Folders (Lateral Esquerda) */}
-          {isSidebarOpen && (
-            <div className="lg:col-span-1 card border border-lumos-border bg-lumos-surface/40 flex flex-col p-4 space-y-4 h-[650px] relative animate-in slide-in-from-left duration-200">
-              
-              {/* Panel Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-                <input
-                  type="text"
-                  placeholder="Buscar cliente ou projeto..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="input-lumos w-full pl-9 h-10 text-xs font-semibold"
-                />
-              </div>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
-                <div className="flex items-center justify-between px-2 mb-2">
-                  <span className="text-[9px] font-black tracking-widest text-lumos-text-secondary uppercase opacity-50 block">
-                    Pastas de Clientes
-                  </span>
-                  <button
-                    onClick={() => setIsSidebarOpen(false)}
-                    className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-border/20 transition-all"
-                    title="Recolher painel"
-                  >
-                    <Menu className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {filteredClients.length === 0 ? (
-                  <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum cliente encontrado.</p>
-                ) : (
-                  filteredClients.map((client) => {
-                    const clientProjects = projects.filter(p => p.client_id === client.id);
-                    const activeProjects = clientProjects.filter(p => p.status === 'ativo');
-                    const concludedProjects = clientProjects.filter(p => p.status === 'concluido');
-                    const isExpanded = !!expandedClients[client.id] || searchTerm.length > 0;
-                    const isClientSelected = selectedClientId === client.id && !selectedProjectId;
-
-                    return (
-                      <div key={client.id} className="space-y-1">
-                        <div 
-                          onClick={() => {
-                            setSelectedClientId(client.id);
-                            setSelectedProjectId(null);
-                            toggleClientExpanded(client.id);
-                          }}
-                          className={clsx(
-                            "flex items-center justify-between px-3 py-2 rounded-lumos cursor-pointer transition-all hover:bg-lumos-surface group",
-                            isClientSelected ? "bg-lumos-yellow/10 text-lumos-yellow border-l-2 border-lumos-yellow" : "text-lumos-text-primary"
-                          )}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            {isExpanded ? (
-                              <FolderOpen className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
-                            ) : (
-                              <FolderClosed className="w-4 h-4 text-lumos-text-secondary/70 flex-shrink-0" />
-                            )}
-                            <span className="text-xs font-bold truncate tracking-tight">{client.name}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {activeProjects.length > 0 && (
-                              <span className="text-[9px] font-black bg-lumos-border/50 px-1.5 py-0.5 rounded text-lumos-text-secondary">
-                                {activeProjects.length}
-                              </span>
-                            )}
-                            {isExpanded ? <ChevronDown className="w-3 h-3 text-lumos-text-secondary/55" /> : <ChevronRight className="w-3 h-3 text-lumos-text-secondary/55" />}
-                          </div>
-                        </div>
-
-                        {/* Client Projects List (Submenu) */}
-                        {isExpanded && (
-                          <div className="pl-6 pr-1 py-1 space-y-1 border-l border-lumos-border/30 ml-5">
-                            {activeProjects.length === 0 && concludedProjects.length === 0 ? (
-                              <span className="text-[10px] text-lumos-text-secondary/50 italic block py-1">Sem projetos</span>
-                            ) : (
-                              <>
-                                {activeProjects.map((proj) => {
-                                  const isProjSelected = selectedProjectId === proj.id;
-                                  return (
-                                    <div
-                                      key={proj.id}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedClientId(client.id);
-                                        setSelectedProjectId(proj.id);
-                                      }}
-                                      className={clsx(
-                                        "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
-                                        isProjSelected 
-                                          ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
-                                          : "text-lumos-text-secondary"
-                                      )}
-                                    >
-                                      <span className="truncate max-w-[80%]">{proj.name}</span>
-                                      {proj.code && (
-                                        <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
-                                          {formatBudgetCode(proj.code)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-
-                                {showConcludedProjects && concludedProjects.length > 0 && (
-                                  <div className="space-y-1 mt-2 pt-1 border-t border-lumos-border/10">
-                                    <div className="text-[8px] font-black uppercase text-lumos-text-secondary opacity-40 tracking-wider pb-1">
-                                      Encerrados
-                                    </div>
-                                    {concludedProjects.map((proj) => {
-                                      const isProjSelected = selectedProjectId === proj.id;
-                                      return (
-                                        <div
-                                          key={proj.id}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedClientId(client.id);
-                                            setSelectedProjectId(proj.id);
-                                          }}
-                                          className={clsx(
-                                            "flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-medium cursor-pointer transition-all hover:text-lumos-yellow",
-                                            isProjSelected 
-                                              ? "text-lumos-yellow bg-lumos-surface/60 font-bold" 
-                                              : "text-lumos-text-secondary/40 line-through"
-                                          )}
-                                        >
-                                          <span className="truncate max-w-[80%]">{proj.name}</span>
-                                          {proj.code && (
-                                            <span className="text-[8px] font-bold px-1 py-0.2 bg-lumos-border/30 rounded text-lumos-text-secondary tracking-tight">
-                                              {formatBudgetCode(proj.code)}
-                                            </span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Panel 2 & 3: Selected client grid OR Selected project detail (Centro/Direita) */}
-          <div className={clsx(
-            "space-y-6 min-h-[600px] transition-all duration-300",
-            isSidebarOpen ? "lg:col-span-3" : "lg:col-span-4"
-          )}>
+          {/* Detalhe do projeto — a seleção vem da árvore de Projetos na sidebar */}
+          <div className="space-y-6 min-h-[600px]">
             
             {selectedProjectId && selectedProject ? (
               /* ================= SELECTED PROJECT DETAILS & TASKS ================= */
@@ -2416,10 +2253,10 @@ export default function Projetos() {
                   </div>
                   <div className="space-y-2">
                     <h3 className="text-lg font-bold text-lumos-text-primary uppercase tracking-tight">
-                      Selecione um Cliente
+                      Selecione um Projeto
                     </h3>
                     <p className="text-xs text-lumos-text-secondary leading-relaxed">
-                      Utilize a árvore de pastas à esquerda para visualizar e gerenciar os projetos vinculados a cada cliente, ou clique no botão superior para cadastrar um novo projeto manual.
+                      Escolha um projeto na árvore de <b>Projetos</b> na barra lateral para ver as tarefas e a revisão de vídeo, ou clique em <b>Criar Projeto</b> pra cadastrar um novo.
                     </p>
                   </div>
                 </div>
