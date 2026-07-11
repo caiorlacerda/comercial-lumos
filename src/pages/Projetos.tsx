@@ -1,7 +1,20 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
+import Select from '@/components/ui/Select';
 import { supabase } from '@/lib/supabase';
+
+const STATUS_OPTIONS = [
+  { value: 'iniciar', label: 'Iniciar' }, { value: 'pausado', label: 'Pausado' },
+  { value: 'aguard_captacao', label: 'Aguard. Captação' }, { value: 'aguard_material', label: 'Aguard. Material' },
+  { value: 'na_fila', label: 'Na Fila' }, { value: 'em_progresso', label: 'Em Progresso' },
+  { value: 'revisao_interna', label: 'Revisão Interna' }, { value: 'aprov_interna', label: 'Aprov. Interna' },
+  { value: 'revisao_cliente', label: 'Revisão do Cliente' }, { value: 'alteracoes', label: 'Alterações' },
+  { value: 'entregue', label: 'Entregue' }, { value: 'concluido', label: 'Concluído' },
+];
+const PRIORITY_OPTIONS = [
+  { value: 'baixa', label: 'Baixa' }, { value: 'media', label: 'Média' }, { value: 'alta', label: 'Alta' },
+];
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
@@ -1668,14 +1681,13 @@ export default function Projetos() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       {canManage ? (
-                        <select
+                        <Select
                           value={selectedProject.category || selectedProject.budget?.category || ''}
-                          onChange={async (e) => {
-                            const newCategory = e.target.value as 'digital' | 'filme' | 'live';
+                          onChange={async (v) => {
                             try {
                               const { error } = await supabase
                                 .from('projects')
-                                .update({ category: newCategory })
+                                .update({ category: v as 'digital' | 'filme' | 'live' })
                                 .eq('id', selectedProject.id);
                               if (error) throw error;
                               toast.success('Segmento do projeto atualizado!');
@@ -1685,16 +1697,12 @@ export default function Projetos() {
                               toast.error('Erro ao atualizar segmento.');
                             }
                           }}
+                          options={[{ value: '', label: 'Sem Segmento' }, { value: 'digital', label: 'Digital' }, { value: 'filme', label: 'Filme' }, { value: 'live', label: 'Live' }]}
                           className={clsx(
-                            "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border bg-transparent cursor-pointer outline-none focus:border-lumos-yellow",
+                            "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border hover:border-lumos-yellow/40",
                             getCategoryTheme(selectedProject.category || selectedProject.budget?.category || null)
                           )}
-                        >
-                          <option value="" className="bg-lumos-surface text-lumos-text-primary">Sem Segmento</option>
-                          <option value="digital" className="bg-lumos-surface text-lumos-text-primary">Digital</option>
-                          <option value="filme" className="bg-lumos-surface text-lumos-text-primary">Filme</option>
-                          <option value="live" className="bg-lumos-surface text-lumos-text-primary">Live</option>
-                        </select>
+                        />
                       ) : (
                         <span className={clsx(
                           "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border",
@@ -1983,68 +1991,43 @@ export default function Projetos() {
 
                                     {/* Status Badge Dropdown */}
                                     <td className="py-2 px-2">
-                                      <select
+                                      <Select
                                         value={task.status}
                                         disabled={!canManage}
-                                        onChange={(e) => handleUpdateTask(task.id, { status: e.target.value })}
+                                        onChange={(v) => handleUpdateTask(task.id, { status: v })}
+                                        options={STATUS_OPTIONS}
                                         className={clsx(
-                                          "bg-transparent border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full max-w-[140px]",
+                                          "border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider hover:border-lumos-border/40 max-w-[150px]",
                                           getStatusDetails(task.status).color
                                         )}
-                                      >
-                                        <optgroup label="Não Iniciado" className="bg-lumos-surface text-lumos-text-primary text-[10px]">
-                                          <option value="iniciar">Iniciar</option>
-                                          <option value="pausado">Pausado</option>
-                                          <option value="aguard_captacao">Aguard. Captação</option>
-                                          <option value="aguard_material">Aguard. Material</option>
-                                        </optgroup>
-                                        <optgroup label="Ativo" className="bg-lumos-surface text-lumos-text-primary text-[10px]">
-                                          <option value="na_fila">Na Fila</option>
-                                          <option value="em_progresso">Em Progresso</option>
-                                          <option value="revisao_interna">Revisão Interna</option>
-                                          <option value="aprov_interna">Aprov. Interna</option>
-                                          <option value="revisao_cliente">Revisão do Cliente</option>
-                                          <option value="alteracoes">Alterações</option>
-                                        </optgroup>
-                                        <optgroup label="Concluído" className="bg-lumos-surface text-lumos-text-primary text-[10px]">
-                                          <option value="entregue">Entregue</option>
-                                          <option value="concluido">Concluído</option>
-                                        </optgroup>
-                                      </select>
+                                      />
                                     </td>
 
                                     {/* Priority Badge Dropdown */}
                                     <td className="py-2 px-2">
-                                      <select
+                                      <Select
                                         value={task.prioridade}
                                         disabled={!canManage}
-                                        onChange={(e) => handleUpdateTask(task.id, { prioridade: e.target.value as any })}
+                                        onChange={(v) => handleUpdateTask(task.id, { prioridade: v as any })}
+                                        options={PRIORITY_OPTIONS}
                                         className={clsx(
-                                          "bg-transparent border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full max-w-[90px]",
+                                          "border border-transparent rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider hover:border-lumos-border/40 max-w-[105px]",
                                           getPriorityTheme(task.prioridade)
                                         )}
-                                      >
-                                        <option value="baixa">Baixa</option>
-                                        <option value="media">Média</option>
-                                        <option value="alta">Alta</option>
-                                      </select>
+                                      />
                                     </td>
 
                                     {/* Assignee Select Dropdown */}
                                     <td className="py-2 px-2">
-                                      <div className="flex items-center gap-1.5 min-w-[130px] border border-transparent hover:border-lumos-border/30 rounded px-1">
+                                      <div className="flex items-center gap-1.5 min-w-[140px] border border-transparent hover:border-lumos-border/30 rounded px-1">
                                         <User className="w-3 h-3 text-lumos-text-secondary opacity-50 flex-shrink-0" />
-                                        <select
+                                        <Select
                                           value={task.responsavel_id || ''}
                                           disabled={!canManage}
-                                          onChange={(e) => handleUpdateTask(task.id, { responsavel_id: e.target.value || null })}
-                                          className="bg-transparent border-none text-[11px] font-medium text-lumos-text-primary outline-none cursor-pointer w-full py-0.5"
-                                        >
-                                          <option value="">Sem responsável</option>
-                                          {teamUsers.map(user => (
-                                            <option key={user.id} value={user.id}>{user.full_name}</option>
-                                          ))}
-                                        </select>
+                                          onChange={(v) => handleUpdateTask(task.id, { responsavel_id: v || null })}
+                                          className="text-[11px] font-medium text-lumos-text-primary py-0.5"
+                                          options={[{ value: '', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]}
+                                        />
                                       </div>
                                     </td>
 
@@ -2361,52 +2344,31 @@ export default function Projetos() {
                   {/* Status */}
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Status</span>
-                    <select
+                    <Select
                       value={selectedTask.status}
                       disabled={!canManage}
-                      onChange={(e) => handleUpdateTask(selectedTask.id, { status: e.target.value })}
+                      onChange={(v) => handleUpdateTask(selectedTask.id, { status: v })}
+                      options={STATUS_OPTIONS}
                       className={clsx(
-                        "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
+                        "border border-lumos-border/40 rounded px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider w-full",
                         getStatusDetails(selectedTask.status).color
                       )}
-                    >
-                      <optgroup label="Não Iniciado" className="bg-lumos-surface text-lumos-text-primary">
-                        <option value="iniciar">Iniciar</option>
-                        <option value="pausado">Pausado</option>
-                        <option value="aguard_captacao">Aguard. Captação</option>
-                        <option value="aguard_material">Aguard. Material</option>
-                      </optgroup>
-                      <optgroup label="Ativo" className="bg-lumos-surface text-lumos-text-primary">
-                        <option value="na_fila">Na Fila</option>
-                        <option value="em_progresso">Em Progresso</option>
-                        <option value="revisao_interna">Revisão Interna</option>
-                        <option value="aprov_interna">Aprov. Interna</option>
-                        <option value="revisao_cliente">Revisão do Cliente</option>
-                        <option value="alteracoes">Alterações</option>
-                      </optgroup>
-                      <optgroup label="Concluído" className="bg-lumos-surface text-lumos-text-primary">
-                        <option value="entregue">Entregue</option>
-                        <option value="concluido">Concluído</option>
-                      </optgroup>
-                    </select>
+                    />
                   </div>
 
                   {/* Priority */}
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prioridade</span>
-                    <select
+                    <Select
                       value={selectedTask.prioridade}
                       disabled={!canManage}
-                      onChange={(e) => handleUpdateTask(selectedTask.id, { prioridade: e.target.value as any })}
+                      onChange={(v) => handleUpdateTask(selectedTask.id, { prioridade: v as any })}
+                      options={PRIORITY_OPTIONS}
                       className={clsx(
-                        "bg-transparent border border-lumos-border/40 rounded px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer focus:border-lumos-yellow w-full",
+                        "border border-lumos-border/40 rounded px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider w-full",
                         getPriorityTheme(selectedTask.prioridade)
                       )}
-                    >
-                      <option value="baixa">Baixa</option>
-                      <option value="media">Média</option>
-                      <option value="alta">Alta</option>
-                    </select>
+                    />
                   </div>
 
                   {/* Assignee */}
@@ -2414,17 +2376,13 @@ export default function Projetos() {
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Responsável</span>
                     <div className="flex items-center gap-1.5 border border-lumos-border/40 rounded px-2.5 py-1">
                       <User className="w-3.5 h-3.5 text-lumos-text-secondary opacity-50 flex-shrink-0" />
-                      <select
+                      <Select
                         value={selectedTask.responsavel_id || ''}
                         disabled={!canManage}
-                        onChange={(e) => handleUpdateTask(selectedTask.id, { responsavel_id: e.target.value || null })}
-                        className="bg-transparent border-none text-[11px] font-medium text-lumos-text-primary outline-none cursor-pointer w-full py-0.5"
-                      >
-                        <option value="">Sem responsável</option>
-                        {teamUsers.map(user => (
-                          <option key={user.id} value={user.id}>{user.full_name}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => handleUpdateTask(selectedTask.id, { responsavel_id: v || null })}
+                        className="text-[11px] font-medium text-lumos-text-primary py-0.5"
+                        options={[{ value: '', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]}
+                      />
                     </div>
                   </div>
 
@@ -2683,32 +2641,26 @@ export default function Projetos() {
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Cliente *
                   </label>
-                  <select
-                    required
+                  <Select
                     value={newProjClient}
-                    onChange={e => setNewProjClient(e.target.value)}
+                    onChange={setNewProjClient}
+                    placeholder="Selecione um Cliente"
                     className="input-lumos w-full h-11 text-xs font-semibold"
-                  >
-                    <option value="">Selecione um Cliente</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                    menuClassName="max-h-72"
+                    options={clients.map(c => ({ value: c.id, label: c.name }))}
+                  />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
                     Segmento *
                   </label>
-                  <select
+                  <Select
                     value={newProjCategory}
-                    onChange={e => setNewProjCategory(e.target.value as any)}
+                    onChange={v => setNewProjCategory(v as any)}
                     className="input-lumos w-full h-11 text-xs font-semibold"
-                  >
-                    <option value="digital">Digital</option>
-                    <option value="filme">Filme</option>
-                    <option value="live">Live</option>
-                  </select>
+                    options={[{ value: 'digital', label: 'Digital' }, { value: 'filme', label: 'Filme' }, { value: 'live', label: 'Live' }]}
+                  />
                 </div>
 
                 <div className="space-y-1">

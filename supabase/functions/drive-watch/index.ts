@@ -331,6 +331,19 @@ serve(async (req) => {
       await renameVersion(payload.version_id, payload.new_name)
       return new Response(JSON.stringify({ ok: true, renamed: payload.version_id }), { status: 200 })
     }
+    // Excluir vídeo(s): manda o arquivo (e o vFINAL) pra lixeira no Drive e apaga
+    // o registro. Como o scan ignora trashed=true, não volta a ser detectado.
+    if (payload?.action === 'delete' && Array.isArray(payload?.version_ids) && payload.version_ids.length) {
+      const { data: vers } = await db.from('video_versions').select('id, drive_file_id, approved_file_id').in('id', payload.version_ids)
+      for (const v of vers || []) {
+        for (const fid of [v.drive_file_id, v.approved_file_id]) {
+          if (!fid) continue
+          try { await driveFetch(`files/${fid}?fields=id`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) }) } catch (_) { /* já sumiu */ }
+        }
+      }
+      await db.from('video_versions').delete().in('id', payload.version_ids)
+      return new Response(JSON.stringify({ ok: true, deleted: (vers || []).length }), { status: 200 })
+    }
     // Scan sob demanda de um projeto (botão "Verificar agora" no app)
     if (payload?.action === 'scan') {
       const res = await scanDropzones(payload.project_id)

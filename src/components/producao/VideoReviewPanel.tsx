@@ -1,10 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, SlidersHorizontal, X, Upload, Play } from 'lucide-react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, SlidersHorizontal, X, Upload, Play, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import InternalReviewModal from './InternalReviewModal';
+import Select from '@/components/ui/Select';
 
 type ReviewStatus =
   | 'EM_REVISAO_INTERNA' | 'ALTERACOES_INTERNAS'
@@ -109,6 +110,9 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [fileDragging, setFileDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [visibleCols, setVisibleCols] = useState<Set<SortKey>>(() => {
     try { const s = JSON.parse(localStorage.getItem('rev_cols_v1') || 'null'); if (Array.isArray(s)) return new Set(s); } catch { /* ignore */ }
     return new Set(OPTIONAL);
@@ -184,6 +188,22 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     setBusy(null);
     if (!link) { toast.error('Não foi possível abrir a revisão.'); return; }
     setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao });
+  };
+
+  const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); setConfirmingDelete(false); return n; });
+
+  const deleteSelected = async () => {
+    const versionIds = groups.filter(g => selected.has(g.id)).flatMap(g => g.versions.map(v => v.id));
+    if (!versionIds.length) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.functions.invoke('drive-delete', { body: { version_ids: versionIds } });
+      if (error) throw error;
+      toast.success(`${selected.size} vídeo(s) excluído(s) ✓`);
+      setSelected(new Set()); setConfirmingDelete(false);
+      await fetchVersions();
+    } catch { toast.error('Não foi possível excluir.'); }
+    finally { setDeleting(false); }
   };
 
   const scanNow = async () => {
@@ -499,10 +519,9 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         {canManage && versions.length > 0 && (
           <label className="flex items-center gap-1.5 text-[10px] font-bold text-lumos-text-secondary">
             <Link2 className="w-3 h-3" /> Espelhar na tarefa:
-            <select value={mirrorTaskId} onChange={e => linkTask(e.target.value)} className="input-lumos h-7 text-[11px] w-auto max-w-[180px] py-0">
-              <option value="">Nenhuma</option>
-              {tasks.map(t => <option key={t.id} value={t.id}>{t.titulo}</option>)}
-            </select>
+            <Select value={mirrorTaskId} onChange={linkTask} align="right"
+              className="input-lumos h-7 text-[11px] py-0 min-w-[150px] max-w-[190px]"
+              options={[{ value: '', label: 'Nenhuma' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]} />
           </label>
         )}
       </div>
@@ -515,6 +534,27 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           </div>
           <div className="h-1.5 rounded-full bg-lumos-text-secondary/20 overflow-hidden">
             <div className="h-full bg-lumos-yellow transition-all" style={{ width: `${Math.round(uploadPct * 100)}%` }} />
+          </div>
+        </div>
+      )}
+
+      {canManage && selected.size > 0 && (
+        <div className="mb-3 flex items-center justify-between gap-3 p-2.5 rounded-lumos border border-red-500/30 bg-red-500/5">
+          <span className="text-[11px] font-bold text-lumos-text-primary">{selected.size} vídeo(s) selecionado(s)</span>
+          <div className="flex items-center gap-2">
+            {confirmingDelete ? (
+              <>
+                <span className="text-[11px] font-bold text-red-400 hidden sm:inline">Excluir e mandar pra lixeira do Drive?</span>
+                <button onClick={() => setConfirmingDelete(false)} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
+                <button onClick={deleteSelected} disabled={deleting} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos bg-red-500 text-white hover:brightness-110 disabled:opacity-60 flex items-center gap-1">
+                  {deleting ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Confirmar
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setConfirmingDelete(true)} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos border border-red-500/40 text-red-400 hover:bg-red-500/10 flex items-center gap-1">
+                <Trash2 className="w-3.5 h-3.5" /> Excluir
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -534,6 +574,13 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-lumos-border">
+                {canManage && (
+                  <th className="w-8 py-2 px-2">
+                    <input type="checkbox" className="accent-lumos-yellow cursor-pointer"
+                      checked={sortedGroups.length > 0 && selected.size === sortedGroups.length}
+                      onChange={e => { setConfirmingDelete(false); setSelected(e.target.checked ? new Set(sortedGroups.map(g => g.id)) : new Set()); }} />
+                  </th>
+                )}
                 {shownColumns.map(col => (
                   <th key={col.key} onClick={() => toggleSort(col.key)}
                     className={clsx('py-2 px-2 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 cursor-pointer select-none whitespace-nowrap hover:text-lumos-text-primary transition-colors', col.align === 'right' && 'text-right')}>
@@ -556,7 +603,12 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                     onDragOver={e => { if (dragId && dragId !== g.id) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverId !== g.id) setDragOverId(g.id); } }}
                     onDrop={e => { e.preventDefault(); const src = dragId; setDragId(null); setDragOverId(null); if (src && src !== g.id) { const s = groups.find(x => x.id === src); if (s) stackInto(s, g); } }}
                     className={clsx('border-b border-lumos-border/40 transition-colors', canManage && renaming?.id !== g.current.id && 'cursor-grab active:cursor-grabbing',
-                      dragOverId === g.id ? 'bg-lumos-yellow/10 ring-1 ring-inset ring-lumos-yellow/50' : dragId === g.id ? 'opacity-40' : 'hover:bg-lumos-text-secondary/[0.03]')}>
+                      selected.has(g.id) ? 'bg-lumos-yellow/[0.06]' : dragOverId === g.id ? 'bg-lumos-yellow/10 ring-1 ring-inset ring-lumos-yellow/50' : dragId === g.id ? 'opacity-40' : 'hover:bg-lumos-text-secondary/[0.03]')}>
+                    {canManage && (
+                      <td className="w-8 py-2.5 px-2" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" className="accent-lumos-yellow cursor-pointer" checked={selected.has(g.id)} onChange={() => toggleSelect(g.id)} />
+                      </td>
+                    )}
                     {shownColumns.map(col => (
                       <td key={col.key} className={clsx('py-2.5 px-2 align-middle whitespace-nowrap', col.align === 'right' && 'text-right')}>
                         {renderCell(g, col.key)}
@@ -567,7 +619,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
 
                   {openGroups.has(g.id) && g.count > 1 && (
                     <tr className="border-b border-lumos-border/40 bg-lumos-bg/30">
-                      <td colSpan={shownColumns.length + 1} className="px-3 py-2">
+                      <td colSpan={shownColumns.length + (canManage ? 2 : 1)} className="px-3 py-2">
                         <div className="pl-4 space-y-1.5">
                           <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Versões deste vídeo</p>
                           {g.versions.map(v => (
