@@ -70,6 +70,20 @@ serve(async (req) => {
   try {
     const token = await googleToken()
 
+    // Identifica o usuário do app (pelo JWT do login) p/ atribuir o upload —
+    // senão o "enviado por" ficaria a conta de serviço que sobe o arquivo.
+    let uploaderName: string | null = null
+    try {
+      const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+      let p = jwt.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/') ?? ''
+      while (p.length % 4) p += '='
+      const claims = JSON.parse(atob(p))
+      if (claims?.sub) {
+        const { data: u } = await db.from('app_users').select('full_name').eq('auth_user_id', claims.sub).maybeSingle()
+        uploaderName = u?.full_name || claims.email || null
+      }
+    } catch (_) { /* sem nome: cai no Google de quem subiu */ }
+
     // Resolve a pasta 06_ENTREGA/01_REVISAO do projeto
     const { data: proj } = await db.from('projects').select('drive_folder_id, drive_upload_folder_id').eq('id', projectId).single()
     let folderId = proj?.drive_upload_folder_id as string | null
@@ -89,7 +103,7 @@ serve(async (req) => {
         'X-Upload-Content-Type': mimeType,
         ...(contentLength ? { 'X-Upload-Content-Length': contentLength } : {}),
       },
-      body: JSON.stringify({ name: fileName, parents: [folderId] }),
+      body: JSON.stringify({ name: fileName, parents: [folderId], ...(uploaderName ? { properties: { app_uploader: uploaderName } } : {}) }),
     })
     const session = initRes.headers.get('location')
     if (!session) return json({ error: `init falhou ${initRes.status}` }, 502)

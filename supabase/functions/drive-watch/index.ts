@@ -78,7 +78,7 @@ async function listChildren(parentId: string): Promise<any[]> {
   const items: any[] = []; let pageToken = ''
   do {
     const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`)
-    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink,size,videoMediaMetadata,createdTime,owners(displayName),lastModifyingUser(displayName)),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
+    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink,size,videoMediaMetadata,createdTime,owners(displayName),lastModifyingUser(displayName),properties),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
     items.push(...(page.files || [])); pageToken = page.nextPageToken || ''
   } while (pageToken)
   return items
@@ -122,26 +122,42 @@ function mp4Boxes(buf: Uint8Array, start: number, end: number): { type: string; 
   }
   return out
 }
-function fpsFromMoov(buf: Uint8Array, start: number, end: number): number | null {
+interface VideoMeta { fps: number | null; width: number | null; height: number | null; durationMs: number | null }
+function metaFromMoov(buf: Uint8Array, start: number, end: number): VideoMeta {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-  for (const trak of mp4Boxes(buf, start, end).filter(b => b.type === 'trak')) {
-    const mdia = mp4Boxes(buf, trak.ds, trak.de).find(b => b.type === 'mdia'); if (!mdia) continue
-    const kids = mp4Boxes(buf, mdia.ds, mdia.de)
-    const hdlr = kids.find(b => b.type === 'hdlr'), mdhd = kids.find(b => b.type === 'mdhd'), minf = kids.find(b => b.type === 'minf')
-    if (!hdlr || !mdhd || !minf) continue
-    const handler = String.fromCharCode(buf[hdlr.ds + 8], buf[hdlr.ds + 9], buf[hdlr.ds + 10], buf[hdlr.ds + 11])
-    if (handler !== 'vide') continue
-    const timescale = buf[mdhd.ds] === 1 ? dv.getUint32(mdhd.ds + 20) : dv.getUint32(mdhd.ds + 12)
-    const stbl = mp4Boxes(buf, minf.ds, minf.de).find(b => b.type === 'stbl'); if (!stbl) continue
-    const stts = mp4Boxes(buf, stbl.ds, stbl.de).find(b => b.type === 'stts'); if (!stts) continue
-    if (dv.getUint32(stts.ds + 4) < 1) continue           // entry_count
-    const sampleDelta = dv.getUint32(stts.ds + 12)        // 1ª entry: count(4) delta(4) após fullbox(4)+count(4)
-    if (!timescale || !sampleDelta) continue
-    return snapFps(timescale / sampleDelta)
+  const top = mp4Boxes(buf, start, end)
+  let durationMs: number | null = null
+  const mvhd = top.find(b => b.type === 'mvhd')
+  if (mvhd) {
+    if (buf[mvhd.ds] === 1) { const ts = dv.getUint32(mvhd.ds + 20); const dur = dv.getUint32(mvhd.ds + 24) * 4294967296 + dv.getUint32(mvhd.ds + 28); if (ts) durationMs = Math.round(dur / ts * 1000) }
+    else { const ts = dv.getUint32(mvhd.ds + 12); const dur = dv.getUint32(mvhd.ds + 16); if (ts) durationMs = Math.round(dur / ts * 1000) }
   }
-  return null
+  let fps: number | null = null, width: number | null = null, height: number | null = null
+  for (const trak of top.filter(b => b.type === 'trak')) {
+    const kids = mp4Boxes(buf, trak.ds, trak.de)
+    const mdia = kids.find(b => b.type === 'mdia'), tkhd = kids.find(b => b.type === 'tkhd')
+    if (!mdia) continue
+    const mk = mp4Boxes(buf, mdia.ds, mdia.de)
+    const hdlr = mk.find(b => b.type === 'hdlr'), mdhd = mk.find(b => b.type === 'mdhd'), minf = mk.find(b => b.type === 'minf')
+    if (!hdlr || !mdhd || !minf) continue
+    if (String.fromCharCode(buf[hdlr.ds + 8], buf[hdlr.ds + 9], buf[hdlr.ds + 10], buf[hdlr.ds + 11]) !== 'vide') continue
+    const timescale = buf[mdhd.ds] === 1 ? dv.getUint32(mdhd.ds + 20) : dv.getUint32(mdhd.ds + 12)
+    const stbl = mp4Boxes(buf, minf.ds, minf.de).find(b => b.type === 'stbl')
+    const stts = stbl && mp4Boxes(buf, stbl.ds, stbl.de).find(b => b.type === 'stts')
+    if (stts && dv.getUint32(stts.ds + 4) >= 1) {
+      const sampleDelta = dv.getUint32(stts.ds + 12)
+      if (timescale && sampleDelta) fps = snapFps(timescale / sampleDelta)
+    }
+    if (tkhd) {
+      const wOff = buf[tkhd.ds] === 1 ? tkhd.ds + 88 : tkhd.ds + 76
+      const w = dv.getUint32(wOff) / 65536, h = dv.getUint32(wOff + 4) / 65536
+      if (w > 0 && h > 0) { width = Math.round(w); height = Math.round(h) }
+    }
+    break
+  }
+  return { fps, width, height, durationMs }
 }
-async function probeFps(driveFileId: string): Promise<number | null> {
+async function probeVideoMeta(driveFileId: string): Promise<VideoMeta | null> {
   const token = await googleAccessToken()
   const url = `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media&supportsAllDrives=true`
   const read = async (a: number, b: number): Promise<Uint8Array> => {
@@ -159,7 +175,7 @@ async function probeFps(driveFileId: string): Promise<number | null> {
     if (type === 'moov') {
       if (size > 12_000_000) return null // moov gigante: aborta p/ não baixar demais
       const moov = await read(offset, offset + size - 1)
-      return fpsFromMoov(moov, hdr, moov.length)
+      return metaFromMoov(moov, hdr, moov.length)
     }
     if (size <= 0) break
     offset += size
@@ -193,7 +209,9 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
 
       for (const file of novos) {
         const vmm = file.videoMediaMetadata || {}
-        const fps = await probeFps(file.id).catch(() => null)
+        // Drive só calcula width/height/duração um tempo DEPOIS do upload; então
+        // lemos direto do cabeçalho (moov) como fonte imediata. FPS o Drive nunca dá.
+        const pm = await probeVideoMeta(file.id).catch(() => null)
         const { error } = await db.from('video_versions').insert([{
           project_id: proj.id,
           versao: 1, // grupo próprio → sempre começa em v01 (group_id = DEFAULT)
@@ -201,14 +219,16 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
           drive_file_id: file.id,
           drive_web_link: file.webViewLink ?? null,
           status: 'EM_REVISAO_INTERNA',
-          width: vmm.width ?? null,
-          height: vmm.height ?? null,
-          duration_ms: vmm.durationMillis ? Number(vmm.durationMillis) : null,
+          width: vmm.width ?? pm?.width ?? null,
+          height: vmm.height ?? pm?.height ?? null,
+          duration_ms: vmm.durationMillis ? Number(vmm.durationMillis) : (pm?.durationMs ?? null),
           size_bytes: file.size ? Number(file.size) : null,
           mime_type: file.mimeType ?? null,
-          uploaded_by: file.lastModifyingUser?.displayName ?? file.owners?.[0]?.displayName ?? null,
+          // uploads pela plataforma gravam o nome do usuário do app numa propriedade;
+          // uploads direto no Drive usam o Google de quem subiu.
+          uploaded_by: file.properties?.app_uploader ?? file.lastModifyingUser?.displayName ?? file.owners?.[0]?.displayName ?? null,
           uploaded_at: file.createdTime ?? null,
-          fps,
+          fps: pm?.fps ?? null,
         }])
         if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Novo vídeo detectado: ${file.name}`) }
         else if (!String(error.message).includes('duplicate')) await log(proj.id, 'error', `Insert falhou p/ ${file.name}: ${error.message}`, 'error')
@@ -261,18 +281,22 @@ async function finalizePending(): Promise<number> {
 // reprocessar arquivos sem info / sem FPS legível para sempre.
 async function backfillMeta(limit = 8): Promise<number> {
   const { data: rows } = await db
-    .from('video_versions').select('id, drive_file_id, uploaded_by, uploaded_at, fps')
-    .or('uploaded_by.is.null,fps.is.null').limit(limit)
+    .from('video_versions').select('id, drive_file_id, uploaded_by, uploaded_at, fps, width, duration_ms, size_bytes')
+    .or('uploaded_by.is.null,fps.is.null,width.is.null,duration_ms.is.null').limit(limit)
   let done = 0
   for (const r of rows || []) {
     try {
       const patch: Record<string, unknown> = {}
-      if (!r.uploaded_by || !r.uploaded_at) {
-        const meta = await driveFetch(`files/${r.drive_file_id}?fields=createdTime,owners(displayName),lastModifyingUser(displayName)`)
-        if (!r.uploaded_by) patch.uploaded_by = meta.lastModifyingUser?.displayName ?? meta.owners?.[0]?.displayName ?? ''
-        if (!r.uploaded_at) patch.uploaded_at = meta.createdTime ?? null
-      }
-      if (r.fps == null) patch.fps = (await probeFps(r.drive_file_id).catch(() => null)) ?? 0
+      const meta = await driveFetch(`files/${r.drive_file_id}?fields=createdTime,size,owners(displayName),lastModifyingUser(displayName),properties,videoMediaMetadata`)
+      const vmm = meta.videoMediaMetadata || {}
+      if (!r.uploaded_by) patch.uploaded_by = meta.properties?.app_uploader ?? meta.lastModifyingUser?.displayName ?? meta.owners?.[0]?.displayName ?? ''
+      if (!r.uploaded_at) patch.uploaded_at = meta.createdTime ?? null
+      if (r.size_bytes == null && meta.size) patch.size_bytes = Number(meta.size)
+      const needProbe = r.fps == null || (r.width == null && !vmm.width) || (r.duration_ms == null && !vmm.durationMillis)
+      const pm = needProbe ? await probeVideoMeta(r.drive_file_id).catch(() => null) : null
+      if (r.width == null && (vmm.width || pm?.width)) { patch.width = vmm.width ?? pm!.width; patch.height = vmm.height ?? pm!.height }
+      if (r.duration_ms == null && (vmm.durationMillis || pm?.durationMs)) patch.duration_ms = vmm.durationMillis ? Number(vmm.durationMillis) : pm!.durationMs
+      if (r.fps == null) patch.fps = pm?.fps ?? 0
       if (Object.keys(patch).length) { await db.from('video_versions').update(patch).eq('id', r.id); done++ }
     } catch (_) { /* tenta no próximo ciclo */ }
   }
