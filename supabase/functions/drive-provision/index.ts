@@ -262,6 +262,12 @@ async function provisionProject(projectId: string): Promise<void> {
   // 2. Idempotência: só pula se a pasta salva ainda existe E continua dentro do
   //    cliente atual (se o cliente foi recriado, a pasta antiga fica órfã).
   if (await folderUnder(project.drive_folder_id, clientFolderId)) {
+    // Backfill: projetos antigos podem não ter o ID do dropzone salvo ainda.
+    if (!project.drive_upload_folder_id) {
+      const entregaId = await findChildFolder(project.drive_folder_id!, '06_ENTREGA')
+      const up = entregaId ? await findChildFolder(entregaId, '01_REVISAO') : null
+      if (up) await db.from('projects').update({ drive_upload_folder_id: up }).eq('id', projectId)
+    }
     await log('project', projectId, 'skip', 'Projeto já tem pasta válida no Drive (idempotência)')
     return
   }
