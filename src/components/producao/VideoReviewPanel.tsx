@@ -1,9 +1,10 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, SlidersHorizontal, X } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, SlidersHorizontal, X, Upload, Play } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import InternalReviewModal from './InternalReviewModal';
 
 type ReviewStatus =
   | 'EM_REVISAO_INTERNA' | 'ALTERACOES_INTERNAS'
@@ -102,6 +103,12 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [showCols, setShowCols] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadName, setUploadName] = useState('');
+  const [fileDragging, setFileDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number } | null>(null);
   const [visibleCols, setVisibleCols] = useState<Set<SortKey>>(() => {
     try { const s = JSON.parse(localStorage.getItem('rev_cols_v1') || 'null'); if (Array.isArray(s)) return new Set(s); } catch { /* ignore */ }
     return new Set(OPTIONAL);
@@ -163,6 +170,22 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     if (error) { toast.error('Não foi possível salvar.'); setLinksByGroup(prev => ({ ...prev, [groupId]: link })); }
   };
 
+  // Abre a revisão interna (player + comentários do time). Garante um token de
+  // stream (reusa o link do grupo ou cria um) para o <video> conseguir tocar.
+  const openReview = async (g: Group) => {
+    setBusy(g.current.id);
+    let link = linksByGroup[g.id];
+    if (!link) {
+      const { data } = await supabase.from('review_links')
+        .insert([{ video_version_id: g.current.id, group_id: g.id, created_by: profile?.id }])
+        .select('id, token, watermark, allow_download').single();
+      if (data) { link = data as any; setLinksByGroup(prev => ({ ...prev, [g.id]: data as any })); }
+    }
+    setBusy(null);
+    if (!link) { toast.error('Não foi possível abrir a revisão.'); return; }
+    setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao });
+  };
+
   const scanNow = async () => {
     setScanning(true);
     try {
@@ -173,6 +196,41 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       toast.success(found > 0 ? `${found} vídeo(s) encontrado(s) ✓` : 'Tudo em dia — nenhum vídeo novo.');
     } catch { toast.error('Não foi possível verificar o Drive agora.'); }
     finally { setScanning(false); }
+  };
+
+  // Upload pela plataforma: abre a sessão resumável e manda os bytes direto pro
+  // Google (com progresso). Ao terminar, dispara o scan p/ detectar na revisão.
+  const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mpg|mpeg|wmv|mts|m2ts)$/i;
+  const uploadFile = async (file: File) => {
+    if (!file) return;
+    if (!(file.type.startsWith('video/') || VIDEO_EXT.test(file.name))) { toast.error('Selecione um arquivo de vídeo.'); return; }
+    setUploading(true); setUploadPct(0); setUploadName(file.name);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const token = session?.access_token || anon;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/drive-upload`
+        + `?project_id=${encodeURIComponent(projectId)}&file_name=${encodeURIComponent(file.name)}&mime_type=${encodeURIComponent(file.type || 'video/mp4')}`;
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.setRequestHeader('apikey', anon);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        xhr.upload.onprogress = e => { if (e.lengthComputable) setUploadPct(e.loaded / e.total); };
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`${xhr.status}`));
+        xhr.onerror = () => reject(new Error('network'));
+        xhr.send(file);
+      });
+      setUploadPct(1);
+      toast.success('Upload concluído ✓ Detectando na revisão…');
+      await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
+      await fetchVersions();
+    } catch {
+      toast.error('Falha no upload. Tente novamente.');
+    } finally {
+      setUploading(false); setUploadName(''); setUploadPct(0);
+    }
   };
 
   const startRename = (v: VideoVersion) => setRenaming({ id: v.id, value: v.file_name, orig: v.file_name });
@@ -318,6 +376,8 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     const v = g.current; const link = linksByGroup[g.id]; const isBusy = busy === v.id;
     return (
       <div className="flex items-center gap-1 justify-end">
+        <IconBtn title="Revisar e comentar (interno)" onClick={() => openReview(g)} className="!text-lumos-yellow !border-lumos-yellow/40"><Play className="w-3.5 h-3.5" /></IconBtn>
+        {canManage && <span className="w-px h-5 bg-lumos-border mx-0.5" />}
         {canManage && v.status === 'EM_REVISAO_INTERNA' && (<>
           <IconBtn title="Aprovar (interno)" disabled={isBusy} onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} className="!text-lumos-yellow"><Check className="w-3.5 h-3.5" /></IconBtn>
           <IconBtn title="Pedir alteração" disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_INTERNAS')} className="!text-red-400"><RotateCcw className="w-3.5 h-3.5" /></IconBtn>
@@ -362,7 +422,20 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   };
 
   return (
-    <div className="card p-6 mt-6">
+    <>
+    <div className="card p-6 mt-6 relative"
+      onDragOver={e => { if (canManage && !uploading && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(true); } }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFileDragging(false); }}
+      onDrop={e => { if (canManage && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(false); const f = e.dataTransfer.files?.[0]; if (f) uploadFile(f); } }}
+    >
+      {fileDragging && (
+        <div className="absolute inset-0 z-40 rounded-lumos border-2 border-dashed border-lumos-yellow bg-lumos-yellow/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+          <p className="text-sm font-black text-lumos-yellow flex items-center gap-2"><Upload className="w-5 h-5" /> Solte o vídeo aqui pra enviar</p>
+        </div>
+      )}
+      <input ref={fileInputRef} type="file" accept="video/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }} />
+
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest flex items-center gap-2">
           <Film className="w-4 h-4 text-lumos-yellow" /> Revisão de Vídeo
@@ -407,10 +480,17 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           </button>
           {uploadFolderUrl && (
             <a href={uploadFolderUrl} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold bg-lumos-yellow text-black hover:brightness-95 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-all"
               title="Abre a pasta 06_ENTREGA/01_REVISAO no Google Drive">
-              <FolderUp className="w-3.5 h-3.5" /> Subir vídeo no Drive
+              <FolderUp className="w-3.5 h-3.5" /> Abrir no Drive
             </a>
+          )}
+          {canManage && (
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold bg-lumos-yellow text-black hover:brightness-95 transition-all disabled:opacity-60"
+              title="Envia um vídeo do seu computador direto pro Drive e pra revisão">
+              <Upload className="w-3.5 h-3.5" /> Enviar vídeo
+            </button>
           )}
         </div>
 
@@ -424,6 +504,18 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           </label>
         )}
       </div>
+
+      {uploading && (
+        <div className="mb-4 p-3 rounded-lumos border border-lumos-yellow/30 bg-lumos-yellow/5">
+          <div className="flex items-center justify-between mb-1.5 gap-2">
+            <span className="text-[11px] font-bold text-lumos-text-primary flex items-center gap-1.5 truncate"><Upload className="w-3.5 h-3.5 text-lumos-yellow flex-shrink-0" /> Enviando <span className="truncate">{uploadName}</span></span>
+            <span className="text-[11px] font-mono font-bold text-lumos-yellow flex-shrink-0">{Math.round(uploadPct * 100)}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-lumos-text-secondary/20 overflow-hidden">
+            <div className="h-full bg-lumos-yellow transition-all" style={{ width: `${Math.round(uploadPct * 100)}%` }} />
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-7 w-7 border-t-2 border-b-2 border-lumos-yellow" /></div>
@@ -498,5 +590,16 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         </div>
       )}
     </div>
+
+    {reviewModal && (
+      <InternalReviewModal
+        versionId={reviewModal.versionId}
+        token={reviewModal.token}
+        fileName={reviewModal.fileName}
+        versao={reviewModal.versao}
+        onClose={() => { setReviewModal(null); fetchVersions(); }}
+      />
+    )}
+    </>
   );
 }
