@@ -313,9 +313,9 @@ export default function SidebarProjectTree() {
                 <p className="px-2.5 py-2 text-[10px] text-lumos-text-secondary/50 italic">Nenhum projeto ativo.</p>
               )}
 
-              {/* Novo projeto */}
+              {/* Novo projeto → abre o modal de criação direto */}
               <button
-                onClick={() => navigate('/producao/projetos')}
+                onClick={() => navigate('/producao/projetos?new=1')}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-[11px] font-bold text-lumos-text-secondary/60 hover:text-lumos-yellow transition-all"
               >
                 <Plus className="w-3.5 h-3.5 flex-shrink-0" />

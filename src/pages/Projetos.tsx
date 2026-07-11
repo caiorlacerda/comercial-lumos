@@ -905,6 +905,22 @@ export default function Projetos() {
     }
   }, [projectTasks]);
 
+  // "+ Novo projeto" da sidebar (?new=1) → abre o modal de criação direto
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setIsModalOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Não existe mais "landing": sem projeto selecionado (e sem estar criando),
+  // volta pra Visão Geral da Produção (/producao).
+  useEffect(() => {
+    if (loading || selectedProjectId || isModalOpen) return;
+    if (searchParams.get('projectId') || searchParams.get('new')) return;
+    navigate('/producao', { replace: true });
+  }, [loading, selectedProjectId, isModalOpen, searchParams, navigate]);
+
   const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
 
   // Sincronizar editor de descrição no modal
