@@ -99,6 +99,8 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [renaming, setRenaming] = useState<{ id: string; value: string; orig: string } | null>(null);
   const [stackMenuFor, setStackMenuFor] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [showCols, setShowCols] = useState(false);
   const [visibleCols, setVisibleCols] = useState<Set<SortKey>>(() => {
     try { const s = JSON.parse(localStorage.getItem('rev_cols_v1') || 'null'); if (Array.isArray(s)) return new Set(s); } catch { /* ignore */ }
@@ -453,7 +455,14 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             <tbody>
               {sortedGroups.map(g => (
                 <Fragment key={g.id}>
-                  <tr className="border-b border-lumos-border/40 hover:bg-lumos-text-secondary/[0.03]">
+                  <tr
+                    draggable={canManage && renaming?.id !== g.current.id}
+                    onDragStart={e => { setDragId(g.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', g.id); } catch { /* noop */ } }}
+                    onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                    onDragOver={e => { if (dragId && dragId !== g.id) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverId !== g.id) setDragOverId(g.id); } }}
+                    onDrop={e => { e.preventDefault(); const src = dragId; setDragId(null); setDragOverId(null); if (src && src !== g.id) { const s = groups.find(x => x.id === src); if (s) stackInto(s, g); } }}
+                    className={clsx('border-b border-lumos-border/40 transition-colors', canManage && renaming?.id !== g.current.id && 'cursor-grab active:cursor-grabbing',
+                      dragOverId === g.id ? 'bg-lumos-yellow/10 ring-1 ring-inset ring-lumos-yellow/50' : dragId === g.id ? 'opacity-40' : 'hover:bg-lumos-text-secondary/[0.03]')}>
                     {shownColumns.map(col => (
                       <td key={col.key} className={clsx('py-2.5 px-2 align-middle whitespace-nowrap', col.align === 'right' && 'text-right')}>
                         {renderCell(g, col.key)}
