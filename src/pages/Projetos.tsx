@@ -838,9 +838,11 @@ export default function Projetos() {
   // Modal State for Manual Creation
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Exclusão definitiva de projeto (admin)
+  // Exclusão definitiva de projeto (admin) — acessada pelo menu discreto que
+  // abre ao clicar no nome do projeto (esquerdo ou direito)
   const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
+  const [projectMenu, setProjectMenu] = useState<{ x: number; y: number } | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [newProjName, setNewProjName] = useState('');
   const [newProjClient, setNewProjClient] = useState('');
@@ -1887,7 +1889,15 @@ export default function Projetos() {
                       </span>
                     </div>
 
-                    <h2 className="text-2xl font-black text-lumos-text-primary uppercase tracking-tight">
+                    <h2
+                      onClick={e => { if (isAdmin) setProjectMenu({ x: e.clientX, y: e.clientY }); }}
+                      onContextMenu={e => { if (isAdmin) { e.preventDefault(); setProjectMenu({ x: e.clientX, y: e.clientY }); } }}
+                      title={isAdmin ? 'Clique para opções do projeto' : undefined}
+                      className={clsx(
+                        'text-2xl font-black text-lumos-text-primary uppercase tracking-tight',
+                        isAdmin && 'cursor-pointer hover:text-lumos-yellow transition-colors select-none'
+                      )}
+                    >
                       {selectedProject.name}
                     </h2>
                     
@@ -1949,16 +1959,6 @@ export default function Projetos() {
                       </button>
                     )}
 
-                    {isAdmin && (
-                      <button
-                        onClick={() => setIsDeleteProjectModalOpen(true)}
-                        className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/60"
-                        title="Excluir projeto definitivamente"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Excluir
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -2976,6 +2976,29 @@ export default function Projetos() {
       )}
 
       {/* ================= CONFIRM APPLY TEMPLATE MODAL ================= */}
+      {/* Menu discreto do projeto (abre ao clicar no nome; admin) */}
+      {projectMenu && selectedProject && (
+        <>
+          <div
+            className="fixed inset-0 z-[150]"
+            onClick={() => setProjectMenu(null)}
+            onContextMenu={e => { e.preventDefault(); setProjectMenu(null); }}
+          />
+          <div
+            className="fixed z-[155] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1.5 min-w-[190px] animate-in fade-in zoom-in-95 duration-100"
+            style={{ left: Math.min(projectMenu.x, window.innerWidth - 210), top: Math.min(projectMenu.y + 6, window.innerHeight - 80) }}
+          >
+            <button
+              onClick={() => { setProjectMenu(null); setIsDeleteProjectModalOpen(true); }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Excluir projeto…
+            </button>
+          </div>
+        </>
+      )}
+
       {/* Confirmação de exclusão DEFINITIVA de projeto (admin) */}
       {isDeleteProjectModalOpen && selectedProject && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
