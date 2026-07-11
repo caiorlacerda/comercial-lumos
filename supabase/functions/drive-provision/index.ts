@@ -139,6 +139,32 @@ async function ensureFolder(parentId: string, name: string): Promise<string> {
   return (await findChildFolder(parentId, name)) ?? (await createFolder(parentId, name))
 }
 
+// A pasta salva no banco ainda existe e NÃO está na lixeira? O Drive mantém o
+// ID válido mesmo depois de mandar pra lixeira — sem esta checagem, o app
+// continuaria gravando dentro de uma pasta deletada (invisível).
+async function folderAlive(folderId: string | null): Promise<boolean> {
+  if (!folderId) return false
+  try {
+    const meta = await driveFetch(`files/${folderId}?fields=trashed`)
+    return meta?.trashed !== true
+  } catch (_) {
+    return false // 404 / sem acesso → tratar como inexistente
+  }
+}
+
+// A pasta existe, não está na lixeira E ainda é filha do pai esperado. Cobre o
+// caso de o pai (cliente) ter sido pra lixeira: o filho mantém trashed=false,
+// mas o pai mudou — então precisa recriar.
+async function folderUnder(folderId: string | null, parentId: string): Promise<boolean> {
+  if (!folderId) return false
+  try {
+    const meta = await driveFetch(`files/${folderId}?fields=trashed,parents`)
+    return meta?.trashed !== true && Array.isArray(meta?.parents) && meta.parents.includes(parentId)
+  } catch (_) {
+    return false
+  }
+}
+
 // Espelha recursivamente um modelo: subpastas são criadas, arquivos são
 // copiados (placeholders/modelos de doc), arquivos de sistema ignorados.
 async function mirrorTemplate(templateFolderId: string, targetFolderId: string): Promise<void> {
@@ -182,7 +208,9 @@ function jobCode(code: string | null): string {
 // Provisionamento
 // ---------------------------------------------------------------------------
 async function ensureClientFolder(client: { id: string; name: string; drive_folder_id: string | null }): Promise<string> {
-  if (client.drive_folder_id) return client.drive_folder_id
+  // Só reusa o ID salvo se a pasta ainda existir (não estiver na lixeira).
+  // Se foi deletada, recria e regrava o novo ID no banco (auto-cura).
+  if (await folderAlive(client.drive_folder_id)) return client.drive_folder_id!
 
   // Pasta do cliente usa o nome EXATAMENTE como escrito no app ("Abby", não
   // "ABBY") — a normalização caixa-alta/sem-acento vale só para a pasta do
@@ -190,14 +218,16 @@ async function ensureClientFolder(client: { id: string; name: string; drive_fold
   const folderName = client.name.trim() || 'CLIENTE'
   const folderId = await ensureFolder(CLIENTES_FOLDER_ID, folderName)
 
-  // Estrutura interna: espelha _TEMPLATES/CLIENTE se existir; senão _ASSETS padrão
-  const clienteTemplateId = await findChildFolder(TEMPLATES_FOLDER_ID, 'CLIENTE')
+  // Estrutura interna: espelha _TEMPLATES/_ASSETS dentro de um _ASSETS do
+  // cliente (o template tem BRAND-BOOK/FONTES/GRAFICOS/IMAGENS/LOGOS na raiz).
+  // Fallback: cria o _ASSETS padrão se o template não existir.
+  const clienteTemplateId = await findChildFolder(TEMPLATES_FOLDER_ID, '_ASSETS')
+  const clientAssetsId = await ensureFolder(folderId, '_ASSETS')
   if (clienteTemplateId) {
-    await mirrorTemplate(clienteTemplateId, folderId)
+    await mirrorTemplate(clienteTemplateId, clientAssetsId)
   } else {
-    const assetsId = await ensureFolder(folderId, '_ASSETS')
     for (const sub of ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS']) {
-      await ensureFolder(assetsId, sub)
+      await ensureFolder(clientAssetsId, sub)
     }
   }
 
@@ -215,31 +245,37 @@ async function provisionProject(projectId: string): Promise<void> {
     .single()
   if (error || !project) throw new Error(`Projeto ${projectId} não encontrado: ${error?.message}`)
 
-  if (project.drive_folder_id) {
-    await log('project', projectId, 'skip', 'Projeto já tem pasta no Drive (idempotência)')
-    return
-  }
   if (!project.client) {
     await log('project', projectId, 'skip', 'Projeto sem cliente — pasta não criada (vincule um cliente e recrie)', 'error')
     return
   }
 
-  // 1. Pasta do cliente (nasce no 1º projeto aprovado)
+  // 1. Pasta do cliente PRIMEIRO (auto-cura se tiver ido pra lixeira)
   const clientFolderId = await ensureClientFolder(project.client)
 
-  // 2. Pasta do projeto
+  // 2. Idempotência: só pula se a pasta salva ainda existe E continua dentro do
+  //    cliente atual (se o cliente foi recriado, a pasta antiga fica órfã).
+  if (await folderUnder(project.drive_folder_id, clientFolderId)) {
+    await log('project', projectId, 'skip', 'Projeto já tem pasta válida no Drive (idempotência)')
+    return
+  }
+
+  // 3. Pasta do projeto
   const category: string = project.category ?? project.budget?.category ?? 'digital'
   const isLive = category === 'live'
   const folderName = `${jobCode(project.code)}_${slugify(project.name)}${isLive ? '_LIVE' : ''}`
   const projectFolderId = await ensureFolder(clientFolderId, folderName)
 
-  // 3. Espelha o template da categoria
-  const templateName = isLive ? 'LIVE' : 'DIGITAL'
-  const templateId = await findChildFolder(TEMPLATES_FOLDER_ID, templateName)
+  // 4. Espelha o template da categoria. Estrutura real do Drive tem um nível a
+  //    mais: _TEMPLATE_PROJETO/NNN_NOMEPROJETO (ou _TEMPLATE_LIVE/..._LIVE).
+  const wrapperName = isLive ? '_TEMPLATE_LIVE' : '_TEMPLATE_PROJETO'
+  const innerName = isLive ? 'NNN_NOMEPROJETO_LIVE' : 'NNN_NOMEPROJETO'
+  const wrapperId = await findChildFolder(TEMPLATES_FOLDER_ID, wrapperName)
+  const templateId = wrapperId ? await findChildFolder(wrapperId, innerName) : null
   if (templateId) {
     await mirrorTemplate(templateId, projectFolderId)
   } else {
-    await log('project', projectId, 'template_missing', `_TEMPLATES/${templateName} não encontrado — pasta criada vazia`, 'error')
+    await log('project', projectId, 'template_missing', `${wrapperName}/${innerName} não encontrado — pasta criada vazia`, 'error')
   }
 
   await db.from('projects').update({ drive_folder_id: projectFolderId }).eq('id', projectId)
