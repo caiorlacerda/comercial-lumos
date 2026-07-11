@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import Select from '@/components/ui/Select';
+import { useConfirm } from '@/components/ui/useConfirm';
 import { supabase } from '@/lib/supabase';
 
 const STATUS_OPTIONS = [
@@ -796,6 +798,7 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
 export default function Projetos() {
   const { can, isAdmin, profile } = useAuth();
   const toast = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   
   // Permissions
   const canManage = isAdmin || can('ordem_do_dia');
@@ -965,9 +968,8 @@ export default function Projetos() {
         } else if (selectedTaskId) {
           const taskObj = projectTasks.find(t => t.id === selectedTaskId);
           if (taskObj && descHTML !== (taskObj.descricao || '')) {
-            if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
-              setSelectedTaskId(null);
-            }
+            confirm({ title: 'Alterações não salvas', message: 'Você tem alterações não salvas na descrição. Deseja realmente fechar?', confirmLabel: 'Fechar sem salvar', danger: true })
+              .then(ok => { if (ok) setSelectedTaskId(null); });
           } else {
             setSelectedTaskId(null);
           }
@@ -1160,7 +1162,7 @@ export default function Projetos() {
 
   // Excluir comentário
   const handleDeleteComment = async (commentId: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este comentário?')) return;
+    if (!(await confirm({ message: 'Tem certeza que deseja excluir este comentário?', confirmLabel: 'Excluir', danger: true }))) return;
 
     try {
       const { error } = await supabase
@@ -1343,7 +1345,7 @@ export default function Projetos() {
 
   // Delete task
   const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta tarefa?')) return;
+    if (!(await confirm({ message: 'Tem certeza que deseja excluir esta tarefa? Essa ação não pode ser desfeita.', confirmLabel: 'Excluir', danger: true }))) return;
 
     try {
       const { error } = await supabase
@@ -1628,6 +1630,13 @@ export default function Projetos() {
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+
+  // Fecha o modal da tarefa, pedindo confirmação (custom) se houver descrição não salva
+  const requestCloseTask = () => {
+    if (!canManage || !selectedTask || descHTML === (selectedTask.descricao || '')) { setSelectedTaskId(null); return; }
+    confirm({ title: 'Alterações não salvas', message: 'Você tem alterações não salvas na descrição. Deseja realmente fechar?', confirmLabel: 'Fechar sem salvar', danger: true })
+      .then(ok => { if (ok) setSelectedTaskId(null); });
+  };
 
   const clientProjectsFiltered = projects.filter(p => {
     if (p.client_id !== selectedClientId) return false;
@@ -2268,19 +2277,11 @@ export default function Projetos() {
       )}
 
       {/* ================= MODAL CENTRAL: DETALHES DA TAREFA (STYLE CLICKUP) ================= */}
-      {selectedTaskId && selectedTask && (
+      {selectedTaskId && selectedTask && createPortal(
         <>
           {/* Backdrop Overlay */}
-          <div 
-            onClick={() => {
-              if (!canManage || descHTML === (selectedTask.descricao || '')) {
-                setSelectedTaskId(null);
-              } else {
-                if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
-                  setSelectedTaskId(null);
-                }
-              }
-            }} 
+          <div
+            onClick={requestCloseTask}
             className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
           />
 
@@ -2304,16 +2305,8 @@ export default function Projetos() {
                 )}
               </div>
               
-              <button 
-                onClick={() => {
-                  if (!canManage || descHTML === (selectedTask.descricao || '')) {
-                    setSelectedTaskId(null);
-                  } else {
-                    if (window.confirm('Você tem alterações não salvas na descrição. Deseja realmente fechar?')) {
-                      setSelectedTaskId(null);
-                    }
-                  }
-                }}
+              <button
+                onClick={requestCloseTask}
                 className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
                 title="Fechar"
               >
@@ -2566,7 +2559,8 @@ export default function Projetos() {
 
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
 
       {/* ================= RIGHT-CLICK TASK CONTEXT MENU ================= */}
@@ -2791,6 +2785,7 @@ export default function Projetos() {
         </div>
       )}
 
+      {confirmDialog}
     </div>
   );
 }
