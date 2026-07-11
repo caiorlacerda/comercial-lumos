@@ -8,6 +8,8 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
 
+const LOGO = { dark: '/logo/Logotipo-Branco-Alpha.svg', light: '/logo/Logotipo-Preto-Alpha.svg' };
+
 // ---------------------------------------------------------------------------
 type Point = { x: number; y: number }; // normalizados 0–1
 type Shape = { type: 'draw' | 'arrow' | 'rect'; color: string; points: Point[] };
@@ -53,6 +55,7 @@ export default function RevisaoPublica() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
@@ -62,6 +65,7 @@ export default function RevisaoPublica() {
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [isFs, setIsFs] = useState(false);
 
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
@@ -105,7 +109,16 @@ export default function RevisaoPublica() {
     const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
     setSpeed(next); if (videoRef.current) videoRef.current.playbackRate = next;
   };
-  const fullscreen = () => wrapRef.current?.requestFullscreen?.();
+  const fullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else playerRef.current?.requestFullscreen?.();
+  };
+  useEffect(() => {
+    const onFs = () => { setIsFs(!!document.fullscreenElement); setTimeout(() => redraw(), 60); };
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const seekTo = (ms: number) => { const v = videoRef.current; if (v) { v.currentTime = ms / 1000; setCurrentMs(ms); v.pause(); setPlaying(false); } };
 
   const toggleMute = () => { const v = videoRef.current; if (!v) return; const m = !v.muted; v.muted = m; setMuted(m); };
@@ -157,7 +170,10 @@ export default function RevisaoPublica() {
     redraw();
   };
   const onCanvasUp = () => {
-    if (drawingRef.current) { setShapes(prev => [...prev, drawingRef.current!]); drawingRef.current = null; }
+    // Captura o shape ANTES de zerar o ref — o updater do setState roda depois,
+    // então usar drawingRef.current lá dentro inseriria null (e drawShape quebra).
+    const shape = drawingRef.current;
+    if (shape) { setShapes(prev => [...prev, shape]); drawingRef.current = null; }
   };
 
   // Entra em modo de composição (pausa e limpa anotações de leitura)
@@ -232,10 +248,13 @@ export default function RevisaoPublica() {
   return (
     <div className="min-h-screen bg-lumos-bg text-lumos-text-primary font-work-sans">
       {/* Header (sem logo) */}
-      <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
-        <span className="text-sm font-black truncate">
-          {data.video.project_name} <span className="text-lumos-text-secondary font-bold">· v{String(data.video.versao).padStart(2, '0')}</span>
-        </span>
+      <header className="h-14 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
+        <div className="flex items-center gap-3 min-w-0">
+          <img src={theme === 'dark' ? LOGO.dark : LOGO.light} alt="Lumos" className="h-7 transition-all duration-300 flex-shrink-0" />
+          <span className="text-sm font-black truncate border-l border-lumos-border pl-3">
+            {data.video.project_name} <span className="text-lumos-text-secondary font-bold">· v{String(data.video.versao).padStart(2, '0')}</span>
+          </span>
+        </div>
         <div className="flex items-center gap-1.5">
           {/* Info (nome, resolução, tamanho, versão… tudo num lugar só) */}
           <div className="relative">
@@ -244,7 +263,7 @@ export default function RevisaoPublica() {
               <Info className="w-3.5 h-3.5" /> Info
             </button>
             {showInfo && (
-              <div className="absolute right-0 top-11 w-64 p-4 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl grid grid-cols-2 gap-x-4 gap-y-2.5 z-40">
+              <div className="absolute right-0 top-12 w-64 p-4 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl grid grid-cols-2 gap-x-4 gap-y-2.5 z-40">
                 {specs.map(([k, v]) => (
                   <div key={k} className={clsx('flex flex-col', (k === 'Projeto' || k === 'Arquivo') && 'col-span-2')}>
                     <span className="text-[8px] font-black uppercase tracking-widest text-lumos-text-secondary/60">{k}</span>
@@ -265,10 +284,11 @@ export default function RevisaoPublica() {
 
       <div className="flex flex-col lg:flex-row" onClick={() => showInfo && setShowInfo(false)}>
         {/* Player */}
-        <div className="flex-1 p-4 space-y-2">
-          <div ref={wrapRef} className="relative bg-black rounded-lumos overflow-hidden select-none">
+        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0', isFs ? 'bg-black' : 'p-4 gap-2')}>
+          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 flex items-center justify-center' : 'rounded-lumos')}>
             <video
-              ref={videoRef} src={streamUrl} className="w-full max-h-[68vh] block mx-auto"
+              ref={videoRef} src={streamUrl}
+              className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full max-h-[68vh] mx-auto')}
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
               onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
@@ -296,7 +316,7 @@ export default function RevisaoPublica() {
           </div>
 
           {/* Barra de progresso com marcadores de comentário */}
-          <div className="px-1 pt-1">
+          <div className={clsx('pt-1', isFs ? 'px-4' : 'px-1')}>
             <div ref={barRef} onPointerDown={onBarDown} className="relative h-5 flex items-center cursor-pointer group">
               <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
               <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
@@ -314,7 +334,7 @@ export default function RevisaoPublica() {
           </div>
 
           {/* Controles (estilo Frame.io) */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className={clsx('flex items-center gap-2 flex-wrap', isFs && 'px-4 pb-3')}>
             <button onClick={togglePlay} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
               {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
@@ -332,14 +352,14 @@ export default function RevisaoPublica() {
             <div className="flex-1" />
             <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
             {data.link.allow_download && (
-              <a href={streamUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar"><Download className="w-4 h-4" /></a>
+              <a href={`${streamUrl}&download=1`} download className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar arquivo"><Download className="w-4 h-4" /></a>
             )}
             <button onClick={fullscreen} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
           </div>
         </div>
 
         {/* Comentários */}
-        <aside className="w-full lg:w-[380px] border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:max-h-[calc(100vh-3rem)]">
+        <aside className={clsx('w-full lg:w-[380px] border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:max-h-[calc(100vh-3.5rem)]', isFs && 'hidden')}>
           <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between">
             <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários</span>
             <span className="text-[10px] font-bold text-lumos-text-secondary/70">{data.comments.length}</span>

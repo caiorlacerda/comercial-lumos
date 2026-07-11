@@ -42,10 +42,12 @@ serve(async (req) => {
   const token = url.searchParams.get('token') ?? ''
   if (!token) return new Response('missing token', { status: 400, headers: CORS })
 
+  const wantsDownload = url.searchParams.get('download') === '1'
+
   // Token → arquivo do Drive (só links ativos)
-  const { data: link } = await db.from('review_links').select('video_version_id, active').eq('token', token).eq('active', true).maybeSingle()
+  const { data: link } = await db.from('review_links').select('video_version_id, active, allow_download').eq('token', token).eq('active', true).maybeSingle()
   if (!link) return new Response('invalid token', { status: 403, headers: CORS })
-  const { data: version } = await db.from('video_versions').select('drive_file_id, mime_type').eq('id', link.video_version_id).maybeSingle()
+  const { data: version } = await db.from('video_versions').select('drive_file_id, mime_type, file_name').eq('id', link.video_version_id).maybeSingle()
   if (!version?.drive_file_id) return new Response('not found', { status: 404, headers: CORS })
 
   const gToken = await googleToken()
@@ -61,6 +63,12 @@ serve(async (req) => {
   const cr = driveRes.headers.get('content-range'); if (cr) headers.set('Content-Range', cr)
   const cl = driveRes.headers.get('content-length'); if (cl) headers.set('Content-Length', cl)
   headers.set('Cache-Control', 'private, max-age=3600')
+
+  // Download direto (só se o link permitir): força "salvar como" com o nome real
+  if (wantsDownload && link.allow_download) {
+    const safe = (version.file_name || 'video').replace(/["\\\r\n]/g, '_')
+    headers.set('Content-Disposition', `attachment; filename="${safe}"`)
+  }
 
   return new Response(driveRes.body, { status: driveRes.status, headers })
 })
