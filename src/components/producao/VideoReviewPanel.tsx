@@ -351,11 +351,13 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             onBlur={saveRename}
             className="input-lumos h-7 text-xs w-full min-w-[160px]" />
         ) : (
-          <div className="flex items-center gap-1 group/name max-w-[260px]">
-            <a href={v.drive_web_link || driveFileUrl(v.drive_file_id)} target="_blank" rel="noopener noreferrer"
-              className="text-xs font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors truncate flex items-center gap-1">
-              {v.file_name} <ExternalLink className="w-3 h-3 opacity-50 flex-shrink-0" />
-            </a>
+          <div className="flex items-center gap-1.5 group/name max-w-[280px]">
+            <button type="button" onClick={() => openReview(g)} title="Abrir revisão interna (comentar no vídeo)"
+              className="text-xs font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors truncate text-left">
+              {v.file_name}
+            </button>
+            <a href={v.drive_web_link || driveFileUrl(v.drive_file_id)} target="_blank" rel="noopener noreferrer" title="Abrir arquivo no Google Drive"
+              className="text-lumos-text-secondary/50 hover:text-lumos-yellow flex-shrink-0"><ExternalLink className="w-3 h-3" /></a>
             {canManage && <button type="button" title="Renomear" onClick={() => startRename(v)} className="opacity-0 group-hover/name:opacity-100 text-lumos-text-secondary hover:text-lumos-yellow flex-shrink-0"><Pencil className="w-3 h-3" /></button>}
           </div>
         );
