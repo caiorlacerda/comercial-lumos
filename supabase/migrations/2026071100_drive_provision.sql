@@ -23,22 +23,39 @@ CREATE POLICY "authenticated read drive log"
   USING (true);
 -- (escritas vêm da edge function com service_role, que ignora RLS)
 
--- 3) Webhook de banco: todo INSERT em projects chama a edge function
---    drive-provision, que cria as pastas no Drive (cliente + projeto).
---    ⚠️ TROQUE <SEGREDO> por um valor aleatório longo (ex.: saída de
---       `openssl rand -hex 24`) — o MESMO valor vai no secret
---       DRIVE_WEBHOOK_SECRET da edge function.
---    ⚠️ Se der erro "schema supabase_functions does not exist", habilite
---       Database Webhooks no painel (Database → Webhooks → Enable) e rode
---       este bloco de novo.
+-- 3) Webhook de banco via pg_net: todo INSERT em projects chama a edge
+--    function drive-provision, que cria as pastas no Drive (cliente+projeto).
+--    ⚠️ TROQUE <SEGREDO> pelo MESMO valor do secret DRIVE_WEBHOOK_SECRET da
+--       edge function (ex.: saída de `openssl rand -hex 24`).
+--    Usa pg_net diretamente (o schema supabase_functions dos Database
+--    Webhooks do painel pode não existir no projeto).
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Se o aviso falhar, só registra warning — NUNCA bloqueia a criação do projeto.
+CREATE OR REPLACE FUNCTION public.notify_drive_provision()
+RETURNS trigger AS $$
+BEGIN
+  PERFORM net.http_post(
+    url := 'https://byntpekyfhzwfihjhzuo.supabase.co/functions/v1/drive-provision',
+    body := jsonb_build_object(
+      'type', 'INSERT',
+      'table', 'projects',
+      'record', to_jsonb(NEW)
+    ),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-drive-secret', '<SEGREDO>'
+    ),
+    timeout_milliseconds := 5000
+  );
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'drive-provision webhook falhou: %', SQLERRM;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 DROP TRIGGER IF EXISTS drive_provision_on_project_insert ON public.projects;
 CREATE TRIGGER drive_provision_on_project_insert
   AFTER INSERT ON public.projects
-  FOR EACH ROW
-  EXECUTE FUNCTION supabase_functions.http_request(
-    'https://byntpekyfhzwfihjhzuo.supabase.co/functions/v1/drive-provision',
-    'POST',
-    '{"Content-Type":"application/json","x-drive-secret":"<SEGREDO>"}',
-    '{}',
-    '5000'
-  );
+  FOR EACH ROW EXECUTE FUNCTION public.notify_drive_provision();
