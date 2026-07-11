@@ -1646,7 +1646,8 @@ export default function Projetos() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header — some quando um projeto está aberto (a sidebar já cobre a navegação) */}
+      {!selectedProjectId && (
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div>
@@ -1658,9 +1659,9 @@ export default function Projetos() {
             </p>
           </div>
         </div>
-        
+
         {canManage && (
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
             className="btn-primary flex items-center gap-2 text-sm shadow-xl shadow-lumos-yellow/10 hover:scale-105 active:scale-95 transition-all"
           >
@@ -1669,6 +1670,7 @@ export default function Projetos() {
           </button>
         )}
       </div>
+      )}
 
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[400px]">
