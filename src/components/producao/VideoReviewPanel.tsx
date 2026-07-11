@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp } from 'lucide-react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -57,6 +57,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [driveFolders, setDriveFolders] = useState<{ root: string | null; upload: string | null }>({ root: null, upload: null });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   // Pasta de upload = 06_ENTREGA/01_REVISAO; fallback: raiz do projeto no Drive
   const uploadFolderUrl = driveFolders.upload || driveFolders.root
@@ -116,6 +117,21 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     setLinks(prev => ({ ...prev, [versionId]: { ...link, [field]: next } }));
     const { error } = await supabase.from('review_links').update({ [field]: next }).eq('id', link.id);
     if (error) { toast.error('Não foi possível salvar.'); setLinks(prev => ({ ...prev, [versionId]: link })); }
+  };
+
+  const scanNow = async () => {
+    setScanning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
+      if (error) throw error;
+      await fetchVersions();
+      const found = (data as any)?.found ?? 0;
+      toast.success(found > 0 ? `${found} vídeo(s) encontrado(s) ✓` : 'Tudo em dia — nenhum vídeo novo.');
+    } catch {
+      toast.error('Não foi possível verificar o Drive agora.');
+    } finally {
+      setScanning(false);
+    }
   };
 
   useEffect(() => {
@@ -186,16 +202,26 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           <span className="text-lumos-text-secondary/60 font-bold normal-case tracking-normal">· dropzone 06_ENTREGA/01_REVISAO</span>
         </h3>
 
-        {uploadFolderUrl && (
-          <a
-            href={uploadFolderUrl}
-            target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold bg-lumos-yellow text-black hover:brightness-95 transition-all"
-            title="Abre a pasta 06_ENTREGA/01_REVISAO no Google Drive"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={scanNow}
+            disabled={scanning}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-text-secondary/40 transition-all disabled:opacity-60"
+            title="Procura vídeos novos no Drive agora, sem esperar o ciclo automático"
           >
-            <FolderUp className="w-3.5 h-3.5" /> Subir vídeo no Drive
-          </a>
-        )}
+            <RefreshCw className={clsx('w-3.5 h-3.5', scanning && 'animate-spin')} /> {scanning ? 'Verificando…' : 'Verificar agora'}
+          </button>
+          {uploadFolderUrl && (
+            <a
+              href={uploadFolderUrl}
+              target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold bg-lumos-yellow text-black hover:brightness-95 transition-all"
+              title="Abre a pasta 06_ENTREGA/01_REVISAO no Google Drive"
+            >
+              <FolderUp className="w-3.5 h-3.5" /> Subir vídeo no Drive
+            </a>
+          )}
+        </div>
 
         {canManage && versions.length > 0 && (
           <label className="flex items-center gap-1.5 text-[10px] font-bold text-lumos-text-secondary">
@@ -219,7 +245,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           <Film className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-2" />
           <p className="text-xs text-lumos-text-secondary">Nenhuma versão ainda.</p>
           <p className="text-[10px] text-lumos-text-secondary/60 mt-1">
-            O editor sobe o corte em <b>06_ENTREGA/01_REVISAO</b> (ex.: <code>247_MINI-MISSAO_v01.mp4</code>) e ele aparece aqui em até ~3 min.
+            O editor sobe o corte em <b>06_ENTREGA/01_REVISAO</b> (qualquer nome de arquivo) e ele aparece aqui — clique em <b>Verificar agora</b> pra trazer na hora.
           </p>
         </div>
       ) : (

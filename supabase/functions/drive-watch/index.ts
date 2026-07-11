@@ -21,7 +21,13 @@ const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const SYSTEM_FILES = new Set(['.DS_Store', 'desktop.ini', 'Thumbs.db'])
-const VIDEO_RE = /^(\d{3,4})_([A-Z0-9-]+)_v(\d{2})\.(mp4|mov)$/i
+
+// Qualquer vídeo serve — sem trava de nome. Detecta por mimeType de vídeo ou
+// pela extensão (o Drive nem sempre preenche o mimeType de imediato no upload).
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mpg|mpeg|wmv|mts|m2ts)$/i
+function isVideoFile(file: any): boolean {
+  return (typeof file.mimeType === 'string' && file.mimeType.startsWith('video/')) || VIDEO_EXT.test(file.name || '')
+}
 
 // --- Google auth (Service Account, JWT RS256) -----------------------------
 let cachedToken: { token: string; exp: number } | null = null
@@ -72,7 +78,7 @@ async function listChildren(parentId: string): Promise<any[]> {
   const items: any[] = []; let pageToken = ''
   do {
     const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`)
-    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink,size,videoMediaMetadata),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
+    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink,size,videoMediaMetadata,createdTime),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
     items.push(...(page.files || [])); pageToken = page.nextPageToken || ''
   } while (pageToken)
   return items
@@ -92,9 +98,11 @@ async function log(entity_id: string | null, action: string, detail: string, sta
 }
 
 // --- Monitor do dropzone --------------------------------------------------
-async function scanDropzones(): Promise<{ found: number }> {
-  const { data: projects } = await db
+async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }> {
+  let query = db
     .from('projects').select('id, drive_folder_id').eq('status', 'ativo').not('drive_folder_id', 'is', null)
+  if (onlyProjectId) query = query.eq('id', onlyProjectId)
+  const { data: projects } = await query
   const { data: known } = await db.from('video_versions').select('drive_file_id')
   const knownIds = new Set((known || []).map((k: any) => k.drive_file_id))
 
@@ -106,15 +114,23 @@ async function scanDropzones(): Promise<{ found: number }> {
       const revisaoId = await findChildFolder(entregaId, '01_REVISAO')
       if (!revisaoId) continue
 
-      for (const file of await listChildren(revisaoId)) {
-        if (file.mimeType === FOLDER_MIME || SYSTEM_FILES.has(file.name)) continue
-        if (knownIds.has(file.id)) continue
-        const m = file.name.match(VIDEO_RE)
-        if (!m) continue
+      // Vídeos novos (qualquer nome), ordenados do upload mais antigo p/ o mais
+      // novo, para numerar as versões na ordem em que foram subidos.
+      const novos = (await listChildren(revisaoId))
+        .filter((f: any) => f.mimeType !== FOLDER_MIME && !SYSTEM_FILES.has(f.name) && !knownIds.has(f.id) && isVideoFile(f))
+        .sort((a: any, b: any) => String(a.createdTime || '').localeCompare(String(b.createdTime || '')))
+      if (!novos.length) continue
+
+      // Próxima versão = maior versão já registrada do projeto + 1
+      const { data: maxRow } = await db
+        .from('video_versions').select('versao').eq('project_id', proj.id).order('versao', { ascending: false }).limit(1)
+      let nextV = (((maxRow?.[0]?.versao as number) ?? 0)) + 1
+
+      for (const file of novos) {
         const vmm = file.videoMediaMetadata || {}
         const { error } = await db.from('video_versions').insert([{
           project_id: proj.id,
-          versao: parseInt(m[3], 10),
+          versao: nextV,
           file_name: file.name,
           drive_file_id: file.id,
           drive_web_link: file.webViewLink ?? null,
@@ -125,7 +141,7 @@ async function scanDropzones(): Promise<{ found: number }> {
           size_bytes: file.size ? Number(file.size) : null,
           mime_type: file.mimeType ?? null,
         }])
-        if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Nova versão detectada: ${file.name}`) }
+        if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Nova versão v${String(nextV).padStart(2, '0')} detectada: ${file.name}`); nextV++ }
         else if (!String(error.message).includes('duplicate')) await log(proj.id, 'error', `Insert falhou p/ ${file.name}: ${error.message}`, 'error')
       }
     } catch (err: any) {
@@ -146,7 +162,11 @@ async function finalizeVersion(versionId: string): Promise<void> {
 
   const entregaId = await ensureFolder(projFolderId, '06_ENTREGA')
   const aprovadoId = await ensureFolder(entregaId, '02_APROVADO')
-  const finalName = v.file_name.replace(/_v\d{2}\.(mp4|mov)$/i, '_vFINAL.$1')
+  // Nome do aprovado: insere _APROVADO antes da extensão (funciona com qualquer nome)
+  const dot = (v.file_name as string).lastIndexOf('.')
+  const finalName = dot > 0
+    ? `${(v.file_name as string).slice(0, dot)}_APROVADO${(v.file_name as string).slice(dot)}`
+    : `${v.file_name}_APROVADO`
 
   const copy = await driveFetch(`files/${v.drive_file_id}/copy?fields=id`, {
     method: 'POST', body: JSON.stringify({ name: finalName, parents: [aprovadoId] }),
@@ -181,6 +201,12 @@ serve(async (req) => {
     if (payload?.action === 'finalize' && payload?.version_id) {
       await finalizeVersion(payload.version_id)
       return new Response(JSON.stringify({ ok: true, finalized: payload.version_id }), { status: 200 })
+    }
+    // Scan sob demanda de um projeto (botão "Verificar agora" no app)
+    if (payload?.action === 'scan') {
+      const res = await scanDropzones(payload.project_id)
+      const finalized = await finalizePending()
+      return new Response(JSON.stringify({ ok: true, ...res, finalized }), { status: 200 })
     }
     // Varredura periódica: detecta novas versões + finaliza aprovadas pendentes
     const res = await scanDropzones()
