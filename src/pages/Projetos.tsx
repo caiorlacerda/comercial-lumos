@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -837,6 +838,7 @@ export default function Projetos() {
 
   // Modal State for Manual Creation
   const [isModalOpen, setIsModalOpen] = useState(false);
+
   const [modalLoading, setModalLoading] = useState(false);
   const [newProjName, setNewProjName] = useState('');
   const [newProjClient, setNewProjClient] = useState('');
@@ -1923,6 +1925,7 @@ export default function Projetos() {
                         )}
                       </button>
                     )}
+
                   </div>
                 </div>
 
@@ -2259,6 +2262,9 @@ export default function Projetos() {
                     </div>
                   ) : null}
                 </div>
+
+                {/* Revisão de vídeo (dropzone 06_ENTREGA/01_REVISAO) */}
+                <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
 
               </div>
             ) : selectedClientId && selectedClient ? (
