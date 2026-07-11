@@ -78,7 +78,7 @@ async function listChildren(parentId: string): Promise<any[]> {
   const items: any[] = []; let pageToken = ''
   do {
     const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`)
-    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink,size,videoMediaMetadata,createdTime),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
+    const page = await driveFetch(`files?q=${q}&fields=files(id,name,mimeType,webViewLink,size,videoMediaMetadata,createdTime,owners(displayName),lastModifyingUser(displayName)),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`)
     items.push(...(page.files || [])); pageToken = page.nextPageToken || ''
   } while (pageToken)
   return items
@@ -140,6 +140,8 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
           duration_ms: vmm.durationMillis ? Number(vmm.durationMillis) : null,
           size_bytes: file.size ? Number(file.size) : null,
           mime_type: file.mimeType ?? null,
+          uploaded_by: file.lastModifyingUser?.displayName ?? file.owners?.[0]?.displayName ?? null,
+          uploaded_at: file.createdTime ?? null,
         }])
         if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Nova versão v${String(nextV).padStart(2, '0')} detectada: ${file.name}`); nextV++ }
         else if (!String(error.message).includes('duplicate')) await log(proj.id, 'error', `Insert falhou p/ ${file.name}: ${error.message}`, 'error')

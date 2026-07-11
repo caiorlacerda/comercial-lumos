@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,7 +20,34 @@ interface VideoVersion {
   status: ReviewStatus;
   approved_file_id: string | null;
   created_at: string;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  size_bytes: number | null;
+  mime_type: string | null;
+  uploaded_by: string | null;
+  uploaded_at: string | null;
+  fps: number | null;
 }
+
+type SortKey = 'versao' | 'file_name' | 'status' | 'duration' | 'resolution' | 'format' | 'fps' | 'size' | 'uploader' | 'date' | 'comments';
+const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
+  { key: 'versao', label: 'Versão' },
+  { key: 'file_name', label: 'Nome' },
+  { key: 'status', label: 'Status' },
+  { key: 'duration', label: 'Duração', align: 'right' },
+  { key: 'resolution', label: 'Resolução', align: 'right' },
+  { key: 'format', label: 'Formato' },
+  { key: 'fps', label: 'FPS', align: 'right' },
+  { key: 'size', label: 'Tamanho', align: 'right' },
+  { key: 'uploader', label: 'Enviado por' },
+  { key: 'date', label: 'Data' },
+  { key: 'comments', label: 'Coment.', align: 'right' },
+];
+
+const fmtDur = (ms: number | null) => { if (!ms) return '—'; const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fmtSize = (b: number | null) => b ? `${(b / 1048576).toFixed(1)} MB` : '—';
+const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
 
 const STATUS_UI: Record<ReviewStatus, { label: string; color: string }> = {
   EM_REVISAO_INTERNA: { label: 'Revisão interna', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
@@ -58,6 +85,34 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'versao', dir: 'desc' });
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleSort = (key: SortKey) => setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const sortedVersions = useMemo(() => {
+    const val = (v: VideoVersion): string | number => {
+      switch (sort.key) {
+        case 'versao': return v.versao;
+        case 'file_name': return (v.file_name || '').toLowerCase();
+        case 'status': return v.status;
+        case 'duration': return v.duration_ms || 0;
+        case 'resolution': return (v.height || 0) * 100000 + (v.width || 0);
+        case 'format': return (v.mime_type || '').toLowerCase();
+        case 'fps': return v.fps || 0;
+        case 'size': return v.size_bytes || 0;
+        case 'uploader': return (v.uploaded_by || '').toLowerCase();
+        case 'date': return new Date(v.uploaded_at || v.created_at).getTime();
+        case 'comments': return counts[v.id] || 0;
+      }
+    };
+    return [...versions].sort((a, b) => {
+      const x = val(a), y = val(b);
+      const c = x < y ? -1 : x > y ? 1 : 0;
+      return sort.dir === 'asc' ? c : -c;
+    });
+  }, [versions, sort, counts]);
 
   // Pasta de upload = 06_ENTREGA/01_REVISAO; fallback: raiz do projeto no Drive
   const uploadFolderUrl = driveFolders.upload || driveFolders.root
@@ -199,7 +254,6 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest flex items-center gap-2">
           <Film className="w-4 h-4 text-lumos-yellow" /> Revisão de Vídeo
-          <span className="text-lumos-text-secondary/60 font-bold normal-case tracking-normal">· dropzone 06_ENTREGA/01_REVISAO</span>
         </h3>
 
         <div className="flex items-center gap-2">
@@ -249,95 +303,104 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {versions.map(v => {
-            const ui = STATUS_UI[v.status];
-            const isBusy = busy === v.id;
-            return (
-              <div key={v.id} className="p-3 rounded-lumos border border-lumos-border/50 bg-lumos-bg/30 space-y-2">
-               <div className="flex items-center gap-3">
-                <span className="text-sm font-black text-lumos-text-primary w-10 flex-shrink-0">v{String(v.versao).padStart(2, '0')}</span>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-lumos-border">
+                {COLUMNS.map(col => (
+                  <th key={col.key} onClick={() => toggleSort(col.key)}
+                    className={clsx('py-2 px-2 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 cursor-pointer select-none whitespace-nowrap hover:text-lumos-text-primary transition-colors', col.align === 'right' && 'text-right')}>
+                    <span className={clsx('inline-flex items-center gap-1', col.align === 'right' && 'flex-row-reverse')}>
+                      {col.label}
+                      {sort.key === col.key && (sort.dir === 'asc' ? <ChevronUp className="w-3 h-3 text-lumos-yellow" /> : <ChevronDown className="w-3 h-3 text-lumos-yellow" />)}
+                    </span>
+                  </th>
+                ))}
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedVersions.map(v => {
+                const ui = STATUS_UI[v.status];
+                const isBusy = busy === v.id;
+                const isOpen = expanded.has(v.id);
+                return (
+                  <Fragment key={v.id}>
+                    <tr onClick={() => toggleExpand(v.id)} className="border-b border-lumos-border/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer">
+                      <td className="py-2.5 px-2 text-xs font-black text-lumos-text-primary whitespace-nowrap">v{String(v.versao).padStart(2, '0')}</td>
+                      <td className="py-2.5 px-2 max-w-[240px]">
+                        <a href={v.drive_web_link || driveFileUrl(v.drive_file_id)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                          className="text-xs font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors truncate flex items-center gap-1">
+                          {v.file_name} <ExternalLink className="w-3 h-3 opacity-50 flex-shrink-0" />
+                        </a>
+                      </td>
+                      <td className="py-2.5 px-2 whitespace-nowrap">
+                        <span className={clsx('inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border', ui.color)}>{ui.label}</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-[11px] font-mono font-bold text-lumos-text-secondary text-right whitespace-nowrap">{fmtDur(v.duration_ms)}</td>
+                      <td className="py-2.5 px-2 text-[11px] font-mono text-lumos-text-secondary text-right whitespace-nowrap">{v.width ? `${v.width}×${v.height}` : '—'}</td>
+                      <td className="py-2.5 px-2 text-[11px] font-bold text-lumos-text-secondary whitespace-nowrap">{(v.mime_type || '').split('/')[1]?.toUpperCase() || '—'}</td>
+                      <td className="py-2.5 px-2 text-[11px] font-mono text-lumos-text-secondary text-right whitespace-nowrap">{v.fps ? v.fps : '—'}</td>
+                      <td className="py-2.5 px-2 text-[11px] font-mono text-lumos-text-secondary text-right whitespace-nowrap">{fmtSize(v.size_bytes)}</td>
+                      <td className="py-2.5 px-2 text-[11px] font-semibold text-lumos-text-secondary truncate max-w-[130px]">{v.uploaded_by || '—'}</td>
+                      <td className="py-2.5 px-2 text-[11px] font-mono text-lumos-text-secondary whitespace-nowrap">{fmtDate(v.uploaded_at || v.created_at)}</td>
+                      <td className="py-2.5 px-2 text-[11px] font-bold text-lumos-text-secondary text-right whitespace-nowrap">
+                        {(counts[v.id] || 0) > 0 ? <span className="inline-flex items-center gap-1 text-lumos-text-primary"><MessageSquare className="w-3 h-3" />{counts[v.id]}</span> : '—'}
+                      </td>
+                      <td className="py-2.5 px-1 text-lumos-text-secondary">
+                        <ChevronRight className={clsx('w-4 h-4 transition-transform', isOpen && 'rotate-90')} />
+                      </td>
+                    </tr>
 
-                <div className="flex-1 min-w-0">
-                  <a
-                    href={v.drive_web_link || driveFileUrl(v.drive_file_id)}
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-xs font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors truncate flex items-center gap-1"
-                  >
-                    {v.file_name} <ExternalLink className="w-3 h-3 opacity-50 flex-shrink-0" />
-                  </a>
-                  <span className={clsx('inline-block mt-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border', ui.color)}>
-                    {ui.label}
-                  </span>
-                </div>
+                    {isOpen && (
+                      <tr className="border-b border-lumos-border/40 bg-lumos-bg/30">
+                        <td colSpan={COLUMNS.length + 1} className="px-3 py-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Máquina de estados */}
+                            {!canManage ? null : v.status === 'EM_REVISAO_INTERNA' ? (
+                              <>
+                                <button disabled={isBusy} onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold bg-lumos-yellow/10 text-lumos-yellow hover:bg-lumos-yellow/20 transition-colors flex items-center gap-1"><Check className="w-3 h-3" /> Aprovar (interno)</button>
+                                <button disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_INTERNAS')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1"><RotateCcw className="w-3 h-3" /> Alteração</button>
+                              </>
+                            ) : v.status === 'EM_REVISAO_CLIENTE' ? (
+                              <>
+                                <button disabled={isBusy} onClick={() => transition(v, 'APROVADO')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors flex items-center gap-1"><CircleCheckBig className="w-3 h-3" /> Cliente aprovou</button>
+                                <button disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_CLIENTE')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1"><RotateCcw className="w-3 h-3" /> Alteração</button>
+                              </>
+                            ) : v.status === 'APROVADO' ? (
+                              v.approved_file_id ? (
+                                <a href={driveFileUrl(v.approved_file_id)} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors flex items-center gap-1"><ExternalLink className="w-3 h-3" /> vFINAL</a>
+                              ) : (
+                                <span className="text-[10px] font-bold text-lumos-text-secondary flex items-center gap-1"><Clock className="w-3 h-3 animate-pulse" /> Gerando vFINAL…</span>
+                              )
+                            ) : (
+                              <span className="text-[10px] font-semibold text-lumos-text-secondary/70 italic">Aguardando novo corte</span>
+                            )}
 
-                {/* Ações da máquina de estados */}
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {!canManage ? null : v.status === 'EM_REVISAO_INTERNA' ? (
-                    <>
-                      <button disabled={isBusy} onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold bg-lumos-yellow/10 text-lumos-yellow hover:bg-lumos-yellow/20 transition-colors flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Aprovar (interno)
-                      </button>
-                      <button disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_INTERNAS')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1">
-                        <RotateCcw className="w-3 h-3" /> Alteração
-                      </button>
-                    </>
-                  ) : v.status === 'EM_REVISAO_CLIENTE' ? (
-                    <>
-                      <button disabled={isBusy} onClick={() => transition(v, 'APROVADO')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors flex items-center gap-1">
-                        <CircleCheckBig className="w-3 h-3" /> Cliente aprovou
-                      </button>
-                      <button disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_CLIENTE')} className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1">
-                        <RotateCcw className="w-3 h-3" /> Alteração
-                      </button>
-                    </>
-                  ) : v.status === 'APROVADO' ? (
-                    v.approved_file_id ? (
-                      <a href={driveFileUrl(v.approved_file_id)} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 rounded-lumos text-[10px] font-bold bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors flex items-center gap-1">
-                        <ExternalLink className="w-3 h-3" /> vFINAL
-                      </a>
-                    ) : (
-                      <span className="text-[10px] font-bold text-lumos-text-secondary flex items-center gap-1"><Clock className="w-3 h-3 animate-pulse" /> Gerando vFINAL…</span>
-                    )
-                  ) : (
-                    <span className="text-[10px] font-semibold text-lumos-text-secondary/70 italic">Aguardando novo corte</span>
-                  )}
-                </div>
-               </div>
-
-               {/* Link do cliente + comentários */}
-               {canManage && (
-                 <div className="flex items-center gap-2 flex-wrap pl-[52px] pt-0.5">
-                   {links[v.id] ? (
-                     <>
-                       <button onClick={() => copyLink(links[v.id].token)} className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1 border border-lumos-border rounded-full px-2 py-1 transition-colors">
-                         <Copy className="w-3 h-3" /> Copiar link
-                       </button>
-                       <a href={`/revisao/${links[v.id].token}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1 border border-lumos-border rounded-full px-2 py-1 transition-colors">
-                         <ExternalLink className="w-3 h-3" /> Abrir
-                       </a>
-                       <button onClick={() => toggleLinkFlag(v.id, 'watermark')} title="Marca d'água" className={clsx('text-[10px] font-bold flex items-center gap-1 rounded-full px-2 py-1 transition-colors border', links[v.id].watermark ? 'text-lumos-yellow border-lumos-yellow/40 bg-lumos-yellow/10' : 'text-lumos-text-secondary/60 border-lumos-border')}>
-                         <Droplet className="w-3 h-3" /> Marca d'água
-                       </button>
-                       <button onClick={() => toggleLinkFlag(v.id, 'allow_download')} title="Permitir download" className={clsx('text-[10px] font-bold flex items-center gap-1 rounded-full px-2 py-1 transition-colors border', links[v.id].allow_download ? 'text-lumos-yellow border-lumos-yellow/40 bg-lumos-yellow/10' : 'text-lumos-text-secondary/60 border-lumos-border')}>
-                         <DownloadCloud className="w-3 h-3" /> Download
-                       </button>
-                     </>
-                   ) : (
-                     <button disabled={isBusy} onClick={() => generateLink(v.id)} className="text-[10px] font-bold text-lumos-yellow hover:bg-lumos-yellow/10 flex items-center gap-1 border border-lumos-yellow/40 rounded-full px-2.5 py-1 transition-colors">
-                       <Link2 className="w-3 h-3" /> Gerar link do cliente
-                     </button>
-                   )}
-                   {(counts[v.id] || 0) > 0 && (
-                     <span className="text-[10px] font-bold text-lumos-text-secondary flex items-center gap-1 ml-auto">
-                       <MessageSquare className="w-3 h-3" /> {counts[v.id]} comentário{counts[v.id] > 1 ? 's' : ''}
-                     </span>
-                   )}
-                 </div>
-               )}
-              </div>
-            );
-          })}
+                            {/* Link do cliente */}
+                            {canManage && (
+                              <div className="flex items-center gap-2 flex-wrap ml-auto">
+                                {links[v.id] ? (
+                                  <>
+                                    <button onClick={() => copyLink(links[v.id].token)} className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1 border border-lumos-border rounded-full px-2 py-1 transition-colors"><Copy className="w-3 h-3" /> Copiar link</button>
+                                    <a href={`/revisao/${links[v.id].token}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1 border border-lumos-border rounded-full px-2 py-1 transition-colors"><ExternalLink className="w-3 h-3" /> Abrir</a>
+                                    <button onClick={() => toggleLinkFlag(v.id, 'watermark')} title="Marca d'água" className={clsx('text-[10px] font-bold flex items-center gap-1 rounded-full px-2 py-1 transition-colors border', links[v.id].watermark ? 'text-lumos-yellow border-lumos-yellow/40 bg-lumos-yellow/10' : 'text-lumos-text-secondary/60 border-lumos-border')}><Droplet className="w-3 h-3" /> Marca d'água</button>
+                                    <button onClick={() => toggleLinkFlag(v.id, 'allow_download')} title="Permitir download" className={clsx('text-[10px] font-bold flex items-center gap-1 rounded-full px-2 py-1 transition-colors border', links[v.id].allow_download ? 'text-lumos-yellow border-lumos-yellow/40 bg-lumos-yellow/10' : 'text-lumos-text-secondary/60 border-lumos-border')}><DownloadCloud className="w-3 h-3" /> Download</button>
+                                  </>
+                                ) : (
+                                  <button disabled={isBusy} onClick={() => generateLink(v.id)} className="text-[10px] font-bold text-lumos-yellow hover:bg-lumos-yellow/10 flex items-center gap-1 border border-lumos-yellow/40 rounded-full px-2.5 py-1 transition-colors"><Link2 className="w-3 h-3" /> Gerar link do cliente</button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
