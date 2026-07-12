@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ShieldCheck, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2
+  CalendarDays, Truck, Users2, KeyRound
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -53,6 +53,7 @@ export const NAV_SECTIONS: Section[] = [
       { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
       { icon: FileStack, label: 'Templates de Tarefas', path: '/producao/templates-tarefas', permission: 'admin' },
+      { icon: KeyRound, label: 'Acessos & Senhas', path: '/producao/acessos', permission: 'ordem_do_dia' },
       // Só para quem TEM cronograma e NÃO tem as demais views (papel editor):
       // sem este item, editores ficariam sem porta de entrada na seção.
       { icon: CalendarDays, label: 'Cronograma Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao_only' },
