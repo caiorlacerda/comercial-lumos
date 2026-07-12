@@ -16,6 +16,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
+import UserAvatar from '@/components/common/UserAvatar';
 import { useToast } from '@/context/ToastContext';
 import { TASK_STATUS_GROUPS } from '@/pages/Projetos';
 
@@ -43,6 +44,7 @@ interface BoardTask {
 interface TeamUser {
   id: string;
   full_name: string;
+  avatar_url?: string | null;
 }
 
 // Colunas do board = todos os status de tarefa, na ordem do fluxo.
@@ -66,7 +68,7 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 // -------------------------------------------------------------
 // Conteúdo visual do card (usado no board e no DragOverlay)
 // -------------------------------------------------------------
-function BoardCardContent({ task, responsavelName }: { task: BoardTask; responsavelName: string | null }) {
+function BoardCardContent({ task, responsavel }: { task: BoardTask; responsavel: TeamUser | null }) {
   const isOverdue = !!task.data_fim && task.data_fim < todayStr() && !CONCLUDED_STATUSES.has(task.status);
 
   return (
@@ -99,14 +101,7 @@ function BoardCardContent({ task, responsavelName }: { task: BoardTask; responsa
           {task.prioridade === 'alta' && <Flag className="w-3 h-3 text-red-500 fill-red-500/30" />}
           {task.prioridade === 'media' && <Flag className="w-3 h-3 text-amber-500 fill-amber-500/20" />}
         </div>
-        {responsavelName && (
-          <span
-            title={responsavelName}
-            className="w-5 h-5 rounded-full bg-lumos-yellow/15 text-lumos-yellow text-[8px] font-black flex items-center justify-center flex-shrink-0 border border-lumos-yellow/20"
-          >
-            {getInitials(responsavelName)}
-          </span>
-        )}
+        {responsavel && <UserAvatar user={responsavel} size={22} showStatus />}
       </div>
     </>
   );
@@ -117,12 +112,12 @@ function BoardCardContent({ task, responsavelName }: { task: BoardTask; responsa
 // -------------------------------------------------------------
 function BoardCard({
   task,
-  responsavelName,
+  responsavel,
   disabled,
   onOpen,
 }: {
   task: BoardTask;
-  responsavelName: string | null;
+  responsavel: TeamUser | null;
   disabled: boolean;
   onOpen: () => void;
 }) {
@@ -144,7 +139,7 @@ function BoardCard({
         !disabled && 'touch-none'
       )}
     >
-      <BoardCardContent task={task} responsavelName={responsavelName} />
+      <BoardCardContent task={task} responsavel={responsavel} />
     </div>
   );
 }
@@ -243,7 +238,7 @@ export default function ProducaoBoard() {
             project:projects!inner ( id, name, status, client_id, client:clients ( id, name ) )
           `)
           .eq('project.status', 'ativo'),
-        supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
+        supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo').order('full_name'),
       ]);
 
       if (tasksRes.error) throw tasksRes.error;
@@ -259,9 +254,9 @@ export default function ProducaoBoard() {
     }
   }
 
-  const userNameById = useMemo(() => {
-    const map: Record<string, string> = {};
-    teamUsers.forEach(u => { map[u.id] = u.full_name; });
+  const userById = useMemo(() => {
+    const map: Record<string, TeamUser> = {};
+    teamUsers.forEach(u => { map[u.id] = u; });
     return map;
   }, [teamUsers]);
 
@@ -478,7 +473,7 @@ export default function ProducaoBoard() {
                     <BoardCard
                       key={task.id}
                       task={task}
-                      responsavelName={task.responsavel_id ? userNameById[task.responsavel_id] || null : null}
+                      responsavel={task.responsavel_id ? userById[task.responsavel_id] || null : null}
                       disabled={!canMove}
                       onOpen={() => openTask(task)}
                     />
@@ -494,7 +489,7 @@ export default function ProducaoBoard() {
               <div className="w-[256px] bg-lumos-bg border border-lumos-yellow/50 rounded-lumos p-3 shadow-2xl ring-1 ring-lumos-yellow/30 rotate-2 cursor-grabbing">
                 <BoardCardContent
                   task={activeTask}
-                  responsavelName={activeTask.responsavel_id ? userNameById[activeTask.responsavel_id] || null : null}
+                  responsavel={activeTask.responsavel_id ? userById[activeTask.responsavel_id] || null : null}
                 />
               </div>
             ) : null}

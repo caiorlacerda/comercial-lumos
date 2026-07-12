@@ -7,6 +7,7 @@ import {
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
+import UserAvatar from '@/components/common/UserAvatar';
 import { useToast } from '@/context/ToastContext';
 import { TASK_STATUS_GROUPS, getStatusDetails } from '@/pages/Projetos';
 
@@ -29,6 +30,7 @@ interface ActivityItem {
   type: 'comment' | 'done';
   when: string;
   who: string;
+  actor: { id?: string; full_name?: string | null; avatar_url?: string | null } | null;
   text: string;
   sub: string;
   projectId: string | null;
@@ -77,7 +79,7 @@ export default function ProducaoOverview() {
 
   const [projectsCount, setProjectsCount] = useState(0);
   const [tasks, setTasks] = useState<OverviewTask[]>([]);
-  const [teamUsers, setTeamUsers] = useState<{ id: string; full_name: string }[]>([]);
+  const [teamUsers, setTeamUsers] = useState<{ id: string; full_name: string; avatar_url?: string | null }[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -95,15 +97,15 @@ export default function ProducaoOverview() {
           .from('project_tasks')
           .select('id, project_id, titulo, status, prioridade, data_fim, responsavel_id, project:projects!inner(id, name, status, client:clients(name))')
           .eq('project.status', 'ativo'),
-        supabase.from('app_users').select('id, full_name').eq('status', 'ativo'),
+        supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo'),
         supabase
           .from('task_comments')
-          .select('id, content, created_at, user:app_users(full_name), task:project_tasks(id, titulo, project_id)')
+          .select('id, content, created_at, user:app_users(id, full_name, avatar_url), task:project_tasks(id, titulo, project_id)')
           .order('created_at', { ascending: false })
           .limit(8),
         supabase
           .from('project_tasks')
-          .select('id, titulo, status, updated_at, project_id, responsavel:app_users!responsavel_id(full_name)')
+          .select('id, titulo, status, updated_at, project_id, responsavel:app_users!responsavel_id(id, full_name, avatar_url)')
           .in('status', ['entregue', 'concluido'])
           .order('updated_at', { ascending: false })
           .limit(5),
@@ -123,6 +125,7 @@ export default function ProducaoOverview() {
           type: 'comment',
           when: c.created_at,
           who: c.user?.full_name || 'Alguém',
+          actor: c.user || null,
           text: c.content?.length > 90 ? c.content.slice(0, 90) + '…' : (c.content || ''),
           sub: c.task?.titulo || 'Tarefa',
           projectId: c.task?.project_id ?? null,
@@ -135,6 +138,7 @@ export default function ProducaoOverview() {
           type: 'done',
           when: t.updated_at,
           who: t.responsavel?.full_name || 'Equipe',
+          actor: t.responsavel || null,
           text: t.titulo,
           sub: getStatusDetails(t.status).label,
           projectId: t.project_id,
@@ -194,11 +198,10 @@ export default function ProducaoOverview() {
       else unassigned++;
     });
     const rows = Object.entries(byUser)
-      .map(([id, count]) => ({
-        id,
-        name: teamUsers.find(u => u.id === id)?.full_name || 'Usuário',
-        count,
-      }))
+      .map(([id, count]) => {
+        const u = teamUsers.find(x => x.id === id);
+        return { id, name: u?.full_name || 'Usuário', avatar_url: u?.avatar_url ?? null, count };
+      })
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
     return { rows, unassigned, max: rows.length ? rows[0].count : 0 };
@@ -401,12 +404,7 @@ export default function ProducaoOverview() {
               <div className="space-y-2.5">
                 {workload.rows.map(row => (
                   <div key={row.id} className="flex items-center gap-2.5">
-                    <span
-                      title={row.name}
-                      className="w-6 h-6 rounded-full bg-lumos-yellow/15 text-lumos-yellow text-[8px] font-black flex items-center justify-center flex-shrink-0 border border-lumos-yellow/20"
-                    >
-                      {getInitials(row.name)}
-                    </span>
+                    <UserAvatar user={{ id: row.id, full_name: row.name, avatar_url: row.avatar_url }} size={24} showStatus />
                     <span className="text-[10px] font-bold text-lumos-text-primary w-20 truncate flex-shrink-0">
                       {row.name.split(' ')[0]}
                     </span>
@@ -443,12 +441,7 @@ export default function ProducaoOverview() {
                     onClick={() => openTaskInManager(item.projectId, item.taskId)}
                     className="w-full flex items-start gap-2.5 p-2 rounded-lumos hover:bg-lumos-text-secondary/[0.04] transition-colors text-left group"
                   >
-                    <span className={clsx(
-                      'p-1.5 rounded-full flex-shrink-0 mt-0.5',
-                      item.type === 'comment' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-500'
-                    )}>
-                      {item.type === 'comment' ? <MessageSquare className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-                    </span>
+                    <UserAvatar user={item.actor || { full_name: item.who }} size={28} showStatus className="mt-0.5" />
                     <span className="flex-1 min-w-0">
                       <span className="block text-[11px] text-lumos-text-primary leading-snug">
                         <span className="font-black">{item.who.split(' ')[0]}</span>

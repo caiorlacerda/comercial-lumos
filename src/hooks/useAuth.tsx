@@ -26,6 +26,7 @@ export interface AppUserProfile {
   custom_permissions: Record<string, boolean>;
   phone: string | null;
   joined_at: string;
+  avatar_url?: string | null;
   presence_status?: 'online' | 'busy' | 'away' | 'offline';
   last_seen?: string;
 }
@@ -73,6 +74,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq('auth_user_id', userId)
         .single();
       setProfile(data ?? null);
+      // Espelha a foto do Auth (user_metadata) na coluna app_users.avatar_url,
+      // para que OUTROS usuários consigam ver a foto (metadata só é legível pelo
+      // dono). Self-heal: acontece no login de cada um.
+      if (data) {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const metaAvatar = authUser?.user_metadata?.avatar_url ?? null;
+        if (metaAvatar && metaAvatar !== data.avatar_url) {
+          await supabase.from('app_users').update({ avatar_url: metaAvatar }).eq('id', data.id);
+          setProfile({ ...data, avatar_url: metaAvatar });
+        }
+      }
     } catch (err) {
       console.error('Error fetching profile:', err);
       setProfile(null);
@@ -127,6 +139,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (updateError) throw updateError;
     const { data: { user: updatedUser } } = await supabase.auth.getUser();
     setUser(updatedUser);
+    // Espelha na tabela para que os outros usuários vejam a nova foto
+    if (profile?.id) {
+      await supabase.from('app_users').update({ avatar_url: url }).eq('id', profile.id);
+      setProfile(p => (p ? { ...p, avatar_url: url } : p));
+    }
   };
 
   const updatePresenceStatus = async (status: 'online' | 'busy' | 'away') => {
