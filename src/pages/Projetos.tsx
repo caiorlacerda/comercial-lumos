@@ -738,6 +738,7 @@ export default function Projetos() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'lista' | 'kanban' | 'gantt'>('lista');
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const quickAddInputRef = useRef<HTMLInputElement>(null);
   const [isConfirmTemplateOpen, setIsConfirmTemplateOpen] = useState(false);
 
   // Task Details Modal States
@@ -1310,11 +1311,12 @@ export default function Projetos() {
 
       if (error) throw error;
 
-      toast.success('Tarefa adicionada!');
+      // Fluxo rápido: sem toast e sem recarregar o painel. A tarefa entra direto
+      // na lista (otimista) e o input mantém o foco para criação em sequência.
       setNewTaskTitle('');
-      
-      await fetchProjectTasks(selectedProjectId);
-      await fetchData();
+      setProjectTasks(prev => [...prev, newTask]);
+      setTasks(prev => [...prev, { id: newTask.id, project_id: selectedProjectId, status: newTask.status }]);
+      quickAddInputRef.current?.focus();
     } catch (err: any) {
       console.error('Error adding task:', err);
       toast.error('Erro ao adicionar tarefa.');
@@ -2091,6 +2093,7 @@ export default function Projetos() {
                       {canManage && (
                         <form onSubmit={handleQuickAddTask} className="flex items-center gap-3 pt-3 border-t border-lumos-border/40 mt-2">
                           <input
+                            ref={quickAddInputRef}
                             type="text"
                             placeholder="Digitar nova tarefa... (Pressione Enter para adicionar)"
                             value={newTaskTitle}
