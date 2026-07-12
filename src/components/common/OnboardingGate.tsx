@@ -125,7 +125,7 @@ export default function OnboardingGate() {
       <PartyPopper className="w-5 h-5 text-lumos-yellow flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-lumos-text-primary">Complete seu cadastro na Lumos</p>
-        <p className="text-[11px] text-lumos-text-secondary">Leva 1 minutinho — foto, aniversário e seus dados. Clique para preencher.</p>
+        <p className="text-[11px] text-lumos-text-secondary">Leva 1 minutinho, complete sua foto e seus dados. Clique para preencher.</p>
       </div>
       <span className="text-xs font-black uppercase tracking-wider text-black bg-lumos-yellow px-3 py-1.5 rounded-full flex-shrink-0">Completar</span>
     </button>
@@ -141,7 +141,7 @@ export default function OnboardingGate() {
           <PartyPopper className="w-8 h-8 text-lumos-yellow mx-auto mb-2" />
           <h2 className="text-xl font-black text-lumos-text-primary tracking-tight">Bem-vindo(a) à Lumos, {profile.full_name?.split(' ')[0]}!</h2>
           <p className="text-xs text-lumos-text-secondary mt-1 font-semibold max-w-md mx-auto">
-            Complete seu cadastro pra gente te conhecer melhor. Leva 1 minutinho — e sim, o aniversário vira confete no dia. 🎂
+            Complete seu cadastro pra gente te conhecer melhor. Leva 1 minutinho e já fica tudo pronto no seu perfil.
           </p>
         </div>
 

@@ -68,19 +68,6 @@ const ReviewVisual = () => (
   </div>
 );
 
-const BirthdayVisual = () => (
-  <div className="relative">
-    <Float>🎂</Float>
-    {['🎉', '✨', '🎊'].map((e, i) => (
-      <motion.span key={i} className="absolute text-xl"
-        style={{ left: `${i * 40 - 20}px`, top: 0 }}
-        animate={{ y: [0, 40], opacity: [1, 0] }} transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.4 }}>
-        {e}
-      </motion.span>
-    ))}
-  </div>
-);
-
 // ── Slides por cargo ────────────────────────────────────────────────────────
 interface Slide { key: string; accent: string; title: string; body: string; Visual: React.FC; }
 
@@ -88,13 +75,13 @@ function getSlides(role: string, isAdmin: boolean): Slide[] {
   const intro: Slide = {
     key: 'intro', accent: 'yellow',
     title: 'Bem-vindo à central da Lumos! 🎬',
-    body: 'Esta é a nossa plataforma de produção. Pensa num ClickUp — mas agora feito sob medida pra Lumos, com tudo o que a gente precisa num lugar só.',
+    body: 'Esta é a nossa plataforma de produção. Pensa num ClickUp, mas agora feito sob medida pra Lumos, com tudo o que a gente precisa num lugar só.',
     Visual: () => <Float>🎬</Float>,
   };
   const tasks: Slide = {
     key: 'tasks', accent: 'yellow',
     title: 'Projetos & Tarefas',
-    body: 'Cada projeto tem suas tarefas, com status, prioridade, responsável, prazo e tags coloridas. Você cria, organiza e acompanha — do jeitinho que já conhece.',
+    body: 'Cada projeto tem suas tarefas, com status, prioridade, responsável, prazo e tags coloridas. Você cria, organiza e acompanha, do jeitinho que já conhece.',
     Visual: TasksVisual,
   };
   const views: Slide = {
@@ -112,7 +99,7 @@ function getSlides(role: string, isAdmin: boolean): Slide[] {
   const review: Slide = {
     key: 'review', accent: 'purple',
     title: 'Revisão de vídeo',
-    body: 'Suba os cortes, comente no segundo exato, rabisque em cima do vídeo e gere um link pro cliente aprovar — sem sair da plataforma.',
+    body: 'Suba os cortes, comente no segundo exato, rabisque em cima do vídeo e gere um link pro cliente aprovar, sem sair da plataforma.',
     Visual: ReviewVisual,
   };
   const finance: Slide = {
@@ -127,24 +114,24 @@ function getSlides(role: string, isAdmin: boolean): Slide[] {
     body: 'Como admin, você acessa Comercial, Financeiro, Produção e a gestão de usuários e permissões. É a visão completa da Lumos.',
     Visual: () => <Float>🛠️</Float>,
   };
-  const birthday: Slide = {
-    key: 'birthday', accent: 'pink',
-    title: 'Seu perfil (e seu aniversário!)',
-    body: 'Complete seu cadastro com foto e data de nascimento. No seu dia, a plataforma solta confete pra todo mundo comemorar com você. 🎉',
-    Visual: BirthdayVisual,
+  const profileSlide: Slide = {
+    key: 'profile', accent: 'pink',
+    title: 'Seu perfil',
+    body: 'Complete seu cadastro com foto e seus dados. Assim seu rostinho aparece nas tarefas, comentários e na equipe.',
+    Visual: () => <Float>🙂</Float>,
   };
   const finish: Slide = {
     key: 'finish', accent: 'yellow',
     title: 'Bora produzir! 🚀',
-    body: 'É isso! Explore à vontade — e qualquer dúvida, chama o time. Seja muito bem-vindo(a) à Lumos.',
+    body: 'É isso! Explore à vontade, e qualquer dúvida, chama o time. Seja muito bem-vindo(a) à Lumos.',
     Visual: () => <Float>🚀</Float>,
   };
 
-  if (isAdmin) return [intro, tasks, views, realtime, review, admin, birthday, finish];
-  if (role === 'producao') return [intro, tasks, views, realtime, review, finance, birthday, finish];
-  if (role === 'basico') return [intro, { ...finance, title: 'Seus reembolsos', body: 'Aqui você lança e acompanha seus reembolsos de forma simples.' }, birthday, finish];
+  if (isAdmin) return [intro, tasks, views, realtime, review, admin, profileSlide, finish];
+  if (role === 'producao') return [intro, tasks, views, realtime, review, finance, profileSlide, finish];
+  if (role === 'basico') return [intro, { ...finance, title: 'Seus reembolsos', body: 'Aqui você lança e acompanha seus reembolsos de forma simples.' }, profileSlide, finish];
   // editor, atendimento, social_media
-  return [intro, tasks, views, realtime, review, birthday, finish];
+  return [intro, tasks, views, realtime, review, profileSlide, finish];
 }
 
 const ACCENTS: Record<string, string> = {
@@ -178,50 +165,50 @@ export default function WelcomeTour() {
 
   return createPortal(
     <div className="fixed inset-0 z-[280] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl overflow-hidden">
+      <div className="w-full max-w-3xl bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl overflow-hidden">
         {/* Palco da animação */}
-        <div className={`relative h-52 flex items-center justify-center bg-gradient-to-b ${accent}`}>
-          <button onClick={close} title="Pular" className="absolute top-3 right-3 p-1.5 rounded-full text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-black/10">
-            <X className="w-4 h-4" />
+        <div className={`relative h-80 flex items-center justify-center bg-gradient-to-b ${accent}`}>
+          <button onClick={close} title="Pular" className="absolute top-4 right-4 p-2 rounded-full text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-black/10">
+            <X className="w-5 h-5" />
           </button>
           <AnimatePresence mode="wait">
             <motion.div key={slide.key}
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
-              className="flex items-center justify-center">
+              className="flex items-center justify-center scale-[1.5]">
               <slide.Visual />
             </motion.div>
           </AnimatePresence>
         </div>
 
         {/* Texto */}
-        <div className="px-6 pt-5 pb-4 text-center min-h-[130px]">
+        <div className="px-10 pt-8 pb-5 text-center min-h-[180px]">
           <AnimatePresence mode="wait">
             <motion.div key={slide.key}
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
-              <h2 className="text-lg font-black text-lumos-text-primary tracking-tight">{slide.title}</h2>
-              <p className="text-sm text-lumos-text-secondary mt-2 leading-relaxed">{slide.body}</p>
+              <h2 className="text-3xl font-black text-lumos-text-primary tracking-tight">{slide.title}</h2>
+              <p className="text-base text-lumos-text-secondary mt-3 leading-relaxed max-w-xl mx-auto">{slide.body}</p>
             </motion.div>
           </AnimatePresence>
         </div>
 
         {/* Rodapé: progresso + navegação */}
-        <div className="px-6 py-4 border-t border-lumos-border flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+        <div className="px-10 py-5 border-t border-lumos-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
             {slides.map((s, i) => (
               <button key={s.key} onClick={() => setStep(i)}
-                className={`h-1.5 rounded-full transition-all ${i === step ? 'w-5 bg-lumos-yellow' : 'w-1.5 bg-lumos-text-secondary/30 hover:bg-lumos-text-secondary/50'}`} />
+                className={`h-2 rounded-full transition-all ${i === step ? 'w-7 bg-lumos-yellow' : 'w-2 bg-lumos-text-secondary/30 hover:bg-lumos-text-secondary/50'}`} />
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {step > 0 && (
-              <button onClick={back} className="btn-secondary h-9 px-3 text-xs font-bold flex items-center gap-1">
-                <ArrowLeft className="w-3.5 h-3.5" /> Voltar
+              <button onClick={back} className="btn-secondary h-11 px-4 text-sm font-bold flex items-center gap-1.5">
+                <ArrowLeft className="w-4 h-4" /> Voltar
               </button>
             )}
-            <button onClick={next} className="btn-primary h-9 px-4 text-xs font-bold flex items-center gap-1.5">
+            <button onClick={next} className="btn-primary h-11 px-6 text-sm font-bold flex items-center gap-2">
               {isLast ? 'Começar!' : 'Próximo'}
-              {!isLast && <ArrowRight className="w-3.5 h-3.5" />}
+              {!isLast && <ArrowRight className="w-4 h-4" />}
             </button>
           </div>
         </div>
