@@ -194,6 +194,18 @@ export default function SidebarProjectTree() {
   // "Todos os Projetos" = Visão Geral (/producao)
   const isOverviewActive = location.pathname === '/producao';
   const isHeaderActive = isOverviewActive || location.pathname === '/producao/projetos';
+  // Projeto aberto no momento (vem na URL). Usado para destacar na árvore.
+  const activeProjectId = new URLSearchParams(location.search).get('projectId');
+
+  // Ao abrir um projeto, expande automaticamente o cliente dele para que o
+  // item destacado fique visível (inclusive ao entrar por link direto).
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const client = clients.find(c => c.projects.some(p => p.id === activeProjectId));
+    if (client) setExpanded(prev => (prev[client.id] ? prev : { ...prev, [client.id]: true }));
+    else if (noClientProjects.some(p => p.id === activeProjectId))
+      setExpanded(prev => (prev.__none__ ? prev : { ...prev, __none__: true }));
+  }, [activeProjectId, clients, noClientProjects]);
 
   return (
     <div>
@@ -266,7 +278,12 @@ export default function SidebarProjectTree() {
                             onClick={() => openProject(proj.id)}
                             onContextMenu={e => openProjMenu(e, proj)}
                             title={isAdmin ? `${proj.name} — botão direito para excluir` : proj.name}
-                            className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
+                            className={clsx(
+                              'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
+                              proj.id === activeProjectId
+                                ? 'bg-lumos-yellow/10 text-lumos-yellow'
+                                : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
+                            )}
                           >
                             {proj.name}
                           </button>
@@ -299,7 +316,12 @@ export default function SidebarProjectTree() {
                           onClick={() => openProject(proj.id)}
                           onContextMenu={e => openProjMenu(e, proj)}
                           title={isAdmin ? `${proj.name} — botão direito para excluir` : proj.name}
-                          className="w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all truncate block"
+                          className={clsx(
+                            'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
+                            proj.id === activeProjectId
+                              ? 'bg-lumos-yellow/10 text-lumos-yellow'
+                              : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
+                          )}
                         >
                           {proj.name}
                         </button>
