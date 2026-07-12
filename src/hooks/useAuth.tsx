@@ -2,7 +2,7 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 
-export type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'basico';
+export type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
 
 // Permissões padrão por cargo. custom_permissions (por usuário) sobrescreve.
 // Editor e Atendimento veem toda a Produção; Início e Configurações não têm
@@ -13,6 +13,7 @@ export const ROLE_DEFAULTS: Record<string, string[]> = {
   producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados'],
   atendimento: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
   editor: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
+  social_media: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
   basico: ['reembolso'],
 };
 
@@ -29,6 +30,7 @@ export interface AppUserProfile {
   avatar_url?: string | null;
   presence_status?: 'online' | 'busy' | 'away' | 'offline';
   last_seen?: string;
+  tour_seen?: boolean;
 }
 
 const AuthContext = createContext<{
@@ -43,6 +45,7 @@ const AuthContext = createContext<{
   updateProfile: (fullName: string) => Promise<void>;
   updateAvatar: (url: string) => Promise<void>;
   updatePresenceStatus: (status: 'online' | 'busy' | 'away') => Promise<void>;
+  markTourSeen: () => Promise<void>;
   can: (permission: string) => boolean;
 }>({
   user: null,
@@ -56,6 +59,7 @@ const AuthContext = createContext<{
   updateProfile: async () => {},
   updateAvatar: async () => {},
   updatePresenceStatus: async () => {},
+  markTourSeen: async () => {},
   can: () => false,
 });
 
@@ -160,6 +164,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Marca o tour de boas-vindas como visto (não reaparece até um admin reenviar)
+  const markTourSeen = async () => {
+    if (!profile?.id || profile.tour_seen) return;
+    setProfile(prev => (prev ? { ...prev, tour_seen: true } : prev));
+    await supabase.from('app_users').update({ tour_seen: true }).eq('id', profile.id);
+  };
+
   const can = (permission: string): boolean => {
     if (!profile) return false;
     if (profile.custom_permissions && permission in profile.custom_permissions) {
@@ -174,7 +185,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       user, profile, loading, profileChecked, error,
       isAdmin: profile?.role === 'admin',
       isProducao: profile?.role === 'producao',
-      signOut, updateProfile, updateAvatar, updatePresenceStatus, can
+      signOut, updateProfile, updateAvatar, updatePresenceStatus, markTourSeen, can
     }}>
       {children}
     </AuthContext.Provider>

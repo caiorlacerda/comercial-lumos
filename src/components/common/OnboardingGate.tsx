@@ -34,6 +34,10 @@ export default function OnboardingGate() {
     // O "pular" só evita o POP-UP automático nesta sessão — o banner de
     // "completar cadastro" continua aparecendo até a pessoa concluir.
     const skipped = sessionStorage.getItem('onboard-skip') === profile.id;
+    // Não abre o modal de dados sozinho enquanto o tour de boas-vindas está
+    // pendente (tour_seen === false) — evita dois modais empilhados.
+    const tourPending = profile.tour_seen === false;
+    const autoOpen = !skipped && !tourPending;
     supabase.from('team_members')
       .select('id, onboarded_at, ' + FIELDS.join(', '))
       .eq('app_user_id', profile.id)
@@ -47,10 +51,10 @@ export default function OnboardingGate() {
           setForm(filled);
           const notDone = !data.onboarded_at;
           setNeeds(notDone);
-          if (notDone && !skipped) setOpen(true);
+          if (notDone && autoOpen) setOpen(true);
         } else {
           setNeeds(true);
-          if (!skipped) setOpen(true);
+          if (autoOpen) setOpen(true);
         }
       });
   }, [profile?.id, checked]);

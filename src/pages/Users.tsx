@@ -23,7 +23,7 @@ import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
 
-type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'basico';
+type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
 
 // Permissões que o admin pode liberar/bloquear por usuário (sobre o padrão do cargo)
 const PERM_OPTIONS: { key: string; label: string }[] = [
@@ -186,6 +186,22 @@ export default function UsersPage() {
     }
   };
 
+  // Reenvia o tour de boas-vindas: zera tour_seen → a pessoa vê de novo no
+  // próximo acesso.
+  const handleResendTour = async () => {
+    if (!selectedUser) return;
+    try {
+      setFormLoading(true);
+      const { error } = await supabase.from('app_users').update({ tour_seen: false }).eq('id', selectedUser.id);
+      if (error) throw error;
+      toast.success(`Tour reenviado — ${selectedUser.full_name.split(' ')[0]} verá no próximo login.`);
+    } catch (error: any) {
+      toast.error(`Erro ao reenviar: ${error.message}`);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   const handleBatchStatus = async (status: UserStatus) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -305,6 +321,7 @@ export default function UsersPage() {
       case 'producao': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
       case 'atendimento': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
       case 'editor': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+      case 'social_media': return 'bg-pink-500/20 text-pink-400 border-pink-500/30';
       default: return 'bg-lumos-text-primary/10 text-lumos-text-secondary border-lumos-border';
     }
   };
@@ -347,6 +364,7 @@ export default function UsersPage() {
             <option value="producao">Produção</option>
             <option value="atendimento">Atendimento</option>
             <option value="editor">Editor</option>
+            <option value="social_media">Social Media</option>
             <option value="basico">Básico</option>
           </select>
           <select 
@@ -450,7 +468,7 @@ export default function UsersPage() {
                         <span className="text-xs font-medium text-lumos-text-primary">{user.job_title || 'Não definido'}</span>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit ${getRoleBadgeColor(user.role)}`}>
                           <Shield className="w-2.5 h-2.5 mr-1" />
-                          {user.role.toUpperCase()}
+                          {user.role.replace('_', ' ').toUpperCase()}
                         </span>
                       </div>
                     </td>
@@ -601,6 +619,7 @@ export default function UsersPage() {
                 <option value="producao">Produção</option>
                 <option value="atendimento">Atendimento</option>
                 <option value="editor">Editor</option>
+                <option value="social_media">Social Media</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -670,6 +689,7 @@ export default function UsersPage() {
                 <option value="producao">Produção</option>
                 <option value="atendimento">Atendimento</option>
                 <option value="editor">Editor</option>
+                <option value="social_media">Social Media</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -730,6 +750,12 @@ export default function UsersPage() {
               </div>
             </div>
           )}
+
+          {/* Reenviar tour de boas-vindas (aparece no próximo login da pessoa) */}
+          <button type="button" disabled={formLoading} onClick={handleResendTour}
+            className="w-full h-9 text-xs font-bold rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/40 transition-colors flex items-center justify-center gap-1.5">
+            🎬 Reenviar tour de boas-vindas no próximo login
+          </button>
 
           <div className="pt-4 flex gap-3">
             <button type="button" disabled={formLoading} onClick={() => setIsEditModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>

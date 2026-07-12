@@ -21,6 +21,7 @@ import { clsx } from 'clsx';
 import Confetti from '@/components/common/Confetti';
 import UserAvatar from '@/components/common/UserAvatar';
 import OnboardingGate from '@/components/common/OnboardingGate';
+import WelcomeTour from '@/components/common/WelcomeTour';
 
 interface Birthday { id: string; app_user_id: string | null; full_name: string; photo_url: string | null; }
 
@@ -210,7 +211,8 @@ export default function Home() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-work-sans text-lumos-text-primary pb-10">
 
-      {/* Onboarding no primeiro acesso (salva dados do usuário na equipe) */}
+      {/* Tour de boas-vindas (só no 1º login) + onboarding de dados */}
+      <WelcomeTour />
       <OnboardingGate />
 
       {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
