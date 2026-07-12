@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +38,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [ready, setReady] = useState(false);
+  // Tema local do player: começa sempre no escuro (melhor pra revisar vídeo)
+  const [rtheme, setRtheme] = useState<'dark' | 'light'>('dark');
 
   const [composing, setComposing] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -174,14 +176,20 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-lumos-bg text-lumos-text-primary flex flex-col font-work-sans">
+    <div className={clsx('fixed inset-0 z-50 bg-lumos-bg text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
       <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 flex-shrink-0">
         <span className="text-sm font-black truncate flex items-center gap-2">
           <span className="text-[9px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-400 px-2 py-0.5 rounded-full">Revisão interna</span>
           {projectName ? `${projectName} · ` : ''}v{String(versao).padStart(2, '0')}
           <span className="text-lumos-text-secondary font-bold normal-case tracking-normal hidden md:inline">· {fileName}</span>
         </span>
-        <button onClick={onClose} className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"><X className="w-4 h-4" /></button>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setRtheme(t => t === 'dark' ? 'light' : 'dark')} title="Tema claro/escuro"
+            className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
+            {rtheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <button onClick={onClose} className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"><X className="w-4 h-4" /></button>
+        </div>
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">

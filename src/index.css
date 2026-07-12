@@ -21,10 +21,22 @@
   --color-lumos-text-primary: #FFFFFF;
   --color-lumos-text-secondary: #999999;
   --color-lumos-border: rgba(255,255,255,0.08);
-  
+
   :root {
     color-scheme: dark;
   }
+}
+
+/* Escopo de tema LOCAL claro (ex.: player de revisão que começa no dark mas
+   pode alternar para claro mesmo com o app global em dark). Redeclara os
+   tokens claros explicitamente para vencer um ancestral .dark. */
+.theme-light {
+  --color-lumos-bg: #F5F5F3;
+  --color-lumos-surface: #FFFFFF;
+  --color-lumos-text-primary: #1a1a1a;
+  --color-lumos-text-secondary: #666666;
+  --color-lumos-border: rgba(0,0,0,0.08);
+  color-scheme: light;
 }
 
 @layer base {

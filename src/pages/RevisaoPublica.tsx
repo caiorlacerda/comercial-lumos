@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
-import { useTheme } from '@/context/ThemeContext';
 
 const LOGO = { dark: '/logo/Logotipo-Branco-Alpha.svg', light: '/logo/Logotipo-Preto-Alpha.svg' };
 
@@ -43,7 +42,12 @@ const fmtSize = (b: number | null) => b ? `${(b / 1048576).toFixed(1)} MB` : '�
 // ---------------------------------------------------------------------------
 export default function RevisaoPublica() {
   const { token = '' } = useParams();
-  const { theme, toggleTheme } = useTheme();
+  // Tema local da revisão: começa sempre no escuro (melhor pra visualizar vídeo)
+  // e é independente do tema global do app.
+  const [rtheme, setRtheme] = useState<'dark' | 'light'>('dark');
+  const theme = rtheme;
+  const toggleTheme = () => setRtheme(t => (t === 'dark' ? 'light' : 'dark'));
+  const themeClass = rtheme === 'dark' ? 'dark' : 'theme-light';
   const [data, setData] = useState<ReviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -251,14 +255,14 @@ export default function RevisaoPublica() {
   };
 
   // --- Render ---
-  if (loading) return <Centered><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" /></Centered>;
-  if (error) return <Centered><p className="text-red-500 font-bold text-sm">{error}</p></Centered>;
+  if (loading) return <Centered className={themeClass}><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" /></Centered>;
+  if (error) return <Centered className={themeClass}><p className="text-red-500 font-bold text-sm">{error}</p></Centered>;
   if (!data) return null;
 
   // Identificação
   if (!viewerId) {
     return (
-      <Centered>
+      <Centered className={themeClass}>
         <div className="w-full max-w-sm bg-lumos-surface border border-lumos-border rounded-lumos p-8 shadow-2xl">
           <div className="flex flex-col items-center text-center mb-6">
             <img src="/logo-lumos.png" alt="Lumos" className="h-8 mb-4" onError={e => (e.currentTarget.style.display = 'none')} />
@@ -292,7 +296,7 @@ export default function RevisaoPublica() {
   const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-lumos-bg text-lumos-text-primary font-work-sans">
+    <div className={clsx('min-h-screen bg-lumos-bg text-lumos-text-primary font-work-sans', themeClass)}>
       {/* Header (sem logo) */}
       <header className="h-14 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
         <div className="flex items-center gap-3 min-w-0">
@@ -491,8 +495,8 @@ export default function RevisaoPublica() {
 }
 
 // ---------------------------------------------------------------------------
-function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-lumos-bg flex items-center justify-center p-4 font-work-sans">{children}</div>;
+function Centered({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={clsx('min-h-screen bg-lumos-bg flex items-center justify-center p-4 font-work-sans', className)}>{children}</div>;
 }
 
 function drawShape(ctx: CanvasRenderingContext2D, sh: Shape, w: number, h: number) {
