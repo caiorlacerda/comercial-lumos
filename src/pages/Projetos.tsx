@@ -58,6 +58,8 @@ function describeActivity(a: { action: string; old_value: string | null; new_val
 }
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
+import UserAvatar from '@/components/common/UserAvatar';
+import AssigneePicker from '@/components/common/AssigneePicker';
 import { useToast } from '@/context/ToastContext';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
 import { pdf } from '@react-pdf/renderer';
@@ -189,6 +191,7 @@ interface Task {
 interface TeamUser {
   id: string;
   full_name: string;
+  avatar_url?: string | null;
 }
 
 interface TaskComment {
@@ -199,9 +202,11 @@ interface TaskComment {
   created_at: string;
   updated_at: string;
   user?: {
+    id?: string;
     full_name: string;
     email: string;
     role: string;
+    avatar_url?: string | null;
   } | null;
 }
 
@@ -947,7 +952,7 @@ export default function Projetos() {
 
       const { data: usersData, error: uErr } = await supabase
         .from('app_users')
-        .select('id, full_name')
+        .select('id, full_name, avatar_url')
         .eq('status', 'ativo')
         .order('full_name', { ascending: true });
       if (uErr) throw uErr;
@@ -1027,7 +1032,7 @@ export default function Projetos() {
     try {
       const { data, error } = await supabase
         .from('task_comments')
-        .select('*, user:app_users(full_name, email, role)')
+        .select('*, user:app_users(id, full_name, email, role, avatar_url)')
         .eq('task_id', taskId)
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -1076,7 +1081,7 @@ export default function Projetos() {
           user_id: profile.id,
           content: text
         })
-        .select('*, user:app_users(full_name, email, role)')
+        .select('*, user:app_users(id, full_name, email, role, avatar_url)')
         .single();
 
       if (cErr) throw cErr;
@@ -2048,16 +2053,15 @@ export default function Projetos() {
                                       />
                                     </td>
 
-                                    {/* Assignee Select Dropdown */}
+                                    {/* Responsável — busca por nome com foto + status */}
                                     <td className="py-2 px-2">
                                       <div className="flex items-center gap-1.5 min-w-[140px] border border-transparent hover:border-lumos-border/30 rounded px-1">
-                                        <User className="w-3 h-3 text-lumos-text-secondary opacity-50 flex-shrink-0" />
-                                        <Select
-                                          value={task.responsavel_id || ''}
+                                        <AssigneePicker
+                                          value={task.responsavel_id || null}
                                           disabled={!canManage}
-                                          onChange={(v) => handleUpdateTask(task.id, { responsavel_id: v || null })}
+                                          onChange={(v) => handleUpdateTask(task.id, { responsavel_id: v })}
                                           className="text-[11px] font-medium text-lumos-text-primary py-0.5"
-                                          options={[{ value: '', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]}
+                                          users={teamUsers as any}
                                         />
                                       </div>
                                     </td>
@@ -2387,17 +2391,16 @@ export default function Projetos() {
                     />
                   </div>
 
-                  {/* Assignee */}
+                  {/* Responsável — busca por nome com foto + status */}
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Responsável</span>
-                    <div className="flex items-center gap-1.5 border border-lumos-border/40 rounded px-2.5 py-1">
-                      <User className="w-3.5 h-3.5 text-lumos-text-secondary opacity-50 flex-shrink-0" />
-                      <Select
-                        value={selectedTask.responsavel_id || ''}
+                    <div className="flex items-center gap-1.5 border border-lumos-border/40 rounded px-2.5 py-1.5">
+                      <AssigneePicker
+                        value={selectedTask.responsavel_id || null}
                         disabled={!canManage}
-                        onChange={(v) => handleUpdateTask(selectedTask.id, { responsavel_id: v || null })}
+                        onChange={(v) => handleUpdateTask(selectedTask.id, { responsavel_id: v })}
                         className="text-[11px] font-medium text-lumos-text-primary py-0.5"
-                        options={[{ value: '', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]}
+                        users={teamUsers as any}
                       />
                     </div>
                   </div>
@@ -2554,9 +2557,11 @@ export default function Projetos() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {/* Initials Avatar */}
-                              <div className="w-6 h-6 rounded-full bg-lumos-yellow/10 border border-lumos-yellow/20 flex items-center justify-center text-[10px] font-black text-lumos-yellow">
-                                {getInitials(comment.user?.full_name || 'Usuário')}
-                              </div>
+                              <UserAvatar
+                                user={{ id: comment.user?.id || comment.user_id, full_name: comment.user?.full_name, avatar_url: comment.user?.avatar_url }}
+                                size={24}
+                                showStatus
+                              />
                               <span className="font-bold text-lumos-text-primary">
                                 {comment.user?.full_name || 'Usuário'}
                               </span>

@@ -212,7 +212,13 @@ export default function Equipe() {
 
               {/* Avatar with Status Dot */}
               <div className="relative w-20 h-20 rounded-full bg-lumos-yellow flex items-center justify-center text-black font-black text-2xl shadow-sm mb-4 ring-4 ring-lumos-yellow/5 flex-shrink-0">
-                {u.email && u.full_name ? (
+                {u.avatar_url ? (
+                  <img
+                    src={u.avatar_url}
+                    alt={u.full_name}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : u.email && u.full_name ? (
                   <img
                     src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.full_name)}&backgroundColor=EFC700&textColor=000000&fontWeight=900`}
                     alt={u.full_name}
