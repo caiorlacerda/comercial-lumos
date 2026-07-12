@@ -18,6 +18,44 @@ const STATUS_OPTIONS = [
 const PRIORITY_OPTIONS = [
   { value: 'baixa', label: 'Baixa' }, { value: 'media', label: 'Média' }, { value: 'alta', label: 'Alta' },
 ];
+
+// ── Histórico de atividade: transforma um registro em frase legível ──────────
+const statusLabelOf = (v: string | null) => STATUS_OPTIONS.find(o => o.value === v)?.label || v || '—';
+const priorityLabelOf = (v: string | null) => PRIORITY_OPTIONS.find(o => o.value === v)?.label || v || '—';
+const fmtActDate = (d: string | null) => {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  return (y && m && day) ? `${day}/${m}/${y.slice(2)}` : d;
+};
+function describeActivity(a: { action: string; old_value: string | null; new_value: string | null }): string {
+  switch (a.action) {
+    case 'created': return 'criou a tarefa';
+    case 'status':
+      return a.old_value
+        ? `mudou o status de ${statusLabelOf(a.old_value)} para ${statusLabelOf(a.new_value)}`
+        : `definiu o status: ${statusLabelOf(a.new_value)}`;
+    case 'prioridade':
+      return a.old_value
+        ? `mudou a prioridade de ${priorityLabelOf(a.old_value)} para ${priorityLabelOf(a.new_value)}`
+        : `definiu a prioridade: ${priorityLabelOf(a.new_value)}`;
+    case 'titulo': return `renomeou para "${a.new_value ?? ''}"`;
+    case 'descricao': return 'editou a descrição';
+    case 'prazo':
+      if (!a.new_value) return 'removeu o prazo';
+      if (!a.old_value) return `definiu o prazo para ${fmtActDate(a.new_value)}`;
+      return `mudou o prazo de ${fmtActDate(a.old_value)} para ${fmtActDate(a.new_value)}`;
+    case 'data_inicio':
+      if (!a.new_value) return 'removeu a data de início';
+      if (!a.old_value) return `definiu o início para ${fmtActDate(a.new_value)}`;
+      return `mudou o início de ${fmtActDate(a.old_value)} para ${fmtActDate(a.new_value)}`;
+    case 'responsavel':
+      if (!a.new_value) return `removeu o responsável${a.old_value ? ` (${a.old_value})` : ''}`;
+      return `atribuiu para ${a.new_value}`;
+    case 'tag_added': return `adicionou a tag "${a.new_value ?? ''}"`;
+    case 'tag_removed': return `removeu a tag "${a.old_value ?? ''}"`;
+    default: return a.action;
+  }
+}
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
@@ -59,6 +97,7 @@ import {
   HelpCircle,
   CornerDownRight,
   MessageSquare,
+  History,
   Edit2,
   Menu
 } from 'lucide-react';
@@ -163,6 +202,16 @@ interface TaskComment {
     email: string;
     role: string;
   } | null;
+}
+
+interface TaskActivity {
+  id: string;
+  task_id: string;
+  actor_name: string | null;
+  action: string;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
 }
 
 // Configuração segura para sanitização do HTML (DOMPurify) incluindo novos elementos e classes
@@ -701,6 +750,11 @@ export default function Projetos() {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
 
+  // Histórico de atividade da tarefa (estilo ClickUp) + aba do painel direito
+  const [activity, setActivity] = useState<TaskActivity[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [rightTab, setRightTab] = useState<'comments' | 'activity'>('comments');
+
   // Comment @mention Autocomplete States
   const [mentionAutocomplete, setMentionAutocomplete] = useState<{ query: string; start: number; end: number } | null>(null);
   const [selectedMentionIdx, setSelectedMentionIdx] = useState(0);
@@ -809,12 +863,15 @@ export default function Projetos() {
     }
   }, [selectedTaskId, selectedTask?.id]);
 
-  // Carregar comentários quando a tarefa for selecionada
+  // Carregar comentários e histórico quando a tarefa for selecionada
   useEffect(() => {
     if (selectedTaskId) {
       fetchTaskComments(selectedTaskId);
+      fetchTaskActivity(selectedTaskId);
     } else {
       setComments([]);
+      setActivity([]);
+      setRightTab('comments');
     }
   }, [selectedTaskId]);
 
@@ -937,6 +994,7 @@ export default function Projetos() {
     } else {
       await supabase.from('project_task_tags').insert({ task_id: taskId, tag_id: tagId });
     }
+    if (taskId === selectedTaskId) fetchTaskActivity(taskId);
   };
 
   const tagById = (id: string) => allTags.find(t => t.id === id);
@@ -962,6 +1020,24 @@ export default function Projetos() {
       toast.error('Erro ao carregar feed de comentários.');
     } finally {
       setCommentsLoading(false);
+    }
+  };
+
+  // Carregar histórico de atividade da tarefa (mais recente primeiro)
+  const fetchTaskActivity = async (taskId: string) => {
+    setActivityLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('task_activity')
+        .select('id, task_id, actor_name, action, old_value, new_value, created_at')
+        .eq('task_id', taskId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setActivity(data || []);
+    } catch (err: any) {
+      console.error('Error fetching activity:', err);
+    } finally {
+      setActivityLoading(false);
     }
   };
 
@@ -1182,6 +1258,9 @@ export default function Projetos() {
         if (updates.status === undefined) return prev;
         return prev.map(t => t.id === taskId ? { ...t, status: updates.status! } : t);
       });
+
+      // Atualiza o histórico ao vivo se a tarefa aberta foi a alterada
+      if (taskId === selectedTaskId) fetchTaskActivity(taskId);
     } catch (err: any) {
       console.error('Error updating task:', err);
       toast.error('Erro ao atualizar tarefa.');
@@ -2372,14 +2451,71 @@ export default function Projetos() {
 
               {/* Right Column (Comments Sidebar - 1/3 width) */}
               <div className="lg:col-span-1 bg-lumos-surface/30 p-6 flex flex-col justify-between overflow-hidden h-full border-l border-lumos-border/40 relative">
-                <div className="flex items-center gap-1.5 pb-3 border-b border-lumos-border/50 flex-shrink-0">
-                  <MessageSquare className="w-4 h-4 text-lumos-text-secondary opacity-60" />
-                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
+                <div className="flex items-center gap-1 pb-3 border-b border-lumos-border/50 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setRightTab('comments')}
+                    className={clsx(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all",
+                      rightTab === 'comments'
+                        ? "bg-lumos-yellow/15 text-lumos-yellow"
+                        : "text-lumos-text-secondary hover:text-lumos-text-primary"
+                    )}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
                     Comentários
-                  </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRightTab('activity')}
+                    className={clsx(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all",
+                      rightTab === 'activity'
+                        ? "bg-lumos-yellow/15 text-lumos-yellow"
+                        : "text-lumos-text-secondary hover:text-lumos-text-primary"
+                    )}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    Atividade
+                  </button>
                 </div>
-                
+
+                {/* Timeline de atividade (estilo ClickUp) */}
+                {rightTab === 'activity' && (
+                  <div className="flex-grow overflow-y-auto custom-scrollbar py-4 min-h-0 text-xs">
+                    {activityLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" />
+                      </div>
+                    ) : activity.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center text-lumos-text-secondary/50">
+                        <History className="w-6 h-6 mb-2 opacity-20" />
+                        <p className="text-[10px] font-bold uppercase tracking-wider">Sem atividade ainda</p>
+                        <p className="text-[9px] mt-0.5">As ações na tarefa aparecem aqui.</p>
+                      </div>
+                    ) : (
+                      <ul className="space-y-3">
+                        {activity.map((a) => (
+                          <li key={a.id} className="flex items-start gap-2.5">
+                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-lumos-yellow/60 flex-shrink-0" />
+                            <div className="min-w-0 flex-grow">
+                              <p className="text-[11px] text-lumos-text-primary leading-snug break-words">
+                                <span className="font-bold">{a.actor_name || 'Alguém'}</span>{' '}
+                                <span className="text-lumos-text-secondary">{describeActivity(a)}</span>
+                              </p>
+                              <p className="text-[9px] text-lumos-text-secondary/60 mt-0.5">
+                                {formatCommentDate(a.created_at)}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
                 {/* Scrollable comments list with highlights */}
+                {rightTab === 'comments' && (
                 <div className="flex-grow overflow-y-auto custom-scrollbar py-4 space-y-4 min-h-0 text-xs">
                   {commentsLoading ? (
                     <div className="flex justify-center py-8">
@@ -2441,6 +2577,7 @@ export default function Projetos() {
                     })
                   )}
                 </div>
+                )}
 
                 {/* Autocomplete Mention Popover overlay inside comments wrapper */}
                 {mentionAutocomplete && filteredMentionUsers.length > 0 && (
@@ -2471,7 +2608,7 @@ export default function Projetos() {
                 )}
 
                 {/* Submit new comment form at bottom with autocomplete listeners */}
-                {profile && (
+                {rightTab === 'comments' && profile && (
                   <form onSubmit={handleSendComment} className="flex items-center gap-2 pt-3 border-t border-lumos-border/50 flex-shrink-0">
                     <input
                       ref={commentInputRef}

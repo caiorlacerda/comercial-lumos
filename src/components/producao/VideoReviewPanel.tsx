@@ -86,9 +86,11 @@ function IconBtn({ title, onClick, active, disabled, className, children }: { ti
 interface Props { projectId: string; tasks: { id: string; titulo: string }[]; }
 
 export default function VideoReviewPanel({ projectId, tasks }: Props) {
-  const { isAdmin, profile } = useAuth();
+  const { isAdmin, profile, can } = useAuth();
   const toast = useToast();
-  const canManage = isAdmin || profile?.role === 'producao';
+  // Produção, editores e atendimento gerenciam a revisão de vídeo (todos têm
+  // 'ordem_do_dia'). Editores têm autonomia para comentar/subir/organizar vídeos.
+  const canManage = isAdmin || can('ordem_do_dia');
 
   const [versions, setVersions] = useState<VideoVersion[]>([]);
   const [linksByGroup, setLinksByGroup] = useState<Record<string, { id: string; token: string; watermark: boolean; allow_download: boolean }>>({});
