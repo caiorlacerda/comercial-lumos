@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
+import { TagChip } from '@/components/producao/TaskTags';
 
 // DnD Kit imports
 import {
@@ -110,6 +111,14 @@ function DraggableTask({
           <h4 className="text-xs font-bold text-lumos-text-primary mt-1 line-clamp-2 leading-snug group-hover:text-emerald-500 transition-colors">
             {task.titulo}
           </h4>
+          {Array.isArray(task.tags) && task.tags.some((tg: any) => tg?.name === 'entregas') && (
+            <span className="inline-block mt-2 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">⚠ Entrega sem prazo</span>
+          )}
+          {Array.isArray(task.tags) && task.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {task.tags.map((tg: any) => <TagChip key={tg.id} tag={tg} small />)}
+            </div>
+          )}
         </div>
         <div className="mt-3.5 pt-2 border-t border-lumos-border/40 flex items-center justify-between text-[9px] text-lumos-text-secondary font-bold">
           <span className="truncate max-w-[120px]">👤 {responsibleName}</span>
@@ -369,8 +378,22 @@ export default function ProducaoDashboard() {
 
       if (err2) throw err2;
 
+      // Enriquece as tarefas SEM prazo com suas tags (p/ monitorar "entregas sem prazo")
+      let enrichedNoDate = tasksWithoutDate || [];
+      const noDateIds = (tasksWithoutDate || []).map((t: any) => t.id);
+      if (noDateIds.length) {
+        const [tagsRes, mapRes] = await Promise.all([
+          supabase.from('task_tags').select('id, name, color'),
+          supabase.from('project_task_tags').select('task_id, tag_id').in('task_id', noDateIds),
+        ]);
+        const tagsById = new Map((tagsRes.data || []).map((t: any) => [t.id, t]));
+        const byTask: Record<string, any[]> = {};
+        (mapRes.data || []).forEach((r: any) => { (byTask[r.task_id] = byTask[r.task_id] || []).push(tagsById.get(r.tag_id)); });
+        enrichedNoDate = (tasksWithoutDate || []).map((t: any) => ({ ...t, tags: (byTask[t.id] || []).filter(Boolean) }));
+      }
+
       setProjectTasks(tasksWithDate || []);
-      setNoDateTasks(tasksWithoutDate || []);
+      setNoDateTasks(enrichedNoDate);
     } catch (err: any) {
       console.error('Error fetching project tasks:', err);
       setTasksError(err.message || 'Erro ao carregar tarefas.');
@@ -953,8 +976,12 @@ export default function ProducaoDashboard() {
 
         {/* Painel de Tarefas Sem Prazo */}
         <div className="card p-6 shadow-sm">
-          <h2 className="text-md font-bold text-lumos-text-primary uppercase tracking-wider mb-2 flex items-center gap-2 select-none">
+          <h2 className="text-md font-bold text-lumos-text-primary uppercase tracking-wider mb-2 flex items-center gap-2 select-none flex-wrap">
             📋 Tarefas Sem Prazo ({filteredNoDateTasks.length})
+            {(() => {
+              const n = filteredNoDateTasks.filter((t: any) => Array.isArray(t.tags) && t.tags.some((tg: any) => tg?.name === 'entregas')).length;
+              return n > 0 ? <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 normal-case">⚠ {n} entrega{n > 1 ? 's' : ''} sem prazo</span> : null;
+            })()}
           </h2>
           <p className="text-xs text-lumos-text-secondary mb-4">
             Tarefas operacionais pendentes que ainda não possuem prazo definido. Arraste-as para um dia do calendário acima para agendá-las.
