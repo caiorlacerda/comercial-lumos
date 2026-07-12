@@ -10,7 +10,7 @@ import { getVisibleSections, getSectionItems } from '@/lib/navigation';
 import SidebarProjectTree from '@/components/layout/SidebarProjectTree';
 import CommandPalette from '@/components/common/CommandPalette';
 import { clsx } from 'clsx';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import PageTransition from '@/components/layout/PageTransition';
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {
@@ -85,12 +85,22 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       <MobileSubNav />
 
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Desktop Sidebar */}
-        {!isHome && (
-          <aside className="hidden lg:flex w-64 bg-lumos-surface border-r border-lumos-border flex-col fixed inset-y-0 top-16 shadow-sm z-30 transition-colors duration-300 animate-in slide-in-from-left duration-200">
-            {sidebarContent}
-          </aside>
-        )}
+        {/* Desktop Sidebar — entra deslizando da esquerda e SAI deslizando para
+            a esquerda (ao ir para o Início, que não tem sidebar). */}
+        <AnimatePresence>
+          {!isHome && (
+            <motion.aside
+              key="desktop-sidebar"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="hidden lg:flex w-64 bg-lumos-surface border-r border-lumos-border flex-col fixed inset-y-0 top-16 shadow-sm z-30 transition-colors duration-300"
+            >
+              {sidebarContent}
+            </motion.aside>
+          )}
+        </AnimatePresence>
 
         {/* Main Content */}
         <main className={clsx(
