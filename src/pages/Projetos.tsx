@@ -40,6 +40,16 @@ import {
   AlertCircle,
   Clock,
   Loader2,
+  Bold as BoldIcon,
+  Italic as ItalicIcon,
+  Underline as UnderlineIcon,
+  List as ListIcon,
+  ListOrdered,
+  ListChecks,
+  Quote,
+  Minus,
+  Link2,
+  AlertTriangle,
   Trash2,
   Columns,
   Layers,
@@ -383,6 +393,22 @@ const ALL_SLASH_COMMANDS: SlashCommandItem[] = [
   }
 ];
 
+// Botão da toolbar do editor (ícone), com estado ativo
+function TBtn({ active, onClick, title, children }: { active?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={title}
+      className={clsx('p-1.5 rounded-md transition-colors flex items-center justify-center',
+        active ? 'bg-lumos-yellow/20 text-lumos-yellow' : 'text-lumos-text-secondary hover:bg-lumos-text-secondary/10 hover:text-lumos-text-primary')}>
+      {children}
+    </button>
+  );
+}
+const TBSep = () => <span className="w-px h-4 bg-lumos-border/70 mx-1" />;
+const HEADING_OPTS = [
+  { value: 'p', label: 'Texto' }, { value: '1', label: 'Título 1' }, { value: '2', label: 'Título 2' },
+  { value: '3', label: 'Título 3' }, { value: '4', label: 'Título 4' }, { value: '5', label: 'Título 5' },
+];
+
 function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number; text: string; range: { from: number; to: number } } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -541,204 +567,35 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
   return (
     <div className="relative border border-lumos-border rounded-lumos overflow-visible bg-lumos-bg/30">
       {editable && (
-        <div className="flex flex-wrap gap-1 p-1 bg-lumos-surface border-b border-lumos-border items-center">
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[10px] font-black transition-all",
-              editor.isActive('bold') ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
-            )}
-            title="Negrito"
-          >
-            B
-          </button>
-          
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[10px] italic transition-all",
-              editor.isActive('italic') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Itálico"
-          >
-            I
-          </button>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[10px] underline transition-all",
-              editor.isActive('underline') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Sublinhado"
-          >
-            U
-          </button>
-
-          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-black transition-all",
-              editor.isActive('heading', { level: 1 }) ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
-            )}
-            title="Título 1"
-          >
-            H1
-          </button>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-black transition-all",
-              editor.isActive('heading', { level: 2 }) ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
-            )}
-            title="Título 2"
-          >
-            H2
-          </button>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-black transition-all",
-              editor.isActive('heading', { level: 3 }) ? "bg-lumos-yellow/20 text-lumos-yellow font-black" : "text-lumos-text-secondary"
-            )}
-            title="Título 3"
-          >
-            H3
-          </button>
-
-          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
-              editor.isActive('taskList') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Checklist"
-          >
-            ☑ Checklist
-          </button>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
-              editor.isActive('bulletList') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Marcadores"
-          >
-            • Lista
-          </button>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
-              editor.isActive('orderedList') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Numerada"
-          >
-            1. Lista
-          </button>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
-              editor.isActive('blockquote') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Citação"
-          >
-            “ Citação
-          </button>
-
-          <button
-            type="button"
-            onClick={() => (editor.chain().focus() as any).toggleCallout().run()}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
-              editor.isActive('callout') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Banner Destaque"
-          >
-            ⚠ Banner
-          </button>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            className="p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold text-lumos-text-secondary transition-all"
-            title="Divisória"
-          >
-            ― Divisória
-          </button>
-
-          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
-
-          <button
-            type="button"
-            onClick={addLink}
-            className={clsx(
-              "p-1.5 rounded hover:bg-lumos-bg text-[9px] font-semibold transition-all",
-              editor.isActive('link') ? "bg-lumos-yellow/20 text-lumos-yellow" : "text-lumos-text-secondary"
-            )}
-            title="Link"
-          >
-            Link
-          </button>
-
-          <span className="w-px h-3 bg-lumos-border/50 mx-1"></span>
-
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setColor('#facc15').run()}
-            className="w-3 h-3 rounded-full bg-yellow-400 border border-black/40 hover:scale-110 transition-all"
-            title="Amarelo Lumos"
+        <div className="flex flex-wrap items-center gap-0.5 p-1.5 bg-lumos-surface border-b border-lumos-border rounded-t-lumos">
+          <Select
+            value={editor.isActive('heading', { level: 1 }) ? '1' : editor.isActive('heading', { level: 2 }) ? '2' : editor.isActive('heading', { level: 3 }) ? '3' : editor.isActive('heading', { level: 4 }) ? '4' : editor.isActive('heading', { level: 5 }) ? '5' : 'p'}
+            onChange={(v) => { const c = editor.chain().focus(); if (v === 'p') c.setParagraph().run(); else c.setHeading({ level: Number(v) as any }).run(); }}
+            options={HEADING_OPTS}
+            className="input-lumos h-7 text-[11px] py-0 w-28"
           />
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setColor('#ffffff').run()}
-            className="w-3 h-3 rounded-full bg-white border border-black/40 hover:scale-110 transition-all"
-            title="Branco"
-          />
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setColor('#9ca3af').run()}
-            className="w-3 h-3 rounded-full bg-gray-400 border border-black/40 hover:scale-110 transition-all"
-            title="Cinza"
-          />
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setColor('#f87171').run()}
-            className="w-3 h-3 rounded-full bg-red-400 border border-black/40 hover:scale-110 transition-all"
-            title="Vermelho"
-          />
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().unsetColor().run()}
-            className="text-[9px] text-lumos-text-secondary hover:text-lumos-text-primary ml-1"
-            title="Limpar Cor"
-          >
-            Limpar
-          </button>
+          <TBSep />
+          <TBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito (⌘B)"><BoldIcon className="w-3.5 h-3.5" /></TBtn>
+          <TBtn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico (⌘I)"><ItalicIcon className="w-3.5 h-3.5" /></TBtn>
+          <TBtn active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado (⌘U)"><UnderlineIcon className="w-3.5 h-3.5" /></TBtn>
+          <TBSep />
+          <TBtn active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Lista"><ListIcon className="w-3.5 h-3.5" /></TBtn>
+          <TBtn active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada"><ListOrdered className="w-3.5 h-3.5" /></TBtn>
+          <TBtn active={editor.isActive('taskList')} onClick={() => editor.chain().focus().toggleTaskList().run()} title="Checklist"><ListChecks className="w-3.5 h-3.5" /></TBtn>
+          <TBSep />
+          <TBtn active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Citação"><Quote className="w-3.5 h-3.5" /></TBtn>
+          <TBtn active={editor.isActive('callout')} onClick={() => (editor.chain().focus() as any).toggleCallout().run()} title="Banner de destaque"><AlertTriangle className="w-3.5 h-3.5" /></TBtn>
+          <TBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divisória"><Minus className="w-3.5 h-3.5" /></TBtn>
+          <TBtn active={editor.isActive('link')} onClick={addLink} title="Link"><Link2 className="w-3.5 h-3.5" /></TBtn>
+          <TBSep />
+          <button type="button" onClick={() => editor.chain().focus().setColor('#facc15').run()} className="w-3.5 h-3.5 rounded-full bg-yellow-400 border border-black/20 hover:scale-110 transition-transform" title="Amarelo" />
+          <button type="button" onClick={() => editor.chain().focus().setColor('#f87171').run()} className="w-3.5 h-3.5 rounded-full bg-red-400 border border-black/20 hover:scale-110 transition-transform" title="Vermelho" />
+          <button type="button" onClick={() => editor.chain().focus().setColor('#60a5fa').run()} className="w-3.5 h-3.5 rounded-full bg-blue-400 border border-black/20 hover:scale-110 transition-transform" title="Azul" />
+          <button type="button" onClick={() => editor.chain().focus().unsetColor().run()} className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary px-1" title="Limpar cor">×</button>
         </div>
       )}
 
-      <div className="p-3 min-h-[120px] text-xs leading-relaxed text-lumos-text-primary focus-within:outline-none bg-transparent">
+      <div className="p-4 min-h-[160px] text-sm leading-relaxed text-lumos-text-primary focus-within:outline-none bg-transparent">
         <EditorContent editor={editor} />
       </div>
 
@@ -1938,18 +1795,15 @@ export default function Projetos() {
                     <div className="space-y-4 flex-grow flex flex-col justify-between">
 
                       {allTags.length > 0 && projectTasks.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Filtrar por tag:</span>
-                          {allTags.map(t => {
-                            const on = tagFilter.includes(t.id);
-                            return (
-                              <button key={t.id} onClick={() => setTagFilter(prev => on ? prev.filter(id => id !== t.id) : [...prev, t.id])}
-                                className={clsx('rounded-full transition-all', on ? 'ring-2 ring-offset-1 ring-offset-lumos-surface ring-lumos-yellow' : 'opacity-50 hover:opacity-100')}>
-                                <TagChip tag={t} small />
-                              </button>
-                            );
-                          })}
-                          {tagFilter.length > 0 && <button onClick={() => setTagFilter([])} className="text-[9px] font-bold text-lumos-text-secondary hover:text-red-400 underline ml-1">limpar</button>}
+                          <TagPicker
+                            allTags={allTags}
+                            selectedIds={tagFilter}
+                            addLabel="Filtrar"
+                            onToggle={(id) => setTagFilter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+                          />
+                          {tagFilter.length > 0 && <button onClick={() => setTagFilter([])} className="text-[9px] font-bold text-lumos-text-secondary hover:text-red-400 underline">limpar</button>}
                         </div>
                       )}
 

@@ -32,10 +32,11 @@ interface PickerProps {
   selectedIds: string[];
   onToggle: (tagId: string) => void;
   disabled?: boolean;
+  addLabel?: string;
 }
 
 // Editor de tags de uma tarefa: chips + botão "+" que abre o catálogo (portal).
-export function TagPicker({ allTags, selectedIds, onToggle, disabled }: PickerProps) {
+export function TagPicker({ allTags, selectedIds, onToggle, disabled, addLabel = 'Tag' }: PickerProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -66,7 +67,7 @@ export function TagPicker({ allTags, selectedIds, onToggle, disabled }: PickerPr
       {!disabled && (
         <button ref={btnRef} type="button" onClick={() => setOpen(o => !o)}
           className="inline-flex items-center gap-1 text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow border border-dashed border-lumos-border rounded-full px-2 py-0.5 transition-colors">
-          <Plus className="w-3 h-3" /> Tag
+          <Plus className="w-3 h-3" /> {addLabel}
         </button>
       )}
       {open && pos && createPortal(
