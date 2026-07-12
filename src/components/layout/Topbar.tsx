@@ -39,7 +39,7 @@ export default function Topbar() {
     { id: 'home' as SectionType, label: 'Início', visible: true },
     { id: 'comercial' as SectionType, label: 'Comercial', visible: isAdmin },
     { id: 'producao' as SectionType, label: 'Produção', visible: can('ordem_do_dia') || can('fornecedores') || can('cronograma_edicao') },
-    { id: 'financeiro' as SectionType, label: 'Financeiro', visible: true },
+    { id: 'financeiro' as SectionType, label: 'Financeiro', visible: isAdmin || can('custos_projeto') || can('reembolso') },
     { id: 'configuracoes' as SectionType, label: 'Configurações', visible: true },
   ];
 
