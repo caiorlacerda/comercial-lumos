@@ -260,7 +260,7 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
   const nomenclatureHeader = `${formattedCode} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
 
   return (
-    <Document title={`OS_LUMOS_${formattedCode.replace('#', '')}`}>
+    <Document title={`OS_${nomenclatureHeader}`}>
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho */}
         <View style={styles.header}>
