@@ -70,6 +70,7 @@ export async function getUserIdsWithPermission(permission: string): Promise<stri
       producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados'],
       atendimento: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
       editor: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
+      social_media: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
       basico: ['reembolso'],
     };
     const rolePermissions = defaults[u.role as string] || [];
