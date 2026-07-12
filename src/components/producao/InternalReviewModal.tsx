@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import UserAvatar from '@/components/common/UserAvatar';
 import { COLORS, SPEEDS, STREAM_BASE, fmtTime, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
 
 interface TeamComment {
@@ -43,7 +44,19 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   const [composing, setComposing] = useState(false);
   const [commentText, setCommentText] = useState('');
-  const [showTools, setShowTools] = useState(false);
+  // Equipe (para avatar + status nos comentários, casando pelo nome do autor)
+  const [team, setTeam] = useState<{ id: string; full_name: string; avatar_url?: string | null }[]>([]);
+  const userByName = useMemo(() => {
+    const m: Record<string, { id: string; full_name: string; avatar_url?: string | null }> = {};
+    team.forEach(u => { if (u.full_name) m[u.full_name.trim().toLowerCase()] = u; });
+    return m;
+  }, [team]);
+
+  // Largura do painel de comentários — redimensionável e lembrada por usuário
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    const s = Number(localStorage.getItem('lumos-review-panel-w'));
+    return s >= 300 && s <= 720 ? s : 360;
+  });
   const [tool, setTool] = useState<'draw' | 'arrow' | 'rect' | null>(null);
   const [color, setColor] = useState(COLORS[0]);
   const [shapes, setShapes] = useState<Shape[]>([]);
@@ -63,6 +76,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   }, [versionId]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo')
+      .then(({ data }) => setTeam(data || []));
+  }, []);
   useEffect(() => {
     const ch = supabase.channel(`rc:${versionId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'review_comments', filter: `video_version_id=eq.${versionId}` }, () => load())
@@ -152,7 +169,26 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const onCanvasUp = () => { const s = drawingRef.current; if (s) { setShapes(prev => [...prev, s]); drawingRef.current = null; } };
 
   const ensureComposing = () => { if (composing) return; videoRef.current?.pause(); setPlaying(false); setViewingShapes([]); setShapes([]); setComposing(true); };
-  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setShowTools(false); setCommentText(''); };
+  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); };
+
+  // Redimensiona o painel de comentários (arrasta a borda esquerda no desktop)
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    let lastW = startW;
+    const move = (ev: PointerEvent) => {
+      lastW = Math.min(720, Math.max(300, startW + (startX - ev.clientX)));
+      setPanelWidth(lastW);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      localStorage.setItem('lumos-review-panel-w', String(Math.round(lastW)));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   const submit = async () => {
     if (!commentText.trim() && shapes.length === 0) return;
@@ -234,8 +270,17 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           </div>
         </div>
 
-        {/* Comentários do time */}
-        <aside className="w-full lg:w-[360px] border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col min-h-0">
+        {/* Comentários do time — painel redimensionável (largura lembrada) */}
+        <aside
+          style={{ ['--rpw' as any]: `${panelWidth}px` }}
+          className="relative w-full lg:w-[var(--rpw)] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col min-h-0"
+        >
+          {/* Handle de redimensionamento (só desktop) */}
+          <div
+            onPointerDown={startResize}
+            title="Arraste para redimensionar"
+            className="hidden lg:block absolute left-0 top-0 h-full w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-lumos-yellow/40 active:bg-lumos-yellow/60 transition-colors z-20"
+          />
           <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between flex-shrink-0">
             <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários do time</span>
             <span className="text-[10px] font-bold text-lumos-text-secondary/70">{comments.length}</span>
@@ -246,51 +291,62 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.</p>
             ) : comments.map(c => (
               <button key={c.id} onClick={() => viewComment(c)} className="w-full text-left p-2.5 rounded-lumos border border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] transition-all">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[11px] font-black text-lumos-text-primary truncate">{c.author_name}{!c.is_team && <span className="ml-1 text-[8px] uppercase text-amber-400">Cliente</span>}</span>
-                  <span className="text-[10px] font-mono font-bold text-lumos-yellow">{fmtTime(c.timecode_ms)}</span>
+                <div className="flex items-start gap-2">
+                  <UserAvatar
+                    user={userByName[(c.author_name || '').trim().toLowerCase()] || { full_name: c.author_name }}
+                    size={24}
+                    showStatus={c.is_team}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="text-[11px] font-black text-lumos-text-primary truncate">{c.author_name}{!c.is_team && <span className="ml-1 text-[8px] uppercase text-amber-400">Cliente</span>}</span>
+                      <span className="text-[10px] font-mono font-bold text-lumos-yellow flex-shrink-0">{fmtTime(c.timecode_ms)}</span>
+                    </div>
+                    {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug whitespace-pre-line break-words">{c.body}</p>}
+                    {c.annotations.length > 0 && <span className="text-[9px] text-lumos-text-secondary/60 flex items-center gap-1 mt-1"><Pencil className="w-2.5 h-2.5" /> {c.annotations.length} anotação(ões)</span>}
+                  </div>
                 </div>
-                {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug whitespace-pre-line">{c.body}</p>}
-                {c.annotations.length > 0 && <span className="text-[9px] text-lumos-text-secondary/60 flex items-center gap-1 mt-1"><Pencil className="w-2.5 h-2.5" /> {c.annotations.length} anotação(ões)</span>}
               </button>
             ))}
           </div>
 
           {/* Compositor */}
-          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0">
-            <div className="flex items-center justify-between mb-2">
+          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2">
+            <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1"><Clock className="w-3 h-3" /> em {fmtTime(currentMs)}</span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => { ensureComposing(); setShowTools(s => !s); if (!showTools && !tool) setTool('draw'); }}
-                  className={clsx('text-[10px] font-bold flex items-center gap-1 px-2 py-1 rounded-full border transition-colors', showTools ? 'border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                  <Pencil className="w-3 h-3" /> Anotar
+              {composing && (
+                <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors">
+                  <X className="w-3 h-3" /> Cancelar
                 </button>
-                {composing && <button onClick={resetComposer} title="Cancelar" className="p-1 rounded-full text-lumos-text-secondary hover:text-red-400"><X className="w-3.5 h-3.5" /></button>}
-              </div>
+              )}
             </div>
-            {showTools && (
-              <div className="flex items-center gap-1.5 mb-2 flex-wrap p-2 bg-lumos-bg/40 rounded-lumos">
-                {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
-                  <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
-                    className={clsx('p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                    <Icon className="w-3.5 h-3.5" />
-                  </button>
-                ))}
-                <div className="flex items-center gap-1 ml-1">
-                  {COLORS.map(c => <button key={c} onClick={() => setColor(c)} style={{ background: c }} className={clsx('w-4 h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />)}
-                </div>
-                <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
+
+            {/* Ferramentas de anotação — sempre visíveis */}
+            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-lumos">
+              {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
+                <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
+                  title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}
+                  className={clsx('p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                  <Icon className="w-3.5 h-3.5" />
+                </button>
+              ))}
+              <div className="flex items-center gap-1 ml-1">
+                {COLORS.map(c => <button key={c} onClick={() => setColor(c)} style={{ background: c }} title="Cor" className={clsx('w-4 h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />)}
               </div>
-            )}
+              <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
+            </div>
+
             <div className="flex items-end gap-2">
               <textarea value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
                 onKeyDown={onCommentKey}
-                rows={1} placeholder={`Comentar em ${fmtTime(currentMs)}… (Enter envia, Shift+Enter quebra linha)`} className="input-lumos flex-1 text-xs resize-none min-h-[40px] max-h-28 py-2.5" />
+                rows={2} placeholder={`Comentar em ${fmtTime(currentMs)}…`} className="input-lumos flex-1 text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug" />
               <button onClick={submit} disabled={sending || (!commentText.trim() && shapes.length === 0)}
-                className="btn-primary h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
+                className="btn-primary h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
+            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">Enter envia · Shift+Enter quebra linha</p>
           </div>
         </aside>
       </div>
