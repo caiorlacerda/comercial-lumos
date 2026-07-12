@@ -94,7 +94,9 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
         {/* Main Content */}
         <main className={clsx(
-          "flex-1 overflow-y-auto bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0",
+          // overflow-x-hidden: clipa o leve deslize horizontal da transição de
+          // página sem criar barra de rolagem (o scroll vertical segue normal).
+          "flex-1 overflow-y-auto overflow-x-hidden bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0",
           !isHome && "lg:ml-64"
         )}>
           <AnimatePresence mode="wait">
