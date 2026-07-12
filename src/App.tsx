@@ -47,6 +47,7 @@ const ProducaoBoard = lazy(() => import('@/pages/ProducaoBoard'));
 const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
 const Projetos = lazy(() => import('@/pages/Projetos'));
 const TemplatesTarefas = lazy(() => import('@/pages/TemplatesTarefas'));
+const Acessos = lazy(() => import('@/pages/Acessos'));
 const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
 const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
 const OrdemDoDiaEditor = lazy(() => import('@/pages/OrdemDoDiaEditor'));
@@ -602,6 +603,18 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="ordem_do_dia">
                   <Projetos />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
+          {/* PRODUÇÃO — Acessos & Senhas (admin/produção) */}
+          <Route
+            path="/producao/acessos"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <Acessos />
                 </PermissionGuard>
               </AuthWrapper>
             }
