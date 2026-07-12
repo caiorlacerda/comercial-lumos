@@ -67,7 +67,7 @@ export async function getUserIdsWithPermission(permission: string): Promise<stri
     
     // Check default role fallbacks (mantido em sincronia com ROLE_DEFAULTS em useAuth.tsx)
     const defaults: Record<string, string[]> = {
-      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados'],
       atendimento: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
       editor: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
       basico: ['reembolso'],

@@ -197,6 +197,23 @@ export default function ProducaoDashboard() {
   const [ordens, setOrdens] = useState<OrdemDoDiaEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Aniversários da equipe (chave "mês-dia" → nomes), para pintar no calendário
+  const [birthdaysMap, setBirthdaysMap] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    const m = currentDate.getMonth() + 1;
+    const months = [...new Set([((m - 2 + 12) % 12) + 1, m, (m % 12) + 1])];
+    Promise.all(months.map(mo =>
+      supabase.rpc('birthdays_in_month', { p_month: mo }).then(r => ({ mo, rows: (r.data as any[]) || [] }))
+    )).then(results => {
+      const map: Record<string, string[]> = {};
+      results.forEach(({ mo, rows }) => rows.forEach(b => {
+        const key = `${mo}-${b.day}`;
+        (map[key] = map[key] || []).push(b.full_name);
+      }));
+      setBirthdaysMap(map);
+    });
+  }, [currentDate]);
+
   // Google Calendar Integration State
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
@@ -528,9 +545,22 @@ export default function ProducaoDashboard() {
         });
       }
 
+      // 4. Fonte D: Aniversários da equipe (Rosa, 🎂) — sempre visíveis
+      const bKey = `${day.getMonth() + 1}-${day.getDate()}`;
+      (birthdaysMap[bKey] || []).forEach((name, i) => {
+        unifiedEvents.push({
+          id: `bday-${bKey}-${i}`,
+          title: `🎂 Aniversário de ${name}`,
+          subtitle: 'Aniversário',
+          type: 'birthday',
+          icon: '🎂',
+          colorClass: 'text-pink-600 dark:text-pink-400 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 dark:border-pink-500/30',
+        });
+      });
+
       return unifiedEvents;
     };
-  }, [ordens, googleEvents, projectTasks, taskFilter, selectedUserIds, showOrdens, showGoogle, showTasks]);
+  }, [ordens, googleEvents, projectTasks, taskFilter, selectedUserIds, showOrdens, showGoogle, showTasks, birthdaysMap]);
 
   // =========================================================================
   // HANDLERS DRAG AND DROP
@@ -953,6 +983,19 @@ export default function ProducaoDashboard() {
                                 setSelectedLocalTask(event.rawTask);
                               }}
                             />
+                          );
+                        } else if (event.type === 'birthday') {
+                          return (
+                            <div
+                              key={event.id}
+                              title={event.title}
+                              className={clsx(
+                                "block px-1.5 py-0.5 rounded text-[9px] font-black truncate tracking-tight leading-tight",
+                                event.colorClass
+                              )}
+                            >
+                              {event.title}
+                            </div>
                           );
                         } else {
                           return (
