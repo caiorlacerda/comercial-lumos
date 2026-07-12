@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
+import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
 import { supabase } from '@/lib/supabase';
 
 const STATUS_OPTIONS = [
@@ -825,6 +826,9 @@ export default function Projetos() {
   
   // Project Tasks Panel States
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [taskTags, setTaskTags] = useState<Record<string, string[]>>({}); // taskId -> tagIds
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'lista' | 'kanban' | 'gantt'>('lista');
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -1017,10 +1021,16 @@ export default function Projetos() {
         .order('full_name', { ascending: true });
       if (uErr) throw uErr;
 
+      const { data: tagsData } = await supabase
+        .from('task_tags')
+        .select('id, name, color, ordem')
+        .order('ordem', { ascending: true });
+
       setClients(clientsData || []);
       setProjects(projectsData || []);
       setTasks(tasksData || []);
       setTeamUsers(usersData || []);
+      setAllTags((tagsData as Tag[]) || []);
     } catch (err: any) {
       console.error('Error fetching project data:', err);
       toast.error('Erro ao carregar dados dos projetos.');
@@ -1039,6 +1049,17 @@ export default function Projetos() {
         .order('ordem', { ascending: true });
       if (error) throw error;
       setProjectTasks(data || []);
+
+      // Tags das tarefas do projeto
+      const ids = (data || []).map((t: any) => t.id);
+      if (ids.length) {
+        const { data: ptt } = await supabase.from('project_task_tags').select('task_id, tag_id').in('task_id', ids);
+        const map: Record<string, string[]> = {};
+        (ptt || []).forEach((r: any) => { (map[r.task_id] = map[r.task_id] || []).push(r.tag_id); });
+        setTaskTags(map);
+      } else {
+        setTaskTags({});
+      }
     } catch (err: any) {
       console.error('Error fetching tasks:', err);
       toast.error('Erro ao carregar tarefas.');
@@ -1046,6 +1067,27 @@ export default function Projetos() {
       setTasksLoading(false);
     }
   };
+
+  // Adiciona/remove uma tag de uma tarefa
+  const toggleTaskTag = async (taskId: string, tagId: string) => {
+    const has = (taskTags[taskId] || []).includes(tagId);
+    setTaskTags(prev => {
+      const cur = prev[taskId] || [];
+      return { ...prev, [taskId]: has ? cur.filter(id => id !== tagId) : [...cur, tagId] };
+    });
+    if (has) {
+      await supabase.from('project_task_tags').delete().eq('task_id', taskId).eq('tag_id', tagId);
+    } else {
+      await supabase.from('project_task_tags').insert({ task_id: taskId, tag_id: tagId });
+    }
+  };
+
+  const tagById = (id: string) => allTags.find(t => t.id === id);
+
+  // Lista de tarefas exibida (aplica o filtro por tags — tarefa com QUALQUER das tags)
+  const displayedTasks = tagFilter.length
+    ? projectTasks.filter(t => (taskTags[t.id] || []).some(id => tagFilter.includes(id)))
+    : projectTasks;
 
   // Carregar comentários da tarefa
   const fetchTaskComments = async (taskId: string) => {
@@ -1894,7 +1936,23 @@ export default function Projetos() {
                   ) : activeTab === 'lista' ? (
                     /* ================= LIST VIEW (ACTIVE) ================= */
                     <div className="space-y-4 flex-grow flex flex-col justify-between">
-                      
+
+                      {allTags.length > 0 && projectTasks.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Filtrar por tag:</span>
+                          {allTags.map(t => {
+                            const on = tagFilter.includes(t.id);
+                            return (
+                              <button key={t.id} onClick={() => setTagFilter(prev => on ? prev.filter(id => id !== t.id) : [...prev, t.id])}
+                                className={clsx('rounded-full transition-all', on ? 'ring-2 ring-offset-1 ring-offset-lumos-surface ring-lumos-yellow' : 'opacity-50 hover:opacity-100')}>
+                                <TagChip tag={t} small />
+                              </button>
+                            );
+                          })}
+                          {tagFilter.length > 0 && <button onClick={() => setTagFilter([])} className="text-[9px] font-bold text-lumos-text-secondary hover:text-red-400 underline ml-1">limpar</button>}
+                        </div>
+                      )}
+
                       {projectTasks.length === 0 ? (
                         <div className="flex-grow border border-dashed border-lumos-border/50 rounded-lumos flex flex-col justify-center items-center text-center p-8 bg-lumos-bg/10 py-16">
                           <ClipboardList className="w-8 h-8 text-lumos-text-secondary opacity-30 mb-3" />
@@ -1927,7 +1985,7 @@ export default function Projetos() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-lumos-border/20">
-                              {projectTasks.map((task) => {
+                              {displayedTasks.map((task) => {
                                 const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
                                 return (
                                   <tr 
@@ -2003,6 +2061,11 @@ export default function Projetos() {
                                         )}>
                                           {task.titulo}
                                         </span>
+                                      )}
+                                      {(taskTags[task.id]?.length ?? 0) > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).map(t => <TagChip key={t!.id} tag={t!} small />)}
+                                        </div>
                                       )}
                                     </td>
 
@@ -2399,6 +2462,17 @@ export default function Projetos() {
                     />
                   </div>
 
+                </div>
+
+                {/* Tags */}
+                <div className="space-y-1.5">
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Tags</span>
+                  <TagPicker
+                    allTags={allTags}
+                    selectedIds={taskTags[selectedTask.id] || []}
+                    onToggle={(tagId) => toggleTaskTag(selectedTask.id, tagId)}
+                    disabled={!canManage}
+                  />
                 </div>
 
                 {/* Description */}
