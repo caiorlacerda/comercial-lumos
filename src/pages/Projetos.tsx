@@ -831,7 +831,14 @@ export default function Projetos() {
         setSelectedProjectId(proj.id);
       }
     }
-    setSearchParams({}, { replace: true });
+    // Mantém projectId na URL (reflete o projeto aberto → destaque na sidebar e
+    // sobrevive a refresh). Remove só taskId/new, e apenas quando existem, para
+    // não reprocessar em loop.
+    if (searchParams.get('taskId') || searchParams.get('new')) {
+      const keep = new URLSearchParams();
+      if (pid) keep.set('projectId', pid);
+      setSearchParams(keep, { replace: true });
+    }
   }, [projects, searchParams]);
 
   // Quando as tarefas do projeto deep-linkado chegam, abre a tarefa pendente
