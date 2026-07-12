@@ -76,14 +76,14 @@ export default function AssigneePicker({ value, onChange, users, className, plac
         onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
         className={clsx('flex items-center justify-between gap-2 w-full text-left cursor-pointer disabled:opacity-60 disabled:cursor-default', className)}
       >
-        <span className="truncate flex items-center gap-2 min-w-0">
+        <span className="flex items-center gap-2 min-w-0">
           {selected ? (
             <>
               <UserAvatar user={selected} size={20} showStatus />
               <span className="truncate">{selected.full_name}</span>
             </>
           ) : (
-            <span className="text-lumos-text-secondary">{placeholder}</span>
+            <span className="text-lumos-text-secondary truncate">{placeholder}</span>
           )}
         </span>
         <ChevronDown className={clsx('w-3.5 h-3.5 flex-shrink-0 text-lumos-text-secondary transition-transform', open && 'rotate-180')} />
