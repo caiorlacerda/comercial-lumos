@@ -19,6 +19,7 @@ import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
@@ -70,9 +71,12 @@ export default function ContasPagar() {
     fetchData();
   }, []);
 
-  async function fetchData() {
+  // Tempo real: contas/custos alterados por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['payables', 'project_costs'], () => fetchData(true));
+
+  async function fetchData(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [payablesRes, costsRes, usersRes, projectsRes] = await Promise.all([
         supabase.from('payables').select('*, project:projects(name), responsible:app_users!responsible_id(full_name)').order('due_date', { ascending: true }),
         supabase.from('project_costs').select('*, budget:budgets(project_name), responsible:app_users!responsible_id(full_name)').order('cost_date', { ascending: true }),

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check, Pencil, Plus, X, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,14 +53,18 @@ export default function CustosProjeto() {
     fetchClients();
   }, []);
 
+  // Tempo real: custos/projetos alterados por outros usuários aparecem sem spinner
+  // (vw_rentabilidade é uma view — assinamos as tabelas base)
+  useRealtimeRefetch(['projetos_financeiro', 'project_costs', 'projects'], () => fetchProjects(true));
+
   async function fetchClients() {
     const { data } = await supabase.from('clients').select('id, name').order('name');
     setClients(data || []);
   }
 
-  async function fetchProjects() {
+  async function fetchProjects(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       // Query from vw_rentabilidade to get calculations and dimensions
       const { data: rentData, error: rentError } = await supabase

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KeyRound, Plus, Trash2, Eye, EyeOff, Copy, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
@@ -17,13 +18,16 @@ export default function Acessos() {
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [newService, setNewService] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('access_credentials').select('*').order('service', { ascending: true }).order('ordem', { ascending: true });
     setRows((data as Cred[]) || []);
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Tempo real: alterações de outros usuários aparecem sem spinner
+  useRealtimeRefetch(['access_credentials'], () => load(true));
 
   const toggleReveal = (id: string) => setRevealed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 

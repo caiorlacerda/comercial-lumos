@@ -8,6 +8,7 @@ import { addDays, format, startOfWeek, startOfMonth, differenceInCalendarDays } 
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import { TASK_STATUS_GROUPS, getStatusDetails } from '@/pages/Projetos';
 
@@ -72,7 +73,7 @@ interface DragState {
 // Página
 // -------------------------------------------------------------
 export default function ProducaoSchedule() {
-  const { profile } = useAuth();
+  const { isAdmin, can } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -94,7 +95,8 @@ export default function ProducaoSchedule() {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const suppressClickRef = useRef(false);
 
-  const canMove = profile?.role === 'admin' || profile?.role === 'producao';
+  // Editores/atendimento também ajustam prazos (mesma regra do gerenciador)
+  const canMove = isAdmin || can('ordem_do_dia');
   const { pxPerDay, spanDays, navDays } = ZOOM_CONFIG[zoom];
 
   // -----------------------------------------------------------
@@ -102,9 +104,12 @@ export default function ProducaoSchedule() {
   // -----------------------------------------------------------
   useEffect(() => { fetchData(); }, []);
 
-  async function fetchData() {
+  // Tempo real: mudanças de outros usuários atualizam a timeline sem spinner
+  useRealtimeRefetch(['projects', 'project_tasks'], () => fetchData(true));
+
+  async function fetchData(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [projRes, taskRes, usersRes] = await Promise.all([
         supabase
           .from('projects')

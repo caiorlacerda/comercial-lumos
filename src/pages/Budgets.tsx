@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { 
   Users,
   Plus, 
@@ -138,9 +139,12 @@ export default function Budgets() {
     };
   }, []);
 
-  async function fetchBudgets() {
+  // Tempo real: orçamentos alterados por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['budgets', 'budget_items', 'clients'], () => { fetchBudgets(true); fetchClients(); });
+
+  async function fetchBudgets(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data, error } = await supabase
         .from('budgets')
         .select(`

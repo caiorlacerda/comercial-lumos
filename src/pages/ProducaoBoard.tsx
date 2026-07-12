@@ -15,6 +15,7 @@ import { Search, Flag, CalendarDays, Columns3, ExternalLink, X } from 'lucide-re
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import { TASK_STATUS_GROUPS } from '@/pages/Projetos';
 
@@ -197,7 +198,7 @@ function BoardColumn({
 // Página
 // -------------------------------------------------------------
 export default function ProducaoBoard() {
-  const { profile } = useAuth();
+  const { isAdmin, can } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -217,7 +218,8 @@ export default function ProducaoBoard() {
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
 
   // Mesma regra do calendário: admin e produção movem cards
-  const canMove = profile?.role === 'admin' || profile?.role === 'producao';
+  // Editores/atendimento também movem cards (mesma regra do gerenciador)
+  const canMove = isAdmin || can('ordem_do_dia');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -227,9 +229,12 @@ export default function ProducaoBoard() {
     fetchBoard();
   }, []);
 
-  async function fetchBoard() {
+  // Tempo real: mudanças de outros usuários atualizam o board sem spinner
+  useRealtimeRefetch(['projects', 'project_tasks'], () => fetchBoard(true));
+
+  async function fetchBoard(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [tasksRes, usersRes] = await Promise.all([
         supabase
           .from('project_tasks')

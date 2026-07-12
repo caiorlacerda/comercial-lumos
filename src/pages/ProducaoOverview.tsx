@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import { TASK_STATUS_GROUPS, getStatusDetails } from '@/pages/Projetos';
 
@@ -82,9 +83,12 @@ export default function ProducaoOverview() {
 
   useEffect(() => { fetchData(); }, []);
 
-  async function fetchData() {
+  // Tempo real: mudanças de outros usuários atualizam a visão sem spinner
+  useRealtimeRefetch(['projects', 'project_tasks', 'task_comments'], () => fetchData(true));
+
+  async function fetchData(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [projRes, taskRes, usersRes, commentsRes, doneRes] = await Promise.all([
         supabase.from('projects').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
         supabase

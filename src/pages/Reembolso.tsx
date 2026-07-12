@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import Modal from '@/components/common/Modal';
@@ -82,6 +83,9 @@ export default function Reembolso() {
     fetchClients();
   }, [profile, isAdmin]);
 
+  // Tempo real: reembolsos alterados por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['reimbursements'], () => fetchReimbursements(true));
+
   async function fetchProjects() {
     const { data } = await supabase
       .from('projects')
@@ -95,9 +99,9 @@ export default function Reembolso() {
     setClients(data || []);
   }
 
-  async function fetchReimbursements() {
+  async function fetchReimbursements(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       let query = supabase.from('reimbursements').select('*, requester:app_users!requester_id(full_name), project:projects(name)');
       if (!isAdmin) query = query.eq('requester_id', profile?.id);
       const { data, error } = await query.order('created_at', { ascending: false });
