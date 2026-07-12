@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
-import { useAuth, AppUserProfile } from '@/hooks/useAuth';
+import { useAuth, AppUserProfile, ROLE_DEFAULTS } from '@/hooks/useAuth';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import Modal from '@/components/common/Modal';
@@ -23,7 +23,17 @@ import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
 
-type UserRole = 'admin' | 'producao' | 'basico' | 'editor';
+type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'basico';
+
+// Permissões que o admin pode liberar/bloquear por usuário (sobre o padrão do cargo)
+const PERM_OPTIONS: { key: string; label: string }[] = [
+  { key: 'ordem_do_dia', label: 'Produção (Projetos, Ordem do Dia, views)' },
+  { key: 'fornecedores', label: 'Fornecedores' },
+  { key: 'cronograma_edicao', label: 'Cronograma de Edição' },
+  { key: 'acessos', label: 'Acessos & Senhas (cofre)' },
+  { key: 'reembolso', label: 'Reembolso' },
+  { key: 'custos_projeto', label: 'Custos de Projeto' },
+];
 type UserStatus = 'ativo' | 'inativo';
 
 export default function UsersPage() {
@@ -48,7 +58,8 @@ export default function UsersPage() {
     role: 'basico' as UserRole,
     job_title: '',
     status: 'ativo' as UserStatus,
-    password: ''
+    password: '',
+    custom_permissions: {} as Record<string, boolean>,
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
@@ -142,7 +153,8 @@ export default function UsersPage() {
           full_name: formData.full_name,
           role: formData.role,
           job_title: formData.job_title,
-          status: formData.status
+          status: formData.status,
+          custom_permissions: formData.custom_permissions,
         })
         .eq('id', selectedUser.id);
 
@@ -250,9 +262,19 @@ export default function UsersPage() {
       role: user.role,
       job_title: user.job_title || '',
       status: user.status,
-      password: ''
+      password: '',
+      custom_permissions: { ...(user.custom_permissions || {}) },
     });
     setIsEditModalOpen(true);
+  };
+
+  // Liberar/bloquear/voltar-ao-padrão uma permissão para o usuário em edição
+  const setPerm = (key: string, mode: 'default' | 'allow' | 'block') => {
+    setFormData(fd => {
+      const cp = { ...fd.custom_permissions };
+      if (mode === 'default') delete cp[key]; else cp[key] = mode === 'allow';
+      return { ...fd, custom_permissions: cp };
+    });
   };
 
   const resetForm = () => {
@@ -262,7 +284,8 @@ export default function UsersPage() {
       role: 'basico',
       job_title: '',
       status: 'ativo',
-      password: ''
+      password: '',
+      custom_permissions: {}
     });
   };
 
@@ -280,6 +303,8 @@ export default function UsersPage() {
     switch (role) {
       case 'admin': return 'bg-lumos-yellow/20 text-lumos-yellow border-lumos-yellow/30';
       case 'producao': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'atendimento': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'editor': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
       default: return 'bg-lumos-text-primary/10 text-lumos-text-secondary border-lumos-border';
     }
   };
@@ -320,8 +345,9 @@ export default function UsersPage() {
             <option value="all">Todos os Cargos</option>
             <option value="admin">Admin</option>
             <option value="producao">Produção</option>
-            <option value="basico">Básico</option>
+            <option value="atendimento">Atendimento</option>
             <option value="editor">Editor</option>
+            <option value="basico">Básico</option>
           </select>
           <select 
             className="input-lumos text-sm h-10 px-4"
@@ -573,6 +599,7 @@ export default function UsersPage() {
               >
                 <option value="basico">Básico</option>
                 <option value="producao">Produção</option>
+                <option value="atendimento">Atendimento</option>
                 <option value="editor">Editor</option>
                 <option value="admin">Admin</option>
               </select>
@@ -641,6 +668,7 @@ export default function UsersPage() {
               >
                 <option value="basico">Básico</option>
                 <option value="producao">Produção</option>
+                <option value="atendimento">Atendimento</option>
                 <option value="editor">Editor</option>
                 <option value="admin">Admin</option>
               </select>
@@ -659,13 +687,50 @@ export default function UsersPage() {
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cargo</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               className="input-lumos w-full"
               value={formData.job_title}
               onChange={(e) => setFormData({...formData, job_title: e.target.value})}
             />
           </div>
+
+          {formData.role !== 'admin' && (
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Permissões — o que essa pessoa vê</label>
+              <p className="text-[10px] text-lumos-text-secondary/70 leading-relaxed">
+                <b>Padrão</b> = herda do cargo. <b>Liberar</b>/<b>Bloquear</b> sobrescreve só para este usuário. A bolinha verde mostra o resultado atual.
+              </p>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                {PERM_OPTIONS.map(p => {
+                  const roleGrants = (ROLE_DEFAULTS[formData.role] || []).some(x => x === '*' || x === p.key);
+                  const ov = formData.custom_permissions[p.key];
+                  const mode: 'default' | 'allow' | 'block' = ov === undefined ? 'default' : ov ? 'allow' : 'block';
+                  const effective = ov === undefined ? roleGrants : ov;
+                  return (
+                    <div key={p.key} className="flex items-center justify-between gap-2 p-2 rounded-lumos border border-lumos-border/50 bg-lumos-bg/20">
+                      <span className="text-[11px] font-semibold text-lumos-text-primary flex items-center gap-1.5 min-w-0">
+                        <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', effective ? 'bg-green-500' : 'bg-lumos-text-secondary/40')} />
+                        <span className="truncate">{p.label}</span>
+                      </span>
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                        {([['default', 'Padrão'], ['allow', 'Liberar'], ['block', 'Bloquear']] as const).map(([m, lbl]) => (
+                          <button key={m} type="button" onClick={() => setPerm(p.key, m)}
+                            className={clsx('text-[9px] font-black uppercase px-2 py-1 rounded transition-colors',
+                              mode === m
+                                ? (m === 'allow' ? 'bg-green-500/20 text-green-500' : m === 'block' ? 'bg-red-500/20 text-red-400' : 'bg-lumos-yellow/20 text-lumos-yellow')
+                                : 'text-lumos-text-secondary hover:bg-lumos-text-secondary/10')}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="pt-4 flex gap-3">
             <button type="button" disabled={formLoading} onClick={() => setIsEditModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" disabled={formLoading} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2">

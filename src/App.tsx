@@ -613,7 +613,7 @@ function AppContent() {
             path="/producao/acessos"
             element={
               <AuthWrapper>
-                <PermissionGuard permission="ordem_do_dia">
+                <PermissionGuard permission="acessos">
                   <Acessos />
                 </PermissionGuard>
               </AuthWrapper>

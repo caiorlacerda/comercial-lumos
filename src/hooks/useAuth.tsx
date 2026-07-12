@@ -2,11 +2,25 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 
+export type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'basico';
+
+// Permissões padrão por cargo. custom_permissions (por usuário) sobrescreve.
+// Editor e Atendimento veem toda a Produção; Início e Configurações não têm
+// gate de permissão (visíveis a qualquer logado). O cofre de senhas fica em
+// 'acessos' (só produção/admin) por ser sensível.
+export const ROLE_DEFAULTS: Record<string, string[]> = {
+  admin: ['*'],
+  producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  atendimento: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
+  editor: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
+  basico: ['reembolso'],
+};
+
 export interface AppUserProfile {
   id: string;
   full_name: string;
   email: string;
-  role: 'admin' | 'producao' | 'basico' | 'editor';
+  role: UserRole;
   job_title: string | null;
   status: 'ativo' | 'inativo';
   custom_permissions: Record<string, boolean>;
@@ -134,13 +148,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (profile.custom_permissions && permission in profile.custom_permissions) {
       return profile.custom_permissions[permission];
     }
-    const defaults: Record<string, string[]> = {
-      admin: ['*'],
-      producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
-      basico: ['reembolso'],
-      editor: ['cronograma_edicao'],
-    };
-    const rolePermissions = defaults[profile.role] || [];
+    const rolePermissions = ROLE_DEFAULTS[profile.role] || [];
     return rolePermissions.includes('*') || rolePermissions.includes(permission);
   };
 
