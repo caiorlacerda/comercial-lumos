@@ -52,6 +52,7 @@ export const NAV_SECTIONS: Section[] = [
       { icon: ClipboardList, label: 'Projetos', path: '/producao', permission: 'ordem_do_dia', end: true },
       { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
+      { icon: FileStack, label: 'Templates de Tarefas', path: '/producao/templates-tarefas', permission: 'admin' },
       // Só para quem TEM cronograma e NÃO tem as demais views (papel editor):
       // sem este item, editores ficariam sem porta de entrada na seção.
       { icon: CalendarDays, label: 'Cronograma Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao_only' },
