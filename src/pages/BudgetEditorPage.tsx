@@ -67,6 +67,7 @@ import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 
 import Modal from '@/components/common/Modal';
+import RichTextEditor from '@/components/common/RichTextEditor';
 import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
 
@@ -1389,13 +1390,12 @@ export default function BudgetEditorPage() {
                   <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block flex items-center gap-1">
                     <MessageSquare className="w-3 h-3" /> Proposta para o Cliente (PDF)
                   </label>
-                  <textarea 
-                    disabled={isReadOnly}
-                    className="input-lumos w-full min-h-[160px] text-sm leading-relaxed disabled:opacity-70 scrollbar-thin"
-                    placeholder={version && budget?.category ? briefingPlaceholders[budget.category] : "Descreva o projeto, entregas, produção e prazos..."}
+                  <RichTextEditor
+                    editable={!isReadOnly}
+                    minHeight={160}
                     value={version?.notes_client || ''}
-                    onChange={(e) => {
-                      setVersion(v => v ? { ...v, notes_client: e.target.value } : null);
+                    onChange={(html) => {
+                      setVersion(v => v ? { ...v, notes_client: html } : null);
                       isDirty.current = true;
                     }}
                   />
