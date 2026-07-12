@@ -17,6 +17,7 @@ export const NOTIFICATION_EVENTS = {
   MENTION_COMMENT: { key: 'mencao_comentario', category: 'producao', label: 'Menção em comentário', defaultEnabled: true },
   COMENTARIO_TAREFA: { key: 'comentario_tarefa', category: 'producao', label: 'Novo comentário na sua tarefa', defaultEnabled: true },
   PROJETO_ENCERRADO: { key: 'projeto_encerrado', category: 'producao', label: 'Projeto encerrado', defaultEnabled: true },
+  NOVO_ACESSO_DISPONIVEL: { key: 'novo_acesso_disponivel', category: 'producao', label: 'Novo acesso/senha disponível pra você', defaultEnabled: true },
   DEADLINE_ALERT: { key: 'prazo_alerta', category: 'producao', label: 'Alerta de prazo de entrega', defaultEnabled: true },
 
   // COMERCIAL

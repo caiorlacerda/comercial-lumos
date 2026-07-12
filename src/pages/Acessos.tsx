@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KeyRound, Plus, Trash2, Eye, EyeOff, Copy, Loader2, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
+import { notify, getUserIdsWithPermission } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 
@@ -12,6 +15,9 @@ const ASSIGNED = ['', 'Comercial', 'Sócios', 'Produção', 'Edição', 'Todos']
 
 export default function Acessos() {
   const toast = useToast();
+  const { profile, isAdmin } = useAuth();
+  // Só admin/produção editam; os demais cargos (editor/atendimento/social) veem.
+  const canManage = isAdmin || profile?.role === 'producao';
   const { confirm, dialog } = useConfirm();
   const [rows, setRows] = useState<Cred[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +54,17 @@ export default function Acessos() {
     const s = newService.trim(); if (!s) return;
     setNewService('');
     await addRow(s);
+    // Avisa quem usa o cofre que uma nova plataforma foi disponibilizada
+    try {
+      const ids = (await getUserIdsWithPermission('acessos')).filter(id => id !== profile?.id);
+      await notify({
+        userIds: ids,
+        event: NOTIFICATION_EVENTS.NOVO_ACESSO_DISPONIVEL,
+        title: 'Novo acesso disponível 🔑',
+        body: `${s} foi adicionado ao cofre de Acessos & Senhas.`,
+        link: '/producao/acessos',
+      });
+    } catch (e) { console.error('notify novo acesso falhou', e); }
   };
 
   const remove = async (r: Cred) => {
@@ -90,7 +107,7 @@ export default function Acessos() {
 
       <div className="flex items-start gap-2 text-[11px] text-amber-500/90 bg-amber-500/[0.07] border border-amber-500/25 rounded-lumos px-3 py-2">
         <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-        <span>Visível só para <b>admin</b> e <b>produção</b>. As senhas ficam guardadas para uso do time — evite cadastrar aqui credenciais bancárias ou de altíssima sensibilidade.</span>
+        <span>Todo o time de produção <b>vê</b> as senhas do cofre. Só <b>admin</b> e <b>produção</b> podem <b>editar</b>. Evite cadastrar aqui credenciais bancárias ou de altíssima sensibilidade.</span>
       </div>
 
       {loading ? (
@@ -102,7 +119,8 @@ export default function Acessos() {
               <div className="px-4 py-2.5 bg-lumos-yellow/10 border-b border-lumos-border">
                 <input
                   defaultValue={group.service}
-                  onBlur={e => renameService(group.service, e.target.value)}
+                  readOnly={!canManage}
+                  onBlur={canManage ? (e => renameService(group.service, e.target.value)) : undefined}
                   className="bg-transparent text-sm font-black text-lumos-text-primary uppercase tracking-wide outline-none focus:text-lumos-yellow w-full"
                 />
               </div>
@@ -113,13 +131,17 @@ export default function Acessos() {
                     <div key={r.id} className="flex flex-col md:flex-row md:items-center gap-2 px-4 py-2.5 hover:bg-lumos-text-secondary/[0.02]">
                       {/* Login */}
                       <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <input value={r.login} onChange={e => setRows(p => p.map(x => x.id === r.id ? { ...x, login: e.target.value } : x))} onBlur={e => patch(r.id, { login: e.target.value })}
+                        <input value={r.login} readOnly={!canManage}
+                          onChange={canManage ? (e => setRows(p => p.map(x => x.id === r.id ? { ...x, login: e.target.value } : x))) : undefined}
+                          onBlur={canManage ? (e => patch(r.id, { login: e.target.value })) : undefined}
                           placeholder="login / e-mail" className="input-lumos h-8 text-xs w-full" />
                         <button onClick={() => copy(r.login, 'Login')} className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow flex-shrink-0" title="Copiar login"><Copy className="w-3.5 h-3.5" /></button>
                       </div>
                       {/* Senha */}
                       <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <input type={shown ? 'text' : 'password'} value={r.password} onChange={e => setRows(p => p.map(x => x.id === r.id ? { ...x, password: e.target.value } : x))} onBlur={e => patch(r.id, { password: e.target.value })}
+                        <input type={shown ? 'text' : 'password'} value={r.password} readOnly={!canManage}
+                          onChange={canManage ? (e => setRows(p => p.map(x => x.id === r.id ? { ...x, password: e.target.value } : x))) : undefined}
+                          onBlur={canManage ? (e => patch(r.id, { password: e.target.value })) : undefined}
                           placeholder="senha" className="input-lumos h-8 text-xs w-full font-mono" />
                         <button onClick={() => toggleReveal(r.id)} className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow flex-shrink-0" title={shown ? 'Ocultar' : 'Revelar senha'}>
                           {shown ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -128,27 +150,35 @@ export default function Acessos() {
                       </div>
                       {/* Tá com quem? */}
                       <div className="w-full md:w-40 flex-shrink-0">
-                        <Select value={r.assigned_to || ''} onChange={v => patch(r.id, { assigned_to: v })} options={ASSIGNED} placeholder="Tá com quem?" className="input-lumos h-8 text-xs py-0" />
+                        <Select value={r.assigned_to || ''} onChange={v => patch(r.id, { assigned_to: v })} options={ASSIGNED} placeholder="Tá com quem?" disabled={!canManage} className="input-lumos h-8 text-xs py-0" />
                       </div>
-                      <button onClick={() => remove(r)} className="p-1.5 text-lumos-text-secondary hover:text-red-400 flex-shrink-0 self-end md:self-center" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                      {canManage && <button onClick={() => remove(r)} className="p-1.5 text-lumos-text-secondary hover:text-red-400 flex-shrink-0 self-end md:self-center" title="Excluir"><Trash2 className="w-4 h-4" /></button>}
                     </div>
                   );
                 })}
               </div>
-              <button onClick={() => addRow(group.service)} className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/5 transition-colors border-t border-lumos-border/40">
-                <Plus className="w-3.5 h-3.5" /> Adicionar acesso
-              </button>
+              {canManage && (
+                <button onClick={() => addRow(group.service)} className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/5 transition-colors border-t border-lumos-border/40">
+                  <Plus className="w-3.5 h-3.5" /> Adicionar acesso
+                </button>
+              )}
             </div>
           ))}
 
-          {/* Novo serviço */}
-          <div className="flex items-center gap-2">
-            <input value={newService} onChange={e => setNewService(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addService(); }}
-              placeholder="Novo serviço (ex.: Frame, Adobe, Envato…)" className="input-lumos flex-1 h-10 text-sm" />
-            <button onClick={addService} disabled={!newService.trim()} className="btn-primary h-10 px-4 text-sm font-bold flex items-center gap-1.5 disabled:opacity-50">
-              <Plus className="w-4 h-4" /> Adicionar serviço
-            </button>
-          </div>
+          {groups.length === 0 && (
+            <p className="text-sm text-lumos-text-secondary italic py-8 text-center">Nenhum acesso cadastrado ainda.</p>
+          )}
+
+          {/* Novo serviço (só quem gerencia) */}
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <input value={newService} onChange={e => setNewService(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addService(); }}
+                placeholder="Novo serviço (ex.: Frame, Adobe, Envato…)" className="input-lumos flex-1 h-10 text-sm" />
+              <button onClick={addService} disabled={!newService.trim()} className="btn-primary h-10 px-4 text-sm font-bold flex items-center gap-1.5 disabled:opacity-50">
+                <Plus className="w-4 h-4" /> Adicionar serviço
+              </button>
+            </div>
+          )}
         </div>
       )}
 
