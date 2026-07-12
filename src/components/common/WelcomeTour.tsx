@@ -167,7 +167,7 @@ export default function WelcomeTour() {
     <div className="fixed inset-0 z-[280] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-3xl bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl overflow-hidden">
         {/* Palco da animação */}
-        <div className={`relative h-80 flex items-center justify-center bg-gradient-to-b ${accent}`}>
+        <div className={`relative h-[26rem] flex items-center justify-center bg-gradient-to-b ${accent}`}>
           <button onClick={close} title="Pular" className="absolute top-4 right-4 p-2 rounded-full text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-black/10">
             <X className="w-5 h-5" />
           </button>
@@ -182,7 +182,7 @@ export default function WelcomeTour() {
         </div>
 
         {/* Texto */}
-        <div className="px-10 pt-8 pb-5 text-center min-h-[180px]">
+        <div className="px-10 pt-9 pb-6 text-center min-h-[220px]">
           <AnimatePresence mode="wait">
             <motion.div key={slide.key}
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
