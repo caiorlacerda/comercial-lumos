@@ -46,7 +46,7 @@ export default function Clients() {
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 12;
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
-    return (localStorage.getItem('lumos-clients-view') as 'grid' | 'list') || 'grid';
+    return (localStorage.getItem('lumos-clients-view') as 'grid' | 'list') || 'list';
   });
 
   // Modal state

@@ -9,6 +9,7 @@ import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import { useConfirm } from '@/components/ui/useConfirm';
 import UserAvatar from '@/components/common/UserAvatar';
+import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
 
 interface TeamMember {
   id: string;
@@ -56,6 +57,8 @@ export default function DadosEquipe() {
   const [rows, setRows] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('lumos-equipe-view') as ViewMode) || 'list');
+  useEffect(() => { localStorage.setItem('lumos-equipe-view', viewMode); }, [viewMode]);
   const [editing, setEditing] = useState<TeamMember | 'new' | null>(null);
   const [form, setForm] = useState<Omit<TeamMember, 'id' | 'ordem' | 'app_user_id' | 'app_user'>>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -136,9 +139,12 @@ export default function DadosEquipe() {
             Cadastro dos funcionários da Lumos. Os aniversários caem sozinhos no calendário e viram confete na home. 🎉
           </p>
         </div>
-        <button onClick={openNew} className="btn-primary h-10 px-4 text-sm font-bold flex items-center gap-1.5 flex-shrink-0">
-          <Plus className="w-4 h-4" /> Novo membro
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+          <button onClick={openNew} className="btn-primary h-10 px-4 text-sm font-bold flex items-center gap-1.5">
+            <Plus className="w-4 h-4" /> Novo membro
+          </button>
+        </div>
       </div>
 
       <div className="flex items-start gap-2 text-[11px] text-amber-500/90 bg-amber-500/[0.07] border border-amber-500/25 rounded-lumos px-3 py-2">
@@ -158,7 +164,7 @@ export default function DadosEquipe() {
         <p className="text-sm text-lumos-text-secondary italic py-12 text-center">
           {rows.length === 0 ? 'Nenhum membro cadastrado ainda. Clique em "Novo membro".' : 'Ninguém encontrado com esse filtro.'}
         </p>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(m => (
             <button key={m.id} onClick={() => openEdit(m)}
@@ -180,6 +186,42 @@ export default function DadosEquipe() {
               </div>
             </button>
           ))}
+        </div>
+      ) : (
+        /* Visão em LISTA */
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-lumos-bg/40 border-b border-lumos-border">
+                <tr className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
+                  <th className="px-4 py-3">Nome</th>
+                  <th className="px-4 py-3 hidden md:table-cell">Cargo / Setor</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">WhatsApp</th>
+                  <th className="px-4 py-3 hidden xl:table-cell">Aniversário</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">Entrada</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-lumos-border/50">
+                {filtered.map(m => (
+                  <tr key={m.id} onClick={() => openEdit(m)}
+                    className="hover:bg-lumos-text-secondary/[0.03] cursor-pointer transition-colors">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <UserAvatar user={{ id: m.app_user_id, full_name: m.full_name, avatar_url: m.app_user?.avatar_url ?? m.photo_url } as any} size={32} showStatus />
+                        <span className="font-bold text-lumos-text-primary truncate">{m.full_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-lumos-text-secondary hidden md:table-cell truncate max-w-[200px]">
+                      {m.role_title || '—'}{m.department ? ` · ${m.department}` : ''}
+                    </td>
+                    <td className="px-4 py-2.5 text-lumos-text-secondary hidden lg:table-cell">{m.whatsapp || '—'}</td>
+                    <td className="px-4 py-2.5 text-lumos-text-secondary hidden xl:table-cell">{fmtBirthday(m.birth_date) || '—'}</td>
+                    <td className="px-4 py-2.5 text-lumos-text-secondary hidden lg:table-cell">{fmtDate(m.joined_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
