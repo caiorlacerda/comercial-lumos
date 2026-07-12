@@ -1646,8 +1646,8 @@ export default function Projetos() {
 
   return (
     <div className="space-y-6">
-      {/* Header — some quando um projeto está aberto (a sidebar já cobre a navegação) */}
-      {!selectedProjectId && (
+      {/* Header — some quando um projeto está aberto ou durante o carregamento */}
+      {!selectedProjectId && !loading && (
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div>
@@ -1690,7 +1690,33 @@ export default function Projetos() {
                 {/* Project Detail Header */}
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 pb-5 border-b border-lumos-border/50">
                   <div className="space-y-2">
+                    {/* 1. Cliente */}
+                    <p className="text-xs text-lumos-text-secondary font-medium">
+                      Cliente: <span className="text-lumos-text-primary font-bold">{selectedClient?.name}</span>
+                    </p>
+
+                    {/* 2. Tags: código + status */}
                     <div className="flex items-center gap-2 flex-wrap">
+                      {selectedProject.code && (
+                        <span className="text-[9px] font-black bg-lumos-border/40 text-lumos-text-secondary px-2 py-0.5 rounded tracking-wider uppercase">
+                          Cód: {formatBudgetCode(selectedProject.code)}
+                        </span>
+                      )}
+                      <span className={clsx(
+                        "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider",
+                        selectedProject.status === 'concluido' ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'
+                      )}>
+                        {selectedProject.status}
+                      </span>
+                    </div>
+
+                    {/* 3. Nome do projeto */}
+                    <h2 className="text-2xl font-black text-lumos-text-primary uppercase tracking-tight">
+                      {selectedProject.name}
+                    </h2>
+
+                    {/* 4. Segmento (dropdown) */}
+                    <div className="flex items-center gap-2 flex-wrap pt-0.5">
                       {canManage ? (
                         <Select
                           value={selectedProject.category || selectedProject.budget?.category || ''}
@@ -1710,7 +1736,7 @@ export default function Projetos() {
                           }}
                           options={[{ value: '', label: 'Sem Segmento' }, { value: 'digital', label: 'Digital' }, { value: 'filme', label: 'Filme' }, { value: 'live', label: 'Live' }]}
                           className={clsx(
-                            "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border hover:border-lumos-yellow/40",
+                            "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider border hover:border-lumos-yellow/40 max-w-[160px]",
                             getCategoryTheme(selectedProject.category || selectedProject.budget?.category || null)
                           )}
                         />
@@ -1722,27 +1748,7 @@ export default function Projetos() {
                           {selectedProject.category || selectedProject.budget?.category || 'Sem Segmento'}
                         </span>
                       )}
-
-                      {selectedProject.code && (
-                        <span className="text-[9px] font-black bg-lumos-border/40 text-lumos-text-secondary px-2 py-0.5 rounded tracking-wider uppercase">
-                          Cód: {formatBudgetCode(selectedProject.code)}
-                        </span>
-                      )}
-                      <span className={clsx(
-                        "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider",
-                        selectedProject.status === 'concluido' ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'
-                      )}>
-                        {selectedProject.status}
-                      </span>
                     </div>
-
-                    <h2 className="text-2xl font-black text-lumos-text-primary uppercase tracking-tight">
-                      {selectedProject.name}
-                    </h2>
-                    
-                    <p className="text-xs text-lumos-text-secondary font-medium">
-                      Cliente: <span className="text-lumos-text-primary font-bold">{selectedClient?.name}</span>
-                    </p>
                   </div>
 
                   <div className="flex items-center gap-2.5 flex-wrap">
