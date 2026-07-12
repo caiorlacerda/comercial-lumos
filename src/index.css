@@ -117,6 +117,7 @@ body {
 .ProseMirror {
   outline: none;
   min-height: 150px;
+  color: var(--color-lumos-text-primary);
 }
 .ProseMirror > * + * { margin-top: 0.55rem; }
 .ProseMirror p { line-height: 1.65; }
