@@ -23,6 +23,7 @@ export default function OnboardingGate() {
 
   const [checked, setChecked] = useState(false);
   const [open, setOpen] = useState(false);
+  const [needs, setNeeds] = useState(false); // ainda não concluiu o cadastro
   const [existingId, setExistingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -30,7 +31,9 @@ export default function OnboardingGate() {
 
   useEffect(() => {
     if (!profile?.id || checked) return;
-    if (sessionStorage.getItem('onboard-skip') === profile.id) { setChecked(true); return; }
+    // O "pular" só evita o POP-UP automático nesta sessão — o banner de
+    // "completar cadastro" continua aparecendo até a pessoa concluir.
+    const skipped = sessionStorage.getItem('onboard-skip') === profile.id;
     supabase.from('team_members')
       .select('id, onboarded_at, ' + FIELDS.join(', '))
       .eq('app_user_id', profile.id)
@@ -42,9 +45,12 @@ export default function OnboardingGate() {
           const filled: FormState = { ...EMPTY };
           FIELDS.forEach(f => { if (data[f]) filled[f] = data[f]; });
           setForm(filled);
-          if (!data.onboarded_at) setOpen(true);
+          const notDone = !data.onboarded_at;
+          setNeeds(notDone);
+          if (notDone && !skipped) setOpen(true);
         } else {
-          setOpen(true);
+          setNeeds(true);
+          if (!skipped) setOpen(true);
         }
       });
   }, [profile?.id, checked]);
@@ -89,6 +95,7 @@ export default function OnboardingGate() {
         if (error) throw error;
       }
       toast.success('Tudo certo! Bem-vindo(a) à Lumos 🎉');
+      setNeeds(false);
       setOpen(false);
     } catch (err: any) {
       console.error(err);
@@ -103,7 +110,24 @@ export default function OnboardingGate() {
     setOpen(false);
   };
 
-  if (!open || !profile) return null;
+  if (!profile) return null;
+
+  // Banner fixo enquanto o cadastro não foi concluído (quando o modal está fechado)
+  const banner = needs && !open ? (
+    <button
+      onClick={() => setOpen(true)}
+      className="w-full flex items-center gap-3 text-left rounded-lumos border border-lumos-yellow/40 bg-lumos-yellow/[0.07] hover:bg-lumos-yellow/10 transition-colors px-4 py-3"
+    >
+      <PartyPopper className="w-5 h-5 text-lumos-yellow flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-lumos-text-primary">Complete seu cadastro na Lumos</p>
+        <p className="text-[11px] text-lumos-text-secondary">Leva 1 minutinho — foto, aniversário e seus dados. Clique para preencher.</p>
+      </div>
+      <span className="text-xs font-black uppercase tracking-wider text-black bg-lumos-yellow px-3 py-1.5 rounded-full flex-shrink-0">Completar</span>
+    </button>
+  ) : null;
+
+  if (!open) return banner;
 
   return createPortal(
     <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
