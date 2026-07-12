@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Calendar, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import { format } from 'date-fns';
@@ -20,9 +21,12 @@ export default function OrdensDoDia() {
 
   useEffect(() => { fetchOrdens(); }, []);
 
-  async function fetchOrdens() {
+  // Tempo real: ordens criadas/alteradas por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['ordens_do_dia'], () => fetchOrdens(true));
+
+  async function fetchOrdens(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data, error } = await supabase
         .from('ordens_do_dia')
         .select('*')

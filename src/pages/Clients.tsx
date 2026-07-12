@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Pagination from '@/components/common/Pagination';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { logAudit } from '@/hooks/useAuditLog';
 import {
   Users,
@@ -56,13 +57,16 @@ export default function Clients() {
     fetchClients();
   }, []);
 
+  // Tempo real: clientes alterados por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['clients', 'budgets'], () => fetchClients(true));
+
   useEffect(() => {
     localStorage.setItem('lumos-clients-view', viewMode);
   }, [viewMode]);
 
-  async function fetchClients() {
+  async function fetchClients(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data, error } = await supabase
         .from('clients')
         .select(`

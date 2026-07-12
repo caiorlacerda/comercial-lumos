@@ -24,6 +24,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import {
   DndContext,
   closestCenter,
@@ -242,6 +243,9 @@ export default function FinanceiroDashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, [period]);
+
+  // Tempo real: lançamentos alterados por outros usuários atualizam o dashboard
+  useRealtimeRefetch(['payables', 'receivables', 'project_costs', 'reimbursements'], () => fetchDashboardData());
 
   const getStartDate = (periodType: PeriodType): string => {
     const now = new Date();

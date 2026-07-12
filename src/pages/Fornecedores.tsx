@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Truck, Plus, Search, Phone, Mail, FileText, Trash2, Edit2, AlertTriangle, Link2, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { Fornecedor } from '@/types/fornecedor';
@@ -22,6 +23,9 @@ export default function Fornecedores() {
     fetchFornecedores();
   }, []);
 
+  // Tempo real: fornecedores alterados por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['fornecedores', 'fornecedor_servicos'], () => fetchFornecedores(true));
+
   const handleCopyPublicLink = async () => {
     const url = `${window.location.origin}/cadastro-fornecedor`;
     try {
@@ -33,9 +37,9 @@ export default function Fornecedores() {
     }
   };
 
-  async function fetchFornecedores() {
+  async function fetchFornecedores(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data, error } = await supabase
         .from('fornecedores')
         .select('*, servicos:fornecedor_servicos(id, tipo_servico)')

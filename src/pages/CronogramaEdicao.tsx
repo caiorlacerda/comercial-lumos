@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import { 
@@ -425,8 +426,8 @@ export default function CronogramaEdicao() {
   const canEditDelivery = canManage || (profile?.role === 'editor' && briefingTask?.editor_id === currentEditor?.id);
 
   // 1. CARREGAR DADOS
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       // Buscar Editores
       const { data: dataEditores, error: errEditores } = await supabase
@@ -492,6 +493,9 @@ export default function CronogramaEdicao() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Tempo real: edições/editores alterados por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['edicoes_cronograma', 'editores'], () => fetchData(true));
 
   // 2. SUBMIT EDITOR (Criar / Editar)
   const handleEditorSubmit = async (e: React.FormEvent) => {

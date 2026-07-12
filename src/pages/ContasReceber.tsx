@@ -16,6 +16,7 @@ import {
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import { useAuth } from '@/hooks/useAuth';
@@ -66,14 +67,17 @@ export default function ContasReceber() {
     fetchClients();
   }, []);
 
+  // Tempo real: recebíveis alterados por outros usuários aparecem sem spinner
+  useRealtimeRefetch(['receivables'], () => fetchReceivables(true));
+
   async function fetchClients() {
     const { data } = await supabase.from('clients').select('id, name').order('name');
     setClients(data || []);
   }
 
-  async function fetchReceivables() {
+  async function fetchReceivables(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data, error } = await supabase.from('receivables').select('*, client:clients(name), budget:budgets(id, project_name)').order('due_date', { ascending: true });
       if (error) throw error;
       setReceivables(data || []);

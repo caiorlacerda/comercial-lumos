@@ -57,6 +57,7 @@ function describeActivity(a: { action: string; old_value: string | null; new_val
   }
 }
 import { useAuth } from '@/hooks/useAuth';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
 import { pdf } from '@react-pdf/renderer';
@@ -876,6 +877,20 @@ export default function Projetos() {
     }
   }, [selectedTaskId]);
 
+  // Colaboração em tempo real: mudanças feitas por outros usuários aparecem
+  // aqui sem reload (refetch silencioso — sem spinner).
+  useRealtimeRefetch(
+    ['projects', 'project_tasks', 'task_comments', 'project_task_tags', 'task_tags', 'task_activity'],
+    () => {
+      fetchData(true);
+      if (selectedProjectId) fetchProjectTasks(selectedProjectId, true);
+      if (selectedTaskId) {
+        fetchTaskComments(selectedTaskId, true);
+        fetchTaskActivity(selectedTaskId, true);
+      }
+    }
+  );
+
   // Global keydown triggers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -909,8 +924,9 @@ export default function Projetos() {
     };
   }, [selectedTaskId, renamingTaskId, descHTML, projectTasks, mentionAutocomplete]);
 
-  async function fetchData() {
-    setLoading(true);
+  // silent = refetch sem spinner (realtime): os dados antigos ficam na tela
+  async function fetchData(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const { data: clientsData, error: cErr } = await supabase
         .from('clients')
@@ -954,8 +970,8 @@ export default function Projetos() {
     }
   }
 
-  const fetchProjectTasks = async (projectId: string) => {
-    setTasksLoading(true);
+  const fetchProjectTasks = async (projectId: string, silent = false) => {
+    if (!silent) setTasksLoading(true);
     try {
       const { data, error } = await supabase
         .from('project_tasks')
@@ -1006,8 +1022,8 @@ export default function Projetos() {
     : projectTasks;
 
   // Carregar comentários da tarefa
-  const fetchTaskComments = async (taskId: string) => {
-    setCommentsLoading(true);
+  const fetchTaskComments = async (taskId: string, silent = false) => {
+    if (!silent) setCommentsLoading(true);
     try {
       const { data, error } = await supabase
         .from('task_comments')
@@ -1025,8 +1041,8 @@ export default function Projetos() {
   };
 
   // Carregar histórico de atividade da tarefa (mais recente primeiro)
-  const fetchTaskActivity = async (taskId: string) => {
-    setActivityLoading(true);
+  const fetchTaskActivity = async (taskId: string, silent = false) => {
+    if (!silent) setActivityLoading(true);
     try {
       const { data, error } = await supabase
         .from('task_activity')

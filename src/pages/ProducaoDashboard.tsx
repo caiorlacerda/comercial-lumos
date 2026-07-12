@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { 
@@ -258,9 +259,9 @@ export default function ProducaoDashboard() {
     }
   }, [undoAction]);
 
-  async function fetchOrdensLocais() {
+  async function fetchOrdensLocais(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data, error } = await supabase
         .from('ordens_do_dia')
         .select('id, codigo, titulo, data_producao')
@@ -324,13 +325,13 @@ export default function ProducaoDashboard() {
   }, [currentDate]);
 
   // Busca tarefas do Gerenciador de Projetos (project_tasks) com e sem prazo
-  const fetchProjectTasks = async () => {
+  const fetchProjectTasks = async (silent = false) => {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(monthStart);
     const start = startOfWeek(monthStart, { weekStartsOn: 0 });
     const end = endOfWeek(monthEnd, { weekStartsOn: 0 });
 
-    setLoadingTasks(true);
+    if (!silent) setLoadingTasks(true);
     setTasksError(null);
     try {
       // Query A: Tarefas COM data no intervalo visível
@@ -405,6 +406,12 @@ export default function ProducaoDashboard() {
   useEffect(() => {
     fetchProjectTasks();
   }, [currentDate]);
+
+  // Tempo real: tarefas/ordens alteradas por outros usuários aparecem sem spinner
+  useRealtimeRefetch(
+    ['project_tasks', 'project_task_tags', 'task_tags', 'ordens_do_dia'],
+    () => { fetchProjectTasks(true); fetchOrdensLocais(true); }
+  );
 
   // Calendar grid math (mês inteiro ou semana única, conforme o modo)
   const monthStart = startOfMonth(currentDate);
