@@ -20,8 +20,9 @@ import {
 import { clsx } from 'clsx';
 import Confetti from '@/components/common/Confetti';
 import UserAvatar from '@/components/common/UserAvatar';
+import OnboardingGate from '@/components/common/OnboardingGate';
 
-interface Birthday { id: string; full_name: string; photo_url: string | null; }
+interface Birthday { id: string; app_user_id: string | null; full_name: string; photo_url: string | null; }
 
 interface TaskWithProject {
   id: string;
@@ -203,11 +204,14 @@ export default function Home() {
     );
   };
 
-  const myBirthday = birthdays.some(b => b.full_name === profile?.full_name);
+  const myBirthday = birthdays.some(b => (b.app_user_id && b.app_user_id === profile?.id) || b.full_name === profile?.full_name);
   const birthdayNames = birthdays.map(b => b.full_name.split(' ')[0]).join(', ').replace(/, ([^,]*)$/, ' e $1');
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-work-sans text-lumos-text-primary pb-10">
+
+      {/* Onboarding no primeiro acesso (salva dados do usuário na equipe) */}
+      <OnboardingGate />
 
       {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
 
