@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Users2, Plus, Loader2, ShieldAlert, Search, Trash2, X, Cake, Phone,
-  CalendarDays, Briefcase, MapPin, Mail, CreditCard, Shirt, HeartPulse, IdCard,
+  CalendarDays, Briefcase, MapPin, Mail, CreditCard, Shirt, Footprints, HeartPulse, IdCard,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -26,15 +26,18 @@ interface TeamMember {
   pix_key: string | null;
   emergency_contact: string | null;
   shirt_size: string | null;
+  pants_size: string | null;
+  shoe_size: string | null;
   photo_url: string | null;
   notes: string | null;
   ordem: number;
+  app_user?: { avatar_url: string | null } | null; // join p/ foto do login
 }
 
-const EMPTY: Omit<TeamMember, 'id' | 'ordem' | 'app_user_id'> = {
+const EMPTY: Omit<TeamMember, 'id' | 'ordem' | 'app_user_id' | 'app_user'> = {
   full_name: '', email: '', whatsapp: '', cpf: '', rg: '', birth_date: '', address: '',
   role_title: '', department: '', joined_at: '', pix_key: '', emergency_contact: '',
-  shirt_size: '', photo_url: '', notes: '',
+  shirt_size: '', pants_size: '', shoe_size: '', photo_url: '', notes: '',
 };
 
 const fmtBirthday = (d: string | null) => {
@@ -54,12 +57,12 @@ export default function DadosEquipe() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<TeamMember | 'new' | null>(null);
-  const [form, setForm] = useState<Omit<TeamMember, 'id' | 'ordem' | 'app_user_id'>>(EMPTY);
+  const [form, setForm] = useState<Omit<TeamMember, 'id' | 'ordem' | 'app_user_id' | 'app_user'>>(EMPTY);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    const { data } = await supabase.from('team_members').select('*').order('full_name', { ascending: true });
+    const { data } = await supabase.from('team_members').select('*, app_user:app_users(avatar_url)').order('full_name', { ascending: true });
     setRows((data as TeamMember[]) || []);
     setLoading(false);
   }, []);
@@ -68,8 +71,8 @@ export default function DadosEquipe() {
 
   const openNew = () => { setForm(EMPTY); setEditing('new'); };
   const openEdit = (m: TeamMember) => {
-    const { id, ordem, app_user_id, ...rest } = m;
-    void id; void ordem; void app_user_id;
+    const { id, ordem, app_user_id, app_user, ...rest } = m;
+    void id; void ordem; void app_user_id; void app_user;
     setForm({ ...EMPTY, ...rest });
     setEditing(m);
   };
@@ -161,7 +164,7 @@ export default function DadosEquipe() {
             <button key={m.id} onClick={() => openEdit(m)}
               className="card text-left border border-lumos-border bg-lumos-surface hover:border-lumos-yellow/40 hover:shadow-md transition-all p-4 flex flex-col gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <UserAvatar user={{ id: m.app_user_id, full_name: m.full_name, avatar_url: m.photo_url } as any} size={44} showStatus />
+                <UserAvatar user={{ id: m.app_user_id, full_name: m.full_name, avatar_url: m.app_user?.avatar_url ?? m.photo_url } as any} size={44} showStatus />
                 <div className="min-w-0">
                   <p className="font-bold text-lumos-text-primary truncate">{m.full_name}</p>
                   <p className="text-[11px] text-lumos-text-secondary truncate">
@@ -210,13 +213,14 @@ export default function DadosEquipe() {
               <Section title="Na Lumos" icon={Briefcase}>
                 <Field label="Cargo / função" value={form.role_title || ''} onChange={v => setField('role_title', v)} />
                 <Field label="Setor" value={form.department || ''} onChange={v => setField('department', v)} />
-                <Field label="Entrou na Lumos" type="date" value={form.joined_at || ''} onChange={v => setField('joined_at', v)} icon={CalendarDays} />
-                <Field label="Foto (URL)" value={form.photo_url || ''} onChange={v => setField('photo_url', v)} />
+                <Field label="Entrou na Lumos" type="date" value={form.joined_at || ''} onChange={v => setField('joined_at', v)} icon={CalendarDays} full />
               </Section>
 
-              <Section title="Outros" icon={CreditCard}>
+              <Section title="Tamanhos & pagamento" icon={Shirt}>
+                <Field label="Camiseta" value={form.shirt_size || ''} onChange={v => setField('shirt_size', v)} icon={Shirt} />
+                <Field label="Calça / shorts" value={form.pants_size || ''} onChange={v => setField('pants_size', v)} icon={Shirt} />
+                <Field label="Calçado" value={form.shoe_size || ''} onChange={v => setField('shoe_size', v)} icon={Footprints} />
                 <Field label="Chave PIX" value={form.pix_key || ''} onChange={v => setField('pix_key', v)} icon={CreditCard} />
-                <Field label="Tamanho de camiseta" value={form.shirt_size || ''} onChange={v => setField('shirt_size', v)} icon={Shirt} />
                 <div className="col-span-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Observações</label>
                   <textarea value={form.notes || ''} onChange={e => setField('notes', e.target.value)} rows={2} className="input-lumos w-full text-sm resize-none" />
