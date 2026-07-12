@@ -175,7 +175,7 @@ export default function Fornecedores() {
                     {f.servicos?.length ? (
                       <div className="flex flex-wrap gap-1">
                         {f.servicos.map((s: any) => (
-                          <span key={s.id} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20">
+                          <span key={s.id} className="text-[10px] font-bold px-2 py-0.5 rounded bg-lumos-yellow/15 text-lumos-text-primary border border-lumos-yellow/40">
                             {s.tipo_servico}
                           </span>
                         ))}
@@ -269,7 +269,7 @@ export default function Fornecedores() {
                       {f.servicos?.length ? (
                         <div className="flex flex-wrap gap-1 max-w-[280px]">
                           {f.servicos.map((s: any) => (
-                            <span key={s.id} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20 whitespace-nowrap">
+                            <span key={s.id} className="text-[10px] font-bold px-2 py-0.5 rounded bg-lumos-yellow/15 text-lumos-text-primary border border-lumos-yellow/40 whitespace-nowrap">
                               {s.tipo_servico}
                             </span>
                           ))}
