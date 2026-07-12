@@ -1,0 +1,132 @@
+// Catálogo padrão de serviços de produtora audiovisual. Serve de fonte de
+// autocomplete no cadastro de fornecedores, pra padronizar os nomes (nada de
+// "FILMMAKER" vs "Filmmaker" vs "Op câmera"). É só editar/expandir aqui.
+
+export const SERVICOS_POR_CATEGORIA: Record<string, string[]> = {
+  'Direção': [
+    'Direção geral',
+    'Direção de cena / artística',
+    'Direção de cena / artística (com PPM)',
+    'Direção de fotografia (DOP)',
+    'Assistente de direção (AD)',
+    'Continuísta / Script',
+    'Direção criativa',
+  ],
+  'Câmera / Imagem': [
+    'Operador de câmera',
+    'Cinegrafista',
+    'Filmmaker',
+    'Assistente de câmera (AC)',
+    'Foquista (1º AC)',
+    'DIT (Digital Imaging Technician)',
+    'Operador de Steadicam',
+    'Operador de gimbal / Ronin',
+    'Operador de drone',
+    'Operador de grua',
+    'Fotógrafo (still)',
+    'Diária de câmera (equipamento)',
+  ],
+  'Iluminação / Elétrica / Maquinária': [
+    'Gaffer (chefe de elétrica)',
+    'Eletricista',
+    'Best boy',
+    'Maquinista (grip)',
+    'Key grip',
+    'Rigger',
+    'DTV',
+  ],
+  'Áudio': [
+    'Som direto',
+    'Técnico de áudio',
+    'Operador de boom / microfonista',
+    'Mixagem de som',
+    'Sound design',
+    'Trilha sonora / Composição',
+    'Locução / Narração',
+    'Estúdio de áudio',
+  ],
+  'Arte': [
+    'Direção de arte',
+    'Cenografia',
+    'Produção de objetos / Objetos',
+    'Aderecista',
+    'Cenotécnico / Montagem de cenário',
+    'Figurino',
+    'Camareira',
+  ],
+  'Maquiagem / Beleza': [
+    'Maquiagem',
+    'Cabelo',
+    'Maquiagem e cabelo',
+    'Caracterização / FX makeup',
+  ],
+  'Elenco / Casting': [
+    'Ator / Atriz',
+    'Modelo',
+    'Apresentador(a)',
+    'Casting / Produção de elenco',
+    'Figuração / Elenco de apoio',
+    'Dublê',
+  ],
+  'Produção': [
+    'Produção executiva',
+    'Produtor(a)',
+    'Coordenação de produção',
+    'Coordenação técnica',
+    'Assistente de produção',
+    'Produção de set',
+    'Produção de locação',
+    'Logística',
+    'Catering / Alimentação',
+    'Segurança',
+  ],
+  'Transporte / Apoio': [
+    'Motoboy',
+    'Motorista / Transporte',
+    'Van / Transporte de equipe',
+  ],
+  'Pós-produção': [
+    'Edição de vídeo',
+    'Edição sameday',
+    'Montagem',
+    'Motion graphics / Animação 2D',
+    'Animação 3D',
+    'VFX / Composição',
+    'Color grading / Colorização',
+    'Finalização / Masterização',
+    'Legendagem',
+  ],
+  'Roteiro / Conteúdo': [
+    'Roteiro',
+    'Storyboard',
+    'Storymaker',
+    'Copywriter / Redação',
+    'Social media',
+    'Design gráfico',
+  ],
+  'Live / Transmissão': [
+    'Transmissão ao vivo (live streaming)',
+    'Switcher / Corte ao vivo',
+    'Operador de VT / Playback',
+    'Técnico de vídeo / Engenheiro de imagem',
+    'Estrutura de TV / Switcher (locação)',
+  ],
+  'Locação de equipamento': [
+    'Locação de câmera',
+    'Locação de iluminação',
+    'Locação de áudio',
+    'Locação de estúdio',
+    'Locação de gerador',
+    'Locação de drone',
+  ],
+  'Outros': [
+    'Tudo (produtora full-service)',
+    'Consultoria',
+    'Tradução',
+  ],
+};
+
+// Lista achatada e ordenada, para o <datalist> de autocomplete.
+export const SERVICOS_CATALOGO: string[] = Array.from(
+  new Set(Object.values(SERVICOS_POR_CATEGORIA).flat())
+).sort((a, b) => a.localeCompare(b, 'pt-BR'));
