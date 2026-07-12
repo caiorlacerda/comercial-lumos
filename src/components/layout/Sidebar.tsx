@@ -23,6 +23,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const visibleSecs = getVisibleSections(ctx);
   const currentSection = visibleSecs.find(s => s.id === activeSection) || visibleSecs[0];
 
+  // As views de produção compartilham um layout (nav de pills fixa) — agrupá-las
+  // sob a mesma key evita que o cross-fade global re-monte (e "pisque") a nav ao
+  // trocar de view; a transição do conteúdo é feita dentro do ProducaoLayout.
+  const PRODUCAO_VIEWS = ['/producao', '/producao/dashboard', '/producao/board', '/producao/schedule', '/producao/cronograma-edicao'];
+  const transitionKey = PRODUCAO_VIEWS.includes(location.pathname) ? '__producao_views__' : location.pathname;
+
   const sidebarContent = (
     <div className="flex flex-col h-full bg-lumos-surface">
       {/* Navigation */}
@@ -92,7 +98,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           !isHome && "lg:ml-64"
         )}>
           <AnimatePresence mode="wait">
-            <PageTransition key={location.pathname}>
+            <PageTransition key={transitionKey}>
               <div className="w-full p-4 lg:p-8">
                 {/* Suspense interno: o carregamento de um chunk lazy mostra o
                     loader só na área de conteúdo, mantendo topbar/sidebar

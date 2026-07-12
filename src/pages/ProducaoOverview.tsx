@@ -7,7 +7,6 @@ import {
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/context/ToastContext';
-import ProducaoViewsNav from '@/components/producao/ProducaoViewsNav';
 import { TASK_STATUS_GROUPS, getStatusDetails } from '@/pages/Projetos';
 
 // -------------------------------------------------------------
@@ -221,7 +220,6 @@ export default function ProducaoOverview() {
 
   return (
     <div className="space-y-6 font-work-sans">
-      <ProducaoViewsNav />
       {/* Header */}
       <div>
         <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight flex items-center gap-2.5">
