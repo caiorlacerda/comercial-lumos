@@ -101,58 +101,53 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* TipTap ProseMirror Editor Styles */
+/* TipTap ProseMirror — editor de descrição (tipografia estilo ClickUp) */
 .ProseMirror {
   outline: none;
   min-height: 150px;
 }
-.ProseMirror p {
-  margin-bottom: 0.5rem;
-}
+.ProseMirror > * + * { margin-top: 0.55rem; }
+.ProseMirror p { line-height: 1.65; }
 .ProseMirror ul {
   list-style-type: disc;
-  padding-left: 1.25rem;
-  margin-bottom: 0.5rem;
+  padding-left: 1.4rem;
 }
 .ProseMirror ol {
   list-style-type: decimal;
-  padding-left: 1.25rem;
-  margin-bottom: 0.5rem;
+  padding-left: 1.4rem;
 }
+.ProseMirror li { margin: 0.15rem 0; }
+.ProseMirror li > p { margin: 0; }
 .ProseMirror blockquote {
   border-left: 3px solid #facc15;
-  padding-left: 0.75rem;
-  font-style: italic;
-  margin-bottom: 0.5rem;
+  padding: 0.15rem 0 0.15rem 0.85rem;
+  color: inherit;
+  opacity: 0.88;
 }
 .ProseMirror a {
   color: #facc15;
   text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid rgb(128 128 128 / 0.28);
+  margin: 1rem 0;
+}
+.ProseMirror code {
+  background: rgb(128 128 128 / 0.16);
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+  font-size: 0.88em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* TipTap Heading Sizes */
-.ProseMirror h1 {
-  font-size: 1.5rem;
-  font-weight: 900;
-  margin-top: 1rem;
-  margin-bottom: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: -0.025em;
-}
-.ProseMirror h2 {
-  font-size: 1.25rem;
-  font-weight: 800;
-  margin-top: 0.85rem;
-  margin-bottom: 0.4rem;
-  text-transform: uppercase;
-}
-.ProseMirror h3 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-top: 0.75rem;
-  margin-bottom: 0.3rem;
-  text-transform: uppercase;
-}
+/* Títulos H1–H5 (sem caixa-alta, elegantes) */
+.ProseMirror h1 { font-size: 1.6rem; font-weight: 800; line-height: 1.25; margin-top: 1.1rem; letter-spacing: -0.02em; }
+.ProseMirror h2 { font-size: 1.32rem; font-weight: 800; line-height: 1.3; margin-top: 1rem; letter-spacing: -0.015em; }
+.ProseMirror h3 { font-size: 1.14rem; font-weight: 700; line-height: 1.3; margin-top: 0.9rem; }
+.ProseMirror h4 { font-size: 1.02rem; font-weight: 700; line-height: 1.35; margin-top: 0.8rem; }
+.ProseMirror h5 { font-size: 0.9rem; font-weight: 700; line-height: 1.35; margin-top: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.82; }
 
 /* Checklist / Task List styles */
 .ProseMirror ul[data-type="taskList"] {
