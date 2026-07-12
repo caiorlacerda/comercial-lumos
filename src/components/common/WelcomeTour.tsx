@@ -69,13 +69,13 @@ const ReviewVisual = () => (
 );
 
 // ── Slides por cargo ────────────────────────────────────────────────────────
-interface Slide { key: string; accent: string; title: string; body: string; Visual: React.FC; }
+interface Slide { key: string; accent: string; title: string; body: React.ReactNode; Visual: React.FC; }
 
 function getSlides(role: string, isAdmin: boolean): Slide[] {
   const intro: Slide = {
     key: 'intro', accent: 'yellow',
-    title: 'Bem-vindo à central da Lumos! 🎬',
-    body: 'Esta é a nossa plataforma de produção. Pensa num ClickUp, mas agora feito sob medida pra Lumos, com tudo o que a gente precisa num lugar só.',
+    title: 'Bem-vindo ao App da Lumos!',
+    body: 'A nossa central de produção, feita sob medida pra Lumos. Pensa num ClickUp, mas nosso!',
     Visual: () => <Float>🎬</Float>,
   };
   const tasks: Slide = {
@@ -123,7 +123,12 @@ function getSlides(role: string, isAdmin: boolean): Slide[] {
   const finish: Slide = {
     key: 'finish', accent: 'yellow',
     title: 'Bora produzir! 🚀',
-    body: 'É isso! Explore à vontade, e qualquer dúvida, chama o time. Seja muito bem-vindo(a) à Lumos.',
+    body: (
+      <>
+        É isso! Explore à vontade, e qualquer dúvida, chama o time.
+        <span className="block mt-2 font-bold text-lumos-text-primary">Seja muito bem-vindo(a) à Lumos.</span>
+      </>
+    ),
     Visual: () => <Float>🚀</Float>,
   };
 
