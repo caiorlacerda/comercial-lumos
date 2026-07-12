@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
+import { formatName, formatDoc, formatPhone } from '@/lib/format';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { Fornecedor } from '@/types/fornecedor';
@@ -137,7 +138,7 @@ export default function Fornecedores() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-lg font-bold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors line-clamp-1">
-                        {f.nome}
+                        {formatName(f.nome)}
                       </h3>
                       {f.status_cadastro === 'pendente' && (
                         <span className="bg-yellow-500/15 text-yellow-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-yellow-500/20 shrink-0">
@@ -147,7 +148,7 @@ export default function Fornecedores() {
                     </div>
                     {f.cnpj && (
                       <p className="text-xs text-lumos-text-secondary font-medium tracking-wide mt-0.5">
-                        CNPJ/CPF: {f.cnpj}
+                        CNPJ/CPF: {formatDoc(f.cnpj)}
                       </p>
                     )}
                   </div>
@@ -160,7 +161,7 @@ export default function Fornecedores() {
                   {f.telefone && (
                     <div className="flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5 text-lumos-yellow shrink-0" />
-                      <span>{f.telefone}</span>
+                      <span>{formatPhone(f.telefone)}</span>
                     </div>
                   )}
                   {f.email && (
@@ -169,9 +170,19 @@ export default function Fornecedores() {
                       <span className="truncate">{f.email}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-lumos-yellow shrink-0" />
-                    <span>{f.servicos?.length || 0} {f.servicos?.length === 1 ? 'serviço' : 'serviços'}</span>
+                  <div className="flex items-start gap-2">
+                    <FileText className="w-3.5 h-3.5 text-lumos-yellow shrink-0 mt-0.5" />
+                    {f.servicos?.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {f.servicos.map((s: any) => (
+                          <span key={s.id} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20">
+                            {s.tipo_servico}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="italic opacity-70">Sem serviços cadastrados</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -245,16 +256,26 @@ export default function Fornecedores() {
                     className="hover:bg-lumos-text-secondary/[0.03] cursor-pointer transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-lumos-text-primary">{f.nome}</span>
+                        <span className="font-bold text-lumos-text-primary">{formatName(f.nome)}</span>
                         {f.status_cadastro === 'pendente' && (
                           <span className="bg-yellow-500/15 text-yellow-500 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-yellow-500/20">Pendente</span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-lumos-text-secondary hidden md:table-cell">{f.cnpj || '—'}</td>
-                    <td className="px-4 py-3 text-lumos-text-secondary hidden lg:table-cell">{f.telefone || '—'}</td>
+                    <td className="px-4 py-3 text-lumos-text-secondary hidden md:table-cell">{formatDoc(f.cnpj) || '—'}</td>
+                    <td className="px-4 py-3 text-lumos-text-secondary hidden lg:table-cell">{formatPhone(f.telefone) || '—'}</td>
                     <td className="px-4 py-3 text-lumos-text-secondary hidden lg:table-cell truncate max-w-[200px]">{f.email || '—'}</td>
-                    <td className="px-4 py-3 text-lumos-text-secondary">{f.servicos?.length || 0}</td>
+                    <td className="px-4 py-3">
+                      {f.servicos?.length ? (
+                        <div className="flex flex-wrap gap-1 max-w-[280px]">
+                          {f.servicos.map((s: any) => (
+                            <span key={s.id} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-lumos-yellow/10 text-lumos-yellow border border-lumos-yellow/20 whitespace-nowrap">
+                              {s.tipo_servico}
+                            </span>
+                          ))}
+                        </div>
+                      ) : <span className="text-lumos-text-secondary">—</span>}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         {f.status_cadastro === 'pendente' && (
