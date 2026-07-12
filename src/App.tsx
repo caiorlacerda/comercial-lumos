@@ -5,6 +5,7 @@ import throttle from 'lodash/throttle';
 // Shell da aplicação — carregado sempre (eager).
 import Login from '@/pages/Login';
 import Sidebar from '@/components/layout/Sidebar';
+import ProducaoLayout from '@/pages/ProducaoLayout';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PermissionGuard } from '@/components/auth/PermissionGuard';
 import { LayoutProvider } from '@/context/LayoutContext';
@@ -583,65 +584,16 @@ function AppContent() {
               </AuthWrapper>
             }
           />
-          {/* PRODUÇÃO — Visão Geral */}
-          <Route
-            path="/producao"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="ordem_do_dia">
-                  <ProducaoOverview />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
-
-          {/* PRODUÇÃO — Dashboard */}
-          <Route
-            path="/producao/dashboard"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="ordem_do_dia">
-                  <ProducaoDashboard />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
-
-          {/* PRODUÇÃO — Cronograma de Edição */}
-          <Route
-            path="/producao/cronograma-edicao"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="cronograma_edicao">
-                  <CronogramaEdicao />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
-
-          {/* PRODUÇÃO — Board Global (Kanban) */}
-          <Route
-            path="/producao/board"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="ordem_do_dia">
-                  <ProducaoBoard />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
-
-          {/* PRODUÇÃO — Timeline (Gantt) */}
-          <Route
-            path="/producao/schedule"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="ordem_do_dia">
-                  <ProducaoSchedule />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
+          {/* PRODUÇÃO — Views (Visão Geral / Calendário / Board / Timeline /
+              Cronograma). Layout compartilhado: a nav de pills fica fixa e só o
+              conteúdo troca (rotas aninhadas). */}
+          <Route element={<AuthWrapper><ProducaoLayout /></AuthWrapper>}>
+            <Route path="/producao" element={<PermissionGuard permission="ordem_do_dia"><ProducaoOverview /></PermissionGuard>} />
+            <Route path="/producao/dashboard" element={<PermissionGuard permission="ordem_do_dia"><ProducaoDashboard /></PermissionGuard>} />
+            <Route path="/producao/board" element={<PermissionGuard permission="ordem_do_dia"><ProducaoBoard /></PermissionGuard>} />
+            <Route path="/producao/schedule" element={<PermissionGuard permission="ordem_do_dia"><ProducaoSchedule /></PermissionGuard>} />
+            <Route path="/producao/cronograma-edicao" element={<PermissionGuard permission="cronograma_edicao"><CronogramaEdicao /></PermissionGuard>} />
+          </Route>
 
           {/* PRODUÇÃO — Gerenciador de Projetos */}
           <Route

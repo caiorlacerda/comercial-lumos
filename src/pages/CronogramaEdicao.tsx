@@ -36,7 +36,6 @@ import {
   useDroppable
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import ProducaoViewsNav from '@/components/producao/ProducaoViewsNav';
 
 interface Editor {
   id: string;
@@ -835,8 +834,7 @@ export default function CronogramaEdicao() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="p-4 lg:p-8 space-y-6 text-lumos-text-primary max-w-7xl mx-auto font-work-sans">
-      <ProducaoViewsNav />
+      <div className="space-y-6 text-lumos-text-primary font-work-sans">
 
       {/* CABEÇALHO */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-lumos-border pb-6">
