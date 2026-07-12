@@ -1455,13 +1455,12 @@ export default function BudgetEditorPage() {
                   <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block flex items-center gap-1">
                     <Info className="w-3 h-3" /> Observações Internas (Não aparecem no PDF)
                   </label>
-                  <textarea 
-                    disabled={isReadOnly}
-                    className="input-lumos w-full min-h-[80px] text-sm bg-blue-50/10 disabled:opacity-70 scrollbar-thin"
-                    placeholder="Notas para a equipe Lumos..."
+                  <RichTextEditor
+                    editable={!isReadOnly}
+                    minHeight={80}
                     value={version?.notes_internal || ''}
-                    onChange={(e) => {
-                      setVersion(v => v ? { ...v, notes_internal: e.target.value } : null);
+                    onChange={(html) => {
+                      setVersion(v => v ? { ...v, notes_internal: html } : null);
                       isDirty.current = true;
                     }}
                   />

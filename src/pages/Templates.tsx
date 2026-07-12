@@ -19,6 +19,7 @@ import {
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
+import RichTextEditor from '@/components/common/RichTextEditor';
 import { useToast } from '@/context/ToastContext';
 
 interface Template {
@@ -502,11 +503,10 @@ export default function Templates() {
               Estrutura do Conteúdo
               <span className="text-lumos-yellow/60 normal-case font-medium">Este texto preencherá o campo de briefing no editor.</span>
             </label>
-            <textarea 
-              className="input-lumos w-full min-h-[300px] text-xs leading-relaxed font-mono"
-              value={editingBriefing?.notes_client}
-              onChange={e => setEditingBriefing({...editingBriefing!, notes_client: e.target.value})}
-              placeholder="Descreva a estrutura do template aqui..."
+            <RichTextEditor
+              minHeight={300}
+              value={editingBriefing?.notes_client || ''}
+              onChange={html => setEditingBriefing({ ...editingBriefing!, notes_client: html })}
             />
           </div>
         </div>
