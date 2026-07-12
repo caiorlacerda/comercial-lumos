@@ -18,6 +18,10 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import Confetti from '@/components/common/Confetti';
+import UserAvatar from '@/components/common/UserAvatar';
+
+interface Birthday { id: string; full_name: string; photo_url: string | null; }
 
 interface TaskWithProject {
   id: string;
@@ -45,6 +49,17 @@ export default function Home() {
 
   const [tasks, setTasks] = useState<TaskWithProject[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
+
+  // Aniversariantes de hoje → confete + banner comemorativo (para todo o time)
+  const [birthdays, setBirthdays] = useState<Birthday[]>([]);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [bannerClosed, setBannerClosed] = useState(false);
+  useEffect(() => {
+    supabase.rpc('birthdays_today').then(({ data }) => {
+      const list = (data as Birthday[]) || [];
+      if (list.length) { setBirthdays(list); setShowConfetti(true); }
+    });
+  }, []);
 
   const userId = profile?.id;
   const ctx = useMemo(() => ({ can, isAdmin }), [can, isAdmin]);
@@ -188,9 +203,39 @@ export default function Home() {
     );
   };
 
+  const myBirthday = birthdays.some(b => b.full_name === profile?.full_name);
+  const birthdayNames = birthdays.map(b => b.full_name.split(' ')[0]).join(', ').replace(/, ([^,]*)$/, ' e $1');
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-work-sans text-lumos-text-primary pb-10">
-      
+
+      {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
+
+      {/* Banner de aniversário 🎂 */}
+      {birthdays.length > 0 && !bannerClosed && (
+        <div className="relative overflow-hidden rounded-lumos border border-lumos-yellow/40 bg-gradient-to-r from-lumos-yellow/15 via-pink-500/10 to-purple-500/10 p-4 flex items-center gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex -space-x-2 flex-shrink-0">
+            {birthdays.slice(0, 4).map(b => (
+              <UserAvatar key={b.id} user={{ full_name: b.full_name, avatar_url: b.photo_url }} size={40} className="ring-2 ring-lumos-surface rounded-full" />
+            ))}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm md:text-base font-black text-lumos-text-primary flex items-center gap-1.5">
+              🎂 {myBirthday ? `Feliz aniversário, ${profile?.full_name?.split(' ')[0]}!` : `Hoje é aniversário de ${birthdayNames}!`}
+            </p>
+            <p className="text-[11px] text-lumos-text-secondary font-semibold">
+              {myBirthday ? 'A Lumos deseja um dia incrível! 🎉' : 'Passa lá e deseja um feliz aniversário! 🎉'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button onClick={() => setShowConfetti(true)} title="Soltar confete de novo" className="hidden sm:flex text-lg hover:scale-110 transition-transform">🎉</button>
+            <button onClick={() => setBannerClosed(true)} className="p-1 rounded-full text-lumos-text-secondary hover:text-lumos-text-primary" title="Fechar">
+              <span className="text-lg leading-none">×</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-lumos-surface border border-lumos-border/50 rounded-lumos p-6 relative overflow-hidden shadow-sm">
         <div className="absolute top-0 left-0 h-full w-1 bg-lumos-yellow" />

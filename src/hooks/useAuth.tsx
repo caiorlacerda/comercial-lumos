@@ -10,7 +10,7 @@ export type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'basico
 // 'acessos' (só produção/admin) por ser sensível.
 export const ROLE_DEFAULTS: Record<string, string[]> = {
   admin: ['*'],
-  producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados'],
   atendimento: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
   editor: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao'],
   basico: ['reembolso'],
