@@ -1448,6 +1448,9 @@ export default function Projetos() {
 
   // Generate OS PDF dynamics
   const handleDownloadOS = async (projectId: string, budgetId: string) => {
+    // Abre a aba JÁ no clique (dentro do gesto do usuário) pra não ser bloqueada
+    // pelo popup blocker; depois aponta ela pro PDF gerado.
+    const win = window.open('', '_blank');
     setIsGeneratingOS(projectId);
     try {
       const { data: budget, error: bErr } = await supabase
@@ -1458,6 +1461,7 @@ export default function Projetos() {
       if (bErr || !budget) throw new Error('Budget not found');
 
       if (!budget.active_version_id) {
+        win?.close();
         toast.error('Este orçamento não possui uma versão ativa configurada.');
         return;
       }
@@ -1476,7 +1480,6 @@ export default function Projetos() {
         .order('sort_order', { ascending: true });
       if (iErr || !items) throw new Error('Items not found');
 
-      const fileName = `OS_${budget.code}_Lumos_${budget.project_name}.pdf`;
       const blob = await pdf(
         <ServiceOrderPDF
           budget={budget}
@@ -1485,18 +1488,15 @@ export default function Projetos() {
           items={items}
         />
       ).toBlob();
-      
+
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success('Ordem de Serviço baixada!');
+      if (win) win.location.href = url; else window.open(url, '_blank');
+      // dá tempo do PDF carregar na aba antes de liberar o blob
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success('Ordem de Serviço aberta em nova aba!');
     } catch (err: any) {
       console.error('Error generating OS:', err);
+      win?.close();
       toast.error('Erro ao gerar Ordem de Serviço PDF.');
     } finally {
       setIsGeneratingOS(null);
@@ -1766,7 +1766,7 @@ export default function Projetos() {
                         ) : (
                           <>
                             <FileText className="w-3.5 h-3.5" />
-                            Baixar OS (PDF)
+                            Abrir OS (PDF)
                           </>
                         )}
                       </button>
@@ -2231,7 +2231,7 @@ export default function Projetos() {
                                   onClick={() => handleDownloadOS(proj.id, proj.budget_id!)}
                                   disabled={isGeneratingOS === proj.id}
                                   className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-                                  title="Baixar Ordem de Serviço (PDF)"
+                                  title="Abrir Ordem de Serviço (PDF)"
                                 >
                                   {isGeneratingOS === proj.id ? (
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
