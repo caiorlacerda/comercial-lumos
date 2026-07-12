@@ -4,6 +4,7 @@ import { Truck, Plus, Search, Phone, Mail, FileText, Trash2, Edit2, AlertTriangl
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
+import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { Fornecedor } from '@/types/fornecedor';
@@ -18,6 +19,8 @@ export default function Fornecedores() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('lumos-fornecedores-view') as ViewMode) || 'list');
+  useEffect(() => { localStorage.setItem('lumos-fornecedores-view', viewMode); }, [viewMode]);
 
   useEffect(() => {
     fetchFornecedores();
@@ -85,6 +88,7 @@ export default function Fornecedores() {
           <p className="text-lumos-text-secondary text-sm">Gestão de parceiros, fornecedores e diárias de serviço.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ViewToggle value={viewMode} onChange={setViewMode} />
           <button
             onClick={handleCopyPublicLink}
             className="btn-secondary h-10 px-4 flex items-center gap-2 text-xs"
@@ -120,7 +124,7 @@ export default function Fornecedores() {
         <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">
           Nenhum fornecedor cadastrado ou encontrado.
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredFornecedores.map(f => (
             <div
@@ -219,6 +223,68 @@ export default function Fornecedores() {
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        /* Visão em LISTA */
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-lumos-bg/40 border-b border-lumos-border">
+                <tr className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
+                  <th className="px-4 py-3">Nome</th>
+                  <th className="px-4 py-3 hidden md:table-cell">CNPJ/CPF</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">Telefone</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">E-mail</th>
+                  <th className="px-4 py-3">Serviços</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-lumos-border/50">
+                {filteredFornecedores.map(f => (
+                  <tr key={f.id} onClick={() => navigate(`/producao/fornecedores/${f.id}`)}
+                    className="hover:bg-lumos-text-secondary/[0.03] cursor-pointer transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-lumos-text-primary">{f.nome}</span>
+                        {f.status_cadastro === 'pendente' && (
+                          <span className="bg-yellow-500/15 text-yellow-500 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-yellow-500/20">Pendente</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-lumos-text-secondary hidden md:table-cell">{f.cnpj || '—'}</td>
+                    <td className="px-4 py-3 text-lumos-text-secondary hidden lg:table-cell">{f.telefone || '—'}</td>
+                    <td className="px-4 py-3 text-lumos-text-secondary hidden lg:table-cell truncate max-w-[200px]">{f.email || '—'}</td>
+                    <td className="px-4 py-3 text-lumos-text-secondary">{f.servicos?.length || 0}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        {f.status_cadastro === 'pendente' && (
+                          <button onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const { error } = await supabase.from('fornecedores').update({ status_cadastro: 'aprovado' }).eq('id', f.id);
+                              if (error) throw error;
+                              toast.success('Fornecedor aprovado com sucesso!');
+                              fetchFornecedores();
+                            } catch (err: any) { toast.error(`Erro ao aprovar: ${err.message}`); }
+                          }} className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-all" title="Aprovar">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button onClick={e => { e.stopPropagation(); navigate(`/producao/fornecedores/${f.id}`); }}
+                          className="p-1.5 text-lumos-text-secondary hover:text-blue-500 rounded hover:bg-blue-500/10 transition-all" title="Editar">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); setDeletingId(f.id); setIsDeleteModalOpen(true); }}
+                          className="p-1.5 text-lumos-text-secondary hover:text-red-500 rounded hover:bg-red-500/10 transition-all" title="Excluir">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
