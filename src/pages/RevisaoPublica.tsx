@@ -137,6 +137,37 @@ export default function RevisaoPublica() {
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };
+  // Pula alguns segundos sem pausar (mantém o estado de play atual)
+  const seekRelative = (deltaSec: number) => {
+    const v = videoRef.current; if (!v) return;
+    v.currentTime = Math.min(v.duration || Infinity, Math.max(0, v.currentTime + deltaSec));
+    setCurrentMs(v.currentTime * 1000);
+  };
+  // Aumenta/diminui a velocidade dentro dos passos de SPEEDS (lê a taxa ao vivo)
+  const bumpSpeed = (dir: 1 | -1) => {
+    const v = videoRef.current; if (!v) return;
+    const idx = SPEEDS.indexOf(v.playbackRate);
+    const next = SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, (idx < 0 ? 0 : idx) + dir))];
+    v.playbackRate = next; setSpeed(next);
+  };
+
+  // Atalhos de teclado do player (ignora quando digitando em campos)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      switch (e.key) {
+        case ' ': case 'k': e.preventDefault(); togglePlay(); break;
+        case 'ArrowLeft': e.preventDefault(); seekRelative(e.shiftKey ? -10 : -5); break;
+        case 'ArrowRight': e.preventDefault(); seekRelative(e.shiftKey ? 10 : 5); break;
+        case 'ArrowUp': e.preventDefault(); bumpSpeed(1); break;
+        case 'ArrowDown': e.preventDefault(); bumpSpeed(-1); break;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Canvas: desenho de anotações ---
   const redraw = useCallback(() => {
@@ -184,6 +215,20 @@ export default function RevisaoPublica() {
     setViewingShapes([]); setShapes([]); setComposing(true);
   };
   const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setShowTools(false); setCommentText(''); };
+
+  // Enter envia o comentário; Shift/Cmd/Ctrl+Enter quebra linha
+  const onCommentKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Enter') return;
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      const ta = e.currentTarget; const s = ta.selectionStart, en = ta.selectionEnd;
+      setCommentText(commentText.slice(0, s) + '\n' + commentText.slice(en));
+      requestAnimationFrame(() => { try { ta.selectionStart = ta.selectionEnd = s + 1; } catch { /* noop */ } });
+    } else {
+      e.preventDefault();
+      submitComment();
+    }
+  };
 
   const submitComment = async () => {
     if (!commentText.trim() && shapes.length === 0) return;
@@ -383,7 +428,7 @@ export default function RevisaoPublica() {
                     <span className="text-[11px] font-black text-lumos-text-primary truncate">{c.author_name}{c.is_team && <span className="ml-1 text-[8px] uppercase text-lumos-yellow">Lumos</span>}</span>
                     <span className="text-[10px] font-mono font-bold text-lumos-yellow flex items-center gap-1">{c.resolved && <Check className="w-3 h-3 text-green-500" />}{fmtTime(c.timecode_ms)}</span>
                   </div>
-                  {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug">{c.body}</p>}
+                  {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug whitespace-pre-line">{c.body}</p>}
                   {c.annotations.length > 0 && <span className="text-[9px] text-lumos-text-secondary/60 flex items-center gap-1 mt-1"><Pencil className="w-2.5 h-2.5" /> {c.annotations.length} anotação(ões)</span>}
                 </button>
               ))
@@ -429,8 +474,8 @@ export default function RevisaoPublica() {
             <div className="flex items-end gap-2">
               <textarea
                 value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComment(); }}
-                rows={1} placeholder={`Comentar em ${fmtTime(currentMs)}…`}
+                onKeyDown={onCommentKey}
+                rows={1} placeholder={`Comentar em ${fmtTime(currentMs)}… (Enter envia, Shift+Enter quebra linha)`}
                 className="input-lumos flex-1 text-xs resize-none min-h-[40px] max-h-28 py-2.5"
               />
               <button onClick={submitComment} disabled={sending || (!commentText.trim() && shapes.length === 0)}
