@@ -62,7 +62,7 @@ export const NAV_SECTIONS: Section[] = [
   {
     id: 'financeiro',
     title: 'FINANCEIRO',
-    visibleWhen: () => true,
+    visibleWhen: ({ can, isAdmin }) => isAdmin || can('custos_projeto') || can('reembolso'),
     items: [
       { icon: BarChart3, label: 'Dashboard Financeiro', path: '/financeiro', permission: 'financeiro_dashboard', end: true },
       { icon: TrendingUp, label: 'Fluxo de Caixa', path: '/financeiro/fluxo-de-caixa', permission: 'financeiro_admin' },
