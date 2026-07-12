@@ -5,6 +5,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+import ServicosDatalist from '@/components/common/ServicosDatalist';
 
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
@@ -293,6 +294,7 @@ export default function CadastroFornecedorPublico() {
               </div>
 
               <div className="space-y-4">
+                <ServicosDatalist />
                 {services.map((item, idx) => (
                   <div key={idx} className="bg-lumos-bg/30 p-4 rounded border border-lumos-border grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative">
                     <div className="md:col-span-6 space-y-1">
@@ -302,8 +304,9 @@ export default function CadastroFornecedorPublico() {
                       <input
                         required
                         type="text"
+                        list="servicos-catalogo"
                         className="input-lumos w-full h-10 px-3 text-sm"
-                        placeholder="Ex: Diária de Câmera (Sony FX6)"
+                        placeholder="Busque o serviço (ex.: Filmmaker, Som direto…)"
                         value={item.tipo_servico}
                         onChange={e => handleUpdateService(idx, 'tipo_servico', e.target.value)}
                       />

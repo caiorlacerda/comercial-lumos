@@ -4,6 +4,7 @@ import { ArrowLeft, Truck, Plus, Trash2, Save } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import ServicosDatalist from '@/components/common/ServicosDatalist';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -315,15 +316,17 @@ export default function FornecedorEditor() {
             </div>
 
             <div className="space-y-4">
+              <ServicosDatalist />
               {services.map((item, idx) => (
                 <div key={idx} className="bg-lumos-bg/30 p-4 rounded border border-lumos-border grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative">
                   <div className="md:col-span-6 space-y-1">
                     <label className="block text-[10px] font-bold text-lumos-text-secondary uppercase">Tipo de Serviço *</label>
-                    <input 
+                    <input
                       required
-                      type="text" 
+                      type="text"
+                      list="servicos-catalogo"
                       className="input-lumos w-full h-10 px-3 text-sm"
-                      placeholder="Ex: Diária de Filmmaker (Câmera própria)"
+                      placeholder="Busque o serviço (ex.: Filmmaker, Som direto…)"
                       value={item.tipo_servico}
                       onChange={e => handleUpdateService(idx, 'tipo_servico', e.target.value)}
                     />
