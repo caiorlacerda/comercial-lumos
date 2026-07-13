@@ -255,6 +255,40 @@ export default function Reembolso() {
     }
   };
 
+  // Reembolso vinculado a projeto vira custo do projeto (project_costs).
+  // Idempotente: dedupe por reimbursement_id (UNIQUE), então aprovar em lote ou
+  // reaprovar nunca duplica o custo. Reembolso interno (sem projeto) não gera custo.
+  const syncCostForReimbursement = async (item: any, status: string) => {
+    if (!item?.project_id) return; // interno / sem projeto não entra na conta do projeto
+    if (status === 'rejeitado') {
+      await supabase.from('project_costs').delete().eq('reimbursement_id', item.id);
+      return;
+    }
+    if (status !== 'aprovado' && status !== 'pago') return;
+    const paid = status === 'pago';
+    const payload: any = {
+      project_id: item.project_id,
+      description: item.description,
+      amount: item.amount,
+      cost_date: item.expense_date,
+      category: 'outro',
+      responsible_id: item.requester_id || null,
+      notes: `Reembolso — ${item.requester?.full_name || 'funcionário'}`,
+      reimbursement_id: item.id,
+      created_by: profile?.id || null,
+      status: paid ? 'pago' : 'pendente',
+      paid_at: paid ? new Date().toISOString() : null,
+      paid_by: paid ? (profile?.id || null) : null,
+    };
+    const { data: existing } = await supabase
+      .from('project_costs').select('id').eq('reimbursement_id', item.id).maybeSingle();
+    if (existing) {
+      await supabase.from('project_costs').update(payload).eq('id', existing.id);
+    } else {
+      await supabase.from('project_costs').insert([payload]);
+    }
+  };
+
   const updateStatus = async (id: string, status: string) => {
     try {
       const { error } = await supabase.from('reimbursements').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
@@ -274,6 +308,9 @@ export default function Reembolso() {
           created_by: profile?.id
         }]);
       }
+
+      // Reflete no custo do projeto (cria/atualiza/remove conforme o status).
+      if (item) await syncCostForReimbursement(item, status);
 
       // Trigger notifications for approved or rejected
       if (item && (status === 'aprovado' || status === 'rejeitado') && item.requester_id) {
@@ -334,6 +371,11 @@ export default function Reembolso() {
           }));
           await supabase.from('payables').insert(payables);
         }
+      }
+
+      // Reflete cada item no custo do projeto correspondente.
+      for (const item of toUpdate) {
+        await syncCostForReimbursement(item, status);
       }
 
       // Trigger notifications for approved or rejected

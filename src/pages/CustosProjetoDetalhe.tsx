@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
+import { formatBudgetCode } from '@/utils/formatters';
 import { ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -776,7 +777,7 @@ export default function CustosProjetoDetalhe() {
             <div className="flex items-center gap-2">
               {project.code && (
                 <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tighter">
-                  {project.code}
+                  {formatBudgetCode(project.code)}
                 </span>
               )}
               <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">
