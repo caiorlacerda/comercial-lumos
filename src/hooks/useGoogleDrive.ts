@@ -5,9 +5,24 @@ const STORAGE_KEY = 'lumos_google_access_token';
 const FOLDER_ID = import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID;
 
 export function useGoogleDrive() {
-  const [accessToken, setAccessToken] = useState<string | null>(
-    localStorage.getItem(STORAGE_KEY)
-  );
+  // Fonte de verdade do token é um REF (síncrono). O estado é só pra reatividade
+  // de UI. Sem isso, logo após o login o upload ainda leria o token antigo do
+  // closure (o React ainda não re-renderizou) e dava "Not authenticated".
+  const tokenRef = useRef<string | null>(localStorage.getItem(STORAGE_KEY));
+  const [accessToken, setAccessToken] = useState<string | null>(tokenRef.current);
+
+  const setToken = (token: string, expiresAt: number) => {
+    tokenRef.current = token;
+    setAccessToken(token);
+    localStorage.setItem(STORAGE_KEY, token);
+    localStorage.setItem(STORAGE_KEY + '_expires_at', expiresAt.toString());
+  };
+  const clearToken = () => {
+    tokenRef.current = null;
+    setAccessToken(null);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY + '_expires_at');
+  };
 
   // Resolvedores pendentes de ensureAuth(): resolvem quando o popup termina.
   const pendingAuth = useRef<((ok: boolean) => void)[]>([]);
@@ -19,11 +34,8 @@ export function useGoogleDrive() {
 
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
-      const token = tokenResponse.access_token;
       const expiresAt = Date.now() + tokenResponse.expires_in * 1000;
-      setAccessToken(token);
-      localStorage.setItem(STORAGE_KEY, token);
-      localStorage.setItem(STORAGE_KEY + '_expires_at', expiresAt.toString());
+      setToken(tokenResponse.access_token, expiresAt); // atualiza o ref na hora
       settleAuth(true);
     },
     onError: () => settleAuth(false),
@@ -35,162 +47,112 @@ export function useGoogleDrive() {
   });
 
   const isAuthenticated = useCallback(() => {
-    if (!accessToken) return false;
+    if (!tokenRef.current) return false;
     const expiresAtStr = localStorage.getItem(STORAGE_KEY + '_expires_at');
     if (expiresAtStr) {
       const expiresAt = parseInt(expiresAtStr, 10);
       if (Date.now() >= expiresAt) {
-        setAccessToken(null);
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(STORAGE_KEY + '_expires_at');
+        clearToken();
         return false;
       }
     }
     return true;
+    // accessToken na dep só pra recomputar em re-render; o valor real vem do ref.
   }, [accessToken]);
 
   const listFiles = useCallback(async (query: string) => {
-    if (!accessToken) throw new Error('Not authenticated with Google Drive');
+    const token = tokenRef.current;
+    if (!token) throw new Error('Not authenticated with Google Drive');
     const response = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&supportsAllDrives=true&includeItemsFromAllDrives=true`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!response.ok) {
       let errorData;
-      try {
-        errorData = await response.json();
-      } catch (e) {
-        errorData = { error: { message: 'Unknown error' } };
-      }
-      if (response.status === 401) {
-        setAccessToken(null);
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(STORAGE_KEY + '_expires_at');
-      }
+      try { errorData = await response.json(); } catch { errorData = { error: { message: 'Unknown error' } }; }
+      if (response.status === 401) clearToken();
       throw new Error(errorData.error?.message || `Failed to list files (${response.status})`);
     }
     return await response.json();
-  }, [accessToken]);
+  }, []);
 
   const createFolder = useCallback(async (name: string, parentId?: string) => {
-    if (!accessToken) throw new Error('Not authenticated with Google Drive');
-    const metadata = {
-      name,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: parentId ? [parentId] : []
-    };
+    const token = tokenRef.current;
+    if (!token) throw new Error('Not authenticated with Google Drive');
     const response = await fetch(
       'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true',
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(metadata)
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: parentId ? [parentId] : [] })
       }
     );
     if (!response.ok) {
       let errorData;
-      try {
-        errorData = await response.json();
-      } catch (e) {
-        errorData = { error: { message: 'Unknown error' } };
-      }
-      if (response.status === 401) {
-        setAccessToken(null);
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(STORAGE_KEY + '_expires_at');
-      }
+      try { errorData = await response.json(); } catch { errorData = { error: { message: 'Unknown error' } }; }
+      if (response.status === 401) clearToken();
       throw new Error(errorData.error?.message || `Failed to create folder (${response.status})`);
     }
     return await response.json();
-  }, [accessToken]);
+  }, []);
 
   const uploadToDrive = useCallback(async (fileBlob: Blob, fileName: string, mimeType: string = 'application/pdf', folderId?: string) => {
-    if (!accessToken) throw new Error('Not authenticated with Google Drive');
+    const token = tokenRef.current;
+    if (!token) throw new Error('Not authenticated with Google Drive');
 
     const boundary = '-------lumos_boundary_';
     const delimiter = `\r\n--${boundary}\r\n`;
     const closeDelimiter = `\r\n--${boundary}--`;
 
-    const metadata = JSON.stringify({
-      name: fileName,
-      parents: [folderId || FOLDER_ID]
-    });
+    const metadata = JSON.stringify({ name: fileName, parents: [folderId || FOLDER_ID] });
 
-    try {
-      const metadataPart = `Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}`;
-      const filePartHeader = `Content-Type: ${mimeType}\r\n\r\n`;
-      
-      const body = new Blob([
-        delimiter,
-        metadataPart,
-        delimiter,
-        filePartHeader,
-        fileBlob,
-        closeDelimiter
-      ], { type: `multipart/related; boundary=${boundary}` });
+    const metadataPart = `Content-Type: application/json; charset=UTF-8\r\n\r\n${metadata}`;
+    const filePartHeader = `Content-Type: ${mimeType}\r\n\r\n`;
 
-      // Shared Drive support requires supportsAllDrives and includeItemsFromAllDrives parameters
-      const response = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=id,name,mimeType,webViewLink',
-        {
-          method: 'POST',
-          headers: { 
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': `multipart/related; boundary=${boundary}`
-          },
-          body: body
-        }
-      );
+    const body = new Blob([
+      delimiter, metadataPart, delimiter, filePartHeader, fileBlob, closeDelimiter
+    ], { type: `multipart/related; boundary=${boundary}` });
 
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          errorData = { error: { message: 'Unknown error' } };
-        }
-        
-        if (response.status === 401) {
-          setAccessToken(null);
-          localStorage.removeItem(STORAGE_KEY);
-          localStorage.removeItem(STORAGE_KEY + '_expires_at');
-        }
-        throw new Error(errorData.error?.message || `Failed to upload to Google Drive (${response.status})`);
+    // Shared Drive support requires supportsAllDrives and includeItemsFromAllDrives parameters
+    const response = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=id,name,mimeType,webViewLink',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body: body
       }
+    );
 
-      return await response.json();
-    } catch (err) {
-      throw err;
+    if (!response.ok) {
+      let errorData;
+      try { errorData = await response.json(); } catch { errorData = { error: { message: 'Unknown error' } }; }
+      if (response.status === 401) clearToken();
+      throw new Error(errorData.error?.message || `Failed to upload to Google Drive (${response.status})`);
     }
-  }, [accessToken]);
+    return await response.json();
+  }, []);
 
   // Cria um arquivo nativo do Google (Docs/Sheets/Slides) dentro de uma pasta.
   // mimeType: application/vnd.google-apps.{document|spreadsheet|presentation}
   const createGoogleFile = useCallback(async (name: string, mimeType: string, parentId?: string) => {
-    if (!accessToken) throw new Error('Not authenticated with Google Drive');
+    const token = tokenRef.current;
+    if (!token) throw new Error('Not authenticated with Google Drive');
     const response = await fetch(
       'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,mimeType,webViewLink',
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, mimeType, parents: parentId ? [parentId] : [] }),
       }
     );
     if (!response.ok) {
       let errorData;
       try { errorData = await response.json(); } catch { errorData = { error: { message: 'Unknown error' } }; }
-      if (response.status === 401) {
-        setAccessToken(null);
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(STORAGE_KEY + '_expires_at');
-      }
+      if (response.status === 401) clearToken();
       throw new Error(errorData.error?.message || `Failed to create Google file (${response.status})`);
     }
     return await response.json();
-  }, [accessToken]);
+  }, []);
 
   // Garante autenticação sem obrigar clique extra: se já está válido, resolve
   // na hora; senão abre o popup e resolve quando o token chega (ou falha).
