@@ -5,8 +5,10 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import Modal from '@/components/common/Modal';
+import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/hooks/useAuth';
+import { formatBudgetCode } from '@/utils/formatters';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,6 +41,13 @@ export default function CustosProjeto() {
   const [editProjectData, setEditProjectData] = useState({ name: '', code: '', client_id: '', production_value: 0 });
   const [sortBy, setSortBy] = useState<'recente' | 'valor_vendido' | 'lucro_liquido' | 'maior_custo' | 'budget_disponivel'>('recente');
   const [groupByClient, setGroupByClient] = useState(false);
+  const [view, setView] = useState<ViewMode>(() => {
+    try { return (localStorage.getItem('lumos_custos_view') as ViewMode) || 'list'; } catch { return 'list'; }
+  });
+  const changeView = (v: ViewMode) => {
+    setView(v);
+    try { localStorage.setItem('lumos_custos_view', v); } catch { /* ignora */ }
+  };
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -259,7 +268,8 @@ export default function CustosProjeto() {
       !term ||
       p.name.toLowerCase().includes(term) ||
       p.client?.name?.toLowerCase().includes(term) ||
-      (p.code && p.code.toLowerCase().includes(term));
+      (p.code && p.code.toLowerCase().includes(term)) ||
+      (p.code && formatBudgetCode(p.code).toLowerCase().includes(term));
     const matchClient = !clientFilter || p.client_id === clientFilter;
     return matchSearch && matchClient;
   });
@@ -383,7 +393,7 @@ export default function CustosProjeto() {
               <div className="flex items-center gap-1.5 flex-wrap">
                 {p.code && (
                   <span className="text-[10px] font-black text-amber-600 dark:text-lumos-yellow bg-amber-500/10 dark:bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tight">
-                    {p.code}
+                    {formatBudgetCode(p.code)}
                   </span>
                 )}
               </div>
@@ -490,6 +500,130 @@ export default function CustosProjeto() {
     );
   };
 
+  const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+  const renderProjectList = (items: any[]) => (
+    <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider">
+              {isAdmin && <th className="px-4 py-3 w-10" />}
+              <th className="px-4 py-3">Código</th>
+              <th className="px-4 py-3">Projeto</th>
+              {isAdmin ? (
+                <>
+                  <th className="px-4 py-3 text-right">Vendido</th>
+                  <th className="px-4 py-3 text-right">Custos</th>
+                  <th className="px-4 py-3 text-right">Lucro Líq.</th>
+                  <th className="px-4 py-3 text-right">Margem</th>
+                </>
+              ) : (
+                <>
+                  <th className="px-4 py-3 text-right">Budget Disp.</th>
+                  <th className="px-4 py-3 text-right">Custos</th>
+                </>
+              )}
+              <th className="px-4 py-3 text-right w-10" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-lumos-border">
+            {items.map(p => {
+              const isSelected = selectedIds.has(p.id);
+              let marginBadgeClass = 'bg-lumos-text-secondary/10 text-lumos-text-secondary';
+              if (p.totalProductionValue > 0) {
+                if (p.marginPercent >= 30) marginBadgeClass = 'bg-green-500/10 text-green-500 border border-green-500/20';
+                else if (p.marginPercent >= 15) marginBadgeClass = 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20';
+                else marginBadgeClass = 'bg-red-500/10 text-red-500 border border-red-500/20';
+              }
+              return (
+                <tr
+                  key={p.id}
+                  onClick={() => navigate(`/financeiro/custos-projeto/${p.project_id}`)}
+                  className={clsx(
+                    'group cursor-pointer transition-colors hover:bg-lumos-text-primary/5',
+                    isSelected && 'bg-amber-500/[0.04] dark:bg-lumos-yellow/[0.03]',
+                    p.pendente_preenchimento && !isSelected && 'bg-red-500/[0.03]'
+                  )}
+                >
+                  {isAdmin && (
+                    <td className="px-4 py-3">
+                      <div
+                        onClick={e => toggleSelect(p.id, e)}
+                        className={clsx(
+                          'w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all',
+                          isSelected
+                            ? 'bg-amber-600 dark:bg-lumos-yellow border-amber-600 dark:border-lumos-yellow text-white dark:text-black'
+                            : 'border-lumos-border group-hover:border-amber-500/50 dark:group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
+                          selectedIds.size > 0 && 'opacity-100'
+                        )}
+                      >
+                        {isSelected && <Check className="w-3 h-3" />}
+                      </div>
+                    </td>
+                  )}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {p.code ? (
+                      <span className="text-[10px] font-black text-amber-600 dark:text-lumos-yellow bg-amber-500/10 dark:bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tight">
+                        {formatBudgetCode(p.code)}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-lumos-text-secondary/50">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-lumos-text-primary group-hover:text-amber-600 dark:group-hover:text-lumos-yellow transition-colors truncate">{p.name}</span>
+                          {p.pendente_preenchimento && <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0" />}
+                          {p.vencido && <span className="text-[8px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded uppercase flex-shrink-0">Atrasado</span>}
+                        </div>
+                        <span className="text-[11px] text-lumos-text-secondary truncate block">{p.client?.name || 'Sem Cliente'}</span>
+                      </div>
+                    </div>
+                  </td>
+                  {isAdmin ? (
+                    <>
+                      <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalProductionValue)}</td>
+                      <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalCosts)}</td>
+                      <td className={clsx('px-4 py-3 text-right text-xs font-black whitespace-nowrap', p.margin >= 0 ? 'text-green-500' : 'text-red-500')}>{fmtBRL(p.margin)}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {p.totalProductionValue > 0 ? (
+                          <span className={clsx('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black', marginBadgeClass)}>{p.marginPercent.toFixed(1)}%</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-lumos-text-secondary/15 text-lumos-text-secondary border border-lumos-border">S/ Proposta</span>
+                        )}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.tetoCustos)}</td>
+                      <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalCosts)}</td>
+                    </>
+                  )}
+                  <td className="px-4 py-3 text-right">
+                    {isAdmin ? (
+                      <button
+                        onClick={e => openEditModal(p, e)}
+                        className="p-1.5 rounded-full hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow transition-all"
+                        title="Editar projeto"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-lumos-text-secondary inline group-hover:translate-x-0.5 transition-transform" />
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -497,14 +631,17 @@ export default function CustosProjeto() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Custos de Projeto</h1>
           <p className="text-lumos-text-secondary text-sm">Acompanhamento de custos e rentabilidade dos projetos Lumos.</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={openCreateModal}
-            className="btn-primary h-10 px-6 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" /> Novo Projeto
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <ViewToggle value={view} onChange={changeView} />
+          {isAdmin && (
+            <button
+              onClick={openCreateModal}
+              className="btn-primary h-10 px-6 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Novo Projeto
+            </button>
+          )}
+        </div>
       </div>
 
       {/* BARRA DE CONTROLES */}
@@ -684,13 +821,17 @@ export default function CustosProjeto() {
                   </div>
                 </div>
 
-                {/* Grid de Cards do Cliente */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {items.map((p: any) => renderProjectCard(p))}
-                </div>
+                {/* Projetos do Cliente (lista ou cards) */}
+                {view === 'list' ? renderProjectList(items) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {items.map((p: any) => renderProjectCard(p))}
+                  </div>
+                )}
               </div>
             );
           })
+        ) : view === 'list' ? (
+          renderProjectList(sortedProjects)
         ) : (
           // Exibição Corrida (Grid Simples)
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
