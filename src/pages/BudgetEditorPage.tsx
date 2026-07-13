@@ -69,6 +69,14 @@ import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import Modal from '@/components/common/Modal';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import Select from '@/components/ui/Select';
+
+const PAYMENT_PRESETS = [
+  '7 dias após a emissão da nota',
+  '15 dias após a emissão da nota',
+  '30 dias após a emissão da nota',
+  '45 dias após a emissão da nota',
+  '60 dias após a emissão da nota',
+];
 import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
 
@@ -139,6 +147,7 @@ export default function BudgetEditorPage() {
   const [newClientName, setNewClientName] = useState('');
   const [newClientAgency, setNewClientAgency] = useState('');
   const [savingClient, setSavingClient] = useState(false);
+  const [paymentCustom, setPaymentCustom] = useState(false);
   const [previewCode, setPreviewCode] = useState('');
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -350,7 +359,7 @@ export default function BudgetEditorPage() {
         nf_pct: 0.18,
         discount_value: 0,
         validity_days: 7,
-        payment_terms: '60 dias após emissão da NF'
+        payment_terms: '60 dias após a emissão da nota'
       };
       
       setBudget(draftBudget);
@@ -1221,21 +1230,15 @@ export default function BudgetEditorPage() {
               />
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lumos bg-lumos-yellow/10 border border-lumos-yellow/25">
                 <Clock className="w-3 h-3 text-lumos-yellow flex-shrink-0" />
-                <select
-                  className="bg-transparent border-none text-lumos-yellow font-black focus:ring-0 p-0 uppercase cursor-pointer"
-                  value={version?.id}
-                  onChange={(e) => {
-                    const selectedVid = e.target.value;
-                    fetchBudgetData(budget!.id, selectedVid);
-                  }}
-                >
-                  {versions.map(v => (
-                    <option key={v.id} value={v.id}>
-                      Versão {v.version_number} {v.id === budget?.active_version_id ? '(Ativa)' : ''}
-                    </option>
-                  ))}
-                  {isDraft && <option value="draft-v1">Versão 1 (Rascunho)</option>}
-                </select>
+                <Select
+                  className="w-auto! text-xs font-black uppercase text-lumos-yellow hover:text-lumos-yellow"
+                  value={version?.id || ''}
+                  onChange={(v) => fetchBudgetData(budget!.id, v)}
+                  options={[
+                    ...versions.map(v => ({ value: v.id, label: `Versão ${v.version_number}${v.id === budget?.active_version_id ? ' (Ativa)' : ''}` })),
+                    ...(isDraft ? [{ value: 'draft-v1', label: 'Versão 1 (Rascunho)' }] : []),
+                  ]}
+                />
               </div>
             </div>
           </div>
@@ -1490,58 +1493,63 @@ export default function BudgetEditorPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Pagamento</label>
-                    <select 
-                      disabled={isReadOnly}
-                      className="input-lumos w-full text-xs disabled:opacity-70 cursor-pointer"
-                      value={version?.payment_terms || ''}
-                      onChange={(e) => {
-                        setVersion(v => v ? { ...v, payment_terms: e.target.value } : null);
-                        isDirty.current = true;
-                      }}
-                    >
-                      <option value="">Selecionar Pagamento</option>
-                      {[
-                        '7 dias após a emissão da nota',
-                        '15 dias após a emissão da nota',
-                        '30 dias após a emissão da nota',
-                        '45 dias após a emissão da nota',
-                        '60 dias após a emissão da nota'
-                      ].map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                      {version?.payment_terms && ![
-                        '7 dias após a emissão da nota',
-                        '15 dias após a emissão da nota',
-                        '30 dias após a emissão da nota',
-                        '45 dias após a emissão da nota',
-                        '60 dias após a emissão da nota'
-                      ].includes(version.payment_terms) && (
-                        <option value={version.payment_terms}>{version.payment_terms}</option>
-                      )}
-                    </select>
+                    {(() => {
+                      const pv = version?.payment_terms || '';
+                      const isCustom = paymentCustom || (pv !== '' && !PAYMENT_PRESETS.includes(pv));
+                      return (
+                        <>
+                          <Select
+                            disabled={isReadOnly}
+                            className="input-lumos w-full text-xs disabled:opacity-70"
+                            value={isCustom ? '__custom__' : pv}
+                            onChange={(v) => {
+                              if (v === '__custom__') { setPaymentCustom(true); return; }
+                              setPaymentCustom(false);
+                              setVersion(vv => vv ? { ...vv, payment_terms: v } : null);
+                              isDirty.current = true;
+                            }}
+                            options={[
+                              { value: '', label: 'Selecionar Pagamento' },
+                              ...PAYMENT_PRESETS.map(o => ({ value: o, label: o })),
+                              { value: '__custom__', label: 'Personalizado…' },
+                            ]}
+                          />
+                          {isCustom && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <input
+                                type="number" min={0} disabled={isReadOnly}
+                                className="input-lumos w-24 h-9 text-xs disabled:opacity-70"
+                                placeholder="Dias"
+                                value={pv.match(/\d+/)?.[0] || ''}
+                                onChange={(e) => {
+                                  const n = e.target.value.replace(/\D/g, '');
+                                  setVersion(vv => vv ? { ...vv, payment_terms: n ? `${n} dias após a emissão da nota` : '' } : null);
+                                  isDirty.current = true;
+                                }}
+                              />
+                              <span className="text-xs text-lumos-text-secondary">dias após a emissão da nota</span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Validade (Dias)</label>
-                    <select 
+                    <Select
                       disabled={isReadOnly}
-                      className="input-lumos w-full text-xs disabled:opacity-70 cursor-pointer"
-                      value={version?.validity_days || 7}
-                      onChange={(e) => {
-                        setVersion(v => v ? { ...v, validity_days: Number(e.target.value) } : null);
+                      className="input-lumos w-full text-xs disabled:opacity-70"
+                      value={String(version?.validity_days || 7)}
+                      onChange={(v) => {
+                        setVersion(vv => vv ? { ...vv, validity_days: Number(v) } : null);
                         isDirty.current = true;
                       }}
-                    >
-                      {Array.from({ length: 30 }, (_, i) => i + 1).map(day => (
-                        <option key={day} value={day}>
-                          {day} {day === 1 ? 'dia' : 'dias'}
-                        </option>
-                      ))}
-                      {version?.validity_days && (version.validity_days < 1 || version.validity_days > 30) && (
-                        <option value={version.validity_days}>
-                          {version.validity_days} {version.validity_days === 1 ? 'dia' : 'dias'}
-                        </option>
-                      )}
-                    </select>
+                      options={[
+                        ...Array.from({ length: 30 }, (_, i) => i + 1).map(day => ({ value: String(day), label: `${day} ${day === 1 ? 'dia' : 'dias'}` })),
+                        ...(version?.validity_days && (version.validity_days < 1 || version.validity_days > 30)
+                          ? [{ value: String(version.validity_days), label: `${version.validity_days} dias` }] : []),
+                      ]}
+                    />
                   </div>
                 </div>
               </div>
