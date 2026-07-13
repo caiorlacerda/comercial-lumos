@@ -17,6 +17,14 @@ interface LayoutContextType {
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 
+// Estar no canal de presença já significa "conectado", então nunca publicamos
+// 'offline'. Só 'busy'/'away' (presente porém indisponível) são preservados;
+// qualquer outro valor salvo (offline/null/legado) vira 'online'. Sem isso, quem
+// tinha presence_status='offline' no banco aparecia offline mesmo conectado.
+function presentStatus(s?: string | null): 'online' | 'busy' | 'away' {
+  return s === 'busy' || s === 'away' ? s : 'online';
+}
+
 export function getSectionFromPath(path: string): SectionType {
   if (path === '/' || path === '/home') return 'home';
   if (path.startsWith('/financeiro')) return 'financeiro';
@@ -91,7 +99,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
           try {
             await channel.track({
               user_id: profile.id,
-              status: profile.presence_status || 'online',
+              status: presentStatus(profile.presence_status),
               last_seen: new Date().toISOString(),
               full_name: profile.full_name,
             });
@@ -113,7 +121,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
       try {
         channelRef.current.track({
           user_id: profile.id,
-          status: profile.presence_status || 'online',
+          status: presentStatus(profile.presence_status),
           last_seen: new Date().toISOString(),
           full_name: profile.full_name,
         });
