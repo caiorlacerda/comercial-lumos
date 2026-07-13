@@ -119,6 +119,7 @@ export default function Equipe() {
 
   // ── Detalhe da pessoa ─────────────────────────────────────────────────────
   const [detail, setDetail] = useState<Person | null>(null);
+  const [detailTab, setDetailTab] = useState<'dados' | 'acesso'>('dados');
   const [access, setAccess] = useState({ role: 'basico' as UserRole, status: 'ativo' as 'ativo' | 'inativo', job_title: '', custom_permissions: {} as Record<string, boolean> });
   const [hr, setHr] = useState<HrForm>(EMPTY_HR);
   const [saving, setSaving] = useState(false);
@@ -128,6 +129,7 @@ export default function Equipe() {
     const h = p.hr; const f: HrForm = { ...EMPTY_HR, role_title: h?.role_title || '' };
     HR_FIELDS.forEach(k => { if (h?.[k]) f[k] = h[k] as string; });
     setHr(f);
+    setDetailTab('dados'); // sempre abre em Dados — evita mexer no acesso sem querer
     setDetail(p);
   };
 
@@ -353,8 +355,37 @@ export default function Equipe() {
                 {detail.hr?.birth_date && canHR && <Info label="Aniversário" value={fmtBirthday(detail.hr.birth_date)} />}
               </Section>
 
-              {/* Acesso & permissões (admin) */}
-              {isAdmin && detail.user && (
+              {(() => {
+                const hasAcesso = isAdmin && !!detail.user;
+                const hasDados = canHR;
+                if (!hasAcesso && !hasDados) {
+                  return (
+                    <div className="flex items-start gap-2 text-[11px] text-lumos-text-secondary bg-lumos-bg/40 border border-lumos-border rounded-lumos px-3 py-2">
+                      <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" /> Dados de RH (CPF, endereço, PIX…) visíveis só para admin e produção.
+                    </div>
+                  );
+                }
+                const showTabs = hasAcesso && hasDados;
+                const active = showTabs ? detailTab : (hasDados ? 'dados' : 'acesso');
+                return (
+                  <>
+                    {/* Abas: Dados primeiro (padrão), Acesso depois — evita mexer no acesso sem querer */}
+                    {showTabs && (
+                      <div className="flex gap-1 p-1 rounded-lumos bg-lumos-bg/40 border border-lumos-border">
+                        <button type="button" onClick={() => setDetailTab('dados')}
+                          className={clsx('flex-1 h-9 rounded-lumos text-xs font-bold flex items-center justify-center gap-1.5 transition-colors',
+                            active === 'dados' ? 'bg-lumos-surface text-lumos-text-primary shadow-sm' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                          <IdCard className="w-4 h-4" /> Dados
+                        </button>
+                        <button type="button" onClick={() => setDetailTab('acesso')}
+                          className={clsx('flex-1 h-9 rounded-lumos text-xs font-bold flex items-center justify-center gap-1.5 transition-colors',
+                            active === 'acesso' ? 'bg-lumos-surface text-lumos-text-primary shadow-sm' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                          <Shield className="w-4 h-4" /> Acesso &amp; permissões
+                        </button>
+                      </div>
+                    )}
+
+              {active === 'acesso' && hasAcesso && (
                 <Section title="Acesso & permissões" icon={Shield}>
                   <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Cargo / função (exibição)" value={access.job_title} onChange={v => setAccess(a => ({ ...a, job_title: v }))} />
@@ -405,8 +436,7 @@ export default function Equipe() {
                 </Section>
               )}
 
-              {/* Dados / RH (admin ou produção) */}
-              {canHR ? (
+              {active === 'dados' && hasDados && (
                 <Section title="Dados (RH)" icon={IdCard}>
                   <Field label="Cargo / função" value={hr.role_title} onChange={v => setHr(f => ({ ...f, role_title: v }))} icon={Briefcase} />
                   <Field label="Setor" value={hr.department} onChange={v => setHr(f => ({ ...f, department: v }))} />
@@ -431,11 +461,10 @@ export default function Equipe() {
                     </button>
                   </div>
                 </Section>
-              ) : (
-                <div className="flex items-start gap-2 text-[11px] text-lumos-text-secondary bg-lumos-bg/40 border border-lumos-border rounded-lumos px-3 py-2">
-                  <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" /> Dados de RH (CPF, endereço, PIX…) visíveis só para admin e produção.
-                </div>
               )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>,
