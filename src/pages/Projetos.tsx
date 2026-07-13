@@ -743,6 +743,7 @@ export default function Projetos() {
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [taskTags, setTaskTags] = useState<Record<string, string[]>>({}); // taskId -> tagIds
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'lista' | 'kanban' | 'gantt'>('lista');
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -810,6 +811,7 @@ export default function Projetos() {
       setProjectTasks([]);
     }
     setSelectedTaskId(null);
+    setSelTaskIds(new Set());
   }, [selectedProjectId]);
 
   // Abre projeto/tarefa vindos da URL assim que os projetos estiverem carregados.
@@ -1375,6 +1377,45 @@ export default function Projetos() {
       console.error('Error deleting task:', err);
       toast.error('Erro ao excluir tarefa.');
     }
+  };
+
+  // ── Ações em lote ──────────────────────────────────────────────────────────
+  const toggleSelTask = (taskId: string) => {
+    setSelTaskIds(prev => {
+      const next = new Set(prev);
+      next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+      return next;
+    });
+  };
+  const toggleSelAll = () => {
+    setSelTaskIds(prev => {
+      const ids = displayedTasks.map(t => t.id);
+      const allSel = ids.length > 0 && ids.every(id => prev.has(id));
+      return allSel ? new Set() : new Set(ids);
+    });
+  };
+
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selTaskIds);
+    if (ids.length === 0) return;
+    if (!(await confirm({ message: `Excluir ${ids.length} tarefa(s)? Essa ação não pode ser desfeita.`, confirmLabel: 'Excluir', danger: true }))) return;
+    const { error } = await supabase.from('project_tasks').delete().in('id', ids);
+    if (error) { console.error(error); toast.error('Erro ao excluir as tarefas.'); return; }
+    setProjectTasks(prev => prev.filter(t => !selTaskIds.has(t.id)));
+    setTasks(prev => prev.filter(t => !selTaskIds.has(t.id)));
+    if (selectedTaskId && selTaskIds.has(selectedTaskId)) setSelectedTaskId(null);
+    setSelTaskIds(new Set());
+    toast.success(`${ids.length} tarefa(s) excluída(s).`);
+  };
+
+  const handleBatchStatus = async (status: string) => {
+    const ids = Array.from(selTaskIds);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('project_tasks').update({ status, updated_at: new Date().toISOString() }).in('id', ids);
+    if (error) { toast.error('Erro ao atualizar as tarefas.'); return; }
+    if (selectedProjectId) fetchProjectTasks(selectedProjectId, true);
+    setSelTaskIds(new Set());
+    toast.success(`${ids.length} tarefa(s) atualizada(s).`);
   };
 
   // Trigger Apply template
@@ -1947,6 +1988,17 @@ export default function Projetos() {
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
                               <tr className="border-b border-lumos-border/40 text-lumos-text-secondary font-black uppercase tracking-wider text-[9px] opacity-70">
+                                {canManage && (
+                                  <th className="py-2.5 px-2 w-8 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={displayedTasks.length > 0 && displayedTasks.every(t => selTaskIds.has(t.id))}
+                                      onChange={toggleSelAll}
+                                      title="Selecionar todas"
+                                      className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-3.5 w-3.5 bg-lumos-bg cursor-pointer"
+                                    />
+                                  </th>
+                                )}
                                 <th className="py-2.5 px-2 w-8 text-center">Ok</th>
                                 <th className="py-2.5 px-2 min-w-[250px]">Título da Tarefa</th>
                                 <th className="py-2.5 px-2 w-36">Status</th>
@@ -1974,9 +2026,23 @@ export default function Projetos() {
                                     className={clsx(
                                       "hover:bg-lumos-surface/40 transition-all group/row",
                                       isTaskCompleted && "bg-green-500/[0.01]",
+                                      selTaskIds.has(task.id) && "bg-lumos-yellow/[0.05]",
                                       selectedTaskId === task.id && "bg-lumos-yellow/[0.03]"
                                     )}
                                   >
+                                    {/* Batch select checkbox */}
+                                    {canManage && (
+                                      <td className="py-2 px-2 text-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={selTaskIds.has(task.id)}
+                                          onChange={() => toggleSelTask(task.id)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-3.5 w-3.5 bg-lumos-bg cursor-pointer"
+                                        />
+                                      </td>
+                                    )}
+
                                     {/* Done check checkbox toggle */}
                                     <td className="py-2 px-2 text-center">
                                       <input
@@ -2122,6 +2188,25 @@ export default function Projetos() {
                               })}
                             </tbody>
                           </table>
+                        </div>
+                      )}
+
+                      {/* Barra de ações em lote */}
+                      {canManage && selTaskIds.size > 0 && (
+                        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                          <div className="bg-lumos-surface border border-lumos-yellow/30 shadow-2xl rounded-full px-5 py-3 flex items-center gap-4 backdrop-blur-xl">
+                            <div className="flex items-center gap-2 pr-3 border-r border-lumos-border">
+                              <span className="w-7 h-7 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-xs">{selTaskIds.size}</span>
+                              <span className="text-xs font-bold text-lumos-text-primary uppercase tracking-tight">{selTaskIds.size === 1 ? 'tarefa' : 'tarefas'}</span>
+                            </div>
+                            <button onClick={() => handleBatchStatus('concluido')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-500/10 text-green-500 font-black text-[10px] uppercase hover:bg-green-500 hover:text-white transition-all active:scale-95">
+                              <Check className="w-3.5 h-3.5" /> Concluir
+                            </button>
+                            <button onClick={handleBatchDelete} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 text-red-500 font-black text-[10px] uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95">
+                              <Trash2 className="w-3.5 h-3.5" /> Excluir
+                            </button>
+                            <button onClick={() => setSelTaskIds(new Set())} className="text-[10px] font-bold uppercase text-lumos-text-secondary hover:text-lumos-text-primary transition-colors">Cancelar</button>
+                          </div>
                         </div>
                       )}
 
