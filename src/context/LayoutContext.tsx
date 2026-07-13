@@ -35,7 +35,7 @@ export function getSectionFromPath(path: string): SectionType {
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, isAdmin, can } = useAuth();
+  const { profile, isAdmin, can } = useAuth();
   
   const [activeSection, setActiveSection] = useState<SectionType>(() => 
     getSectionFromPath(location.pathname)
@@ -51,8 +51,16 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
   }, [location.pathname]);
 
   // Sincroniza Presença em Tempo Real (Supabase Realtime Presence)
+  //
+  // IMPORTANTE: depende só de `profile?.id` (string estável), NÃO do objeto
+  // `user`. O `onAuthStateChange` do Supabase dispara em cada token refresh e
+  // volta de foco da aba, recriando o objeto `user` a cada vez. Se o efeito
+  // dependesse de `user`, o canal 'online-users' era derrubado e recriado nessas
+  // horas — e o canal reconstruído parava de receber os eventos de sync dos
+  // outros, deixando o status congelado até dar F5. Com a chave estável, o canal
+  // vive uma vez por sessão e sobrevive a refresh/foco.
   useEffect(() => {
-    if (!user || !profile) {
+    if (!profile?.id) {
       setOnlineUsers({});
       return;
     }
@@ -97,7 +105,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [user, profile?.id]);
+  }, [profile?.id]);
 
   // Atualiza o estado da presença local no canal se o status mudar no perfil do useAuth
   useEffect(() => {
