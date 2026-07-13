@@ -5,16 +5,19 @@ interface PageTransitionProps {
   children: React.ReactNode;
 }
 
-// Transição de página fluida: a nova página ENTRA com fade + um leve deslize da
-// esquerda para a direita. Sem animação de saída — antes o `exit` levava a tela
-// ao fundo em branco antes da próxima aparecer, o que causava a "piscada". Agora
-// a troca é imediata e só a entrada é animada, então nunca há um quadro em branco.
+// Transição de página: cross-fade puro (só opacity), igual à troca de abas do
+// perfil da Equipe. A página que sai faz fade-out e a que entra faz fade-in.
+//
+// Importante: NÃO deslizar na horizontal. A "piscada" de antes vinha do slide
+// de saída (a tela era arrastada pra fora revelando o fundo), não do fade em si.
+// Com fade puro sobre o `bg-lumos-bg`, a troca nunca mostra um quadro em branco.
 export default function PageTransition({ children }: PageTransitionProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: -18 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       className="w-full flex flex-col flex-1"
     >
       {children}
