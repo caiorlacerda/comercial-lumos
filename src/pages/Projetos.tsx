@@ -1999,7 +1999,6 @@ export default function Projetos() {
                                     />
                                   </th>
                                 )}
-                                <th className="py-2.5 px-2 w-8 text-center">Ok</th>
                                 <th className="py-2.5 px-2 min-w-[250px]">Título da Tarefa</th>
                                 <th className="py-2.5 px-2 w-36">Status</th>
                                 <th className="py-2.5 px-2 w-28">Prioridade</th>
@@ -2043,28 +2042,26 @@ export default function Projetos() {
                                       </td>
                                     )}
 
-                                    {/* Done check checkbox toggle */}
-                                    <td className="py-2 px-2 text-center">
-                                      <input
-                                        type="checkbox"
-                                        checked={isTaskCompleted}
-                                        disabled={!canManage}
-                                        onChange={() => handleUpdateTask(task.id, { 
-                                          status: isTaskCompleted ? 'iniciar' : 'concluido' 
-                                        })}
-                                        className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer disabled:cursor-not-allowed"
-                                      />
-                                    </td>
-
-                                    {/* Task Title (Static by default, input if renaming) */}
-                                    <td 
-                                      className="py-2 px-2 cursor-pointer"
-                                      onClick={() => {
-                                        if (renamingTaskId !== task.id) {
-                                          setSelectedTaskId(task.id);
-                                        }
-                                      }}
-                                    >
+                                    {/* Título, com o círculo de concluir à esquerda do nome */}
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-start gap-2.5">
+                                        <button
+                                          type="button"
+                                          disabled={!canManage}
+                                          onClick={(e) => { e.stopPropagation(); handleUpdateTask(task.id, { status: isTaskCompleted ? 'iniciar' : 'concluido' }); }}
+                                          title={isTaskCompleted ? 'Reabrir tarefa' : 'Concluir tarefa'}
+                                          className={clsx(
+                                            'mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors',
+                                            isTaskCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-lumos-border text-transparent hover:border-green-500 hover:text-green-500/60',
+                                            !canManage && 'cursor-not-allowed opacity-40',
+                                          )}
+                                        >
+                                          <Check className="w-3 h-3" />
+                                        </button>
+                                        <div
+                                          className="min-w-0 flex-1 cursor-pointer"
+                                          onClick={() => { if (renamingTaskId !== task.id) setSelectedTaskId(task.id); }}
+                                        >
                                       {renamingTaskId === task.id ? (
                                         <input
                                           type="text"
@@ -2105,6 +2102,8 @@ export default function Projetos() {
                                           {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).map(t => <TagChip key={t!.id} tag={t!} small />)}
                                         </div>
                                       )}
+                                        </div>
+                                      </div>
                                     </td>
 
                                     {/* Status Badge Dropdown */}
