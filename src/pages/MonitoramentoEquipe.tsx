@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, Users, UserX,
   ListChecks, Coffee, ShieldCheck, IdCard, PauseCircle, Zap, Radio,
+  Search, X, Hourglass, ChevronRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useLayout } from '@/context/LayoutContext';
 import UserAvatar from '@/components/common/UserAvatar';
-import StatusDot from '@/components/common/StatusDot';
-import { isDone, isActive, isOpen, taskLabel } from '@/lib/taskStatus';
+import Select from '@/components/ui/Select';
+import { isDone, isActive, isOpen, taskLabel, TASK_ACTIVE } from '@/lib/taskStatus';
 import { formatBudgetCode } from '@/utils/formatters';
 
 interface AppUser {
@@ -53,6 +55,12 @@ export default function MonitoramentoEquipe() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [hr, setHr] = useState<HR[]>([]);
   const [loading, setLoading] = useState(true);
+  // Filtros + drill-down
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
+  const [period, setPeriod] = useState(7); // dias, para produtividade
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
   useRealtimeRefetch(['project_tasks', 'app_users', 'team_members', 'projects'], () => load(true));
@@ -73,6 +81,23 @@ export default function MonitoramentoEquipe() {
   const today = todayStr();
   const isStale = (task: Task) => isActive(task.status) && (Date.now() - new Date(task.updated_at).getTime()) > STALE_DAYS * 86400000;
   const isOverdue = (task: Task) => !!task.data_fim && task.data_fim < today && isOpen(task.status);
+  const doneInPeriod = (task: Task) => isDone(task.status) && (Date.now() - new Date(task.updated_at).getTime()) <= period * 86400000;
+
+  // Escopo por projeto (filtro). Vale para agregados, produtividade e gargalos.
+  const scoped = useMemo(() => projectFilter ? tasks.filter(t => t.project_id === projectFilter) : tasks, [tasks, projectFilter]);
+
+  // Listas para os selects de filtro
+  const projectOptions = useMemo(() => {
+    const m = new Map<string, { name: string; code: string | null }>();
+    tasks.forEach(t => { if (t.project_id && !m.has(t.project_id)) m.set(t.project_id, { name: t.project?.name || 'Projeto', code: t.project?.code || null }); });
+    return [{ value: '', label: 'Todos os projetos' }, ...Array.from(m.entries())
+      .map(([id, p]) => ({ value: id, label: `${p.code ? formatBudgetCode(p.code) + ' ' : ''}${p.name}` }))
+      .sort((a, b) => a.label.localeCompare(b.label))];
+  }, [tasks]);
+  const roleOptions = useMemo(() => {
+    const set = new Set(users.map(u => u.role));
+    return [{ value: '', label: 'Todos os cargos' }, ...Array.from(set).map(r => ({ value: r, label: ROLE_LABEL[r] || r }))];
+  }, [users]);
 
   const hrByUser = useMemo(() => {
     const m = new Map<string, HR>();
@@ -80,16 +105,16 @@ export default function MonitoramentoEquipe() {
     return m;
   }, [hr]);
 
-  // Estatísticas por pessoa
+  // Estatísticas por pessoa (sobre o escopo de projeto atual)
   const people = useMemo(() => {
     return users.map(u => {
-      const mine = tasks.filter(t => t.responsavel_id === u.id);
+      const mine = scoped.filter(t => t.responsavel_id === u.id);
       const open = mine.filter(t => isOpen(t.status));
       const active = mine.filter(t => isActive(t.status));
       const done = mine.filter(t => isDone(t.status));
       const overdue = mine.filter(isOverdue);
       const stale = mine.filter(isStale);
-      // "Fazendo agora": prioriza em_progresso, senão qualquer ativa mais recente.
+      const donePeriod = mine.filter(doneInPeriod).length;
       const current = active.find(t => t.status === 'em_progresso')
         || [...active].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]
         || null;
@@ -97,29 +122,47 @@ export default function MonitoramentoEquipe() {
       const h = hrByUser.get(u.id);
       const hrFilled = !!h && !!(h.cpf || h.whatsapp || h.birth_date);
       return {
-        user: u, online, current,
-        open: open.length, active: active.length, done: done.length,
+        user: u, online, current, tasks: mine,
+        open: open.length, active: active.length, done: done.length, donePeriod,
         overdue: overdue.length, stale: stale.length,
         onboarded: !!u.tour_seen, hrFilled,
       };
     }).sort((a, b) => Number(b.online) - Number(a.online) || b.overdue - a.overdue || b.open - a.open);
-  }, [users, tasks, hrByUser, getLiveStatus]);
+  }, [users, scoped, hrByUser, getLiveStatus, period]);
+
+  const visiblePeople = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return people.filter(p =>
+      (!roleFilter || p.user.role === roleFilter) &&
+      (!q || p.user.full_name.toLowerCase().includes(q) || (p.user.email || '').toLowerCase().includes(q)));
+  }, [people, roleFilter, search]);
 
   const maxOpen = Math.max(1, ...people.map(p => p.open));
 
-  // Agregados globais
+  // Gargalos: tarefas paradas em cada status ativo + tempo médio "parado" (proxy: desde o último update).
+  const bottlenecks = useMemo(() => TASK_ACTIVE.filter(s => s !== 'em_andamento').map(s => {
+    const items = scoped.filter(t => t.status === s);
+    const avgDays = items.length ? items.reduce((a, t) => a + (Date.now() - new Date(t.updated_at).getTime()) / 86400000, 0) / items.length : 0;
+    return { status: s, count: items.length, avgDays };
+  }).filter(b => b.count > 0).sort((a, b) => b.count - a.count), [scoped]);
+  const maxBottleneck = Math.max(1, ...bottlenecks.map(b => b.count));
+
+  // Agregados (sobre o escopo)
   const onlineCount = people.filter(p => p.online).length;
-  const overdueTasks = useMemo(() => tasks.filter(isOverdue)
-    .sort((a, b) => daysLate(b.data_fim!) - daysLate(a.data_fim!)), [tasks]);
-  const activeCount = tasks.filter(t => isActive(t.status)).length;
-  const openCount = tasks.filter(t => isOpen(t.status)).length;
-  const doneCount = tasks.filter(t => isDone(t.status)).length;
-  const totalCount = tasks.length;
+  const overdueTasks = useMemo(() => scoped.filter(isOverdue)
+    .sort((a, b) => daysLate(b.data_fim!) - daysLate(a.data_fim!)), [scoped]);
+  const activeCount = scoped.filter(t => isActive(t.status)).length;
+  const openCount = scoped.filter(t => isOpen(t.status)).length;
+  const doneCount = scoped.filter(t => isDone(t.status)).length;
+  const totalCount = scoped.length;
   const donePct = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
-  const unassigned = tasks.filter(t => isOpen(t.status) && !t.responsavel_id).length;
-  const staleCount = tasks.filter(isStale).length;
+  const unassigned = scoped.filter(t => isOpen(t.status) && !t.responsavel_id).length;
+  const staleCount = scoped.filter(isStale).length;
   const idlePeople = people.filter(p => p.active === 0).length;
   const onboardingPending = people.filter(p => !p.onboarded).length;
+  const filtersActive = !!(search || roleFilter || projectFilter);
+
+  const detailPerson = detailId ? people.find(p => p.user.id === detailId) || null : null;
 
   const userName = (id: string | null) => users.find(u => u.id === id)?.full_name || 'Sem responsável';
 
@@ -153,6 +196,23 @@ export default function MonitoramentoEquipe() {
         </span>
       </div>
 
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar pessoa por nome ou e-mail…"
+            className="input-lumos pl-10 w-full h-10 text-sm" />
+        </div>
+        <Select value={roleFilter} onChange={setRoleFilter} options={roleOptions} className="input-lumos h-10 text-sm min-w-[160px]" />
+        <Select value={projectFilter} onChange={setProjectFilter} options={projectOptions} className="input-lumos h-10 text-sm min-w-[220px]" />
+        {filtersActive && (
+          <button onClick={() => { setSearch(''); setRoleFilter(''); setProjectFilter(''); }}
+            className="h-10 px-3 rounded-lumos border border-lumos-border text-xs font-bold text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1.5">
+            <X className="w-3.5 h-3.5" /> Limpar
+          </button>
+        )}
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi icon={Users} label="Online agora" value={onlineCount} sub={`de ${people.length} pessoas`} tone="good" />
@@ -173,9 +233,23 @@ export default function MonitoramentoEquipe() {
 
       {/* Equipe ao vivo */}
       <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden">
-        <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2">
-          <Users className="w-4 h-4 text-lumos-yellow" />
-          <h2 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Equipe ao vivo</h2>
+        <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-lumos-yellow" />
+            <h2 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Equipe ao vivo</h2>
+            <span className="text-[11px] text-lumos-text-secondary">{visiblePeople.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Entregues em</span>
+            <div className="flex items-center rounded-lumos border border-lumos-border overflow-hidden">
+              {[7, 30].map(d => (
+                <button key={d} onClick={() => setPeriod(d)}
+                  className={clsx('h-7 px-2.5 text-[11px] font-black transition-colors', period === d ? 'bg-lumos-yellow text-black' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                  {d}d
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -185,14 +259,16 @@ export default function MonitoramentoEquipe() {
                 <th className="px-4 py-3">Fazendo agora</th>
                 <th className="px-4 py-3 text-center">Abertas</th>
                 <th className="px-4 py-3 text-center">Atrasadas</th>
-                <th className="px-4 py-3 text-center">Concluídas</th>
+                <th className="px-4 py-3 text-center" title={`Concluídas nos últimos ${period} dias`}>Entregues {period}d</th>
                 <th className="px-4 py-3">Carga</th>
                 <th className="px-4 py-3 text-center">Cadastro</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-lumos-border">
-              {people.map(p => (
-                <tr key={p.user.id} className="hover:bg-lumos-text-primary/5">
+              {visiblePeople.length === 0 ? (
+                <tr><td colSpan={7} className="py-10 text-center text-sm text-lumos-text-secondary italic">Ninguém com esse filtro.</td></tr>
+              ) : visiblePeople.map(p => (
+                <tr key={p.user.id} onClick={() => setDetailId(p.user.id)} className="hover:bg-lumos-text-primary/5 cursor-pointer">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <UserAvatar user={p.user as any} size={36} showStatus />
@@ -206,7 +282,7 @@ export default function MonitoramentoEquipe() {
                   </td>
                   <td className="px-4 py-3 max-w-[280px]">
                     {p.current ? (
-                      <button onClick={() => navigate(`/producao/projetos?projectId=${p.current!.project_id}`)} className="text-left group">
+                      <button onClick={(e) => { e.stopPropagation(); navigate(`/producao/projetos?projectId=${p.current!.project_id}`); }} className="text-left group">
                         <span className="text-sm font-semibold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors truncate block">{p.current.titulo}</span>
                         <span className="text-[10px] text-lumos-text-secondary uppercase tracking-wide">
                           {taskLabel(p.current.status)}{p.current.project?.name ? ` · ${p.current.project.name}` : ''}
@@ -218,7 +294,7 @@ export default function MonitoramentoEquipe() {
                   </td>
                   <td className="px-4 py-3 text-center text-sm font-black text-lumos-text-primary">{p.open}</td>
                   <td className={clsx('px-4 py-3 text-center text-sm font-black', p.overdue ? 'text-red-500' : 'text-lumos-text-secondary')}>{p.overdue || '—'}</td>
-                  <td className="px-4 py-3 text-center text-sm font-black text-green-500">{p.done}</td>
+                  <td className="px-4 py-3 text-center text-sm font-black text-green-500">{p.donePeriod || '—'}</td>
                   <td className="px-4 py-3 w-40">
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2 rounded-full bg-lumos-bg overflow-hidden">
@@ -244,6 +320,33 @@ export default function MonitoramentoEquipe() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Gargalos por etapa */}
+      <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden">
+        <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2">
+          <Hourglass className="w-4 h-4 text-lumos-yellow" />
+          <h2 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Gargalos por etapa</h2>
+          <span className="text-[11px] text-lumos-text-secondary">onde as tarefas ativas estão paradas</span>
+        </div>
+        {bottlenecks.length === 0 ? (
+          <div className="py-8 text-center text-sm text-lumos-text-secondary">Sem tarefas ativas no momento.</div>
+        ) : (
+          <div className="p-4 space-y-2.5">
+            {bottlenecks.map(b => (
+              <div key={b.status} className="flex items-center gap-3">
+                <span className="text-[11px] font-bold text-lumos-text-primary w-36 flex-shrink-0 truncate">{taskLabel(b.status)}</span>
+                <div className="flex-1 h-5 rounded-full bg-lumos-bg overflow-hidden relative">
+                  <div className={clsx('h-full rounded-full', b.avgDays >= STALE_DAYS ? 'bg-red-500/70' : 'bg-lumos-yellow')} style={{ width: `${(b.count / maxBottleneck) * 100}%` }} />
+                  <span className="absolute inset-y-0 left-2 flex items-center text-[10px] font-black text-lumos-text-primary">{b.count}</span>
+                </div>
+                <span className={clsx('text-[10px] font-bold w-24 text-right flex-shrink-0', b.avgDays >= STALE_DAYS ? 'text-red-500' : 'text-lumos-text-secondary')}>
+                  ~{b.avgDays.toFixed(1)}d parada
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tarefas atrasadas */}
@@ -294,6 +397,82 @@ export default function MonitoramentoEquipe() {
           </div>
         )}
       </div>
+
+      {/* Drill-down de uma pessoa */}
+      {detailPerson && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setDetailId(null)}>
+          <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl">
+            <div className="sticky top-0 bg-lumos-surface border-b border-lumos-border px-5 py-3 flex items-center justify-between z-10">
+              <div className="flex items-center gap-3 min-w-0">
+                <UserAvatar user={detailPerson.user as any} size={40} showStatus />
+                <div className="min-w-0">
+                  <h2 className="text-base font-black text-lumos-text-primary truncate">{detailPerson.user.full_name}</h2>
+                  <p className="text-[11px] text-lumos-text-secondary">
+                    {ROLE_LABEL[detailPerson.user.role] || detailPerson.user.role} · {detailPerson.online ? <span className="text-green-500 font-bold">online</span> : `visto ${relTime(detailPerson.user.last_seen)}`}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setDetailId(null)} className="p-1.5 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <MiniStat label="Abertas" value={detailPerson.open} />
+                <MiniStat label="Atrasadas" value={detailPerson.overdue} tone={detailPerson.overdue ? 'danger' : undefined} />
+                <MiniStat label={`Entregues ${period}d`} value={detailPerson.donePeriod} tone="good" />
+                <MiniStat label={`Paradas +${STALE_DAYS}d`} value={detailPerson.stale} tone={detailPerson.stale ? 'warn' : undefined} />
+              </div>
+
+              {(['ativas', 'a_fazer', 'atrasadas'] as const).map(group => {
+                const items = detailPerson.tasks.filter(t =>
+                  group === 'atrasadas' ? isOverdue(t)
+                  : group === 'ativas' ? (isActive(t.status) && !isOverdue(t))
+                  : (isOpen(t.status) && !isActive(t.status) && !isOverdue(t)));
+                if (items.length === 0) return null;
+                const title = group === 'atrasadas' ? 'Atrasadas' : group === 'ativas' ? 'Em andamento' : 'A fazer';
+                return (
+                  <div key={group}>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary mb-1.5">{title} · {items.length}</p>
+                    <div className="space-y-1">
+                      {items.sort((a, b) => (a.data_fim || '9999').localeCompare(b.data_fim || '9999')).map(t => (
+                        <button key={t.id} onClick={() => { setDetailId(null); navigate(`/producao/projetos?projectId=${t.project_id}`); }}
+                          className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-lumos border border-lumos-border/60 hover:border-lumos-yellow/40 hover:bg-lumos-text-primary/5 transition-colors group">
+                          <span className="flex-1 min-w-0">
+                            <span className="text-sm font-semibold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors truncate block">{t.titulo}</span>
+                            <span className="text-[10px] text-lumos-text-secondary uppercase tracking-wide">
+                              {taskLabel(t.status)}{t.project?.name ? ` · ${t.project.name}` : ''}
+                            </span>
+                          </span>
+                          {t.data_fim && (
+                            <span className={clsx('text-[10px] font-bold whitespace-nowrap', isOverdue(t) ? 'text-red-500' : 'text-lumos-text-secondary')}>
+                              {isOverdue(t) ? `${daysLate(t.data_fim)}d atraso` : fmtDate(t.data_fim)}
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {detailPerson.open === 0 && (
+                <p className="text-sm text-lumos-text-secondary text-center py-4 flex items-center justify-center gap-2">
+                  <Coffee className="w-4 h-4" /> Sem tarefas abertas.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, tone }: { label: string; value: number; tone?: 'danger' | 'good' | 'warn' }) {
+  return (
+    <div className="bg-lumos-bg/40 border border-lumos-border rounded-lumos py-2">
+      <p className={clsx('text-2xl font-black leading-none', tone === 'danger' ? 'text-red-500' : tone === 'good' ? 'text-green-500' : tone === 'warn' ? 'text-amber-500' : 'text-lumos-text-primary')}>{value}</p>
+      <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary mt-1">{label}</p>
     </div>
   );
 }

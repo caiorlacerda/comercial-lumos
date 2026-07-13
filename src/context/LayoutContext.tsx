@@ -52,6 +52,16 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, any>>({});
   const channelRef = useRef<any>(null);
+  const [idle, setIdle] = useState(false);
+  const idleRef = useRef(false);
+  useEffect(() => { idleRef.current = idle; }, [idle]);
+
+  // Status efetivo publicado: 'busy'/'away' manuais são respeitados; 'online'
+  // vira 'away' automaticamente quando a pessoa está inativa.
+  const computeStatus = (): 'online' | 'busy' | 'away' => {
+    const base = presentStatus(profile?.presence_status);
+    return base === 'online' && idleRef.current ? 'away' : base;
+  };
 
   // Sincroniza a seção ativa ao navegar por links ou URL direta
   useEffect(() => {
@@ -100,7 +110,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
           try {
             await channel.track({
               user_id: profile.id,
-              status: presentStatus(profile.presence_status),
+              status: computeStatus(),
               last_seen: new Date().toISOString(),
               full_name: profile.full_name,
             });
@@ -116,13 +126,13 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     };
   }, [profile?.id]);
 
-  // Atualiza o estado da presença local no canal se o status mudar no perfil do useAuth
+  // Re-publica a presença quando o status manual muda OU quando entra/sai de inatividade.
   useEffect(() => {
     if (channelRef.current && profile) {
       try {
         channelRef.current.track({
           user_id: profile.id,
-          status: presentStatus(profile.presence_status),
+          status: computeStatus(),
           last_seen: new Date().toISOString(),
           full_name: profile.full_name,
         });
@@ -130,7 +140,31 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         console.error('Error tracking presence update:', err);
       }
     }
-  }, [profile?.presence_status]);
+  }, [profile?.presence_status, idle]);
+
+  // Auto-away: após alguns minutos sem atividade (ou com a aba escondida) a
+  // pessoa vira "ausente"; qualquer interação volta pra "online". Só troca o
+  // estado na transição (não a cada mousemove), pra não re-renderizar à toa.
+  useEffect(() => {
+    if (!profile?.id) return;
+    const IDLE_MS = 5 * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout>;
+    const goActive = () => {
+      if (idleRef.current) setIdle(false);
+      clearTimeout(timer);
+      timer = setTimeout(() => setIdle(true), IDLE_MS);
+    };
+    const onVisibility = () => { if (document.hidden) setIdle(true); else goActive(); };
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(e => window.addEventListener(e, goActive, { passive: true }));
+    document.addEventListener('visibilitychange', onVisibility);
+    goActive();
+    return () => {
+      events.forEach(e => window.removeEventListener(e, goActive));
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearTimeout(timer);
+    };
+  }, [profile?.id]);
 
   const getLiveStatus = (profileId: string): string => {
     const presenceInstances = onlineUsers[profileId];
