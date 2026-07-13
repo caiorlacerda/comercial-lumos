@@ -19,6 +19,29 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { activeSection, navigateToSection } = useLayout();
 
+  // Largura do sidebar (desktop) — redimensionável e lembrada por usuário
+  const [sidebarWidth, setSidebarWidth] = React.useState<number>(() => {
+    const s = Number(localStorage.getItem('lumos-sidebar-w'));
+    return s >= 200 && s <= 480 ? s : 256;
+  });
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebarWidth;
+    let last = startW;
+    const move = (ev: PointerEvent) => {
+      last = Math.min(480, Math.max(200, startW + (ev.clientX - startX)));
+      setSidebarWidth(last);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      localStorage.setItem('lumos-sidebar-w', String(Math.round(last)));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
   const ctx = { can, isAdmin };
   const visibleSecs = getVisibleSections(ctx);
   const currentSection = visibleSecs.find(s => s.id === activeSection) || visibleSecs[0];
@@ -84,9 +107,10 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       <Topbar />
       <MobileSubNav />
 
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative" style={{ ['--sbw' as any]: `${sidebarWidth}px` }}>
         {/* Desktop Sidebar — entra deslizando da esquerda e SAI deslizando para
-            a esquerda (ao ir para o Início, que não tem sidebar). */}
+            a esquerda (ao ir para o Início, que não tem sidebar). Largura
+            ajustável pela alça na borda direita. */}
         <AnimatePresence>
           {!isHome && (
             <motion.aside
@@ -95,9 +119,15 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="hidden lg:flex w-64 bg-lumos-surface border-r border-lumos-border flex-col fixed inset-y-0 top-16 shadow-sm z-30 transition-colors duration-300"
+              className="hidden lg:flex lg:w-[var(--sbw)] bg-lumos-surface border-r border-lumos-border flex-col fixed inset-y-0 top-16 shadow-sm z-30 transition-colors duration-300"
             >
               {sidebarContent}
+              {/* Alça de redimensionamento (só desktop) */}
+              <div
+                onPointerDown={startResize}
+                title="Arraste para redimensionar"
+                className="hidden lg:block absolute right-0 top-0 h-full w-1.5 translate-x-1/2 cursor-col-resize hover:bg-lumos-yellow/40 active:bg-lumos-yellow/60 transition-colors z-40"
+              />
             </motion.aside>
           )}
         </AnimatePresence>
@@ -107,7 +137,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           // overflow-x-hidden: clipa o leve deslize horizontal da transição de
           // página sem criar barra de rolagem (o scroll vertical segue normal).
           "flex-1 overflow-y-auto overflow-x-hidden bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0",
-          !isHome && "lg:ml-64"
+          !isHome && "lg:ml-[var(--sbw)]"
         )}>
           <AnimatePresence mode="wait">
             <PageTransition key={transitionKey}>
