@@ -164,12 +164,12 @@ export default function ClientProfile() {
 
   return (
     <div className="space-y-8 pb-20">
-      <button 
-        onClick={() => navigate('/clientes')}
+      <button
+        onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-xs font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-all"
       >
         <ArrowLeft className="w-4 h-4" />
-        Voltar para Clientes
+        Voltar
       </button>
 
       {/* Header Profile */}

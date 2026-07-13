@@ -218,11 +218,11 @@ export default function FornecedorEditor() {
 
   return (
     <div className="space-y-6 font-work-sans">
-      <button 
-        onClick={() => navigate('/producao/fornecedores')}
+      <button
+        onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-xs font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-all"
       >
-        <ArrowLeft className="w-4 h-4" /> Voltar para Fornecedores
+        <ArrowLeft className="w-4 h-4" /> Voltar
       </button>
 
       <div className="card border-t-4 border-t-lumos-yellow p-6">

@@ -764,7 +764,8 @@ export default function CustosProjetoDetalhe() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/financeiro/custos-projeto')}
+            onClick={() => navigate(-1)}
+            title="Voltar"
             className="p-2 bg-lumos-text-primary/5 rounded-full hover:bg-lumos-text-primary/10 transition-all"
           >
             <ArrowLeft className="w-5 h-5 text-lumos-text-primary" />
