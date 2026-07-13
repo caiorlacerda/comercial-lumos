@@ -8,6 +8,7 @@ import { useLayout, SectionType } from '@/context/LayoutContext';
 import StatusDot from '@/components/common/StatusDot';
 import NotificationBell from '@/components/layout/NotificationBell';
 import MobileHeader from '@/components/layout/MobileHeader';
+import WorldClock from '@/components/layout/WorldClock';
 import { clsx } from 'clsx';
 
 export default function Topbar() {
@@ -104,6 +105,9 @@ export default function Topbar() {
 
       {/* Right Actions */}
       <div className="flex items-center gap-4">
+        {/* Relógio duplo: São Paulo × Portugal */}
+        <WorldClock className="hidden xl:flex mr-1" />
+
         {/* Busca global (Cmd+K) */}
         <button
           onClick={openCommandPalette}
