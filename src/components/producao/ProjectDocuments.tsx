@@ -81,6 +81,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [folderId, setFolderId] = useState<string | null>(driveFolderId ?? null);
   const [newMenu, setNewMenu] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -96,6 +97,14 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   useEffect(() => { fetchDocs(); }, [projectId]);
   useRealtimeRefetch(['project_documents'], () => fetchDocs(true));
 
+  // Mantém o folderId em dia: usa o da prop; se vier vazio, confere no banco
+  // (pode ter sido provisionado depois sem o pai ter recarregado).
+  useEffect(() => {
+    if (driveFolderId) { setFolderId(driveFolderId); return; }
+    supabase.from('projects').select('drive_folder_id').eq('id', projectId).single()
+      .then(({ data }) => { if (data?.drive_folder_id) setFolderId(data.drive_folder_id); });
+  }, [projectId, driveFolderId]);
+
   async function fetchDocs(silent = false) {
     if (!silent) setLoading(true);
     const { data } = await supabase
@@ -107,21 +116,36 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     setLoading(false);
   }
 
-  // Confere pasta do Drive e garante login Google (abre o popup e continua sozinho).
-  const ensureGoogle = async () => {
-    if (!driveFolderId) {
-      toast.error('Este projeto ainda não tem pasta no Drive. Abra/edite o projeto para sincronizar.');
-      return false;
+  // Garante a pasta do projeto no Drive: se ainda não existe, provisiona sob
+  // demanda (um "toque" no projeto dispara o trigger que chama a edge function)
+  // e aguarda o drive_folder_id aparecer.
+  const ensureFolder = async (): Promise<string | null> => {
+    if (folderId) return folderId;
+    toast.info('Criando a pasta do projeto no Drive…');
+    const { error } = await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId);
+    if (error) { toast.error('Não foi possível iniciar a criação da pasta.'); return null; }
+    for (let i = 0; i < 12; i++) {
+      await new Promise(r => setTimeout(r, 1500));
+      const { data } = await supabase.from('projects').select('drive_folder_id').eq('id', projectId).single();
+      if (data?.drive_folder_id) { setFolderId(data.drive_folder_id); toast.success('Pasta do projeto criada no Drive!'); return data.drive_folder_id; }
     }
-    const ok = await ensureAuth();
-    if (!ok) { toast.error('Não foi possível conectar a conta Google.'); return false; }
-    return true;
+    toast.error('A pasta está sendo criada, tente de novo em instantes.');
+    return null;
   };
 
-  const uploadFile = async (file: File) => {
+  // Pasta pronta + login Google (abre o popup e continua sozinho). Retorna o folderId.
+  const ensureReady = async (): Promise<string | null> => {
+    const fid = await ensureFolder();
+    if (!fid) return null;
+    const ok = await ensureAuth();
+    if (!ok) { toast.error('Não foi possível conectar a conta Google.'); return null; }
+    return fid;
+  };
+
+  const uploadFile = async (file: File, fid: string) => {
     try {
       setBusy(true);
-      const res = await uploadToDrive(file, file.name, file.type || 'application/octet-stream', driveFolderId!);
+      const res = await uploadToDrive(file, file.name, file.type || 'application/octet-stream', fid);
       const url = res.webViewLink || googleUrl('file', res.id);
       const { error } = await supabase.from('project_documents').insert([{
         project_id: projectId, name: file.name, url, kind: 'file',
@@ -137,11 +161,12 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     }
   };
 
-  // Sobe 1+ arquivos (input ou drag-and-drop); autentica uma vez e envia em sequência.
+  // Sobe 1+ arquivos (input ou drag-and-drop); prepara pasta+auth uma vez e envia em sequência.
   const uploadFiles = async (files: File[]) => {
     if (files.length === 0) return;
-    if (!(await ensureGoogle())) return;
-    for (const f of files) await uploadFile(f);
+    const fid = await ensureReady();
+    if (!fid) return;
+    for (const f of files) await uploadFile(f, fid);
   };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,10 +187,11 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     if (!createType) return;
     const { mime, kind } = GOOGLE_MIME[createType];
     if (!createName.trim()) { toast.error('Dê um nome ao arquivo.'); return; }
-    if (!(await ensureGoogle())) return;
+    const fid = await ensureReady();
+    if (!fid) return;
     try {
       setBusy(true);
-      const res = await createGoogleFile(createName.trim(), mime, driveFolderId!);
+      const res = await createGoogleFile(createName.trim(), mime, fid);
       const url = res.webViewLink || googleUrl(kind, res.id);
       const { error } = await supabase.from('project_documents').insert([{
         project_id: projectId, name: createName.trim(), url, kind,
@@ -242,9 +268,9 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
 
         {canManage && (
           <div className="flex items-center gap-2">
-            {driveFolderId && (
+            {folderId && (
               <a
-                href={`https://drive.google.com/drive/folders/${driveFolderId}`}
+                href={`https://drive.google.com/drive/folders/${folderId}`}
                 target="_blank" rel="noopener noreferrer"
                 className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-yellow"
                 title="Abrir a pasta do projeto no Drive"
