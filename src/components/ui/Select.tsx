@@ -83,7 +83,7 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
             left: align === 'right' ? undefined : pos.left,
             right: align === 'right' ? Math.max(8, window.innerWidth - (pos.left + pos.width)) : undefined,
           }}
-          className={clsx('z-[200] max-w-[300px] max-h-64 overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1', menuClassName)}
+          className={clsx('z-[300] max-w-[300px] max-h-64 overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1', menuClassName)}
         >
           {options.map(o => (
             <button
