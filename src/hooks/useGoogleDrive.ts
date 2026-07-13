@@ -122,7 +122,7 @@ export function useGoogleDrive() {
 
       // Shared Drive support requires supportsAllDrives and includeItemsFromAllDrives parameters
       const response = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&includeItemsFromAllDrives=true', 
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=id,name,mimeType,webViewLink',
         {
           method: 'POST',
           headers: { 
@@ -155,12 +155,38 @@ export function useGoogleDrive() {
     }
   }, [accessToken]);
 
+  // Cria um arquivo nativo do Google (Docs/Sheets/Slides) dentro de uma pasta.
+  // mimeType: application/vnd.google-apps.{document|spreadsheet|presentation}
+  const createGoogleFile = useCallback(async (name: string, mimeType: string, parentId?: string) => {
+    if (!accessToken) throw new Error('Not authenticated with Google Drive');
+    const response = await fetch(
+      'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,mimeType,webViewLink',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, mimeType, parents: parentId ? [parentId] : [] }),
+      }
+    );
+    if (!response.ok) {
+      let errorData;
+      try { errorData = await response.json(); } catch { errorData = { error: { message: 'Unknown error' } }; }
+      if (response.status === 401) {
+        setAccessToken(null);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY + '_expires_at');
+      }
+      throw new Error(errorData.error?.message || `Failed to create Google file (${response.status})`);
+    }
+    return await response.json();
+  }, [accessToken]);
+
   return {
     login,
     uploadToDrive,
     isAuthenticated,
     accessToken,
     listFiles,
-    createFolder
+    createFolder,
+    createGoogleFile
   };
 }
