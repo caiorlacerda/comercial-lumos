@@ -1,7 +1,7 @@
 import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
-  Briefcase, ShieldCheck, ClipboardList, TrendingUp, Landmark,
+  Briefcase, ClipboardList, TrendingUp, Landmark,
   CalendarDays, Truck, Users2, KeyRound
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
@@ -54,7 +54,6 @@ export const NAV_SECTIONS: Section[] = [
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
       { icon: FileStack, label: 'Templates de Tarefas', path: '/producao/templates-tarefas', permission: 'admin' },
       { icon: KeyRound, label: 'Acessos & Senhas', path: '/producao/acessos', permission: 'acessos' },
-      { icon: Users2, label: 'Dados da Equipe', path: '/producao/equipe-dados', permission: 'equipe_dados' },
       // Só para quem TEM cronograma e NÃO tem as demais views (papel editor):
       // sem este item, editores ficariam sem porta de entrada na seção.
       { icon: CalendarDays, label: 'Cronograma Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao_only' },
@@ -83,7 +82,6 @@ export const NAV_SECTIONS: Section[] = [
     items: [
       { icon: Users2, label: 'Equipe', path: '/equipe' },
       { icon: Settings, label: 'Configurações', path: '/configuracoes' },
-      { icon: ShieldCheck, label: 'Usuários', path: '/usuarios', permission: 'admin' },
       { icon: ClipboardList, label: 'Auditoria', path: '/auditoria', permission: 'admin' },
     ],
   },

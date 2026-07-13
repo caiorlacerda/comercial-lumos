@@ -23,7 +23,6 @@ const BudgetEditorPage = lazy(() => import('@/pages/BudgetEditorPage'));
 const Templates = lazy(() => import('@/pages/Templates'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const ConfiguracoesNotificacoes = lazy(() => import('@/pages/ConfiguracoesNotificacoes'));
-const UsersPage = lazy(() => import('@/pages/Users'));
 const AuditLog = lazy(() => import('@/pages/AuditLog'));
 const AprovacaoPublica = lazy(() => import('@/pages/AprovacaoPublica'));
 const Equipe = lazy(() => import('@/pages/Equipe'));
@@ -48,7 +47,6 @@ const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
 const Projetos = lazy(() => import('@/pages/Projetos'));
 const TemplatesTarefas = lazy(() => import('@/pages/TemplatesTarefas'));
 const Acessos = lazy(() => import('@/pages/Acessos'));
-const DadosEquipe = lazy(() => import('@/pages/DadosEquipe'));
 const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
 const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
 const OrdemDoDiaEditor = lazy(() => import('@/pages/OrdemDoDiaEditor'));
@@ -621,17 +619,8 @@ function AppContent() {
             }
           />
 
-          {/* PRODUÇÃO — Dados da Equipe (admin/produção) */}
-          <Route
-            path="/producao/equipe-dados"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="equipe_dados">
-                  <DadosEquipe />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
+          {/* Consolidado em /equipe — mantém o link antigo funcionando */}
+          <Route path="/producao/equipe-dados" element={<Navigate to="/equipe" replace />} />
 
           {/* PRODUÇÃO — Templates de Tarefas (admin) */}
           <Route
@@ -709,16 +698,8 @@ function AppContent() {
             }
           />
 
-          <Route
-            path="/usuarios"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="admin">
-                  <UsersPage />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
+          {/* Consolidado em /equipe — mantém o link antigo funcionando */}
+          <Route path="/usuarios" element={<Navigate to="/equipe" replace />} />
           <Route
             path="/auditoria"
             element={
