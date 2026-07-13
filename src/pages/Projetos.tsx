@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
+import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
@@ -135,6 +136,7 @@ interface Project {
   data_fim: string | null;
   descricao: string | null;
   category: 'digital' | 'filme' | 'live' | null;
+  drive_folder_id: string | null;
   budget?: {
     category: 'digital' | 'filme' | 'live';
   } | null;
@@ -1859,6 +1861,13 @@ export default function Projetos() {
                     ></div>
                   </div>
                 </div>
+
+                {/* ================= DOCUMENTOS DO PROJETO ================= */}
+                <ProjectDocuments
+                  projectId={selectedProject.id}
+                  driveFolderId={selectedProject.drive_folder_id}
+                  canManage={canManage}
+                />
 
                 {/* ================= TABS FOR TASK VIEWS ================= */}
                 <div className="flex items-center justify-between border-b border-lumos-border/50">
