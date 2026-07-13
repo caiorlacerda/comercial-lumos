@@ -133,12 +133,17 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     return null;
   };
 
-  // Pasta pronta + login Google (abre o popup e continua sozinho). Retorna o folderId.
+  // Login Google + pasta pronta. Retorna o folderId.
+  //
+  // A ordem importa: o popup do Google PRECISA abrir logo após o clique (a
+  // "user activation" do navegador). Como criar a pasta pode levar segundos, se
+  // deixássemos o popup pro final ele seria bloqueado. Por isso autentica
+  // primeiro (dentro do gesto) e só então provisiona a pasta.
   const ensureReady = async (): Promise<string | null> => {
-    const fid = await ensureFolder();
-    if (!fid) return null;
     const ok = await ensureAuth();
     if (!ok) { toast.error('Não foi possível conectar a conta Google.'); return null; }
+    const fid = await ensureFolder();
+    if (!fid) return null;
     return fid;
   };
 
