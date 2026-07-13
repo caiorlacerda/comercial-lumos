@@ -76,10 +76,11 @@ interface Props {
 export default function ProjectDocuments({ projectId, driveFolderId, canManage = true }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
-  const { login, isAuthenticated, uploadToDrive, createGoogleFile } = useGoogleDrive();
+  const { ensureAuth, uploadToDrive, createGoogleFile } = useGoogleDrive();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [newMenu, setNewMenu] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -106,24 +107,18 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     setLoading(false);
   }
 
-  const ensureGoogle = () => {
-    if (!isAuthenticated()) {
-      login();
-      toast.info('Conecte sua conta Google e tente novamente.');
-      return false;
-    }
+  // Confere pasta do Drive e garante login Google (abre o popup e continua sozinho).
+  const ensureGoogle = async () => {
     if (!driveFolderId) {
       toast.error('Este projeto ainda não tem pasta no Drive. Abra/edite o projeto para sincronizar.');
       return false;
     }
+    const ok = await ensureAuth();
+    if (!ok) { toast.error('Não foi possível conectar a conta Google.'); return false; }
     return true;
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    if (!ensureGoogle()) return;
+  const uploadFile = async (file: File) => {
     try {
       setBusy(true);
       const res = await uploadToDrive(file, file.name, file.type || 'application/octet-stream', driveFolderId!);
@@ -133,7 +128,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
         tag: 'outro', drive_file_id: res.id, mime_type: file.type || null, created_by: profile?.id || null,
       }]);
       if (error) throw error;
-      toast.success('Arquivo enviado ao Drive do projeto!');
+      toast.success(`"${file.name}" enviado ao Drive do projeto!`);
       fetchDocs(true);
     } catch (err: any) {
       toast.error(err.message || 'Falha ao enviar o arquivo.');
@@ -142,11 +137,32 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     }
   };
 
+  // Sobe 1+ arquivos (input ou drag-and-drop); autentica uma vez e envia em sequência.
+  const uploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    if (!(await ensureGoogle())) return;
+    for (const f of files) await uploadFile(f);
+  };
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    void uploadFiles(files);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (!canManage) return;
+    const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+    void uploadFiles(files);
+  };
+
   const handleCreate = async () => {
     if (!createType) return;
     const { mime, kind } = GOOGLE_MIME[createType];
     if (!createName.trim()) { toast.error('Dê um nome ao arquivo.'); return; }
-    if (!ensureGoogle()) return;
+    if (!(await ensureGoogle())) return;
     try {
       setBusy(true);
       const res = await createGoogleFile(createName.trim(), mime, driveFolderId!);
@@ -201,7 +217,21 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   };
 
   return (
-    <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden">
+    <div
+      className={clsx('relative bg-lumos-surface border rounded-lumos overflow-hidden transition-colors', dragOver ? 'border-lumos-yellow' : 'border-lumos-border')}
+      onDragOver={canManage ? (e) => { e.preventDefault(); if (!dragOver) setDragOver(true); } : undefined}
+      onDragLeave={canManage ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); } : undefined}
+      onDrop={canManage ? onDrop : undefined}
+    >
+      {/* Overlay de drag-and-drop */}
+      {dragOver && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-lumos-yellow/10 border-2 border-dashed border-lumos-yellow rounded-lumos pointer-events-none">
+          <div className="flex items-center gap-2 text-sm font-black text-lumos-yellow uppercase tracking-wide">
+            <Upload className="w-5 h-5" /> Solte para enviar ao Drive
+          </div>
+        </div>
+      )}
+
       {/* Cabeçalho + ações */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-lumos-border">
         <div className="flex items-center gap-2">
@@ -230,7 +260,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Subir arquivo
             </button>
-            <input ref={fileRef} type="file" className="hidden" onChange={handleUpload}
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload}
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,image/*,application/pdf" />
 
             <div className="relative">
@@ -276,7 +306,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
         <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
       ) : docs.length === 0 ? (
         <div className="py-10 text-center text-sm text-lumos-text-secondary">
-          Nenhum documento ainda. Suba um arquivo (roteiro, contrato…) ou crie um Google Doc/Planilha/Slides.
+          Nenhum documento ainda. Arraste arquivos aqui, suba um (roteiro, contrato…) ou crie um Google Doc/Planilha/Slides.
         </div>
       ) : (
         <ul className="divide-y divide-lumos-border">

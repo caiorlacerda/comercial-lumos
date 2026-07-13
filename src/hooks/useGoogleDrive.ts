@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 
 const STORAGE_KEY = 'lumos_google_access_token';
@@ -9,6 +9,14 @@ export function useGoogleDrive() {
     localStorage.getItem(STORAGE_KEY)
   );
 
+  // Resolvedores pendentes de ensureAuth(): resolvem quando o popup termina.
+  const pendingAuth = useRef<((ok: boolean) => void)[]>([]);
+  const settleAuth = (ok: boolean) => {
+    const list = pendingAuth.current;
+    pendingAuth.current = [];
+    list.forEach(fn => fn(ok));
+  };
+
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
       const token = tokenResponse.access_token;
@@ -16,9 +24,13 @@ export function useGoogleDrive() {
       setAccessToken(token);
       localStorage.setItem(STORAGE_KEY, token);
       localStorage.setItem(STORAGE_KEY + '_expires_at', expiresAt.toString());
+      settleAuth(true);
     },
+    onError: () => settleAuth(false),
+    onNonOAuthError: () => settleAuth(false),
     scope: 'https://www.googleapis.com/auth/drive',
-    prompt: 'consent',
+    // Sem 'consent' forçado: se a pessoa já autorizou, o Google devolve o token
+    // sem reexibir a tela toda vez (menos atrito). Só pede consentimento na 1ª vez.
     flow: 'implicit'
   });
 
@@ -180,8 +192,19 @@ export function useGoogleDrive() {
     return await response.json();
   }, [accessToken]);
 
+  // Garante autenticação sem obrigar clique extra: se já está válido, resolve
+  // na hora; senão abre o popup e resolve quando o token chega (ou falha).
+  const ensureAuth = useCallback((): Promise<boolean> => {
+    if (isAuthenticated()) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      pendingAuth.current.push(resolve);
+      login();
+    });
+  }, [isAuthenticated, login]);
+
   return {
     login,
+    ensureAuth,
     uploadToDrive,
     isAuthenticated,
     accessToken,
