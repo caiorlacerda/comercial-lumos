@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import { formatBudgetCode } from '@/utils/formatters';
 
 // Cores disponíveis para clientes. A chave é o que fica salvo no banco
 // (client_colors.color); a classe é só apresentação.
@@ -36,7 +37,14 @@ interface TreeProject {
   id: string;
   name: string;
   client_id: string | null;
+  code: string | null;
 }
+
+// Sequência numérica do código (ex.: "2026-229" -> 229) para ordenar
+const codeSeq = (p: TreeProject) => {
+  const m = (p.code || '').match(/(\d+)\s*$/);
+  return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+};
 
 interface TreeClient {
   id: string;
@@ -70,7 +78,7 @@ export default function SidebarProjectTree() {
     (async () => {
       try {
         const [projRes, cliRes, colorRes] = await Promise.all([
-          supabase.from('projects').select('id, name, client_id').eq('status', 'ativo').order('name'),
+          supabase.from('projects').select('id, name, client_id, code').eq('status', 'ativo').order('name'),
           supabase.from('clients').select('id, name').order('name'),
           supabase.from('client_colors').select('client_id, color'),
         ]);
@@ -83,6 +91,9 @@ export default function SidebarProjectTree() {
           if (p.client_id) (byClient[p.client_id] = byClient[p.client_id] || []).push(p);
           else orphans.push(p);
         });
+        // Ordena os projetos de cada cliente pelo código
+        Object.values(byClient).forEach(arr => arr.sort((a, b) => codeSeq(a) - codeSeq(b)));
+        orphans.sort((a, b) => codeSeq(a) - codeSeq(b));
 
         // Só clientes com projetos ativos aparecem na árvore
         const tree: TreeClient[] = ((cliRes.data as { id: string; name: string }[]) || [])
@@ -285,7 +296,7 @@ export default function SidebarProjectTree() {
                                 : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
                             )}
                           >
-                            {proj.name}
+                            {proj.code && <span className="font-mono text-[9px] text-lumos-text-secondary/50 mr-1">{formatBudgetCode(proj.code)}</span>}{proj.name}
                           </button>
                         ))}
                       </div>
@@ -323,7 +334,7 @@ export default function SidebarProjectTree() {
                               : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
                           )}
                         >
-                          {proj.name}
+                          {proj.code && <span className="font-mono text-[9px] text-lumos-text-secondary/50 mr-1">{formatBudgetCode(proj.code)}</span>}{proj.name}
                         </button>
                       ))}
                     </div>
