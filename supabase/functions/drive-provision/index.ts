@@ -203,6 +203,25 @@ function slugify(s: string): string {
     .replace(/^-|-$/g, '') || 'PROJETO'
 }
 
+// Nome atual da pasta no Drive (para decidir se precisa renomear)
+async function currentFolderName(folderId: string): Promise<string | null> {
+  try {
+    const meta = await driveFetch(`files/${folderId}?fields=name`)
+    return meta?.name ?? null
+  } catch (_) {
+    return null
+  }
+}
+
+// Renomeia a pasta do projeto se o nome-padrão mudou (edição de nome/código na
+// plataforma). Só faz PATCH quando realmente difere — seguro e idempotente.
+async function renameFolderIfNeeded(folderId: string, expected: string, projectId: string): Promise<void> {
+  const current = await currentFolderName(folderId)
+  if (!current || current === expected) return
+  await driveFetch(`files/${folderId}`, { method: 'PATCH', body: JSON.stringify({ name: expected }) })
+  await log('project', projectId, 'rename_folder', `Pasta renomeada de "${current}" para "${expected}"`)
+}
+
 // "#2026-227" → "227"; ao passar de 999 mantém os dígitos ("1000")
 function jobCode(code: string | null): string {
   const m = (code || '').match(/(\d+)$/)
@@ -259,23 +278,26 @@ async function provisionProject(projectId: string): Promise<void> {
   // 1. Pasta do cliente PRIMEIRO (auto-cura se tiver ido pra lixeira)
   const clientFolderId = await ensureClientFolder(project.client)
 
-  // 2. Idempotência: só pula se a pasta salva ainda existe E continua dentro do
-  //    cliente atual (se o cliente foi recriado, a pasta antiga fica órfã).
+  // Nome-padrão da pasta do projeto (NNN_NOME[_LIVE])
+  const category: string = project.category ?? project.budget?.category ?? 'digital'
+  const isLive = category === 'live'
+  const folderName = `${jobCode(project.code)}_${slugify(project.name)}${isLive ? '_LIVE' : ''}`
+
+  // 2. Idempotência: se a pasta salva existe E continua dentro do cliente atual,
+  //    não recria — mas RENOMEIA se o nome/código do projeto mudou (edição).
   if (await folderUnder(project.drive_folder_id, clientFolderId)) {
+    await renameFolderIfNeeded(project.drive_folder_id!, folderName, projectId)
     // Backfill: projetos antigos podem não ter o ID do dropzone salvo ainda.
     if (!project.drive_upload_folder_id) {
       const entregaId = await findChildFolder(project.drive_folder_id!, '06_ENTREGA')
       const up = entregaId ? await findChildFolder(entregaId, '01_REVISAO') : null
       if (up) await db.from('projects').update({ drive_upload_folder_id: up }).eq('id', projectId)
     }
-    await log('project', projectId, 'skip', 'Projeto já tem pasta válida no Drive (idempotência)')
+    await log('project', projectId, 'ok', 'Pasta verificada/renomeada no Drive (idempotência)')
     return
   }
 
   // 3. Pasta do projeto (sabendo se é nova → mirror mais rápido, sem finds)
-  const category: string = project.category ?? project.budget?.category ?? 'digital'
-  const isLive = category === 'live'
-  const folderName = `${jobCode(project.code)}_${slugify(project.name)}${isLive ? '_LIVE' : ''}`
   const existingFolder = await findChildFolder(clientFolderId, folderName)
   const projectFolderId = existingFolder ?? await createFolder(clientFolderId, folderName)
 
@@ -315,7 +337,8 @@ serve(async (req) => {
   let projectId: string | null = null
   try {
     const body = await req.json()
-    if (body?.table === 'projects' && body?.type === 'INSERT') projectId = body.record?.id ?? null
+    // INSERT ou UPDATE de projeto (o provision é idempotente e renomeia se preciso)
+    if (body?.table === 'projects' && body?.record?.id) projectId = body.record.id
     // Reprocessamento manual: POST {"project_id": "..."}
     if (!projectId && body?.project_id) projectId = body.project_id
   } catch (_) { /* payload inválido */ }
