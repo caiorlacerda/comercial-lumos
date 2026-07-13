@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FileText, FileSpreadsheet, Presentation, File as FileIcon, Link2,
   Upload, Plus, Trash2, ExternalLink, FolderOpen, Loader2, ChevronDown,
@@ -34,6 +35,8 @@ const CATEGORIES: { value: string; label: string; folder: string }[] = [
 ];
 const catLabel = (v: string) => CATEGORIES.find(c => c.value === v)?.label || v;
 const catFolderName = (v: string) => CATEGORIES.find(c => c.value === v)?.folder;
+// Abas de filtro: "Todos" + as categorias.
+const FILTERS = [{ value: 'todos', label: 'Todos' }, ...CATEGORIES.map(c => ({ value: c.value, label: c.label }))];
 
 // Ícone + cor por tipo de documento.
 function kindVisual(kind: Kind, mime?: string | null) {
@@ -78,17 +81,23 @@ interface Props {
 export default function ProjectDocuments({ projectId, driveFolderId, canManage = true }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
-  const { ensureAuth, uploadToDrive, createGoogleFile, listFiles, createFolder } = useGoogleDrive();
+  const { ensureAuth, uploadToDrive, createGoogleFile, listFiles, createFolder, moveFileToFolder } = useGoogleDrive();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [folderId, setFolderId] = useState<string | null>(driveFolderId ?? null);
+  const [activeCat, setActiveCat] = useState('todos'); // aba ativa: filtra a lista E define o destino do upload
   const [newMenu, setNewMenu] = useState(false);
-  const [uploadCat, setUploadCat] = useState('geral'); // categoria dos uploads/drag
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const novoBtnRef = useRef<HTMLButtonElement>(null);
   // Cache dos IDs das subpastas por categoria (evita relookup a cada upload).
   const subfolderCache = useRef<Record<string, string>>({});
+
+  // Destino do upload: a aba ativa; em "Todos", cai em Geral por padrão.
+  const uploadTarget = activeCat === 'todos' ? 'geral' : activeCat;
+  const visibleDocs = activeCat === 'todos' ? docs : docs.filter(d => d.tag === activeCat);
 
   // Modal de "criar Google file" e de "colar link"
   const [createType, setCreateType] = useState<keyof typeof GOOGLE_MIME | null>(null);
@@ -203,7 +212,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     e.target.value = '';
-    void uploadFiles(files, uploadCat);
+    void uploadFiles(files, uploadTarget);
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -211,7 +220,31 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     setDragOver(false);
     if (!canManage) return;
     const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
-    void uploadFiles(files, uploadCat);
+    void uploadFiles(files, uploadTarget);
+  };
+
+  // Re-categoriza um documento: atualiza a etiqueta e, se for arquivo do Drive,
+  // move fisicamente pra subpasta da nova categoria.
+  const recategorize = async (doc: Doc, newCat: string) => {
+    if (newCat === doc.tag) return;
+    const isDriveFile = !!doc.drive_file_id && !!catFolderName(newCat);
+    // Auth primeiro (dentro do gesto do select) se for mexer no Drive.
+    if (isDriveFile) {
+      const ok = await ensureAuth();
+      if (!ok) { toast.error('Conecte o Google para mover no Drive.'); return; }
+    }
+    setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, tag: newCat } : d));
+    const { error } = await supabase.from('project_documents').update({ tag: newCat }).eq('id', doc.id);
+    if (error) { toast.error('Falha ao mudar a categoria.'); fetchDocs(true); return; }
+    if (isDriveFile && folderId) {
+      try {
+        const target = await getCategoryFolder(newCat, folderId);
+        await moveFileToFolder(doc.drive_file_id!, target);
+        toast.success(`Movido para ${catLabel(newCat)}.`);
+      } catch {
+        toast.error('Categoria salva, mas não consegui mover no Drive.');
+      }
+    }
   };
 
   const handleCreate = async () => {
@@ -306,77 +339,91 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
               </a>
             )}
 
-            {/* Categoria de destino: cada uma vai pra subpasta certa no Drive */}
-            <div className="flex items-center rounded-lumos border border-lumos-border overflow-hidden">
-              {CATEGORIES.map(c => (
-                <button key={c.value} type="button" onClick={() => setUploadCat(c.value)}
-                  title={`Enviar para ${c.folder}`}
-                  className={clsx('h-8 px-2.5 text-[11px] font-black uppercase tracking-tight transition-colors',
-                    uploadCat === c.value ? 'bg-lumos-yellow text-black' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                  {c.label}
-                </button>
-              ))}
-            </div>
-
             <button
               onClick={() => fileRef.current?.click()}
               disabled={busy}
               className="h-8 px-3 rounded-lumos border border-lumos-border text-xs font-bold text-lumos-text-primary hover:border-lumos-yellow/50 flex items-center gap-1.5 disabled:opacity-50"
-              title={`Subir para ${catLabel(uploadCat)}`}
+              title={`Subir para ${catLabel(uploadTarget)}`}
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Subir arquivo
             </button>
             <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload}
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,image/*,application/pdf" />
 
-            <div className="relative">
-              <button
-                onClick={() => setNewMenu(v => !v)}
-                className="h-8 px-3 rounded-lumos bg-lumos-yellow text-black text-xs font-black flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" /> Novo <ChevronDown className="w-3 h-3" />
-              </button>
-              {newMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setNewMenu(false)} />
-                  <div className="absolute right-0 top-full mt-1 w-52 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-20 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
-                    {(Object.keys(GOOGLE_MIME) as (keyof typeof GOOGLE_MIME)[]).map(t => {
-                      const { kind, label } = GOOGLE_MIME[t];
-                      const { Icon, color } = kindVisual(kind);
-                      return (
-                        <button key={t}
-                          onClick={() => { setNewMenu(false); setCreateType(t); setCreateName(''); setCreateTag(uploadCat); }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
-                        >
-                          <Icon className={clsx('w-4 h-4', color)} /> Novo Google {label}
-                        </button>
-                      );
-                    })}
-                    <div className="h-px bg-lumos-border my-1" />
-                    <button
-                      onClick={() => { setNewMenu(false); setLinkOpen(true); setLinkUrl(''); setLinkName(''); setLinkTag(uploadCat); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
-                    >
-                      <Link2 className="w-4 h-4 text-lumos-text-secondary" /> Colar link
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+            <button
+              ref={novoBtnRef}
+              onClick={() => {
+                const r = novoBtnRef.current?.getBoundingClientRect();
+                if (r) setMenuPos({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+                setNewMenu(v => !v);
+              }}
+              className="h-8 px-3 rounded-lumos bg-lumos-yellow text-black text-xs font-black flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Novo <ChevronDown className="w-3 h-3" />
+            </button>
           </div>
         )}
       </div>
 
+      {/* Abas de filtro: Todos + categorias. A aba ativa filtra a lista e é o
+          destino dos uploads. */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-lumos-border overflow-x-auto">
+        {FILTERS.map(f => {
+          const count = f.value === 'todos' ? docs.length : docs.filter(d => d.tag === f.value).length;
+          const active = activeCat === f.value;
+          return (
+            <button key={f.value} type="button" onClick={() => setActiveCat(f.value)}
+              className={clsx('h-7 px-3 rounded-full text-[11px] font-black uppercase tracking-tight transition-colors flex items-center gap-1.5 whitespace-nowrap',
+                active ? 'bg-lumos-yellow text-black' : 'text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-primary/5')}>
+              {f.label}
+              <span className={clsx('text-[9px] font-bold', active ? 'text-black/60' : 'text-lumos-text-secondary/60')}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Menu "Novo" (portal, pra não ser cortado pelo overflow do card) */}
+      {newMenu && menuPos && createPortal(
+        <>
+          <div className="fixed inset-0 z-[60]" onClick={() => setNewMenu(false)} />
+          <div style={{ top: menuPos.top, right: menuPos.right }}
+            className="fixed w-52 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[61] py-1 animate-in fade-in slide-in-from-top-2 duration-150">
+            {(Object.keys(GOOGLE_MIME) as (keyof typeof GOOGLE_MIME)[]).map(t => {
+              const { kind, label } = GOOGLE_MIME[t];
+              const { Icon, color } = kindVisual(kind);
+              return (
+                <button key={t}
+                  onClick={() => { setNewMenu(false); setCreateType(t); setCreateName(''); setCreateTag(uploadTarget); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
+                >
+                  <Icon className={clsx('w-4 h-4', color)} /> Novo Google {label}
+                </button>
+              );
+            })}
+            <div className="h-px bg-lumos-border my-1" />
+            <button
+              onClick={() => { setNewMenu(false); setLinkOpen(true); setLinkUrl(''); setLinkName(''); setLinkTag(uploadTarget); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
+            >
+              <Link2 className="w-4 h-4 text-lumos-text-secondary" /> Colar link
+            </button>
+          </div>
+        </>,
+        document.body,
+      )}
+
       {/* Lista */}
       {loading ? (
         <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
-      ) : docs.length === 0 ? (
+      ) : visibleDocs.length === 0 ? (
         <div className="py-10 text-center text-sm text-lumos-text-secondary">
-          Nenhum documento ainda. Escolha a categoria (Geral, Roteiro ou Produção) e arraste arquivos aqui, suba um ou crie um Google Doc/Planilha/Slides.
+          {docs.length === 0
+            ? 'Nenhum documento ainda. Escolha a categoria e arraste arquivos aqui, suba um ou crie um Google Doc/Planilha/Slides.'
+            : `Nenhum documento em ${catLabel(activeCat)}.`}
         </div>
       ) : (
         <ul className="divide-y divide-lumos-border">
-          {docs.map(doc => {
+          {visibleDocs.map(doc => {
             const { Icon, color } = kindVisual(doc.kind, doc.mime_type);
             return (
               <li key={doc.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-lumos-text-primary/5 group">
@@ -386,9 +433,22 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
                   <span className="text-[10px] text-lumos-text-secondary uppercase tracking-wider">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</span>
                 </a>
 
-                <span className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1">
-                  {catLabel(doc.tag)}
-                </span>
+                {canManage ? (
+                  <select
+                    value={CATEGORIES.some(c => c.value === doc.tag) ? doc.tag : ''}
+                    onChange={e => recategorize(doc, e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    title="Mudar categoria (move o arquivo no Drive)"
+                    className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1 cursor-pointer focus:outline-none"
+                  >
+                    {!CATEGORIES.some(c => c.value === doc.tag) && <option value="" disabled>{catLabel(doc.tag)}</option>}
+                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                ) : (
+                  <span className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1">
+                    {catLabel(doc.tag)}
+                  </span>
+                )}
 
                 <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Abrir"
                   className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow transition-colors">

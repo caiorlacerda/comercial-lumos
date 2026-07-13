@@ -154,6 +154,35 @@ export function useGoogleDrive() {
     return await response.json();
   }, []);
 
+  // Move um arquivo pra outra pasta (troca os parents). Usado ao re-categorizar
+  // um documento: some da subpasta antiga e entra na nova.
+  const moveFileToFolder = useCallback(async (fileId: string, targetFolderId: string) => {
+    const token = tokenRef.current;
+    if (!token) throw new Error('Not authenticated with Google Drive');
+    // Descobre os parents atuais pra removê-los.
+    const metaRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!metaRes.ok) {
+      if (metaRes.status === 401) clearToken();
+      throw new Error(`Failed to read file parents (${metaRes.status})`);
+    }
+    const meta = await metaRes.json();
+    const removeParents = (meta.parents || []).filter((p: string) => p !== targetFolderId).join(',');
+    const params = new URLSearchParams({ addParents: targetFolderId, supportsAllDrives: 'true', fields: 'id,parents' });
+    if (removeParents) params.set('removeParents', removeParents);
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?${params.toString()}`,
+      { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    if (!res.ok) {
+      if (res.status === 401) clearToken();
+      throw new Error(`Failed to move file (${res.status})`);
+    }
+    return await res.json();
+  }, []);
+
   // Garante autenticação sem obrigar clique extra: se já está válido, resolve
   // na hora; senão abre o popup e resolve quando o token chega (ou falha).
   const ensureAuth = useCallback((): Promise<boolean> => {
@@ -172,6 +201,7 @@ export function useGoogleDrive() {
     accessToken,
     listFiles,
     createFolder,
-    createGoogleFile
+    createGoogleFile,
+    moveFileToFolder
   };
 }
