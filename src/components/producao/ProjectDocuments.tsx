@@ -240,7 +240,6 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
       try {
         const target = await getCategoryFolder(newCat, folderId);
         await moveFileToFolder(doc.drive_file_id!, target);
-        toast.success(`Movido para ${catLabel(newCat)}.`);
       } catch {
         toast.error('Categoria salva, mas não consegui mover no Drive.');
       }
@@ -394,18 +393,18 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
               return (
                 <button key={t}
                   onClick={() => { setNewMenu(false); setCreateType(t); setCreateName(''); setCreateTag(uploadTarget); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 text-left"
                 >
-                  <Icon className={clsx('w-4 h-4', color)} /> Novo Google {label}
+                  <Icon className={clsx('w-4 h-4 flex-shrink-0', color)} /> <span className="flex-1 text-left leading-tight">Novo Google {label}</span>
                 </button>
               );
             })}
             <div className="h-px bg-lumos-border my-1" />
             <button
               onClick={() => { setNewMenu(false); setLinkOpen(true); setLinkUrl(''); setLinkName(''); setLinkTag(uploadTarget); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 text-left"
             >
-              <Link2 className="w-4 h-4 text-lumos-text-secondary" /> Colar link
+              <Link2 className="w-4 h-4 flex-shrink-0 text-lumos-text-secondary" /> <span className="flex-1 text-left">Colar link</span>
             </button>
           </div>
         </>,
