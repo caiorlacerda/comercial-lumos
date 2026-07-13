@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2, Pencil } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +38,7 @@ interface TreeProject {
   name: string;
   client_id: string | null;
   code: string | null;
+  category: string | null;
 }
 
 // Sequência numérica do código (ex.: "2026-229" -> 229) para ordenar
@@ -69,7 +70,11 @@ export default function SidebarProjectTree() {
   const [loading, setLoading] = useState(true);
   const [colorMenu, setColorMenu] = useState<{ x: number; y: number; clientId: string } | null>(null);
   // Menu de contexto (botão direito) no projeto + exclusão definitiva (admin)
-  const [projMenu, setProjMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
+  const [projMenu, setProjMenu] = useState<{ x: number; y: number; proj: TreeProject } | null>(null);
+  // Edição de projeto (nome/código/categoria)
+  const [editProj, setEditProj] = useState<TreeProject | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', code: '', category: 'digital' });
+  const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -78,7 +83,7 @@ export default function SidebarProjectTree() {
     (async () => {
       try {
         const [projRes, cliRes, colorRes] = await Promise.all([
-          supabase.from('projects').select('id, name, client_id, code').eq('status', 'ativo').order('name'),
+          supabase.from('projects').select('id, name, client_id, code, category').eq('status', 'ativo').order('name'),
           supabase.from('clients').select('id, name').order('name'),
           supabase.from('client_colors').select('client_id, color'),
         ]);
@@ -171,7 +176,29 @@ export default function SidebarProjectTree() {
   const openProjMenu = (e: React.MouseEvent, proj: TreeProject) => {
     if (!isAdmin) return;
     e.preventDefault();
-    setProjMenu({ x: e.clientX, y: e.clientY, id: proj.id, name: proj.name });
+    setProjMenu({ x: e.clientX, y: e.clientY, proj });
+  };
+
+  const openEdit = (proj: TreeProject) => {
+    setEditForm({ name: proj.name, code: proj.code || '', category: proj.category || 'digital' });
+    setEditProj(proj);
+    setProjMenu(null);
+  };
+
+  // Salva nome/código/categoria do projeto e atualiza a árvore local
+  const handleSaveEdit = async () => {
+    if (!editProj || !editForm.name.trim()) return;
+    setSavingEdit(true);
+    const patch = { name: editForm.name.trim(), code: editForm.code.trim() || null, category: editForm.category };
+    const { error } = await supabase.from('projects').update(patch).eq('id', editProj.id);
+    setSavingEdit(false);
+    if (error) { toast.error('Não foi possível salvar o projeto.'); return; }
+    const applyAndSort = (arr: TreeProject[]) =>
+      arr.map(p => (p.id === editProj.id ? { ...p, ...patch } : p)).sort((a, b) => codeSeq(a) - codeSeq(b));
+    setClients(prev => prev.map(c => ({ ...c, projects: applyAndSort(c.projects) })));
+    setNoClientProjects(prev => applyAndSort(prev));
+    toast.success('Projeto atualizado!');
+    setEditProj(null);
   };
 
   // Exclui o projeto DEFINITIVAMENTE (tarefas, comentários e registro
@@ -401,7 +428,14 @@ export default function SidebarProjectTree() {
             style={{ left: Math.min(projMenu.x, window.innerWidth - 210), top: Math.min(projMenu.y + 4, window.innerHeight - 80) }}
           >
             <button
-              onClick={() => { setConfirmDelete({ id: projMenu.id, name: projMenu.name }); setProjMenu(null); }}
+              onClick={() => openEdit(projMenu.proj)}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors text-left"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Editar projeto…
+            </button>
+            <button
+              onClick={() => { setConfirmDelete({ id: projMenu.proj.id, name: projMenu.proj.name }); setProjMenu(null); }}
               className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -449,6 +483,46 @@ export default function SidebarProjectTree() {
                 {deleting
                   ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   : 'Sim, excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de edição de projeto (nome / código / categoria) */}
+      {editProj && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditProj(null)}>
+          <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4">
+            <h3 className="text-base font-black uppercase tracking-tight text-lumos-text-primary flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-lumos-yellow" /> Editar projeto
+            </h3>
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Nome do projeto</label>
+              <input autoFocus value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); }}
+                className="input-lumos w-full h-10 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Código</label>
+                <input value={editForm.code} onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))}
+                  placeholder="Ex.: 2026-245" className="input-lumos w-full h-10 text-sm" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Segmento</label>
+                <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                  className="input-lumos w-full h-10 text-sm cursor-pointer">
+                  <option value="digital">Digital</option>
+                  <option value="filme">Filme</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setEditProj(null)} className="btn-secondary flex-1 h-10 text-sm">Cancelar</button>
+              <button onClick={handleSaveEdit} disabled={!editForm.name.trim() || savingEdit}
+                className="btn-primary flex-1 h-10 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                {savingEdit ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : 'Salvar'}
               </button>
             </div>
           </div>
