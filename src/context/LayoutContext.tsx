@@ -30,10 +30,11 @@ export function getSectionFromPath(path: string): SectionType {
   if (path.startsWith('/financeiro')) return 'financeiro';
   if (path.startsWith('/ordem-do-dia') || path.startsWith('/producao')) return 'producao';
   if (
-    path === '/usuarios' || 
-    path === '/auditoria' || 
-    path === '/configuracoes' || 
-    path === '/equipe'
+    path === '/usuarios' ||
+    path === '/auditoria' ||
+    path === '/configuracoes' ||
+    path === '/equipe' ||
+    path === '/monitoramento'
   ) {
     return 'configuracoes';
   }
