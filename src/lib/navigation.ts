@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2, KeyRound
+  CalendarDays, Truck, Users2, KeyRound, Radio
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -81,6 +81,7 @@ export const NAV_SECTIONS: Section[] = [
     visibleWhen: () => true,
     items: [
       { icon: Users2, label: 'Equipe', path: '/equipe' },
+      { icon: Radio, label: 'Monitoramento', path: '/monitoramento', permission: 'admin' },
       { icon: Settings, label: 'Configurações', path: '/configuracoes' },
       { icon: ClipboardList, label: 'Auditoria', path: '/auditoria', permission: 'admin' },
     ],
