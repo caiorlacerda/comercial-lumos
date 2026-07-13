@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -26,6 +27,7 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
 export default function CustosProjetoDetalhe() {
   const { id } = useParams(); // agora é o project id
   const navigate = useNavigate();
+  const goBack = useGoBack('/financeiro/custos-projeto');
   const { profile } = useAuth();
   const toast = useToast();
   const [project, setProject] = useState<any>(null);
@@ -764,7 +766,7 @@ export default function CustosProjetoDetalhe() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={goBack}
             title="Voltar"
             className="p-2 bg-lumos-text-primary/5 rounded-full hover:bg-lumos-text-primary/10 transition-all"
           >

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { ArrowLeft, Truck, Plus, Trash2, Save } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,6 +27,7 @@ interface ServiceItem {
 export default function FornecedorEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/producao/fornecedores');
   const toast = useToast();
   const { profile } = useAuth();
   
@@ -219,7 +221,7 @@ export default function FornecedorEditor() {
   return (
     <div className="space-y-6 font-work-sans">
       <button
-        onClick={() => navigate(-1)}
+        onClick={goBack}
         className="flex items-center gap-2 text-xs font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-all"
       >
         <ArrowLeft className="w-4 h-4" /> Voltar

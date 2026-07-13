@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { supabase } from '@/lib/supabase';
 import {
   ChevronLeft,
@@ -122,6 +123,7 @@ function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly:
 export default function BudgetEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/orcamentos');
   const { user, profile } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
@@ -1167,7 +1169,7 @@ export default function BudgetEditorPage() {
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:sticky lg:top-0 lg:z-20 lg:bg-lumos-bg/95 lg:backdrop-blur-sm lg:py-4 lg:-mx-8 lg:px-8 lg:-mt-8 lg:mb-4 lg:border-b lg:border-lumos-border/50 transition-all">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} title="Voltar" className="p-2 hover:bg-lumos-bg rounded-full transition-colors text-lumos-text-secondary">
+          <button onClick={goBack} title="Voltar" className="p-2 hover:bg-lumos-bg rounded-full transition-colors text-lumos-text-secondary">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col gap-1">
