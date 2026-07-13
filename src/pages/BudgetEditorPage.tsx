@@ -1175,49 +1175,42 @@ export default function BudgetEditorPage() {
                 onChange={(e) => updateBudget({ project_name: e.target.value })}
               />
             </div>
-            <div className="flex items-center gap-4 text-xs font-semibold">
-              <div className="flex items-center gap-2">
-                <Select
-                  disabled={isReadOnly}
-                  className="w-auto! max-w-[220px] text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary"
-                  value={budget?.client_id || ''}
-                  onChange={(v) => {
-                    if (v === '__new__') { setShowNewClient(true); return; }
-                    updateBudget({ client_id: v });
-                    if (v) {
-                      fetchContactsForClient(v, true);
-                    } else {
-                      setAvailableContacts([]);
-                      setVersion(vv => vv ? { ...vv, contact_id: undefined } : null);
-                    }
-                  }}
-                  options={[
-                    { value: '', label: 'Selecionar Empresa' },
-                    ...clients.map(c => ({ value: c.id, label: c.agency_name ? `${c.agency_name} + ${c.name}` : c.name })),
-                    { value: '__new__', label: '＋ Novo cliente' },
-                  ]}
-                />
-
-                {budget?.client_id && (
-                  <>
-                    <div className="w-px h-3 bg-lumos-border" />
-                    <Select
-                      disabled={isReadOnly}
-                      className="w-auto! max-w-[170px] text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary"
-                      value={version?.contact_id || ''}
-                      onChange={(v) => updateVersion({ contact_id: v })}
-                      options={[
-                        { value: '', label: 'Contato' },
-                        ...availableContacts.map(c => ({ value: c.id, label: `${c.name}${c.role ? ` · ${c.role}` : ''}` })),
-                      ]}
-                    />
-                  </>
-                )}
-              </div>
-              <div className="w-px h-3 bg-lumos-border" />
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               <Select
                 disabled={isReadOnly}
-                className="w-auto! text-xs font-semibold uppercase text-lumos-text-secondary hover:text-lumos-text-primary"
+                className="w-auto! max-w-[240px] text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary px-2.5 py-1 rounded-lumos bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/40 transition-colors"
+                value={budget?.client_id || ''}
+                onChange={(v) => {
+                  if (v === '__new__') { setShowNewClient(true); return; }
+                  updateBudget({ client_id: v });
+                  if (v) {
+                    fetchContactsForClient(v, true);
+                  } else {
+                    setAvailableContacts([]);
+                    setVersion(vv => vv ? { ...vv, contact_id: undefined } : null);
+                  }
+                }}
+                options={[
+                  { value: '', label: 'Selecionar Empresa' },
+                  ...clients.map(c => ({ value: c.id, label: c.agency_name ? `${c.agency_name} + ${c.name}` : c.name })),
+                  { value: '__new__', label: '＋ Novo cliente' },
+                ]}
+              />
+              {budget?.client_id && (
+                <Select
+                  disabled={isReadOnly}
+                  className="w-auto! max-w-[190px] text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary px-2.5 py-1 rounded-lumos bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/40 transition-colors"
+                  value={version?.contact_id || ''}
+                  onChange={(v) => updateVersion({ contact_id: v })}
+                  options={[
+                    { value: '', label: 'Contato' },
+                    ...availableContacts.map(c => ({ value: c.id, label: `${c.name}${c.role ? ` · ${c.role}` : ''}` })),
+                  ]}
+                />
+              )}
+              <Select
+                disabled={isReadOnly}
+                className="w-auto! uppercase text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary px-2.5 py-1 rounded-lumos bg-lumos-surface border border-lumos-border hover:border-lumos-yellow/40 transition-colors"
                 value={budget?.category || 'digital'}
                 onChange={(v) => updateBudget({ category: v as any })}
                 options={[
@@ -1226,11 +1219,10 @@ export default function BudgetEditorPage() {
                   { value: 'live', label: 'Live' },
                 ]}
               />
-              <div className="w-px h-3 bg-lumos-border" />
-              <div className="flex items-center gap-2">
-                <Clock className="w-3 h-3 text-lumos-yellow" />
-                <select 
-                  className="bg-transparent border-none text-lumos-yellow font-black focus:ring-0 p-0 uppercase hover:text-lumos-yellow transition-colors cursor-pointer"
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lumos bg-lumos-yellow/10 border border-lumos-yellow/25">
+                <Clock className="w-3 h-3 text-lumos-yellow flex-shrink-0" />
+                <select
+                  className="bg-transparent border-none text-lumos-yellow font-black focus:ring-0 p-0 uppercase cursor-pointer"
                   value={version?.id}
                   onChange={(e) => {
                     const selectedVid = e.target.value;

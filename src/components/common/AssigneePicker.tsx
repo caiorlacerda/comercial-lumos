@@ -54,7 +54,11 @@ export default function AssigneePicker({ value, onChange, users, className, plac
       setOpen(false);
     };
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    const onScroll = () => setOpen(false);
+    // Ignora o scroll de dentro do menu (para rolar a lista de pessoas)
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onEsc);
     window.addEventListener('scroll', onScroll, true);

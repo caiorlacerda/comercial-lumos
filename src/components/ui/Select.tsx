@@ -43,7 +43,12 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
       setOpen(false);
     };
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    const onScroll = () => setOpen(false);
+    // Fecha ao rolar a PÁGINA (o menu é fixed e descolaria do gatilho), mas
+    // ignora o scroll de DENTRO do próprio menu (para dar pra rolar a lista).
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onEsc);
     window.addEventListener('scroll', onScroll, true);
