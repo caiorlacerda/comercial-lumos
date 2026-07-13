@@ -26,6 +26,7 @@ const ConfiguracoesNotificacoes = lazy(() => import('@/pages/ConfiguracoesNotifi
 const AuditLog = lazy(() => import('@/pages/AuditLog'));
 const AprovacaoPublica = lazy(() => import('@/pages/AprovacaoPublica'));
 const Equipe = lazy(() => import('@/pages/Equipe'));
+const MonitoramentoEquipe = lazy(() => import('@/pages/MonitoramentoEquipe'));
 
 // Financeiro
 const FinanceiroDashboard = lazy(() => import('@/pages/FinanceiroDashboard'));
@@ -700,6 +701,16 @@ function AppContent() {
 
           {/* Consolidado em /equipe — mantém o link antigo funcionando */}
           <Route path="/usuarios" element={<Navigate to="/equipe" replace />} />
+          <Route
+            path="/monitoramento"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <MonitoramentoEquipe />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
           <Route
             path="/auditoria"
             element={
