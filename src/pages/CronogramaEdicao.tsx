@@ -16,9 +16,9 @@ import { format, isPast, isToday, startOfWeek, addDays, addWeeks, subWeeks, pars
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import {
-  DndContext, useSensor, useSensors, PointerSensor, DragEndEvent, useDraggable, useDroppable,
+  DndContext, DragOverlay, useSensor, useSensors, PointerSensor,
+  DragEndEvent, DragStartEvent, useDraggable, useDroppable,
 } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
 
 // Tags que fazem uma tarefa entrar no cronograma de edição.
 const TRIGGER_TAGS = ['entregas', 'edição'];
@@ -37,30 +37,25 @@ interface AppUser { id: string; full_name: string; avatar_url: string | null; ro
 
 const prioBadge = (p: string) => p === 'alta' ? 'bg-red-500/15 text-red-500' : p === 'baixa' ? 'bg-lumos-text-secondary/15 text-lumos-text-secondary' : 'bg-amber-500/15 text-amber-500';
 
-// ---- Card arrastável ----
-function TaskCard({ task, canManage, onOpen }: { task: Task; canManage: boolean; onOpen: (t: Task) => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id, disabled: !canManage });
-  const style = transform ? { transform: CSS.Transform.toString(transform) } : undefined;
+// ---- Aparência do card (usada em lugar e no DragOverlay) ----
+function CardView({ task, dragging, overlay }: { task: Task; dragging?: boolean; overlay?: boolean }) {
   const done = isDone(task.status);
   const overdue = !done && !!task.data_fim && isPast(parseISO(task.data_fim)) && !isToday(parseISO(task.data_fim));
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...(canManage ? attributes : {})}
-      {...(canManage ? listeners : {})}
-      onClick={() => onOpen(task)}
       className={clsx(
-        'text-left w-full p-2 rounded border transition-all select-none relative group/card hover:shadow-md',
-        canManage ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer',
-        isDragging ? 'opacity-45 border-dashed border-lumos-yellow/50 z-50 pointer-events-none' :
+        'w-full p-2 rounded border select-none',
+        overlay ? 'shadow-xl rotate-1 cursor-grabbing' : 'hover:shadow-md',
+        dragging ? 'opacity-40' :
           done ? 'bg-green-500/5 border-green-500/30' :
           overdue ? 'bg-red-500/[0.04] border-red-500/40' :
           'bg-lumos-surface border-lumos-border hover:border-lumos-yellow/40',
+        (dragging && !overlay) && 'bg-lumos-surface border-dashed border-lumos-yellow/40',
+        overlay && (done ? 'bg-green-500/10 border-green-500/40' : overdue ? 'bg-red-500/10 border-red-500/50' : 'bg-lumos-surface border-lumos-yellow/50'),
       )}
     >
       <div className="flex items-start gap-1">
-        {overdue && <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0 mt-0.5 animate-pulse" />}
+        {overdue && <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0 mt-0.5" />}
         <span className={clsx('text-[10px] font-black leading-tight break-words', done ? 'text-green-600 dark:text-green-400 line-through opacity-80' : 'text-lumos-text-primary')}>
           {task.titulo}
         </span>
@@ -74,6 +69,23 @@ function TaskCard({ task, canManage, onOpen }: { task: Task; canManage: boolean;
         <span className={clsx('text-[8px] px-1 py-0.5 rounded font-black uppercase tracking-wide', prioBadge(task.prioridade))}>{task.prioridade}</span>
         <span className="text-[8px] font-bold text-lumos-text-secondary truncate">{taskLabel(task.status)}</span>
       </div>
+    </div>
+  );
+}
+
+// ---- Wrapper arrastável: NÃO aplica transform no card (isso deixava lerdo e
+// deformava). Quem segue o cursor é o DragOverlay; aqui só marcamos a origem. ----
+function TaskCard({ task, canManage, onOpen }: { task: Task; canManage: boolean; onOpen: (t: Task) => void }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !canManage });
+  return (
+    <div
+      ref={setNodeRef}
+      {...(canManage ? attributes : {})}
+      {...(canManage ? listeners : {})}
+      onClick={() => onOpen(task)}
+      className={clsx('text-left', canManage ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer')}
+    >
+      <CardView task={task} dragging={isDragging} />
     </div>
   );
 }
@@ -102,6 +114,7 @@ export default function CronogramaEdicao() {
   const [backlogSearch, setBacklogSearch] = useState('');
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
 
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [novaOpen, setNovaOpen] = useState(false);
   const [nova, setNova] = useState({ project_id: '', titulo: '', responsavel_id: '', data_fim: '', prioridade: 'media' });
   const [saving, setSaving] = useState(false);
@@ -148,11 +161,10 @@ export default function CronogramaEdicao() {
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
-  // Pessoas ordenadas: quem tem tarefa (nesta semana ou geral) primeiro.
-  const orderedUsers = useMemo(() => {
-    const withTask = new Set(tasks.filter(t => t.responsavel_id).map(t => t.responsavel_id!));
-    return [...users].sort((a, b) => Number(withTask.has(b.id)) - Number(withTask.has(a.id)) || a.full_name.localeCompare(b.full_name));
-  }, [users, tasks]);
+  // Só editores (cargo de edição), em ordem alfabética.
+  const editors = useMemo(() =>
+    users.filter(u => u.role === 'editor').sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')),
+  [users]);
 
   const backlog = useMemo(() => {
     const q = backlogSearch.trim().toLowerCase();
@@ -162,7 +174,10 @@ export default function CronogramaEdicao() {
   const cellTasks = (userId: string, day: Date) =>
     tasks.filter(t => t.responsavel_id === userId && t.data_fim && isSameDay(parseISO(t.data_fim), day));
 
+  const handleDragStart = (event: DragStartEvent) => setActiveId(event.active.id as string);
+
   const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null);
     if (!canManage) return;
     const { active, over } = event;
     if (!over) return;
@@ -242,7 +257,7 @@ export default function CronogramaEdicao() {
         )}
       </div>
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
         {/* Grade semanal por pessoa */}
         <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden">
           <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between gap-3 flex-wrap">
@@ -273,8 +288,11 @@ export default function CronogramaEdicao() {
                 ))}
               </div>
 
-              {/* Linhas por pessoa */}
-              {orderedUsers.map(u => (
+              {/* Linhas por editor */}
+              {editors.length === 0 && (
+                <div className="px-3 py-8 text-center text-sm text-lumos-text-secondary">Nenhum editor cadastrado. Defina o cargo “Editor” em Equipe.</div>
+              )}
+              {editors.map(u => (
                 <div key={u.id} className="grid border-b border-lumos-border/60 last:border-0" style={{ gridTemplateColumns: '180px repeat(7, 1fr)' }}>
                   <div className="px-3 py-2 flex items-center gap-2 min-w-0">
                     <UserAvatar user={u as any} size={28} showStatus />
@@ -324,6 +342,13 @@ export default function CronogramaEdicao() {
             {canManage && <p className="text-[10px] text-lumos-text-secondary/70 mt-3 text-center">Arraste um card para a célula de uma pessoa/dia para agendar (define responsável e prazo).</p>}
           </div>
         </Cell>
+
+        <DragOverlay dropAnimation={null}>
+          {activeId ? (() => {
+            const t = tasks.find(x => x.id === activeId);
+            return t ? <div className="w-44"><CardView task={t} overlay /></div> : null;
+          })() : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Nova Edição = cria uma tarefa de projeto com a tag 'entregas' */}
