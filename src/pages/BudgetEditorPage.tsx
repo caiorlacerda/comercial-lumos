@@ -68,6 +68,7 @@ import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 
 import Modal from '@/components/common/Modal';
 import RichTextEditor from '@/components/common/RichTextEditor';
+import Select from '@/components/ui/Select';
 import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
 
@@ -133,6 +134,11 @@ export default function BudgetEditorPage() {
   const [catalogSearch, setCatalogSearch] = useState('');
 
   const [clients, setClients] = useState<any[]>([]);
+  // Criar cliente novo direto do dropdown
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientAgency, setNewClientAgency] = useState('');
+  const [savingClient, setSavingClient] = useState(false);
   const [previewCode, setPreviewCode] = useState('');
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -284,6 +290,33 @@ export default function BudgetEditorPage() {
   async function fetchClients() {
     const { data } = await supabase.from('clients').select('*').order('name');
     setClients(data || []);
+  }
+
+  // Cria um cliente novo direto do dropdown e já seleciona no orçamento
+  async function handleCreateClient() {
+    const name = newClientName.trim();
+    if (!name) return;
+    setSavingClient(true);
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .insert({ name, agency_name: newClientAgency.trim() || null })
+        .select('*')
+        .single();
+      if (error) throw error;
+      setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      updateBudget({ client_id: data.id });
+      fetchContactsForClient(data.id, true);
+      setShowNewClient(false);
+      setNewClientName('');
+      setNewClientAgency('');
+      toast.success('Cliente criado!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Não foi possível criar o cliente.');
+    } finally {
+      setSavingClient(false);
+    }
   }
 
   async function initNewBudget() {
@@ -1144,58 +1177,55 @@ export default function BudgetEditorPage() {
             </div>
             <div className="flex items-center gap-4 text-xs font-semibold">
               <div className="flex items-center gap-2">
-                <select 
+                <Select
                   disabled={isReadOnly}
-                  className="bg-transparent border-none text-lumos-text-secondary focus:ring-0 p-0 hover:text-lumos-text-primary transition-colors cursor-pointer disabled:cursor-default max-w-[200px] truncate"
+                  className="w-auto! max-w-[220px] text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary"
                   value={budget?.client_id || ''}
-                  onChange={(e) => {
-                    const cid = e.target.value;
-                    updateBudget({ client_id: cid });
-                    // Reset contact when client changes
-                    if (cid) {
-                      fetchContactsForClient(cid, true);
+                  onChange={(v) => {
+                    if (v === '__new__') { setShowNewClient(true); return; }
+                    updateBudget({ client_id: v });
+                    if (v) {
+                      fetchContactsForClient(v, true);
                     } else {
                       setAvailableContacts([]);
-                      setVersion(v => v ? { ...v, contact_id: undefined } : null);
+                      setVersion(vv => vv ? { ...vv, contact_id: undefined } : null);
                     }
                   }}
-                >
-                  <option value="">Selecionar Empresa</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.agency_name ? `${c.agency_name} + ${c.name}` : c.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: '', label: 'Selecionar Empresa' },
+                    ...clients.map(c => ({ value: c.id, label: c.agency_name ? `${c.agency_name} + ${c.name}` : c.name })),
+                    { value: '__new__', label: '＋ Novo cliente' },
+                  ]}
+                />
 
                 {budget?.client_id && (
                   <>
                     <div className="w-px h-3 bg-lumos-border" />
-                    <select
+                    <Select
                       disabled={isReadOnly}
-                      className="bg-transparent border-none text-lumos-text-secondary focus:ring-0 p-0 hover:text-lumos-text-primary transition-colors cursor-pointer disabled:cursor-default max-w-[150px] truncate"
+                      className="w-auto! max-w-[170px] text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary"
                       value={version?.contact_id || ''}
-                      onChange={(e) => updateVersion({ contact_id: e.target.value })}
-                    >
-                      <option value="">Contato</option>
-                      {availableContacts.map(c => (
-                        <option key={c.id} value={c.id}>{c.name} {c.role ? `· ${c.role}` : ''}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => updateVersion({ contact_id: v })}
+                      options={[
+                        { value: '', label: 'Contato' },
+                        ...availableContacts.map(c => ({ value: c.id, label: `${c.name}${c.role ? ` · ${c.role}` : ''}` })),
+                      ]}
+                    />
                   </>
                 )}
               </div>
               <div className="w-px h-3 bg-lumos-border" />
-              <select 
+              <Select
                 disabled={isReadOnly}
-                className="bg-transparent border-none text-lumos-text-secondary focus:ring-0 p-0 uppercase hover:text-lumos-text-primary transition-colors cursor-pointer disabled:cursor-default"
+                className="w-auto! text-xs font-semibold uppercase text-lumos-text-secondary hover:text-lumos-text-primary"
                 value={budget?.category || 'digital'}
-                onChange={(e) => updateBudget({ category: e.target.value as any })}
-              >
-                <option value="digital">Digital</option>
-                <option value="filme">Filme</option>
-                <option value="live">Live</option>
-              </select>
+                onChange={(v) => updateBudget({ category: v as any })}
+                options={[
+                  { value: 'digital', label: 'Digital' },
+                  { value: 'filme', label: 'Filme' },
+                  { value: 'live', label: 'Live' },
+                ]}
+              />
               <div className="w-px h-3 bg-lumos-border" />
               <div className="flex items-center gap-2">
                 <Clock className="w-3 h-3 text-lumos-yellow" />
@@ -1969,12 +1999,45 @@ export default function BudgetEditorPage() {
           </div>
         </div>
       )}
-      <GoogleDriveAuthModal 
+      <GoogleDriveAuthModal
         isOpen={isDriveModalOpen}
         onClose={() => setIsDriveModalOpen(false)}
         onAuthorize={login}
         onSkip={() => handleGenerateAndBackup(false)}
       />
+
+      {/* Criar cliente novo direto do orçamento */}
+      <Modal isOpen={showNewClient} onClose={() => setShowNewClient(false)} title="Novo cliente">
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1.5 block">Nome do cliente *</label>
+            <input
+              autoFocus
+              className="input-lumos w-full h-10 text-sm"
+              placeholder="Ex.: Shopee"
+              value={newClientName}
+              onChange={e => setNewClientName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateClient(); }}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-1.5 block">Agência (opcional)</label>
+            <input
+              className="input-lumos w-full h-10 text-sm"
+              placeholder="Ex.: Ampfy"
+              value={newClientAgency}
+              onChange={e => setNewClientAgency(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateClient(); }}
+            />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => setShowNewClient(false)} className="btn-secondary flex-1 h-10">Cancelar</button>
+            <button onClick={handleCreateClient} disabled={!newClientName.trim() || savingClient} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2 disabled:opacity-50">
+              {savingClient ? <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-black" /> : 'Criar e selecionar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
