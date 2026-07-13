@@ -25,13 +25,15 @@ interface Doc {
   created_at: string;
 }
 
-const TAGS: { value: string; label: string }[] = [
-  { value: 'roteiro', label: 'Roteiro' },
-  { value: 'contrato', label: 'Contrato' },
-  { value: 'referencia', label: 'Referência' },
-  { value: 'entrega', label: 'Entrega' },
-  { value: 'outro', label: 'Outro' },
+// Categorias = subpastas reais no Drive do projeto. Ao subir/criar, o arquivo
+// vai direto pra pasta certa (00_GERAL / 01_ROTEIRO / 02_PRODUCAO).
+const CATEGORIES: { value: string; label: string; folder: string }[] = [
+  { value: 'geral', label: 'Geral', folder: '00_GERAL' },
+  { value: 'roteiro', label: 'Roteiro', folder: '01_ROTEIRO' },
+  { value: 'producao', label: 'Produção', folder: '02_PRODUCAO' },
 ];
+const catLabel = (v: string) => CATEGORIES.find(c => c.value === v)?.label || v;
+const catFolderName = (v: string) => CATEGORIES.find(c => c.value === v)?.folder;
 
 // Ícone + cor por tipo de documento.
 function kindVisual(kind: Kind, mime?: string | null) {
@@ -76,23 +78,26 @@ interface Props {
 export default function ProjectDocuments({ projectId, driveFolderId, canManage = true }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
-  const { ensureAuth, uploadToDrive, createGoogleFile } = useGoogleDrive();
+  const { ensureAuth, uploadToDrive, createGoogleFile, listFiles, createFolder } = useGoogleDrive();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [folderId, setFolderId] = useState<string | null>(driveFolderId ?? null);
   const [newMenu, setNewMenu] = useState(false);
+  const [uploadCat, setUploadCat] = useState('geral'); // categoria dos uploads/drag
   const fileRef = useRef<HTMLInputElement>(null);
+  // Cache dos IDs das subpastas por categoria (evita relookup a cada upload).
+  const subfolderCache = useRef<Record<string, string>>({});
 
   // Modal de "criar Google file" e de "colar link"
   const [createType, setCreateType] = useState<keyof typeof GOOGLE_MIME | null>(null);
   const [createName, setCreateName] = useState('');
-  const [createTag, setCreateTag] = useState('outro');
+  const [createTag, setCreateTag] = useState('geral');
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkName, setLinkName] = useState('');
-  const [linkTag, setLinkTag] = useState('outro');
+  const [linkTag, setLinkTag] = useState('geral');
 
   useEffect(() => { fetchDocs(); }, [projectId]);
   useRealtimeRefetch(['project_documents'], () => fetchDocs(true));
@@ -147,17 +152,36 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     return fid;
   };
 
-  const uploadFile = async (file: File, fid: string) => {
+  // Resolve o ID da subpasta da categoria (00_GERAL/01_ROTEIRO/02_PRODUCAO)
+  // dentro da pasta do projeto. Acha por nome; se não existir, cria. Se algo
+  // falhar, cai pra pasta raiz do projeto (upload nunca fica travado).
+  const getCategoryFolder = async (cat: string, projectFolderId: string): Promise<string> => {
+    const name = catFolderName(cat);
+    if (!name) return projectFolderId;
+    const key = `${projectFolderId}:${cat}`;
+    if (subfolderCache.current[key]) return subfolderCache.current[key];
+    try {
+      const res = await listFiles(`'${projectFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and name = '${name}' and trashed = false`);
+      let id: string | undefined = res.files?.[0]?.id;
+      if (!id) id = (await createFolder(name, projectFolderId)).id;
+      subfolderCache.current[key] = id!;
+      return id!;
+    } catch {
+      return projectFolderId;
+    }
+  };
+
+  const uploadFile = async (file: File, targetFolderId: string, cat: string) => {
     try {
       setBusy(true);
-      const res = await uploadToDrive(file, file.name, file.type || 'application/octet-stream', fid);
+      const res = await uploadToDrive(file, file.name, file.type || 'application/octet-stream', targetFolderId);
       const url = res.webViewLink || googleUrl('file', res.id);
       const { error } = await supabase.from('project_documents').insert([{
         project_id: projectId, name: file.name, url, kind: 'file',
-        tag: 'outro', drive_file_id: res.id, mime_type: file.type || null, created_by: profile?.id || null,
+        tag: cat, drive_file_id: res.id, mime_type: file.type || null, created_by: profile?.id || null,
       }]);
       if (error) throw error;
-      toast.success(`"${file.name}" enviado ao Drive do projeto!`);
+      toast.success(`"${file.name}" enviado para ${catLabel(cat)}!`);
       fetchDocs(true);
     } catch (err: any) {
       toast.error(err.message || 'Falha ao enviar o arquivo.');
@@ -166,18 +190,20 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     }
   };
 
-  // Sobe 1+ arquivos (input ou drag-and-drop); prepara pasta+auth uma vez e envia em sequência.
-  const uploadFiles = async (files: File[]) => {
+  // Sobe 1+ arquivos (input ou drag-and-drop) na categoria escolhida; prepara
+  // pasta+auth e resolve a subpasta uma vez, depois envia em sequência.
+  const uploadFiles = async (files: File[], cat: string) => {
     if (files.length === 0) return;
     const fid = await ensureReady();
     if (!fid) return;
-    for (const f of files) await uploadFile(f, fid);
+    const target = await getCategoryFolder(cat, fid);
+    for (const f of files) await uploadFile(f, target, cat);
   };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     e.target.value = '';
-    void uploadFiles(files);
+    void uploadFiles(files, uploadCat);
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -185,7 +211,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     setDragOver(false);
     if (!canManage) return;
     const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
-    void uploadFiles(files);
+    void uploadFiles(files, uploadCat);
   };
 
   const handleCreate = async () => {
@@ -196,15 +222,16 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     if (!fid) return;
     try {
       setBusy(true);
-      const res = await createGoogleFile(createName.trim(), mime, fid);
+      const target = await getCategoryFolder(createTag, fid);
+      const res = await createGoogleFile(createName.trim(), mime, target);
       const url = res.webViewLink || googleUrl(kind, res.id);
       const { error } = await supabase.from('project_documents').insert([{
         project_id: projectId, name: createName.trim(), url, kind,
         tag: createTag, drive_file_id: res.id, mime_type: mime, created_by: profile?.id || null,
       }]);
       if (error) throw error;
-      setCreateType(null); setCreateName(''); setCreateTag('outro');
-      toast.success('Criado na pasta do projeto!');
+      setCreateType(null); setCreateName(''); setCreateTag('geral');
+      toast.success(`Criado em ${catLabel(createTag)}!`);
       fetchDocs(true);
       window.open(url, '_blank', 'noopener');
     } catch (err: any) {
@@ -225,7 +252,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
         project_id: projectId, name, url, kind, tag: linkTag, created_by: profile?.id || null,
       }]);
       if (error) throw error;
-      setLinkOpen(false); setLinkUrl(''); setLinkName(''); setLinkTag('outro');
+      setLinkOpen(false); setLinkUrl(''); setLinkName(''); setLinkTag('geral');
       toast.success('Link salvo no projeto!');
       fetchDocs(true);
     } catch (err: any) {
@@ -233,11 +260,6 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     } finally {
       setBusy(false);
     }
-  };
-
-  const changeTag = async (id: string, tag: string) => {
-    setDocs(prev => prev.map(d => d.id === id ? { ...d, tag } : d));
-    await supabase.from('project_documents').update({ tag }).eq('id', id);
   };
 
   const handleDelete = async (doc: Doc) => {
@@ -284,10 +306,23 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
               </a>
             )}
 
+            {/* Categoria de destino: cada uma vai pra subpasta certa no Drive */}
+            <div className="flex items-center rounded-lumos border border-lumos-border overflow-hidden">
+              {CATEGORIES.map(c => (
+                <button key={c.value} type="button" onClick={() => setUploadCat(c.value)}
+                  title={`Enviar para ${c.folder}`}
+                  className={clsx('h-8 px-2.5 text-[11px] font-black uppercase tracking-tight transition-colors',
+                    uploadCat === c.value ? 'bg-lumos-yellow text-black' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={() => fileRef.current?.click()}
               disabled={busy}
               className="h-8 px-3 rounded-lumos border border-lumos-border text-xs font-bold text-lumos-text-primary hover:border-lumos-yellow/50 flex items-center gap-1.5 disabled:opacity-50"
+              title={`Subir para ${catLabel(uploadCat)}`}
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Subir arquivo
             </button>
@@ -310,7 +345,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
                       const { Icon, color } = kindVisual(kind);
                       return (
                         <button key={t}
-                          onClick={() => { setNewMenu(false); setCreateType(t); setCreateName(''); setCreateTag('outro'); }}
+                          onClick={() => { setNewMenu(false); setCreateType(t); setCreateName(''); setCreateTag(uploadCat); }}
                           className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
                         >
                           <Icon className={clsx('w-4 h-4', color)} /> Novo Google {label}
@@ -319,7 +354,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
                     })}
                     <div className="h-px bg-lumos-border my-1" />
                     <button
-                      onClick={() => { setNewMenu(false); setLinkOpen(true); setLinkUrl(''); setLinkName(''); setLinkTag('outro'); }}
+                      onClick={() => { setNewMenu(false); setLinkOpen(true); setLinkUrl(''); setLinkName(''); setLinkTag(uploadCat); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5"
                     >
                       <Link2 className="w-4 h-4 text-lumos-text-secondary" /> Colar link
@@ -337,7 +372,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
         <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
       ) : docs.length === 0 ? (
         <div className="py-10 text-center text-sm text-lumos-text-secondary">
-          Nenhum documento ainda. Arraste arquivos aqui, suba um (roteiro, contrato…) ou crie um Google Doc/Planilha/Slides.
+          Nenhum documento ainda. Escolha a categoria (Geral, Roteiro ou Produção) e arraste arquivos aqui, suba um ou crie um Google Doc/Planilha/Slides.
         </div>
       ) : (
         <ul className="divide-y divide-lumos-border">
@@ -351,20 +386,9 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
                   <span className="text-[10px] text-lumos-text-secondary uppercase tracking-wider">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</span>
                 </a>
 
-                {canManage ? (
-                  <select
-                    value={doc.tag}
-                    onChange={e => changeTag(doc.id, e.target.value)}
-                    onClick={e => e.stopPropagation()}
-                    className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1 cursor-pointer focus:outline-none"
-                  >
-                    {TAGS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                ) : (
-                  <span className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1">
-                    {TAGS.find(t => t.value === doc.tag)?.label || doc.tag}
-                  </span>
-                )}
+                <span className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1">
+                  {catLabel(doc.tag)}
+                </span>
 
                 <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Abrir"
                   className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
@@ -394,12 +418,12 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
               placeholder="Ex.: Roteiro v1" />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Etiqueta</label>
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
             <select className="input-lumos w-full" value={createTag} onChange={e => setCreateTag(e.target.value)}>
-              {TAGS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
-          <p className="text-[11px] text-lumos-text-secondary">Cria o arquivo direto na pasta do projeto no Drive e abre numa nova aba.</p>
+          <p className="text-[11px] text-lumos-text-secondary">Cria o arquivo na subpasta {catFolderName(createTag)} do projeto no Drive e abre numa nova aba.</p>
           <div className="flex gap-3 pt-1">
             <button onClick={() => setCreateType(null)} className="btn-secondary flex-1">Cancelar</button>
             <button onClick={handleCreate} disabled={busy} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2 disabled:opacity-50">
@@ -424,9 +448,9 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
               <input className="input-lumos w-full" value={linkName} onChange={e => setLinkName(e.target.value)} placeholder="Roteiro do cliente" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Etiqueta</label>
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
               <select className="input-lumos w-full" value={linkTag} onChange={e => setLinkTag(e.target.value)}>
-                {TAGS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
           </div>
