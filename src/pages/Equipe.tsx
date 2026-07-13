@@ -385,7 +385,13 @@ export default function Equipe() {
                       </div>
                     )}
 
-              {active === 'acesso' && hasAcesso && (
+              {/* Abas empilhadas na mesma célula do grid: a altura fica travada
+                  na aba mais alta (Dados) e a troca é um cross-fade. */}
+              <div className={showTabs ? 'grid' : undefined}>
+              {hasAcesso && (
+                <div aria-hidden={showTabs && active !== 'acesso'}
+                  className={clsx(showTabs && '[grid-area:1/1] transition-opacity duration-200 ease-out',
+                    showTabs && (active === 'acesso' ? 'opacity-100' : 'opacity-0 pointer-events-none'))}>
                 <Section title="Acesso & permissões" icon={Shield}>
                   <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Cargo / função (exibição)" value={access.job_title} onChange={v => setAccess(a => ({ ...a, job_title: v }))} />
@@ -434,9 +440,13 @@ export default function Equipe() {
                     <button onClick={deleteUser} className="h-9 px-3 text-xs font-bold rounded-lumos text-red-400 hover:bg-red-500/10 flex items-center gap-1.5 ml-auto"><Trash2 className="w-3.5 h-3.5" /> Excluir</button>
                   </div>
                 </Section>
+                </div>
               )}
 
-              {active === 'dados' && hasDados && (
+              {hasDados && (
+                <div aria-hidden={showTabs && active !== 'dados'}
+                  className={clsx(showTabs && '[grid-area:1/1] transition-opacity duration-200 ease-out',
+                    showTabs && (active === 'dados' ? 'opacity-100' : 'opacity-0 pointer-events-none'))}>
                 <Section title="Dados (RH)" icon={IdCard}>
                   <Field label="Cargo / função" value={hr.role_title} onChange={v => setHr(f => ({ ...f, role_title: v }))} icon={Briefcase} />
                   <Field label="Setor" value={hr.department} onChange={v => setHr(f => ({ ...f, department: v }))} />
@@ -461,7 +471,9 @@ export default function Equipe() {
                     </button>
                   </div>
                 </Section>
+                </div>
               )}
+              </div>
                   </>
                 );
               })()}
