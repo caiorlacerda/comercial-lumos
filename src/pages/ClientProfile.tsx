@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { supabase } from '@/lib/supabase';
 import { 
   Building2, 
@@ -52,6 +53,7 @@ interface Budget {
 export default function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/clientes');
   
   const [client, setClient] = useState<Client | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -165,7 +167,7 @@ export default function ClientProfile() {
   return (
     <div className="space-y-8 pb-20">
       <button
-        onClick={() => navigate(-1)}
+        onClick={goBack}
         className="flex items-center gap-2 text-xs font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-all"
       >
         <ArrowLeft className="w-4 h-4" />

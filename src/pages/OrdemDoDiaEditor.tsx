@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import {
   ArrowLeft,
   Save,
@@ -142,6 +143,7 @@ export default function OrdemDoDiaEditor() {
   const { id } = useParams();
   const isNew = !id || id === 'nova';
   const navigate = useNavigate();
+  const goBack = useGoBack('/ordem-do-dia');
   const toast = useToast();
   const { profile } = useAuth();
 
@@ -348,7 +350,7 @@ export default function OrdemDoDiaEditor() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={goBack}
             title="Voltar"
             className="p-2 bg-lumos-text-primary/5 rounded-full hover:bg-lumos-text-primary/10 transition-all"
           >
