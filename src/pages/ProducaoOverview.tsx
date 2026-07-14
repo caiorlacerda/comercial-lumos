@@ -8,6 +8,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import UserAvatar from '@/components/common/UserAvatar';
+import VideoReviewHub from '@/components/producao/VideoReviewHub';
 import { useToast } from '@/context/ToastContext';
 import { TASK_STATUS_GROUPS, getStatusDetails } from '@/pages/Projetos';
 
@@ -237,6 +238,9 @@ export default function ProducaoOverview() {
           Tudo o que está acontecendo nos projetos ativos, num lugar só.
         </p>
       </div>
+
+      {/* Hub de revisões de vídeo (abre o player ali mesmo) */}
+      <VideoReviewHub />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
