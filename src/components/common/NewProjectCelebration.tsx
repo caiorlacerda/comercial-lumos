@@ -5,34 +5,85 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Confetti from '@/components/common/Confetti';
 
-export type CelebrationPayload = { budgetId: string | null; projectName: string; code: string };
+type Celebration = { id: string; budgetId: string | null; projectName: string; code: string };
 
-// Evento interno usado pelo botão de TESTE (Monitoramento) para abrir o popup
-// sem precisar aprovar um orçamento de verdade.
-export const CELEBRATE_TEST_EVENT = 'lumos:celebrate-test';
+// Janela de "atraso": uma aprovação que aconteceu enquanto a pessoa estava offline
+// ainda é comemorada quando ela entra, desde que tenha sido nos últimos 7 dias
+// (cobre fim de semana/feriado sem ressuscitar aprovação antiga).
+const CATCH_UP_DAYS = 7;
 
-// ⚠️ TEMPORÁRIO — o teste é exclusivo do Caio. O Monitoramento é aberto a todos os
-// admins, então sem isso o botão apareceria para os outros. Remover junto com o
-// botão de teste quando a fase de teste acabar.
-const TEST_OWNER_EMAIL = 'caio.lacerda@produtoralumos.com.br';
-export const canTestCelebration = (email?: string | null) =>
-  (email || '').trim().toLowerCase() === TEST_OWNER_EMAIL;
+// Quais comemorações já foram exibidas neste navegador (evita repetir a cada
+// recarregamento). Ficam aqui e não no banco para não mexer no read_at do sininho.
+const SEEN_KEY = 'lumos_celebracoes_vistas';
+const getSeen = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch { return []; }
+};
+const markSeen = (id: string) => {
+  try {
+    const seen = getSeen();
+    if (seen.includes(id)) return;
+    localStorage.setItem(SEEN_KEY, JSON.stringify([...seen, id].slice(-50)));
+  } catch { /* localStorage indisponível: no pior caso, comemora de novo */ }
+};
+
+const toCelebration = (row: any): Celebration => {
+  const d = row?.data || {};
+  return {
+    id: row.id,
+    budgetId: d.budget_id ?? null,
+    projectName: d.project_name || 'Novo projeto',
+    code: d.code || '',
+  };
+};
 
 /**
- * Popup de comemoração: aparece NA HORA para admin e produção quando um orçamento
- * é aprovado. Escuta o INSERT em `notifications` (o trigger do banco cria a linha
- * assim que budgets.status vira 'aprovado'), então chega em tempo real.
+ * Popup de comemoração de projeto novo, para admin e produção.
+ *
+ * Dois caminhos, os dois via a notificação `orcamento_aprovado` que o trigger do
+ * banco cria assim que budgets.status vira 'aprovado':
+ *  - ONLINE: chega na hora pelo Realtime (INSERT em notifications).
+ *  - OFFLINE: ao entrar, buscamos as aprovações recentes ainda não comemoradas.
+ *
+ * Se mais de um projeto fechou enquanto a pessoa estava fora, elas entram numa
+ * fila e são mostradas uma de cada vez.
  */
 export default function NewProjectCelebration() {
   const { profile } = useAuth();
   const navigate = useNavigate();
-  const [payload, setPayload] = useState<CelebrationPayload | null>(null);
+  const [queue, setQueue] = useState<Celebration[]>([]);
   const [going, setGoing] = useState(false);
 
   const userId = profile?.id;
   const canCelebrate = profile?.role === 'admin' || profile?.role === 'producao';
 
-  // Realtime: nova notificação de orçamento aprovado para MIM.
+  // Enfileira sem duplicar (o realtime pode chegar junto com o catch-up do login).
+  const enqueue = (c: Celebration) => {
+    if (getSeen().includes(c.id)) return;
+    setQueue(prev => (prev.some(x => x.id === c.id) ? prev : [...prev, c]));
+  };
+
+  // 1) Catch-up no login: aprovações recentes que a pessoa ainda não viu.
+  useEffect(() => {
+    if (!userId || !canCelebrate) return;
+    let alive = true;
+    (async () => {
+      const since = new Date(Date.now() - CATCH_UP_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from('notifications')
+        .select('id, data, created_at')
+        .eq('user_id', userId)
+        .eq('event_type', 'orcamento_aprovado')
+        .gte('created_at', since)
+        .order('created_at', { ascending: true });
+      if (!alive || !data) return;
+      const seen = getSeen();
+      const pending = data.filter(r => !seen.includes(r.id)).map(toCelebration);
+      if (pending.length) setQueue(prev => [...prev, ...pending.filter(p => !prev.some(x => x.id === p.id))]);
+    })();
+    return () => { alive = false; };
+  }, [userId, canCelebrate]);
+
+  // 2) Realtime: aprovação acontecendo agora, com a pessoa online.
   useEffect(() => {
     if (!userId || !canCelebrate) return;
     const channel = supabase
@@ -44,36 +95,29 @@ export default function NewProjectCelebration() {
         filter: `user_id=eq.${userId}`,
       }, ({ new: row }: any) => {
         if (row?.event_type !== 'orcamento_aprovado') return;
-        const d = row.data || {};
-        setPayload({
-          budgetId: d.budget_id ?? null,
-          projectName: d.project_name || 'Novo projeto',
-          code: d.code || '',
-        });
+        enqueue(toCelebration(row));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [userId, canCelebrate]);
 
-  // Gatilho de teste (botão em Monitoramento) — só para o dono do teste.
-  useEffect(() => {
-    if (!canTestCelebration(profile?.email)) return;
-    const onTest = (e: Event) => setPayload((e as CustomEvent).detail as CelebrationPayload);
-    window.addEventListener(CELEBRATE_TEST_EVENT, onTest);
-    return () => window.removeEventListener(CELEBRATE_TEST_EVENT, onTest);
-  }, [profile?.email]);
+  const current = queue[0];
+  if (!current) return null;
 
-  if (!payload) return null;
-
-  const close = () => { setPayload(null); setGoing(false); };
+  // Fecha a atual e passa para a próxima da fila (se houver).
+  const close = () => {
+    markSeen(current.id);
+    setQueue(prev => prev.slice(1));
+    setGoing(false);
+  };
 
   // O projeto é criado logo após a aprovação; resolvemos pelo budget_id no clique
   // (evita corrida com a criação) e caímos na lista se ainda não existir.
   const goToProject = async () => {
     setGoing(true);
     let path = '/producao/projetos';
-    if (payload.budgetId) {
-      const { data } = await supabase.from('projects').select('id').eq('budget_id', payload.budgetId).maybeSingle();
+    if (current.budgetId) {
+      const { data } = await supabase.from('projects').select('id').eq('budget_id', current.budgetId).maybeSingle();
       if (data?.id) path = `/producao/projetos?projectId=${data.id}`;
     }
     close();
@@ -109,11 +153,11 @@ export default function NewProjectCelebration() {
               Fechamos um projeto novo
             </p>
             <h2 className="text-2xl font-black text-lumos-text-primary tracking-tight leading-tight">
-              {payload.projectName}
+              {current.projectName}
             </h2>
-            {payload.code && (
+            {current.code && (
               <span className="inline-block mt-3 text-[11px] font-black text-amber-600 dark:text-lumos-yellow bg-amber-500/10 dark:bg-lumos-yellow/10 px-2.5 py-1 rounded uppercase tracking-tight">
-                {payload.code}
+                {current.code}
               </span>
             )}
 
@@ -136,6 +180,12 @@ export default function NewProjectCelebration() {
                 Fechar
               </button>
             </div>
+
+            {queue.length > 1 && (
+              <p className="mt-4 text-[11px] font-bold text-lumos-text-secondary/70">
+                Mais {queue.length - 1} {queue.length - 1 === 1 ? 'projeto fechado' : 'projetos fechados'} enquanto você esteve fora
+              </p>
+            )}
           </div>
         </div>
       </div>
