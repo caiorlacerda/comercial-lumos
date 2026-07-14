@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import {
   Play, Pause, Maximize, Download, Pencil, MoveUpRight,
   Square, Eraser, Send, Clock, Check, Sun, Moon, Volume2, VolumeX, Info, X,
+  MoreVertical, Trash2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -16,6 +17,7 @@ interface Annotation { type: string; data: { color?: string; points?: Point[] } 
 interface Comment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number;
   body: string; resolved: boolean; created_at: string; annotations: Annotation[];
+  viewer_id: string | null; edited_at: string | null; // dono do comentário + marca de edição
 }
 interface ReviewData {
   link: { token: string; watermark: boolean; allow_download: boolean };
@@ -253,6 +255,41 @@ export default function RevisaoPublica() {
     setViewingShapes(shs);
   };
 
+  // --- Editar/excluir o PRÓPRIO comentário ---------------------------------
+  // Dono = viewer_id do comentário igual ao meu. A checagem real acontece no
+  // banco (RPCs SECURITY DEFINER), aqui é só a interface.
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const isMine = (c: Comment) => !!viewerId && !c.is_team && c.viewer_id === viewerId;
+
+  const startEdit = (c: Comment) => { setMenuFor(null); setEditingId(c.id); setEditText(c.body || ''); };
+  const cancelEdit = () => { setEditingId(null); setEditText(''); };
+
+  const saveEdit = async (c: Comment) => {
+    if (!editText.trim()) return;
+    setSavingEdit(true);
+    const { error: err } = await supabase.rpc('review_update_comment', {
+      p_token: token, p_viewer_id: viewerId, p_comment_id: c.id, p_body: editText.trim(),
+    });
+    setSavingEdit(false);
+    if (err) { alert('Não foi possível editar o comentário.'); return; }
+    cancelEdit();
+    await load();
+  };
+
+  const removeComment = async (c: Comment) => {
+    setMenuFor(null);
+    if (!window.confirm('Excluir este comentário? Não dá para desfazer.')) return;
+    const { error: err } = await supabase.rpc('review_delete_comment', {
+      p_token: token, p_viewer_id: viewerId, p_comment_id: c.id,
+    });
+    if (err) { alert('Não foi possível excluir o comentário.'); return; }
+    setViewingShapes([]);
+    await load();
+  };
+
   // --- Render ---
   if (loading) return <Centered className={themeClass}><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" /></Centered>;
   if (error) return <Centered className={themeClass}><p className="text-red-500 font-bold text-sm">{error}</p></Centered>;
@@ -436,14 +473,97 @@ export default function RevisaoPublica() {
               <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.</p>
             ) : (
               data.comments.map(c => (
-                <button key={c.id} onClick={() => viewComment(c)} className="w-full text-left p-2.5 rounded-lumos border border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] transition-all">
+                <div
+                  key={c.id}
+                  onClick={() => editingId !== c.id && viewComment(c)}
+                  className={clsx(
+                    'relative w-full text-left p-2.5 rounded-lumos border transition-all',
+                    editingId === c.id
+                      ? 'border-lumos-yellow/60 bg-lumos-text-secondary/[0.03]'
+                      : 'border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer'
+                  )}
+                >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-[11px] font-black text-lumos-text-primary truncate">{c.author_name}{c.is_team && <span className="ml-1 text-[8px] uppercase text-lumos-yellow">Lumos</span>}</span>
-                    <span className="text-[10px] font-mono font-bold text-lumos-yellow flex items-center gap-1">{c.resolved && <Check className="w-3 h-3 text-green-500" />}{fmtTime(c.timecode_ms)}</span>
+                    <span className="text-[11px] font-black text-lumos-text-primary truncate">
+                      {c.author_name}{c.is_team && <span className="ml-1 text-[8px] uppercase text-lumos-yellow">Lumos</span>}
+                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="text-[10px] font-mono font-bold text-lumos-yellow flex items-center gap-1">
+                        {c.resolved && <Check className="w-3 h-3 text-green-500" />}{fmtTime(c.timecode_ms)}
+                      </span>
+
+                      {/* Três pontinhos: só no MEU comentário */}
+                      {isMine(c) && editingId !== c.id && (
+                        <div className="relative">
+                          <button
+                            onClick={e => { e.stopPropagation(); setMenuFor(m => (m === c.id ? null : c.id)); }}
+                            title="Opções"
+                            className="p-0.5 rounded text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+                          {menuFor === c.id && (
+                            <>
+                              {/* clique fora fecha */}
+                              <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuFor(null); }} />
+                              <div className="absolute right-0 top-6 z-50 w-32 py-1 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl">
+                                <button
+                                  onClick={e => { e.stopPropagation(); startEdit(c); }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10"
+                                >
+                                  <Pencil className="w-3 h-3" /> Editar
+                                </button>
+                                <button
+                                  onClick={e => { e.stopPropagation(); removeComment(c); }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-500/10"
+                                >
+                                  <Trash2 className="w-3 h-3" /> Excluir
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug whitespace-pre-line">{c.body}</p>}
-                  {c.annotations.length > 0 && <span className="text-[9px] text-lumos-text-secondary/60 flex items-center gap-1 mt-1"><Pencil className="w-2.5 h-2.5" /> {c.annotations.length} anotação(ões)</span>}
-                </button>
+
+                  {editingId === c.id ? (
+                    <div onClick={e => e.stopPropagation()} className="space-y-1.5">
+                      <textarea
+                        value={editText}
+                        onChange={e => setEditText(e.target.value)}
+                        rows={2}
+                        autoFocus
+                        className="input-lumos w-full text-[11px] resize-none min-h-[44px] max-h-28 py-1.5 leading-snug"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => saveEdit(c)}
+                          disabled={savingEdit || !editText.trim()}
+                          className="btn-primary h-7 px-3 text-[10px] font-black uppercase tracking-widest rounded-lumos disabled:opacity-40"
+                        >
+                          {savingEdit ? 'Salvando…' : 'Salvar'}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="h-7 px-3 rounded-lumos border border-lumos-border text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug whitespace-pre-line break-words">{c.body}</p>}
+                      <div className="flex items-center gap-2 mt-1">
+                        {c.annotations.length > 0 && (
+                          <span className="text-[9px] text-lumos-text-secondary/60 flex items-center gap-1"><Pencil className="w-2.5 h-2.5" /> {c.annotations.length} anotação(ões)</span>
+                        )}
+                        {c.edited_at && <span className="text-[9px] text-lumos-text-secondary/50 italic">editado</span>}
+                      </div>
+                    </>
+                  )}
+                </div>
               ))
             )}
           </div>
