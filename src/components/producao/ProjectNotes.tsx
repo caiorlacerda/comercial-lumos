@@ -86,12 +86,20 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
+  // Fonte da verdade síncrona do projeto atual + trava anti-perda: só salvamos
+  // DEPOIS que o conteúdo carregou. Sem isso, um autosave disparado antes do
+  // fetch (ou de outro projeto) sobrescrevia as notas com vazio.
+  const projectIdRef = useRef(projectId);
+  useEffect(() => { projectIdRef.current = projectId; }, [projectId]);
+  const loadedRef = useRef(false);
 
   const save = (html: string) => {
+    if (!loadedRef.current) return; // ainda carregando: nunca sobrescrever
+    const targetId = projectIdRef.current;
     setSaveState('saving');
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      await supabase.from('projects').update({ notes: html }).eq('id', projectId);
+      await supabase.from('projects').update({ notes: html }).eq('id', targetId);
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 1500);
     }, 800);
@@ -148,6 +156,7 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
   // Carrega itens de menção + as notas do projeto
   useEffect(() => {
     let alive = true;
+    loadedRef.current = false;
     (async () => {
       setLoading(true);
       const [u, docs, vids, proj] = await Promise.all([
@@ -164,6 +173,7 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
       ];
       itemsRef.current = items;
       editor?.commands.setContent((proj.data as any)?.notes || '', { emitUpdate: false });
+      loadedRef.current = true; // a partir daqui, edições podem salvar
       setLoading(false);
     })();
     return () => { alive = false; };

@@ -1953,7 +1953,9 @@ export default function Projetos() {
                 </div>
 
                 {/* ============ ANOTAÇÕES DO PROJETO (rich text + menções) ============ */}
-                <ProjectNotes projectId={selectedProject.id} canManage={canManage} />
+                {/* key por projeto: remonta o editor ao trocar de projeto, evitando
+                    que o autosave (closure) salve no projeto errado. */}
+                <ProjectNotes key={selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
 
                 {/* ================= TABS FOR TASK VIEWS ================= */}
                 <div className="flex items-center justify-between border-b border-lumos-border/50">
