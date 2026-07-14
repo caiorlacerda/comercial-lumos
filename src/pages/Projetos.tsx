@@ -1952,6 +1952,9 @@ export default function Projetos() {
                   </div>
                 </div>
 
+                {/* ============ ANOTAÇÕES DO PROJETO (rich text + menções) ============ */}
+                <ProjectNotes projectId={selectedProject.id} canManage={canManage} />
+
                 {/* ================= TABS FOR TASK VIEWS ================= */}
                 <div className="flex items-center justify-between border-b border-lumos-border/50">
                   <div className="flex gap-2">
@@ -2283,9 +2286,6 @@ export default function Projetos() {
                   driveFolderId={selectedProject.drive_folder_id}
                   canManage={canManage}
                 />
-
-                {/* ============ ANOTAÇÕES DO PROJETO (rich text + menções) ============ */}
-                <ProjectNotes projectId={selectedProject.id} canManage={canManage} />
 
                 {/* Revisão de vídeo (dropzone 06_ENTREGA/01_REVISAO) */}
                 <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
