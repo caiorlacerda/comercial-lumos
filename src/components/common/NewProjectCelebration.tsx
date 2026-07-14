@@ -11,6 +11,13 @@ export type CelebrationPayload = { budgetId: string | null; projectName: string;
 // sem precisar aprovar um orçamento de verdade.
 export const CELEBRATE_TEST_EVENT = 'lumos:celebrate-test';
 
+// ⚠️ TEMPORÁRIO — o teste é exclusivo do Caio. O Monitoramento é aberto a todos os
+// admins, então sem isso o botão apareceria para os outros. Remover junto com o
+// botão de teste quando a fase de teste acabar.
+const TEST_OWNER_EMAIL = 'caio.lacerda@produtoralumos.com.br';
+export const canTestCelebration = (email?: string | null) =>
+  (email || '').trim().toLowerCase() === TEST_OWNER_EMAIL;
+
 /**
  * Popup de comemoração: aparece NA HORA para admin e produção quando um orçamento
  * é aprovado. Escuta o INSERT em `notifications` (o trigger do banco cria a linha
@@ -48,12 +55,13 @@ export default function NewProjectCelebration() {
     return () => { supabase.removeChannel(channel); };
   }, [userId, canCelebrate]);
 
-  // Gatilho de teste (botão em Monitoramento).
+  // Gatilho de teste (botão em Monitoramento) — só para o dono do teste.
   useEffect(() => {
+    if (!canTestCelebration(profile?.email)) return;
     const onTest = (e: Event) => setPayload((e as CustomEvent).detail as CelebrationPayload);
     window.addEventListener(CELEBRATE_TEST_EVENT, onTest);
     return () => window.removeEventListener(CELEBRATE_TEST_EVENT, onTest);
-  }, []);
+  }, [profile?.email]);
 
   if (!payload) return null;
 
