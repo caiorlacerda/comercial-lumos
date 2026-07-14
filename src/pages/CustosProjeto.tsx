@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, ChevronUp, ChevronDown, Target, Check, Pencil, Plus, X, AlertTriangle } from 'lucide-react';
+import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, ChevronUp, ChevronDown, Target, Check, Pencil, Plus, AlertTriangle, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -66,17 +66,6 @@ export default function CustosProjeto() {
       ? <ChevronUp className="w-3 h-3 text-amber-600 dark:text-lumos-yellow" />
       : <ChevronDown className="w-3 h-3 text-amber-600 dark:text-lumos-yellow" />;
   };
-  // Preset do dropdown ↔ sortConfig (modo grade).
-  const SORT_PRESETS: Record<string, { key: SortKey; direction: 'asc' | 'desc' }> = {
-    recente: { key: 'recente', direction: 'desc' },
-    maior_custo: { key: 'totalCosts', direction: 'desc' },
-    valor_vendido: { key: 'totalProductionValue', direction: 'desc' },
-    lucro_liquido: { key: 'margin', direction: 'desc' },
-    budget_disponivel: { key: 'tetoCustos', direction: 'desc' },
-  };
-  const currentPreset = Object.entries(SORT_PRESETS).find(
-    ([, v]) => v.key === sortConfig.key && v.direction === sortConfig.direction
-  )?.[0] ?? 'custom';
   const [groupByClient, setGroupByClient] = useState(false);
   const [view, setView] = useState<ViewMode>(() => {
     try { return (localStorage.getItem('lumos_custos_view') as ViewMode) || 'list'; } catch { return 'list'; }
@@ -740,10 +729,10 @@ export default function CustosProjeto() {
 
       {/* BARRA DE CONTROLES */}
       <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-5 space-y-4 shadow-xl">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-          
-          {/* Busca (5 colunas) */}
-          <div className="lg:col-span-5 relative">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+
+          {/* Busca */}
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-lumos-text-secondary" />
             <input
               type="text"
@@ -754,72 +743,22 @@ export default function CustosProjeto() {
             />
           </div>
 
-          {/* Filtro Cliente (3 colunas) */}
-          <div className="lg:col-span-3 relative">
-            <select
-              className="input-lumos w-full h-10 text-sm font-medium pr-10 appearance-none bg-no-repeat cursor-pointer"
-              value={clientFilter}
-              onChange={e => setClientFilter(e.target.value)}
-            >
-              <option value="">Todos os Clientes</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            {clientFilter ? (
-              <button
-                onClick={() => setClientFilter('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary"
-                title="Limpar filtro"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            ) : (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-lumos-text-secondary w-0 h-0" />
+          {/* Agrupar por cliente — botão pill com estado ativo claro */}
+          <button
+            type="button"
+            onClick={() => setGroupByClient(!groupByClient)}
+            aria-pressed={groupByClient}
+            title={groupByClient ? 'Desagrupar' : 'Agrupar por cliente'}
+            className={clsx(
+              'h-10 px-4 inline-flex items-center justify-center gap-2 rounded-lumos border text-sm font-bold whitespace-nowrap transition-all',
+              groupByClient
+                ? 'bg-amber-600 dark:bg-lumos-yellow border-amber-600 dark:border-lumos-yellow text-white dark:text-black shadow-sm'
+                : 'bg-lumos-bg border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-amber-500/40 dark:hover:border-lumos-yellow/40'
             )}
-          </div>
-
-          {/* Ordenação (2 colunas) */}
-          <div className="lg:col-span-2 relative">
-            <select
-              className="input-lumos w-full h-10 text-sm font-medium pr-10 appearance-none cursor-pointer"
-              value={currentPreset}
-              onChange={e => { const preset = SORT_PRESETS[e.target.value]; if (preset) setSortConfig(preset); }}
-            >
-              <option value="recente">Mais Recente</option>
-              <option value="maior_custo">Maior Custo</option>
-              {isAdmin ? (
-                <>
-                  <option value="valor_vendido">Maior Valor</option>
-                  <option value="lucro_liquido">Maior Lucro</option>
-                </>
-              ) : (
-                <option value="budget_disponivel">Maior Budget</option>
-              )}
-              {currentPreset === 'custom' && <option value="custom">Personalizado</option>}
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-lumos-text-secondary w-0 h-0" />
-          </div>
-
-          {/* Toggle Agrupar por Cliente (2 colunas) */}
-          <div className="lg:col-span-2 flex items-center justify-between lg:justify-end gap-3 border-t lg:border-t-0 border-lumos-border pt-3 lg:pt-0">
-            <span className="text-xs font-bold text-lumos-text-secondary uppercase select-none">Agrupar</span>
-            <button
-              type="button"
-              onClick={() => setGroupByClient(!groupByClient)}
-              className={clsx(
-                "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                groupByClient ? "bg-amber-600 dark:bg-lumos-yellow" : "bg-lumos-border"
-              )}
-            >
-              <span
-                className={clsx(
-                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                  groupByClient ? "translate-x-5" : "translate-x-0"
-                )}
-              />
-            </button>
-          </div>
+          >
+            <Users className="w-4 h-4" />
+            Agrupar por cliente
+          </button>
 
         </div>
 
