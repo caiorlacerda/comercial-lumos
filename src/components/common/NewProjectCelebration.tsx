@@ -7,6 +7,14 @@ import Confetti from '@/components/common/Confetti';
 
 type Celebration = { id: string; budgetId: string | null; projectName: string; code: string };
 
+// O trigger do banco NÃO notifica quem executou a aprovação (evita notificação da
+// própria ação no sininho). Mas quem fechou o negócio merece o confete, então a
+// tela que aprova dispara a comemoração localmente, só para essa pessoa.
+const CELEBRATION_EVENT = 'lumos:celebrate';
+export function celebrateNewProject(p: { budgetId: string | null; projectName: string; code: string }) {
+  window.dispatchEvent(new CustomEvent(CELEBRATION_EVENT, { detail: p }));
+}
+
 // Janela de "atraso": uma aprovação que aconteceu enquanto a pessoa estava offline
 // ainda é comemorada quando ela entra, desde que tenha sido nos últimos 7 dias
 // (cobre fim de semana/feriado sem ressuscitar aprovação antiga).
@@ -83,7 +91,21 @@ export default function NewProjectCelebration() {
     return () => { alive = false; };
   }, [userId, canCelebrate]);
 
-  // 2) Realtime: aprovação acontecendo agora, com a pessoa online.
+  // 2) Local: quem aprovou não recebe notificação do banco (o trigger pula o autor),
+  //    então a própria tela de orçamentos dispara a comemoração para essa pessoa.
+  useEffect(() => {
+    if (!canCelebrate) return;
+    const onLocal = (e: Event) => {
+      const d = (e as CustomEvent).detail as { budgetId: string | null; projectName: string; code: string };
+      // id único por ação: uma re-aprovação do mesmo orçamento comemora de novo
+      // (um id fixo ficaria marcado como "já visto" e o popup não voltaria).
+      enqueue({ id: `local:${d.budgetId ?? 'novo'}:${Date.now()}`, ...d });
+    };
+    window.addEventListener(CELEBRATION_EVENT, onLocal);
+    return () => window.removeEventListener(CELEBRATION_EVENT, onLocal);
+  }, [canCelebrate]);
+
+  // 3) Realtime: aprovação acontecendo agora, com a pessoa online.
   useEffect(() => {
     if (!userId || !canCelebrate) return;
     const channel = supabase
