@@ -120,7 +120,34 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
+    // Heartbeat: re-publica a presença a cada 30s e ao voltar o foco/aba, e
+    // reconecta o canal se ele tiver caído. Sobrevive a quedas/reconexões do
+    // WebSocket (tab em background, sleep do notebook, proxy, muitas abas) — sem
+    // isso a pessoa podia ficar "offline" pra si mesma até dar F5.
+    const heartbeat = () => {
+      const ch = channelRef.current;
+      if (!ch) return;
+      if (ch.state === 'joined') {
+        ch.track({
+          user_id: profile.id,
+          status: computeStatus(),
+          last_seen: new Date().toISOString(),
+          full_name: profile.full_name,
+        }).catch(() => { /* ignora falha pontual; a próxima batida tenta de novo */ });
+      } else if (ch.state === 'closed' || ch.state === 'errored') {
+        ch.subscribe(); // reconecta; o callback de SUBSCRIBED re-publica a presença
+      }
+    };
+    const hb = setInterval(heartbeat, 30_000);
+    const onFocus = () => heartbeat();
+    const onVisible = () => { if (!document.hidden) heartbeat(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
+      clearInterval(hb);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
       channel.unsubscribe();
       channelRef.current = null;
     };
