@@ -6,12 +6,29 @@ import Mention from '@tiptap/extension-mention';
 import { mergeAttributes } from '@tiptap/core';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, Quote, Minus, Undo2, Redo2, StickyNote, User, FileText, Film, Loader2,
+  History, RotateCcw, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 type MItem = { id: string; label: string; mtype: 'person' | 'file' | 'video'; url?: string };
+type HistItem = { id: string; notes: string | null; created_at: string; edited_by: string | null; editor?: { full_name: string } | null };
+
+// "há X" curtinho em pt-BR (evita dependência de locale do date-fns).
+function timeAgo(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 45) return 'agora';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `há ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `há ${d} d`;
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+function plainText(html: string): string { return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim(); }
 
 // ── Popup de menção ─────────────────────────────────────────────────────────
 const MentionList = forwardRef((props: any, ref) => {
@@ -81,6 +98,7 @@ const Sep = () => <span className="w-px h-4 bg-lumos-border/70 mx-1" />;
 interface Props { projectId: string; canManage?: boolean; }
 
 export default function ProjectNotes({ projectId, canManage = true }: Props) {
+  const { profile } = useAuth();
   const itemsRef = useRef<MItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -93,6 +111,37 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
   useEffect(() => { projectIdRef.current = projectId; }, [projectId]);
   const loadedRef = useRef(false);
 
+  // Histórico / atividades recentes das anotações.
+  const [history, setHistory] = useState<HistItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const lastHistoryAtRef = useRef(0);   // throttle de snapshots (ms epoch)
+  const lastNonEmptyRef = useRef(false); // se o último conteúdo tinha texto
+  const HISTORY_THROTTLE_MS = 90_000;
+
+  const fetchHistory = async () => {
+    const { data } = await supabase
+      .from('project_notes_history')
+      .select('id, notes, created_at, edited_by, editor:app_users!edited_by(full_name)')
+      .eq('project_id', projectIdRef.current)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setHistory((data as any) || []);
+  };
+
+  // Registra um snapshot no histórico — periodicamente durante a edição e SEMPRE
+  // no momento em que o conteúdo fica vazio (o evento "sumiu"), para dar rastro e
+  // permitir recuperar.
+  const maybeSnapshot = async (html: string) => {
+    const isEmpty = plainText(html).length === 0;
+    const now = Date.now();
+    const shouldSnapshot = now - lastHistoryAtRef.current > HISTORY_THROTTLE_MS || (isEmpty && lastNonEmptyRef.current);
+    if (!shouldSnapshot) return;
+    lastHistoryAtRef.current = now;
+    lastNonEmptyRef.current = !isEmpty;
+    await supabase.from('project_notes_history').insert({ project_id: projectIdRef.current, notes: html, edited_by: profile?.id || null });
+    fetchHistory();
+  };
+
   const save = (html: string) => {
     if (!loadedRef.current) return; // ainda carregando: nunca sobrescrever
     const targetId = projectIdRef.current;
@@ -100,6 +149,7 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       await supabase.from('projects').update({ notes: html }).eq('id', targetId);
+      maybeSnapshot(html);
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 1500);
     }, 800);
@@ -172,14 +222,29 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
         ...((vids.data as any[]) || []).map(x => ({ id: x.id, label: `v${x.versao} · ${x.file_name}`, mtype: 'video' as const, url: x.drive_web_link || undefined })),
       ];
       itemsRef.current = items;
-      editor?.commands.setContent((proj.data as any)?.notes || '', { emitUpdate: false });
+      const loadedNotes = (proj.data as any)?.notes || '';
+      editor?.commands.setContent(loadedNotes, { emitUpdate: false });
+      lastNonEmptyRef.current = plainText(loadedNotes).length > 0;
       loadedRef.current = true; // a partir daqui, edições podem salvar
       setLoading(false);
+      fetchHistory();
     })();
     return () => { alive = false; };
   }, [projectId, editor]);
 
   useEffect(() => { editor?.setEditable(canManage); }, [canManage, editor]);
+
+  // Restaura o conteúdo de um snapshot do histórico.
+  const restore = async (h: HistItem) => {
+    if (!canManage || !editor) return;
+    const html = h.notes || '';
+    editor.commands.setContent(html, { emitUpdate: false });
+    await supabase.from('projects').update({ notes: html }).eq('id', projectIdRef.current);
+    lastHistoryAtRef.current = 0; // força registrar a restauração como snapshot
+    await maybeSnapshot(html);
+    setSaveState('saved');
+    setTimeout(() => setSaveState('idle'), 1500);
+  };
 
   // Abre arquivos/vídeos ao clicar na menção (edição ou leitura)
   const onContainerClick = (e: React.MouseEvent) => {
@@ -233,6 +298,61 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
       <div className="px-4 py-3 min-h-[120px] overflow-y-auto custom-scrollbar" onClick={onContainerClick}>
         {loading ? <div className="py-6 text-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow mx-auto" /></div> : <EditorContent editor={editor} />}
       </div>
+
+      {/* Atividades recentes das anotações (histórico + restaurar) */}
+      {!loading && (
+        <div className="border-t border-lumos-border/60">
+          <button
+            type="button"
+            onClick={() => setShowHistory(v => !v)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"
+          >
+            <History className="w-3.5 h-3.5" />
+            Atividades recentes
+            {history.length > 0 && <span className="text-lumos-text-secondary/60">({history.length})</span>}
+            {showHistory ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+          </button>
+
+          {showHistory && (
+            <div className="px-4 pb-3 max-h-64 overflow-y-auto custom-scrollbar">
+              {history.length === 0 ? (
+                <p className="text-xs text-lumos-text-secondary/70 italic py-2">Nenhuma alteração registrada ainda.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {history.map(h => {
+                    const preview = plainText(h.notes || '');
+                    const empty = preview.length === 0;
+                    return (
+                      <li key={h.id} className="flex items-center gap-2 py-1.5 border-b border-lumos-border/40 last:border-0">
+                        <User className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="font-semibold text-lumos-text-primary truncate">{h.editor?.full_name || 'Alguém'}</span>
+                            <span className="text-lumos-text-secondary/60 flex-shrink-0">· {timeAgo(h.created_at)}</span>
+                          </div>
+                          <p className={clsx('text-[11px] truncate', empty ? 'text-red-500 italic' : 'text-lumos-text-secondary')}>
+                            {empty ? 'esvaziou as anotações' : preview}
+                          </p>
+                        </div>
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => restore(h)}
+                            title="Restaurar esta versão"
+                            className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/10 transition-colors"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Restaurar
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
