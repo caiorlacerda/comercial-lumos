@@ -6,7 +6,8 @@ import {
   ListChecks, Coffee, ShieldCheck, IdCard, PauseCircle, Zap, Radio,
   Search, X, Hourglass, ChevronRight, PartyPopper,
 } from 'lucide-react';
-import { CELEBRATE_TEST_EVENT } from '@/components/common/NewProjectCelebration';
+import { CELEBRATE_TEST_EVENT, canTestCelebration } from '@/components/common/NewProjectCelebration';
+import { useAuth } from '@/hooks/useAuth';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -53,6 +54,7 @@ const prioColor = (p: string) => p === 'alta' ? 'text-red-500' : p === 'baixa' ?
 export default function MonitoramentoEquipe() {
   const navigate = useNavigate();
   const { getLiveStatus } = useLayout();
+  const { profile } = useAuth(); // usado só pela trava do botão de teste (temporário)
   const [users, setUsers] = useState<AppUser[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [hr, setHr] = useState<HR[]>([]);
@@ -196,16 +198,19 @@ export default function MonitoramentoEquipe() {
         </div>
         <div className="flex items-center gap-2">
           {/* ⚠️ TEMPORÁRIO — botão só para testar o layout do popup de projeto novo.
-              Remover junto com este bloco quando a fase de teste acabar. */}
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent(CELEBRATE_TEST_EVENT, {
-              detail: { budgetId: null, projectName: 'Heinz | Maionese Saborizada', code: '#2026-228' },
-            }))}
-            className="flex items-center gap-1.5 text-[11px] font-bold text-lumos-text-secondary border border-dashed border-lumos-border hover:text-lumos-yellow hover:border-lumos-yellow/50 px-2.5 py-1 rounded-full transition-colors"
-            title="Apenas teste: abre o popup de comemoração"
-          >
-            <PartyPopper className="w-3.5 h-3.5" /> Testar popup
-          </button>
+              Exclusivo do Caio: o Monitoramento é aberto a todos os admins, então sem
+              essa trava o botão apareceria para os outros. Remover quando o teste acabar. */}
+          {canTestCelebration(profile?.email) && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent(CELEBRATE_TEST_EVENT, {
+                detail: { budgetId: null, projectName: 'Heinz | Maionese Saborizada', code: '#2026-228' },
+              }))}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-lumos-text-secondary border border-dashed border-lumos-border hover:text-lumos-yellow hover:border-lumos-yellow/50 px-2.5 py-1 rounded-full transition-colors"
+              title="Apenas teste: abre o popup de comemoração"
+            >
+              <PartyPopper className="w-3.5 h-3.5" /> Testar popup
+            </button>
+          )}
 
           <span className="flex items-center gap-1.5 text-[11px] font-bold text-green-500 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full">
             <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" /></span>
