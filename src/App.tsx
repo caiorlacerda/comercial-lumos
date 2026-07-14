@@ -9,6 +9,7 @@ import ProducaoLayout from '@/pages/ProducaoLayout';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PermissionGuard } from '@/components/auth/PermissionGuard';
 import { LayoutProvider } from '@/context/LayoutContext';
+import NewProjectCelebration from '@/components/common/NewProjectCelebration';
 
 // Páginas carregadas sob demanda (code-splitting por rota). Cada uma vira um
 // chunk separado, tirando libs pesadas (PDF, gráficos, Excel, editor) do
@@ -223,6 +224,8 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       )}
+      {/* Comemoração de projeto novo: aparece na hora (realtime) em qualquer página. */}
+      <NewProjectCelebration />
       <Sidebar>{children}</Sidebar>
     </LayoutProvider>
   );
