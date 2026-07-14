@@ -19,6 +19,7 @@ export const NOTIFICATION_EVENTS = {
   PROJETO_ENCERRADO: { key: 'projeto_encerrado', category: 'producao', label: 'Projeto encerrado', defaultEnabled: true },
   NOVO_ACESSO_DISPONIVEL: { key: 'novo_acesso_disponivel', category: 'producao', label: 'Novo acesso/senha disponível pra você', defaultEnabled: true },
   DEADLINE_ALERT: { key: 'prazo_alerta', category: 'producao', label: 'Alerta de prazo de entrega', defaultEnabled: true },
+  COMENTARIOS_CLIENTE_VIDEO: { key: 'comentarios_cliente_video', category: 'producao', label: 'Cliente comentou no seu vídeo (em lote, 30 min após o último)', defaultEnabled: true, priority: 'high' },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },

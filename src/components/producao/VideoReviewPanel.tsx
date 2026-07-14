@@ -35,11 +35,12 @@ interface VideoVersion {
 
 interface Group { id: string; versions: VideoVersion[]; current: VideoVersion; count: number; }
 
-type SortKey = 'versao' | 'file_name' | 'status' | 'duration' | 'resolution' | 'format' | 'fps' | 'size' | 'uploader' | 'date' | 'comments';
+type SortKey = 'versao' | 'file_name' | 'status' | 'task' | 'duration' | 'resolution' | 'format' | 'fps' | 'size' | 'uploader' | 'date' | 'comments';
 const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
   { key: 'versao', label: 'Versão' },
   { key: 'file_name', label: 'Nome' },
   { key: 'status', label: 'Status' },
+  { key: 'task', label: 'Tarefa' },
   { key: 'duration', label: 'Duração', align: 'right' },
   { key: 'resolution', label: 'Resolução', align: 'right' },
   { key: 'format', label: 'Formato' },
@@ -49,7 +50,7 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
   { key: 'date', label: 'Data' },
   { key: 'comments', label: 'Coment.', align: 'right' },
 ];
-const FIXED: SortKey[] = ['versao', 'file_name', 'status'];
+const FIXED: SortKey[] = ['versao', 'file_name', 'status', 'task'];
 const OPTIONAL = COLUMNS.filter(c => !FIXED.includes(c.key)).map(c => c.key);
 
 const fmtDur = (ms: number | null) => { if (!ms) return '—'; const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -299,6 +300,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         case 'versao': return v.versao;
         case 'file_name': return (v.file_name || '').toLowerCase();
         case 'status': return v.status;
+        case 'task': return (tasks.find(t => t.id === v.task_id)?.titulo || '').toLowerCase();
         case 'duration': return v.duration_ms || 0;
         case 'resolution': return (v.height || 0) * 100000 + (v.width || 0);
         case 'format': return (v.mime_type || '').toLowerCase();
@@ -312,12 +314,17 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     return [...groups].sort((a, b) => { const x = val(a), y = val(b); const c = x < y ? -1 : x > y ? 1 : 0; return sort.dir === 'asc' ? c : -c; });
   }, [groups, sort, counts]);
 
-  const mirrorTaskId = useMemo(() => versions.find(v => v.task_id)?.task_id ?? '', [versions]);
-  const linkTask = async (taskId: string) => {
+  // Vínculo POR VÍDEO (grupo de versões), não por projeto. Antes isso gravava o
+  // mesmo task_id em todos os vídeos do projeto, o que não bate com o fluxo real
+  // (uma tarefa de entrega para cada vídeo).
+  const linkTask = async (g: Group, taskId: string) => {
     const value = taskId || null;
-    setVersions(prev => prev.map(v => ({ ...v, task_id: value })));
-    const { error } = await supabase.from('video_versions').update({ task_id: value }).eq('project_id', projectId);
-    if (error) { toast.error('Não foi possível vincular a tarefa.'); fetchVersions(); }
+    const groupId = g.id; // o id do grupo É o group_id
+    setVersions(prev => prev.map(v => (v.group_id === groupId ? { ...v, task_id: value } : v)));
+    const { error } = await supabase.from('video_versions').update({ task_id: value }).eq('group_id', groupId);
+    if (error) { toast.error('Não foi possível vincular a tarefa.'); fetchVersions(); return; }
+    // Mantém a tarefa em dia com o status atual do vídeo.
+    if (value) await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[g.current.status] }).eq('id', value);
   };
 
   const transition = async (v: VideoVersion, next: ReviewStatus) => {
@@ -385,6 +392,28 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         );
       case 'status':
         return <span className={clsx('inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', STATUS_UI[v.status].color)}>{STATUS_UI[v.status].label}</span>;
+      case 'task': {
+        // Vínculo por VÍDEO. O gatilho do banco já tenta casar pelo nome do arquivo
+        // no upload; aqui dá para corrigir/definir na mão.
+        const linked = tasks.find(t => t.id === v.task_id);
+        if (!canManage) {
+          return linked
+            ? <span className="text-[11px] font-semibold text-lumos-text-secondary truncate max-w-[160px] inline-block align-middle">{linked.titulo}</span>
+            : <span className="text-[10px] font-bold text-red-500/80">sem tarefa</span>;
+        }
+        return (
+          <div onClick={e => e.stopPropagation()} className="flex items-center gap-1">
+            {!v.task_id && <span className="text-[9px] font-black uppercase text-red-500/80 whitespace-nowrap">sem tarefa</span>}
+            <Select
+              value={v.task_id || ''}
+              onChange={val => linkTask(g, val)}
+              align="left"
+              className={clsx('input-lumos h-7 text-[11px] py-0 min-w-[140px] max-w-[190px]', !v.task_id && 'border-red-500/40')}
+              options={[{ value: '', label: 'Nenhuma' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]}
+            />
+          </div>
+        );
+      }
       case 'duration': return <span className="text-[11px] font-mono font-bold text-lumos-text-secondary">{fmtDur(v.duration_ms)}</span>;
       case 'resolution': return <span className="text-[11px] font-mono text-lumos-text-secondary">{v.width ? `${v.width}×${v.height}` : '—'}</span>;
       case 'format': return <span className="text-[11px] font-bold text-lumos-text-secondary">{(v.mime_type || '').split('/')[1]?.toUpperCase() || '—'}</span>;
@@ -518,14 +547,6 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           )}
         </div>
 
-        {canManage && versions.length > 0 && (
-          <label className="flex items-center gap-1.5 text-[10px] font-bold text-lumos-text-secondary">
-            <Link2 className="w-3 h-3" /> Espelhar na tarefa:
-            <Select value={mirrorTaskId} onChange={linkTask} align="right"
-              className="input-lumos h-7 text-[11px] py-0 min-w-[150px] max-w-[190px]"
-              options={[{ value: '', label: 'Nenhuma' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]} />
-          </label>
-        )}
       </div>
 
       {uploading && (
