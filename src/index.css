@@ -133,6 +133,7 @@ body {
   white-space: nowrap;
 }
 .lumos-mention-person { background: rgb(245 179 1 / 0.15); color: #d99700; }
+.lumos-mention-task { background: rgb(18 183 106 / 0.15); color: #12b76a; }
 .lumos-mention-file { background: rgb(46 144 250 / 0.15); color: #2e90fa; cursor: pointer; }
 .lumos-mention-video { background: rgb(158 119 237 / 0.15); color: #9e77ed; cursor: pointer; }
 .lumos-mention-file:hover, .lumos-mention-video:hover { filter: brightness(1.1); text-decoration: underline; }
