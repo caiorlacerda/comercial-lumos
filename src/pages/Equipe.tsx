@@ -11,6 +11,7 @@ import { useLayout } from '@/context/LayoutContext';
 import { useToast } from '@/context/ToastContext';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
+import { effectiveStatus } from '@/lib/presence';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import { logAudit } from '@/hooks/useAuditLog';
@@ -91,6 +92,8 @@ export default function Equipe() {
   }, []);
   useEffect(() => { load(); }, [load]);
   useRealtimeRefetch(['app_users', 'team_members'], () => load(true));
+  // Poll de fallback: mantém o last_seen fresco mesmo se o realtime não conectar.
+  useEffect(() => { const t = setInterval(() => load(true), 60_000); return () => clearInterval(t); }, [load]);
 
   // Une logins + RH numa lista de pessoas
   const people = useMemo<Person[]>(() => {
@@ -115,7 +118,7 @@ export default function Equipe() {
     });
   }, [people, search, roleFilter]);
 
-  const onlineCount = people.filter(p => p.user && getLiveStatus(p.user.id) === 'online').length;
+  const onlineCount = people.filter(p => p.user && effectiveStatus(getLiveStatus(p.user.id), p.user.last_seen) === 'online').length;
 
   // ── Detalhe da pessoa ─────────────────────────────────────────────────────
   const [detail, setDetail] = useState<Person | null>(null);
@@ -234,7 +237,7 @@ export default function Equipe() {
   const statusPill = (p: Person) => {
     if (!p.user) return <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-lumos-text-primary/10 text-lumos-text-secondary">Sem login</span>;
     if (p.user.status === 'inativo') return <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">Inativo</span>;
-    const s = getLiveStatus(p.user.id);
+    const s = effectiveStatus(getLiveStatus(p.user.id), p.user.last_seen);
     return <span className={clsx('text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full', s === 'online' ? 'bg-green-500/15 text-green-500' : 'bg-lumos-text-primary/10 text-lumos-text-secondary')}>{s === 'online' ? 'Online' : 'Offline'}</span>;
   };
 
@@ -278,7 +281,7 @@ export default function Equipe() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(p => (
             <button key={p.key} onClick={() => openDetail(p)} className="card text-left border border-lumos-border bg-lumos-surface hover:border-lumos-yellow/40 hover:shadow-md transition-all p-4 flex items-center gap-3">
-              <UserAvatar user={avatarOf(p) as any} size={44} showStatus />
+              <UserAvatar user={avatarOf(p) as any} size={44} showStatus lastSeen={p.user?.last_seen} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2"><p className="font-bold text-lumos-text-primary truncate">{nameOf(p)}</p>{statusPill(p)}</div>
                 <p className="text-[11px] text-lumos-text-secondary truncate">{cargoOf(p)}</p>
@@ -305,7 +308,7 @@ export default function Equipe() {
                   <tr key={p.key} onClick={() => openDetail(p)} className="hover:bg-lumos-text-secondary/[0.03] cursor-pointer transition-colors">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <UserAvatar user={avatarOf(p) as any} size={32} showStatus />
+                        <UserAvatar user={avatarOf(p) as any} size={32} showStatus lastSeen={p.user?.last_seen} />
                         <span className="font-bold text-lumos-text-primary truncate">{nameOf(p)}</span>
                       </div>
                     </td>
@@ -332,7 +335,7 @@ export default function Equipe() {
             <div className="sticky top-0 bg-lumos-surface border-b border-lumos-border px-5 py-3 flex items-center justify-between z-10">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative">
-                  <UserAvatar user={avatarOf(detail) as any} size={40} showStatus />
+                  <UserAvatar user={avatarOf(detail) as any} size={40} showStatus lastSeen={detail.user?.last_seen} />
                   {detail.user && canHR && (
                     <button onClick={() => fileRef.current?.click()} className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-lumos-yellow text-black flex items-center justify-center ring-2 ring-lumos-surface" title="Enviar foto"><Camera className="w-3 h-3" /></button>
                   )}

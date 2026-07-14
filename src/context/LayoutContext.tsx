@@ -125,6 +125,14 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     // WebSocket (tab em background, sleep do notebook, proxy, muitas abas) — sem
     // isso a pessoa podia ficar "offline" pra si mesma até dar F5.
     const heartbeat = () => {
+      const active = !document.hidden && !idleRef.current;
+      // Fallback por banco: grava last_seen enquanto a pessoa está ativa. Funciona
+      // mesmo se o WebSocket de presença não conectar (proxy, muitas abas, etc.),
+      // porque as telas consideram "online" quem tem last_seen recente.
+      if (active && profile.id) {
+        supabase.from('app_users').update({ last_seen: new Date().toISOString() }).eq('id', profile.id)
+          .then(undefined, () => { /* ignora */ });
+      }
       const ch = channelRef.current;
       if (!ch) return;
       if (ch.state === 'joined') {
@@ -138,6 +146,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         ch.subscribe(); // reconecta; o callback de SUBSCRIBED re-publica a presença
       }
     };
+    heartbeat(); // primeira batida imediata (grava last_seen ao entrar)
     const hb = setInterval(heartbeat, 30_000);
     const onFocus = () => heartbeat();
     const onVisible = () => { if (!document.hidden) heartbeat(); };
