@@ -6,10 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import InternalReviewModal from './InternalReviewModal';
 import Select from '@/components/ui/Select';
-
-type ReviewStatus =
-  | 'EM_REVISAO_INTERNA' | 'ALTERACOES_INTERNAS'
-  | 'EM_REVISAO_CLIENTE' | 'ALTERACOES_CLIENTE' | 'APROVADO';
+import { type ReviewStatus, STATUS_UI, STATUS_TO_TASK, taskStatusToVideo } from '@/lib/reviewStatus';
 
 interface VideoVersion {
   id: string;
@@ -58,18 +55,6 @@ const fmtSize = (b: number | null) => b ? `${(b / 1048576).toFixed(1)} MB` : '�
 const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
 const vLabel = (n: number) => `v${String(n).padStart(2, '0')}`;
 
-const STATUS_UI: Record<ReviewStatus, { label: string; color: string }> = {
-  EM_REVISAO_INTERNA: { label: 'Revisão interna', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  ALTERACOES_INTERNAS: { label: 'Alterações (interno)', color: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  EM_REVISAO_CLIENTE: { label: 'Revisão do cliente', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  ALTERACOES_CLIENTE: { label: 'Alterações (cliente)', color: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  APROVADO: { label: 'Aprovado', color: 'bg-green-500/10 text-green-400 border-green-500/20' },
-};
-
-const STATUS_TO_TASK: Record<ReviewStatus, string> = {
-  EM_REVISAO_INTERNA: 'revisao_interna', ALTERACOES_INTERNAS: 'alteracoes',
-  EM_REVISAO_CLIENTE: 'revisao_cliente', ALTERACOES_CLIENTE: 'alteracoes', APROVADO: 'entregue',
-};
 
 const driveFileUrl = (id: string) => `https://drive.google.com/file/d/${id}/view`;
 
@@ -84,7 +69,7 @@ function IconBtn({ title, onClick, active, disabled, className, children }: { ti
   );
 }
 
-interface Props { projectId: string; tasks: { id: string; titulo: string }[]; }
+interface Props { projectId: string; tasks: { id: string; titulo: string; status?: string }[]; }
 
 export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const { isAdmin, profile, can } = useAuth();
@@ -323,8 +308,22 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     setVersions(prev => prev.map(v => (v.group_id === groupId ? { ...v, task_id: value } : v)));
     const { error } = await supabase.from('video_versions').update({ task_id: value }).eq('group_id', groupId);
     if (error) { toast.error('Não foi possível vincular a tarefa.'); fetchVersions(); return; }
-    // Mantém a tarefa em dia com o status atual do vídeo.
-    if (value) await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[g.current.status] }).eq('id', value);
+
+    // A TAREFA é a fonte da verdade: ao vincular, o VÍDEO passa a seguir o status
+    // dela (e não o contrário).
+    if (value) {
+      const t = tasks.find(x => x.id === value);
+      const next = t?.status ? taskStatusToVideo(t.status, g.current.status) : null;
+      if (next && next !== g.current.status) {
+        await supabase.from('video_versions')
+          .update({ status: next, updated_at: new Date().toISOString() })
+          .eq('id', g.current.id);
+        toast.success(`Vinculado. O vídeo assumiu o status da tarefa: ${STATUS_UI[next].label}.`);
+      } else {
+        toast.success('Tarefa vinculada ✓');
+      }
+    }
+    fetchVersions();
   };
 
   const transition = async (v: VideoVersion, next: ReviewStatus) => {
