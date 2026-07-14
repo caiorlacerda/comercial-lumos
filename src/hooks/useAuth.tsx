@@ -96,7 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // devolve 0 linhas por um instante — o que fazia piscar "Acesso Pendente".
       // Enquanto não confirmamos, tentamos de novo (sem marcar profileChecked,
       // então a tela mostra o loader, não o "pendente").
-      if (!data && attempt < 4) {
+      if (!data && attempt < 8) {
         await new Promise(r => setTimeout(r, 500));
         return fetchProfile(userId, attempt + 1);
       }
@@ -115,7 +115,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setProfileChecked(true);
     } catch (err) {
-      if (attempt < 4) {
+      if (attempt < 8) {
         await new Promise(r => setTimeout(r, 500));
         return fetchProfile(userId, attempt + 1);
       }
