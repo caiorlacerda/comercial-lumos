@@ -96,9 +96,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // devolve 0 linhas por um instante — o que fazia piscar "Acesso Pendente".
       // Enquanto não confirmamos, tentamos de novo (sem marcar profileChecked,
       // então a tela mostra o loader, não o "pendente").
-      if (!data && attempt < 8) {
+      if (!data && attempt < 6) {
         await new Promise(r => setTimeout(r, 500));
         return fetchProfile(userId, attempt + 1);
+      }
+
+      // Ainda sem perfil por auth_user_id: pode ser descasamento (conta
+      // pré-cadastrada ou reconvidada com outro auth id). Como o e-mail é UNIQUE,
+      // religamos com segurança pela edge function link-profile (self-heal), que
+      // aponta o auth_user_id da linha do MEU e-mail para o meu id atual. Assim o
+      // "Acesso Pendente" some de vez para quem tem cadastro.
+      if (!data) {
+        try {
+          const { data: healed } = await supabase.functions.invoke('link-profile');
+          if (healed?.profile) {
+            setProfile(healed.profile);
+            setProfileChecked(true);
+            return;
+          }
+        } catch (healErr) {
+          console.error('link-profile falhou:', healErr);
+        }
       }
 
       setProfile(data ?? null);
