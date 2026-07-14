@@ -55,7 +55,9 @@ export function TagPicker({ allTags, selectedIds, onToggle, disabled, addLabel =
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (btnRef.current?.contains(e.target as Node) || menuRef.current?.contains(e.target as Node)) return; setOpen(false); };
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    const onScroll = () => setOpen(false);
+    // Fecha ao rolar o fundo (o menu é fixo e desalinharia), MAS não quando o
+    // scroll acontece dentro do próprio menu de tags (que tem lista rolável).
+    const onScroll = (e: Event) => { if (menuRef.current?.contains(e.target as Node)) return; setOpen(false); };
     document.addEventListener('mousedown', onDoc); document.addEventListener('keydown', onEsc);
     window.addEventListener('scroll', onScroll, true); window.addEventListener('resize', onScroll);
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc); window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', onScroll); };
