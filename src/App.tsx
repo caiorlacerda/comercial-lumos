@@ -75,6 +75,19 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
   const location = useLocation();
 
+  // Anti-flash do "Acesso Pendente": só mostra a tela se o estado "logado sem
+  // perfil" PERSISTIR alguns segundos. Num login normal o perfil chega logo e o
+  // portão nunca abre (mostra só o loader). Só sobra pendente pra quem realmente
+  // não tem acesso liberado.
+  const [pendingConfirmed, setPendingConfirmed] = useState(false);
+  useEffect(() => {
+    if (user && profileChecked && !profile) {
+      const t = setTimeout(() => setPendingConfirmed(true), 3500);
+      return () => clearTimeout(t);
+    }
+    setPendingConfirmed(false);
+  }, [user, profileChecked, profile]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -151,7 +164,15 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   
   if (!user) return <Navigate to="/login" />;
 
-  // VALIDAÇÃO DE PERFIL LUMOS
+  // VALIDAÇÃO DE PERFIL LUMOS — durante o portão (perfil ainda pode chegar),
+  // mostra o loader em vez de piscar o "Acesso Pendente".
+  if (user && profileChecked && !profile && !pendingConfirmed) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
+      </div>
+    );
+  }
   if (user && profileChecked && !profile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
