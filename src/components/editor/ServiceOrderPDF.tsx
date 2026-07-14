@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { BudgetItem, BudgetVersion } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
+import { renderRichNotes } from '@/components/editor/richTextPdf';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logo from '../../assets/Logotipo-Preto-Alpha.png';
@@ -333,7 +334,7 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
             )}
 
             {version.notes_client && (
-              <Text style={styles.briefingText}>{version.notes_client}</Text>
+              <View>{renderRichNotes(version.notes_client)}</View>
             )}
           </View>
         )}
