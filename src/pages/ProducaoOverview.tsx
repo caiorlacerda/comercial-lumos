@@ -239,9 +239,6 @@ export default function ProducaoOverview() {
         </p>
       </div>
 
-      {/* Hub de revisões de vídeo (abre o player ali mesmo) */}
-      <VideoReviewHub />
-
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <button onClick={() => navigate('/producao/projetos')} className="card p-5 text-left hover:border-lumos-yellow/40 transition-colors group">
@@ -463,6 +460,9 @@ export default function ProducaoOverview() {
           </div>
         </div>
       </div>
+
+      {/* Revisões de vídeo — última seção da página */}
+      <VideoReviewHub />
     </div>
   );
 }
