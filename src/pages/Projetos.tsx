@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
+import TaskVideoReview from '@/components/producao/TaskVideoReview';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
 import Select from '@/components/ui/Select';
@@ -2583,6 +2584,13 @@ export default function Projetos() {
                     disabled={!canManage}
                   />
                 </div>
+
+                {/* Revisão de vídeo vinculada a esta tarefa (ver status/comentários e vincular) */}
+                <TaskVideoReview
+                  projectId={selectedTask.project_id}
+                  task={{ id: selectedTask.id, status: selectedTask.status }}
+                  canManage={canManage}
+                />
 
                 {/* Description */}
                 <div className="space-y-2.5">
