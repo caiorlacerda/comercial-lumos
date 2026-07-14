@@ -779,6 +779,7 @@ export default function Projetos() {
   // PDF Generation State
   const [isGeneratingOS, setIsGeneratingOS] = useState<string | null>(null);
   const [savingOs, setSavingOs] = useState(false);
+  const [osUrl, setOsUrl] = useState<string | null>(null); // OS já salva no Drive?
   const { saveOsToDrive } = useSaveOsToDrive();
 
   // Modal State for Manual Creation
@@ -816,6 +817,14 @@ export default function Projetos() {
     }
     setSelectedTaskId(null);
     setSelTaskIds(new Set());
+    // Verifica se a OS já está no Drive (documento "OS …" registrado no projeto).
+    if (selectedProjectId) {
+      supabase.from('project_documents').select('url').eq('project_id', selectedProjectId)
+        .ilike('name', 'OS %').order('created_at', { ascending: false }).limit(1)
+        .then(({ data }) => setOsUrl(data?.[0]?.url || null));
+    } else {
+      setOsUrl(null);
+    }
   }, [selectedProjectId]);
 
   // Abre projeto/tarefa vindos da URL assim que os projetos estiverem carregados.
@@ -1562,7 +1571,7 @@ export default function Projetos() {
     setSavingOs(true);
     try {
       const r = await saveOsToDrive({ budgetId, projectId, interactive: true });
-      if (r.ok) toast.success('OS salva na pasta OS do projeto no Drive!');
+      if (r.ok) { toast.success('OS salva na pasta OS do projeto no Drive!'); if (r.url) setOsUrl(r.url); }
       else if (!r.skipped) toast.error(r.error || 'Não foi possível salvar a OS.');
     } finally {
       setSavingOs(false);
@@ -1839,15 +1848,27 @@ export default function Projetos() {
                     )}
 
                     {canManage && selectedProject.budget_id && (
-                      <button
-                        onClick={() => handleSaveOs(selectedProject.id, selectedProject.budget_id!)}
-                        disabled={savingOs}
-                        className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
-                        title="Gera a OS e salva na subpasta OS do projeto no Drive"
-                      >
-                        {savingOs ? <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow" /> : <FolderUp className="w-3.5 h-3.5" />}
-                        {savingOs ? 'Salvando...' : 'Salvar OS no Drive'}
-                      </button>
+                      osUrl ? (
+                        <a
+                          href={osUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-2 px-3 flex items-center gap-2 text-xs font-semibold rounded-lumos border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15 transition-colors"
+                          title="OS já está no Drive — clique para abrir"
+                        >
+                          <Check className="w-3.5 h-3.5" /> OS no Drive
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => handleSaveOs(selectedProject.id, selectedProject.budget_id!)}
+                          disabled={savingOs}
+                          className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
+                          title="Gera a OS e salva na subpasta OS do projeto no Drive"
+                        >
+                          {savingOs ? <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow" /> : <FolderUp className="w-3.5 h-3.5" />}
+                          {savingOs ? 'Salvando...' : 'Salvar OS no Drive'}
+                        </button>
+                      )
                     )}
 
                     {canManage && (
