@@ -33,6 +33,7 @@ import Pagination from '@/components/common/Pagination';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { syncBudgetApprovalFlow } from '@/utils/financeiro';
+import { celebrateNewProject } from '@/components/common/NewProjectCelebration';
 import { formatBudgetCode } from '@/utils/formatters';
 import { getPdfFileName } from '@/utils/pdfFileName';
 import { useToast } from '@/context/ToastContext';
@@ -233,6 +234,11 @@ export default function Budgets() {
 
       // Sincroniza recebíveis e projeto quando aprovado
       if (newStatus === 'aprovado') {
+        // O trigger do banco não notifica quem aprovou, então comemoramos aqui
+        // para essa pessoa (sem criar notificação da própria ação no sininho).
+        const b = budgets.find(x => x.id === id);
+        celebrateNewProject({ budgetId: id, projectName: b?.project_name || 'Novo projeto', code: b?.code ? formatBudgetCode(b.code) : '' });
+
         await syncBudgetApprovalFlow(id);
         // OS automática no Drive (silenciosa; só sobe se já estiver logado no Google).
         // Fire-and-forget pra não travar a UI (gera PDF + espera a pasta provisionar).
@@ -272,6 +278,11 @@ export default function Budgets() {
 
       // Sincroniza cada orçamento aprovado em lote
       if (newStatus === 'aprovado') {
+        // Comemora cada um (o trigger pula quem aprovou); a fila mostra um de cada vez.
+        idsToUpdate.forEach(id => {
+          const b = budgets.find(x => x.id === id);
+          celebrateNewProject({ budgetId: id, projectName: b?.project_name || 'Novo projeto', code: b?.code ? formatBudgetCode(b.code) : '' });
+        });
         await Promise.all(idsToUpdate.map(id => syncBudgetApprovalFlow(id)));
       }
 
