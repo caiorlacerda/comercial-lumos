@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
+import ProjectNotes from '@/components/producao/ProjectNotes';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
@@ -2282,6 +2283,9 @@ export default function Projetos() {
                   driveFolderId={selectedProject.drive_folder_id}
                   canManage={canManage}
                 />
+
+                {/* ============ ANOTAÇÕES DO PROJETO (rich text + menções) ============ */}
+                <ProjectNotes projectId={selectedProject.id} canManage={canManage} />
 
                 {/* Revisão de vídeo (dropzone 06_ENTREGA/01_REVISAO) */}
                 <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
