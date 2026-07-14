@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, Target, Check, Pencil, Plus, X, AlertTriangle } from 'lucide-react';
+import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, ChevronUp, ChevronDown, Target, Check, Pencil, Plus, X, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -39,7 +39,44 @@ export default function CustosProjeto() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null); // null = criação
   const [editProjectData, setEditProjectData] = useState({ name: '', code: '', client_id: '', production_value: 0 });
-  const [sortBy, setSortBy] = useState<'recente' | 'valor_vendido' | 'lucro_liquido' | 'maior_custo' | 'budget_disponivel'>('recente');
+  // Ordenação por coluna clicável (mesmo padrão de Contas a Pagar/Orçamentos):
+  // clicar no título alterna crescente/decrescente. O dropdown do modo grade
+  // alimenta o mesmo estado.
+  type SortKey = 'recente' | 'code' | 'name' | 'totalProductionValue' | 'totalCosts' | 'saldoProducao' | 'margin' | 'marginPercent' | 'tetoCustos';
+  const NUMERIC_SORT_KEYS = new Set<SortKey>(['totalProductionValue', 'totalCosts', 'saldoProducao', 'margin', 'marginPercent', 'tetoCustos']);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'recente', direction: 'desc' });
+  const handleSort = (key: SortKey) => {
+    setSortConfig(prev =>
+      prev.key === key
+        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: NUMERIC_SORT_KEYS.has(key) ? 'desc' : 'asc' } // números começam do maior; texto A→Z
+    );
+  };
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortConfig.key !== column) {
+      // Dica sutil de que a coluna é ordenável (aparece mais no hover do cabeçalho).
+      return (
+        <span className="inline-flex flex-col -space-y-2 opacity-0 group-hover/th:opacity-40 transition-opacity">
+          <ChevronUp className="w-3 h-3" />
+          <ChevronDown className="w-3 h-3" />
+        </span>
+      );
+    }
+    return sortConfig.direction === 'asc'
+      ? <ChevronUp className="w-3 h-3 text-amber-600 dark:text-lumos-yellow" />
+      : <ChevronDown className="w-3 h-3 text-amber-600 dark:text-lumos-yellow" />;
+  };
+  // Preset do dropdown ↔ sortConfig (modo grade).
+  const SORT_PRESETS: Record<string, { key: SortKey; direction: 'asc' | 'desc' }> = {
+    recente: { key: 'recente', direction: 'desc' },
+    maior_custo: { key: 'totalCosts', direction: 'desc' },
+    valor_vendido: { key: 'totalProductionValue', direction: 'desc' },
+    lucro_liquido: { key: 'margin', direction: 'desc' },
+    budget_disponivel: { key: 'tetoCustos', direction: 'desc' },
+  };
+  const currentPreset = Object.entries(SORT_PRESETS).find(
+    ([, v]) => v.key === sortConfig.key && v.direction === sortConfig.direction
+  )?.[0] ?? 'custom';
   const [groupByClient, setGroupByClient] = useState(false);
   const [view, setView] = useState<ViewMode>(() => {
     try { return (localStorage.getItem('lumos_custos_view') as ViewMode) || 'list'; } catch { return 'list'; }
@@ -300,25 +337,22 @@ export default function CustosProjeto() {
 
   const sortedProjects = React.useMemo(() => {
     const list = [...filtered];
+    const { key, direction } = sortConfig;
+    const dir = direction === 'asc' ? 1 : -1;
     return list.sort((a, b) => {
-      if (sortBy === 'recente') {
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      if (key === 'recente') {
+        return (new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()) * dir;
       }
-      if (sortBy === 'valor_vendido') {
-        return (b.totalProductionValue || 0) - (a.totalProductionValue || 0);
+      if (key === 'code') {
+        return formatBudgetCode(a.code || '').localeCompare(formatBudgetCode(b.code || ''), 'pt-BR', { numeric: true }) * dir;
       }
-      if (sortBy === 'lucro_liquido') {
-        return (b.margin || 0) - (a.margin || 0);
+      if (key === 'name') {
+        return (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }) * dir;
       }
-      if (sortBy === 'maior_custo') {
-        return (b.totalCosts || 0) - (a.totalCosts || 0);
-      }
-      if (sortBy === 'budget_disponivel') {
-        return (b.tetoCustos || 0) - (a.tetoCustos || 0);
-      }
-      return 0;
+      // Colunas numéricas (vendido, custos, saldo de produção, lucro, margem, teto).
+      return ((Number(a[key]) || 0) - (Number(b[key]) || 0)) * dir;
     });
-  }, [filtered, sortBy]);
+  }, [filtered, sortConfig]);
 
   const groupedProjects = React.useMemo(() => {
     if (!groupByClient) return null;
@@ -544,20 +578,38 @@ export default function CustosProjeto() {
           <thead>
             <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider">
               {isAdmin && <th className="px-4 py-3 w-10" />}
-              <th className="px-4 py-3">Código</th>
-              <th className="px-4 py-3">Projeto</th>
+              <th className="group/th px-4 py-3 cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('code')}>
+                <div className="flex items-center gap-1">Código <SortIcon column="code" /></div>
+              </th>
+              <th className="group/th px-4 py-3 cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('name')}>
+                <div className="flex items-center gap-1">Projeto <SortIcon column="name" /></div>
+              </th>
               {isAdmin ? (
                 <>
-                  <th className="px-4 py-3 text-right">Vendido</th>
-                  <th className="px-4 py-3 text-right">Custos</th>
-                  <th className="px-4 py-3 text-right">Saldo Prod.</th>
-                  <th className="px-4 py-3 text-right">Lucro Líq.</th>
-                  <th className="px-4 py-3 text-right">Margem</th>
+                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('totalProductionValue')}>
+                    <div className="flex items-center justify-end gap-1">Vendido <SortIcon column="totalProductionValue" /></div>
+                  </th>
+                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('totalCosts')}>
+                    <div className="flex items-center justify-end gap-1">Custos <SortIcon column="totalCosts" /></div>
+                  </th>
+                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('saldoProducao')}>
+                    <div className="flex items-center justify-end gap-1">Saldo Prod. <SortIcon column="saldoProducao" /></div>
+                  </th>
+                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('margin')}>
+                    <div className="flex items-center justify-end gap-1">Lucro Líq. <SortIcon column="margin" /></div>
+                  </th>
+                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('marginPercent')}>
+                    <div className="flex items-center justify-end gap-1">Margem <SortIcon column="marginPercent" /></div>
+                  </th>
                 </>
               ) : (
                 <>
-                  <th className="px-4 py-3 text-right">Budget Disp.</th>
-                  <th className="px-4 py-3 text-right">Custos</th>
+                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('tetoCustos')}>
+                    <div className="flex items-center justify-end gap-1">Budget Disp. <SortIcon column="tetoCustos" /></div>
+                  </th>
+                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('totalCosts')}>
+                    <div className="flex items-center justify-end gap-1">Custos <SortIcon column="totalCosts" /></div>
+                  </th>
                 </>
               )}
               <th className="px-4 py-3 text-right w-10" />
@@ -731,8 +783,8 @@ export default function CustosProjeto() {
           <div className="lg:col-span-2 relative">
             <select
               className="input-lumos w-full h-10 text-sm font-medium pr-10 appearance-none cursor-pointer"
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as any)}
+              value={currentPreset}
+              onChange={e => { const preset = SORT_PRESETS[e.target.value]; if (preset) setSortConfig(preset); }}
             >
               <option value="recente">Mais Recente</option>
               <option value="maior_custo">Maior Custo</option>
@@ -744,6 +796,7 @@ export default function CustosProjeto() {
               ) : (
                 <option value="budget_disponivel">Maior Budget</option>
               )}
+              {currentPreset === 'custom' && <option value="custom">Personalizado</option>}
             </select>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none border-l-4 border-r-4 border-t-4 border-transparent border-t-lumos-text-secondary w-0 h-0" />
           </div>
@@ -770,7 +823,7 @@ export default function CustosProjeto() {
 
         </div>
 
-        {(searchTerm || clientFilter || sortBy !== 'recente' || groupByClient) && (
+        {(searchTerm || clientFilter || sortConfig.key !== 'recente' || groupByClient) && (
           <div className="flex items-center justify-between text-xs text-lumos-text-secondary pt-1 border-t border-lumos-border/50">
             <span>
               Mostrando <strong className="text-lumos-text-primary">{filtered.length}</strong> de {projects.length} projetos
@@ -779,7 +832,7 @@ export default function CustosProjeto() {
               onClick={() => {
                 setSearchTerm('');
                 setClientFilter('');
-                setSortBy('recente');
+                setSortConfig({ key: 'recente', direction: 'desc' });
                 setGroupByClient(false);
               }}
               className="text-amber-600 dark:text-lumos-yellow hover:underline font-bold uppercase tracking-widest text-[10px]"
