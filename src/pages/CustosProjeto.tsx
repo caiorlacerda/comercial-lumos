@@ -98,20 +98,30 @@ export default function CustosProjeto() {
 
       if (rentError) throw rentError;
 
+      // Custos REAIS ao vivo, somados de project_costs por project_id — a MESMA
+      // fonte do detalhe. O custos_total armazenado em projetos_financeiro (via
+      // trigger) podia ficar defasado quando entravam custos/reembolsos, fazendo a
+      // lista divergir do que aparece dentro do projeto. Somar ao vivo garante que
+      // lista e detalhe mostrem exatamente o mesmo custo e o mesmo lucro.
+      const { data: costsRows } = await supabase.from('project_costs').select('project_id, amount');
+      const costByProject = new Map<string, number>();
+      (costsRows || []).forEach((c: any) => {
+        if (!c.project_id) return;
+        costByProject.set(c.project_id, (costByProject.get(c.project_id) || 0) + Number(c.amount || 0));
+      });
+
       const processed = (rentData || []).map(p => {
-        const totalCosts = Number(p.custos_total || 0);
-        
         // --- CÁLCULO DE CUSTOS E FATURAMENTO (IDÊNTICO AO DETALHE) ---
         let estimatedCost = 0;
         const budget = p.budget;
         let marginPct = 0.40; // default margin
-        let nfPct = Number(p.nf_percent ?? 0.18);
+        let budgetNfPct = 0.18; // alíquota do orçamento (reconstrói a venda)
         let discountValue = 0;
 
         if (budget?.active_version) {
           const version = budget.active_version;
           marginPct = Number(version.margin_pct ?? 0.40);
-          nfPct = Number(version.nf_pct ?? 0.18);
+          budgetNfPct = Number(version.nf_pct ?? 0.18);
           discountValue = Number(version.discount_value ?? 0);
 
           const items = version.budget_items || [];
@@ -121,31 +131,43 @@ export default function CustosProjeto() {
           );
         }
 
+        // Alíquota EFETIVA de NF (Dados Financeiros do projeto) — a que o detalhe
+        // usa para deduzir imposto. Cai para a do orçamento e por fim 0.18.
+        const effectiveNfPct = Number(p.nf_percent ?? budgetNfPct ?? 0.18);
+
+        // Custos reais somados ao vivo (fallback ao armazenado se não houver id).
+        const totalCosts = p.project_id != null
+          ? (costByProject.get(p.project_id) ?? 0)
+          : Number(p.custos_total || 0);
+
         // TETO DE CUSTOS (Custo Direto do Orçamento)
         const tetoCustos = p.proposta_id
           ? estimatedCost
-          : Number(p.valor_vendido || 0) * (1 - nfPct) / (1 + 0.40);
+          : Number(p.valor_vendido || 0) * (1 - effectiveNfPct) / (1 + 0.40);
 
         // Subtotal (Custo + Margem)
         const subtotalOrçado = estimatedCost * (1 + marginPct);
 
-        // Faturamento Bruto (Venda)
+        // Faturamento Bruto (Venda) — valor contratado, reconstruído com a alíquota
+        // do orçamento (não muda com a alíquota efetiva).
         const totalProductionValue = p.proposta_id
-          ? (subtotalOrçado * (1 + nfPct) - discountValue)
+          ? (subtotalOrçado * (1 + budgetNfPct) - discountValue)
           : Number(p.valor_vendido || 0);
 
-        // Faturamento Líquido (Receita sem imposto)
-        const faturamentoLiquido = p.proposta_id
-          ? subtotalOrçado
-          : (totalProductionValue / (1 + nfPct));
+        // Faturamento Líquido (Receita sem imposto) = Bruto ÷ (1 + alíquota efetiva).
+        const faturamentoLiquido = totalProductionValue / (1 + effectiveNfPct);
 
         // Lucro Líquido Real (com imposto deduzido)
         const margin = faturamentoLiquido - totalCosts;
 
+        // Saldo de Produção = sobra do teto de custo (negativo = estourou o teto).
+        const saldoProducao = tetoCustos - totalCosts;
+        const consumoTetoPct = tetoCustos > 0 ? (totalCosts / tetoCustos) * 100 : 0;
+
         // Margem Real Alcançada % (Lucro / Faturamento)
         const marginPercent = totalProductionValue > 0 ? (margin / totalProductionValue) * 100 : 0;
         // -------------------------------------------------------------
-        
+
         return {
           id: p.id,
           project_id: p.project_id || p.id,
@@ -163,6 +185,8 @@ export default function CustosProjeto() {
           vencido: p.vencido,
           pendente_preenchimento: p.pendente_preenchimento,
           tetoCustos,
+          saldoProducao,
+          consumoTetoPct,
           created_at: p.created_at
         };
       });
@@ -454,6 +478,17 @@ export default function CustosProjeto() {
                   </div>
                 )}
               </div>
+
+              {/* Saldo de Produção: sobra do teto de custo (negativo = estourou). */}
+              <div className="col-span-2 flex items-center justify-between border-t border-lumos-border/50 pt-2.5 mt-1">
+                <span className="text-[9px] font-bold text-lumos-text-secondary uppercase">Saldo de Produção</span>
+                <span
+                  className={clsx('text-xs font-black', p.saldoProducao >= 0 ? 'text-green-500' : 'text-red-500')}
+                  title={p.tetoCustos > 0 ? `Teto ${fmtBRL(p.tetoCustos)} · consumo ${p.consumoTetoPct.toFixed(1)}%` : undefined}
+                >
+                  {fmtBRL(p.saldoProducao)}
+                </span>
+              </div>
             </div>
           ) : (
             /* Layout Produção (Restrito): Sem faturamento/lucro/margem. Apenas Budget vs Custos */
@@ -515,6 +550,7 @@ export default function CustosProjeto() {
                 <>
                   <th className="px-4 py-3 text-right">Vendido</th>
                   <th className="px-4 py-3 text-right">Custos</th>
+                  <th className="px-4 py-3 text-right">Saldo Prod.</th>
                   <th className="px-4 py-3 text-right">Lucro Líq.</th>
                   <th className="px-4 py-3 text-right">Margem</th>
                 </>
@@ -587,6 +623,12 @@ export default function CustosProjeto() {
                     <>
                       <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalProductionValue)}</td>
                       <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalCosts)}</td>
+                      <td
+                        className={clsx('px-4 py-3 text-right text-xs font-black whitespace-nowrap', p.saldoProducao >= 0 ? 'text-green-500' : 'text-red-500')}
+                        title={p.tetoCustos > 0 ? `Teto ${fmtBRL(p.tetoCustos)} · consumo ${p.consumoTetoPct.toFixed(1)}%` : undefined}
+                      >
+                        {fmtBRL(p.saldoProducao)}
+                      </td>
                       <td className={clsx('px-4 py-3 text-right text-xs font-black whitespace-nowrap', p.margin >= 0 ? 'text-green-500' : 'text-red-500')}>{fmtBRL(p.margin)}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {p.totalProductionValue > 0 ? (
