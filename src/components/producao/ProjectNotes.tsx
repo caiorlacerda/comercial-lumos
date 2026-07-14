@@ -3,6 +3,8 @@ import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Mention from '@tiptap/extension-mention';
+import Suggestion from '@tiptap/suggestion';
+import { PluginKey } from '@tiptap/pm/state';
 import { mergeAttributes } from '@tiptap/core';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -10,10 +12,11 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, Quote, Minus, Undo2, Redo2, StickyNote, User, FileText, Film, Loader2,
-  History, RotateCcw, ChevronDown, ChevronUp,
+  History, RotateCcw, ChevronDown, ChevronUp, CheckSquare,
 } from 'lucide-react';
 
-type MItem = { id: string; label: string; mtype: 'person' | 'file' | 'video'; url?: string };
+type MType = 'person' | 'task' | 'file' | 'video';
+type MItem = { id: string; label: string; mtype: MType; url?: string };
 type HistItem = { id: string; notes: string | null; created_at: string; edited_by: string | null; editor?: { full_name: string } | null };
 
 // "há X" curtinho em pt-BR (evita dependência de locale do date-fns).
@@ -45,8 +48,9 @@ const MentionList = forwardRef((props: any, ref) => {
     },
   }));
   if (items.length === 0) return <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl px-3 py-2 text-xs text-lumos-text-secondary">Nada encontrado</div>;
-  const Icon = (t: MItem['mtype']) => t === 'file' ? FileText : t === 'video' ? Film : User;
-  const color = (t: MItem['mtype']) => t === 'file' ? 'text-blue-500' : t === 'video' ? 'text-purple-500' : 'text-amber-500';
+  const Icon = (t: MType) => t === 'file' ? FileText : t === 'video' ? Film : t === 'task' ? CheckSquare : User;
+  const color = (t: MType) => t === 'file' ? 'text-blue-500' : t === 'video' ? 'text-purple-500' : t === 'task' ? 'text-green-500' : 'text-amber-500';
+  const typeLabel = (t: MType) => t === 'person' ? 'pessoa' : t === 'task' ? 'tarefa' : t === 'file' ? 'arquivo' : 'vídeo';
   return (
     <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 w-64 max-h-64 overflow-y-auto custom-scrollbar">
       {items.map((it, idx) => {
@@ -56,7 +60,7 @@ const MentionList = forwardRef((props: any, ref) => {
             className={clsx('w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs', idx === i ? 'bg-lumos-yellow/10' : 'hover:bg-lumos-text-primary/5')}>
             <Ic className={clsx('w-3.5 h-3.5 flex-shrink-0', color(it.mtype))} />
             <span className="truncate font-semibold text-lumos-text-primary">{it.label}</span>
-            <span className="ml-auto text-[9px] uppercase font-black text-lumos-text-secondary/60">{it.mtype === 'person' ? 'pessoa' : it.mtype === 'file' ? 'arquivo' : 'vídeo'}</span>
+            <span className="ml-auto text-[9px] uppercase font-black text-lumos-text-secondary/60">{typeLabel(it.mtype)}</span>
           </button>
         );
       })}
@@ -67,7 +71,14 @@ MentionList.displayName = 'MentionList';
 
 // Menção com tipo + url. Render como chip; arquivos/vídeos abrem via clique
 // (delegação no container), preservando o round-trip do parse padrão.
+//
+// Gatilhos (padrão ClickUp): @ pessoas · @@ tarefas · @@@ documentos.
+// Todos inserem o MESMO nó ('mention'), só mudando o mtype — por isso a extensão
+// aceita uma lista de configs de suggestion e registra um plugin para cada.
 const LumosMention = Mention.extend({
+  addOptions() {
+    return { ...(this.parent?.() as any), suggestions: [] as any[] };
+  },
   addAttributes() {
     return {
       ...(this.parent?.() as any),
@@ -78,12 +89,78 @@ const LumosMention = Mention.extend({
   renderHTML({ node }) {
     const t = node.attrs.mtype || 'person';
     const label = node.attrs.label ?? node.attrs.id ?? '';
-    const prefix = t === 'file' ? '📄 ' : t === 'video' ? '🎬 ' : '@';
+    const prefix = t === 'file' ? '📄 ' : t === 'video' ? '🎬 ' : t === 'task' ? '☑ ' : '@';
     const attrs: any = { 'data-type': 'mention', 'data-id': node.attrs.id, 'data-label': node.attrs.label, 'data-mtype': t, class: `lumos-mention lumos-mention-${t}` };
     if (node.attrs.url) { attrs['data-url'] = node.attrs.url; attrs.title = 'Abrir'; }
     return ['span', mergeAttributes(attrs), `${prefix}${label}`];
   },
+  addProseMirrorPlugins() {
+    return ((this.options as any).suggestions || []).map((s: any) =>
+      Suggestion({ editor: this.editor, ...s })
+    );
+  },
 });
+
+const PERSON_KEY = new PluginKey('lumosMentionPerson');
+const TASK_KEY = new PluginKey('lumosMentionTask');
+const DOC_KEY = new PluginKey('lumosMentionDoc');
+
+// Monta a config de um gatilho de menção. `blockIfNextAt` desambigua os gatilhos:
+// se logo depois do match vier outro '@', significa que o usuário está digitando
+// um gatilho MAIOR (@@ ou @@@), então este não deve abrir. Assim só um popup fica
+// ativo por vez enquanto o usuário digita @ → @@ → @@@.
+function makeSuggestion(char: string, pluginKey: PluginKey, getItems: () => MItem[], blockIfNextAt: boolean) {
+  return {
+    char,
+    pluginKey,
+    allow: ({ state, range }: any) => {
+      if (!blockIfNextAt) return true;
+      const end = Math.min(range.to + 1, state.doc.content.size);
+      return state.doc.textBetween(range.to, end) !== '@';
+    },
+    items: ({ query }: any) => {
+      const q = (query || '').toLowerCase();
+      return getItems().filter(it => it.label.toLowerCase().includes(q)).slice(0, 8);
+    },
+    command: ({ editor, range, props }: any) => {
+      const nodeAfter = editor.view.state.selection.$to.nodeAfter;
+      if (nodeAfter?.text?.startsWith(' ')) range.to += 1;
+      editor.chain().focus().insertContentAt(range, [
+        { type: 'mention', attrs: props },
+        { type: 'text', text: ' ' },
+      ]).run();
+      editor.view.dom.ownerDocument.defaultView?.getSelection()?.collapseToEnd();
+    },
+    render: () => {
+      let component: ReactRenderer | null = null;
+      let el: HTMLDivElement | null = null;
+      const place = (rect: any) => {
+        if (!el || !rect) return;
+        const r = rect();
+        if (!r) return;
+        el.style.top = `${r.bottom + 6}px`;
+        el.style.left = `${r.left}px`;
+      };
+      return {
+        onStart: (props: any) => {
+          component = new ReactRenderer(MentionList, { props, editor: props.editor });
+          el = document.createElement('div');
+          el.style.position = 'fixed';
+          el.style.zIndex = '300';
+          el.appendChild(component.element);
+          document.body.appendChild(el);
+          place(props.clientRect);
+        },
+        onUpdate: (props: any) => { component?.updateProps(props); place(props.clientRect); },
+        onKeyDown: (props: any) => {
+          if (props.event.key === 'Escape') return true;
+          return (component?.ref as any)?.onKeyDown(props) ?? false;
+        },
+        onExit: () => { component?.destroy(); el?.remove(); el = null; },
+      };
+    },
+  };
+}
 
 function TBtn({ active, onClick, title, children }: any) {
   return (
@@ -99,11 +176,13 @@ interface Props { projectId: string; canManage?: boolean; }
 
 export default function ProjectNotes({ projectId, canManage = true }: Props) {
   const { profile } = useAuth();
-  const itemsRef = useRef<MItem[]>([]);
+  // Listas por gatilho: @ pessoas · @@ tarefas · @@@ documentos (arquivos + vídeos).
+  const peopleRef = useRef<MItem[]>([]);
+  const tasksRef = useRef<MItem[]>([]);
+  const docsRef = useRef<MItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const popupRef = useRef<HTMLDivElement | null>(null);
   // Fonte da verdade síncrona do projeto atual + trava anti-perda: só salvamos
   // DEPOIS que o conteúdo carregou. Sem isso, um autosave disparado antes do
   // fetch (ou de outro projeto) sobrescrevia as notas com vazio.
@@ -162,40 +241,11 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
       Underline,
       LumosMention.configure({
         HTMLAttributes: { class: 'lumos-mention' },
-        suggestion: {
-          char: '@',
-          items: ({ query }: any) => {
-            const q = (query || '').toLowerCase();
-            return itemsRef.current.filter(it => it.label.toLowerCase().includes(q)).slice(0, 8);
-          },
-          render: () => {
-            let component: ReactRenderer | null = null;
-            const place = (rect: any) => {
-              if (!popupRef.current || !rect) return;
-              const r = rect();
-              if (!r) return;
-              popupRef.current.style.top = `${r.bottom + 6}px`;
-              popupRef.current.style.left = `${r.left}px`;
-            };
-            return {
-              onStart: (props: any) => {
-                component = new ReactRenderer(MentionList, { props, editor: props.editor });
-                const el = document.createElement('div');
-                el.style.position = 'fixed'; el.style.zIndex = '300';
-                el.appendChild(component.element);
-                document.body.appendChild(el);
-                popupRef.current = el;
-                place(props.clientRect);
-              },
-              onUpdate: (props: any) => { component?.updateProps(props); place(props.clientRect); },
-              onKeyDown: (props: any) => {
-                if (props.event.key === 'Escape') { return true; }
-                return (component?.ref as any)?.onKeyDown(props) ?? false;
-              },
-              onExit: () => { component?.destroy(); popupRef.current?.remove(); popupRef.current = null; },
-            };
-          },
-        },
+        suggestions: [
+          makeSuggestion('@', PERSON_KEY, () => peopleRef.current, true),
+          makeSuggestion('@@', TASK_KEY, () => tasksRef.current, true),
+          makeSuggestion('@@@', DOC_KEY, () => docsRef.current, false),
+        ],
       }),
     ],
     content: '',
@@ -209,19 +259,21 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     loadedRef.current = false;
     (async () => {
       setLoading(true);
-      const [u, docs, vids, proj] = await Promise.all([
+      const [u, tasks, docs, vids, proj] = await Promise.all([
         supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
+        supabase.from('project_tasks').select('id, titulo').eq('project_id', projectId).order('ordem'),
         supabase.from('project_documents').select('id, name, url').eq('project_id', projectId),
         supabase.from('video_versions').select('id, file_name, versao, drive_web_link').eq('project_id', projectId).order('versao', { ascending: false }),
         supabase.from('projects').select('notes').eq('id', projectId).single(),
       ]);
       if (!alive) return;
-      const items: MItem[] = [
-        ...((u.data as any[]) || []).map(x => ({ id: x.id, label: x.full_name, mtype: 'person' as const })),
+      peopleRef.current = ((u.data as any[]) || []).map(x => ({ id: x.id, label: x.full_name, mtype: 'person' as const }));
+      tasksRef.current = ((tasks.data as any[]) || []).map(x => ({ id: x.id, label: x.titulo, mtype: 'task' as const }));
+      // Documentos = arquivos subidos em Documentos + vídeos em revisão (ambos abrem por link).
+      docsRef.current = [
         ...((docs.data as any[]) || []).map(x => ({ id: x.id, label: x.name, mtype: 'file' as const, url: x.url })),
         ...((vids.data as any[]) || []).map(x => ({ id: x.id, label: `v${x.versao} · ${x.file_name}`, mtype: 'video' as const, url: x.drive_web_link || undefined })),
       ];
-      itemsRef.current = items;
       const loadedNotes = (proj.data as any)?.notes || '';
       editor?.commands.setContent(loadedNotes, { emitUpdate: false });
       lastNonEmptyRef.current = plainText(loadedNotes).length > 0;
@@ -265,7 +317,11 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
       <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2">
         <StickyNote className="w-4 h-4 text-lumos-yellow" />
         <h3 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Anotações do Projeto</h3>
-        <span className="text-[11px] text-lumos-text-secondary">use @ para mencionar pessoas, arquivos e vídeos</span>
+        <span className="text-[11px] text-lumos-text-secondary">
+          <strong className="font-bold text-amber-500">@</strong> pessoas ·{' '}
+          <strong className="font-bold text-green-500">@@</strong> tarefas ·{' '}
+          <strong className="font-bold text-blue-500">@@@</strong> documentos
+        </span>
         {saveState !== 'idle' && (
           <span className="ml-auto text-[10px] font-bold text-lumos-text-secondary flex items-center gap-1">
             {saveState === 'saving' ? <><Loader2 className="w-3 h-3 animate-spin" /> salvando…</> : 'salvo ✓'}
