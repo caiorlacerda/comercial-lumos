@@ -23,6 +23,20 @@ function errMsg(e: any): string {
   )
 }
 
+// Acha a conta de auth de um e-mail (a fonte da verdade — o auth_user_id guardado
+// pode estar defasado). Assim a exclusão não deixa conta órfã com o e-mail preso.
+async function findAuthUserByEmail(admin: any, email: string) {
+  const target = email.trim().toLowerCase()
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+    if (error || !data) return null
+    const found = data.users.find((u: any) => (u.email ?? '').toLowerCase() === target)
+    if (found) return found
+    if (data.users.length < 200) return null
+  }
+  return null
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -70,16 +84,21 @@ serve(async (req) => {
     // 4. Resolve os auth_user_id correspondentes.
     const { data: rows, error: rowsErr } = await adminClient
       .from('app_users')
-      .select('id, auth_user_id')
+      .select('id, auth_user_id, email')
       .in('id', targetIds)
     if (rowsErr) return json({ error: errMsg(rowsErr) }, 400)
 
-    // 5. Apaga cada conta de auth (não bloqueia se uma já não existir — cobre
-    //    também a limpeza de contas órfãs de exclusões antigas).
+    // 5. Apaga cada conta de auth. Resolve tanto pelo auth_user_id guardado quanto
+    //    pelo e-mail — se o id estava defasado, ainda assim removemos a conta certa
+    //    e não deixamos órfã (que depois travaria um novo convite com o mesmo e-mail).
     const warnings: string[] = []
     for (const row of rows ?? []) {
-      if (row.auth_user_id) {
-        const { error: delErr } = await adminClient.auth.admin.deleteUser(row.auth_user_id)
+      const authIds = new Set<string>()
+      if (row.auth_user_id) authIds.add(row.auth_user_id)
+      const byEmail = row.email ? await findAuthUserByEmail(adminClient, row.email) : null
+      if (byEmail?.id) authIds.add(byEmail.id)
+      for (const aid of authIds) {
+        const { error: delErr } = await adminClient.auth.admin.deleteUser(aid)
         if (delErr) warnings.push(`${row.id}: ${errMsg(delErr)}`)
       }
     }

@@ -14,6 +14,20 @@ function errMsg(e: any): string {
   return e.message || e.error_description || e.error || e.msg || e.hint || e.details || JSON.stringify(e, Object.getOwnPropertyNames(e))
 }
 
+// Acha a conta de auth de um e-mail (fonte da verdade — o auth_user_id guardado
+// pode estar defasado por reconvites).
+async function findAuthUserByEmail(admin: any, email: string) {
+  const target = email.trim().toLowerCase()
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+    if (error || !data) return null
+    const found = data.users.find((u: any) => (u.email ?? '').toLowerCase() === target)
+    if (found) return found
+    if (data.users.length < 200) return null
+  }
+  return null
+}
+
 // Reenvia o CONVITE (não recovery) para quem foi convidado mas não aceitou e o
 // link expirou. O recovery (resetPasswordForEmail) não chega em conta ainda não
 // confirmada, por isso aqui a gente reinvita de verdade: apaga a conta de auth
@@ -45,15 +59,19 @@ serve(async (req) => {
       .from('app_users').select('id, email, full_name, role, job_title, auth_user_id').eq('id', id).single()
     if (pErr || !profile) return json({ error: 'Usuário não encontrado.' }, 404)
 
-    // 3. Se a conta de auth existe, confere se já ativou (não reinvitar).
-    if (profile.auth_user_id) {
-      const { data: existing } = await adminClient.auth.admin.getUserById(profile.auth_user_id)
-      const u = existing?.user
-      if (u && (u.last_sign_in_at || u.email_confirmed_at)) {
-        return json({ error: 'Este usuário já ativou o acesso — não precisa reenviar.', already: true }, 400)
-      }
-      // Conta pendente: apaga pra permitir um convite novo (perfil é preservado).
-      await adminClient.auth.admin.deleteUser(profile.auth_user_id)
+    // 3. Estado atual pela conta de auth do e-mail (fonte da verdade — o
+    //    auth_user_id guardado pode estar defasado por reconvites anteriores).
+    const authUser = await findAuthUserByEmail(adminClient, profile.email)
+    if (authUser && (authUser.last_sign_in_at || authUser.email_confirmed_at)) {
+      return json({ error: 'Este usuário já ativou o acesso — não precisa reenviar.', already: true }, 400)
+    }
+    // Apaga qualquer conta de auth pendente do e-mail (a achada e a apontada pelo
+    // perfil, se diferentes) pra liberar um convite novo. O perfil é preservado.
+    const toDelete = new Set<string>()
+    if (authUser?.id) toDelete.add(authUser.id)
+    if (profile.auth_user_id) toDelete.add(profile.auth_user_id)
+    for (const aid of toDelete) {
+      await adminClient.auth.admin.deleteUser(aid).catch(() => {})
     }
 
     // 4. Reinvita (envia o e-mail).

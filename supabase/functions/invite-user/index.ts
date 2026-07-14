@@ -25,6 +25,20 @@ function errMsg(e: any): string {
   )
 }
 
+// Acha a conta de auth de um e-mail (a fonte da verdade — o auth_user_id guardado
+// em app_users pode estar defasado por reconvites). Pagina a lista de usuários.
+async function findAuthUserByEmail(admin: any, email: string) {
+  const target = email.trim().toLowerCase()
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+    if (error || !data) return null
+    const found = data.users.find((u: any) => (u.email ?? '').toLowerCase() === target)
+    if (found) return found
+    if (data.users.length < 200) return null
+  }
+  return null
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -61,6 +75,22 @@ serve(async (req) => {
     const { email, full_name, role, job_title } = await req.json()
     if (!email || !full_name || !role) {
       return json({ error: 'E-mail, nome e cargo são obrigatórios.' }, 400)
+    }
+
+    // 2.5 Já existe perfil com este e-mail? Não duplica — manda usar "Reenviar acesso".
+    const { data: existingProfile } = await adminClient
+      .from('app_users').select('id, full_name').ilike('email', email).maybeSingle()
+    if (existingProfile) {
+      return json({ error: `Já existe um usuário com este e-mail (${existingProfile.full_name}). Abra o perfil dele e use "Reenviar acesso".` }, 400)
+    }
+
+    // 2.6 Limpa conta de auth órfã (e-mail registrado mas SEM perfil — sobra de
+    //     uma exclusão/reconvite antigos). Sem isso, o inviteUserByEmail falha com
+    //     "A user with this email address has already been registered".
+    const orphan = await findAuthUserByEmail(adminClient, email)
+    if (orphan) {
+      const { error: delErr } = await adminClient.auth.admin.deleteUser(orphan.id)
+      if (delErr) return json({ error: `Não foi possível liberar o e-mail (conta antiga): ${errMsg(delErr)}` }, 400)
     }
 
     // 3. Envia o convite (o usuário define a própria senha ao aceitar).
