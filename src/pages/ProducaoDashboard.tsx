@@ -871,6 +871,12 @@ export default function ProducaoDashboard() {
                   ))}
                 </div>
                 <button
+                  onClick={() => setCurrentDate(new Date())}
+                  className="px-2.5 py-1.5 rounded-lg border border-lumos-border text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/40 transition-all cursor-pointer"
+                >
+                  Hoje
+                </button>
+                <button
                   onClick={prevMonth}
                   className="p-1.5 rounded-lg border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all cursor-pointer"
                 >

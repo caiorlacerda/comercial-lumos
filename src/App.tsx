@@ -158,10 +158,13 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
         <div className="bg-yellow-500/10 border border-yellow-500 p-8 rounded-lumos max-w-md">
           <h2 className="text-xl font-bold mb-2">Acesso Pendente</h2>
           <p className="text-lumos-text-secondary text-sm mb-6">
-            Sua conta Supabase foi criada, mas você ainda não possui um perfil autorizado na plataforma. 
+            Sua conta Supabase foi criada, mas você ainda não possui um perfil autorizado na plataforma.
             Contate um administrador para habilitar seu acesso.
           </p>
-          <button onClick={() => signOut()} className="btn-primary w-full">Sair</button>
+          <div className="flex gap-3">
+            <button onClick={() => window.location.reload()} className="btn-primary flex-1">Tentar novamente</button>
+            <button onClick={() => signOut()} className="btn-secondary flex-1">Sair</button>
+          </div>
         </div>
       </div>
     );
