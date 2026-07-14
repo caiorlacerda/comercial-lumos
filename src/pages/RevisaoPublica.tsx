@@ -75,7 +75,6 @@ export default function RevisaoPublica() {
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
   const [commentText, setCommentText] = useState('');
-  const [showTools, setShowTools] = useState(false);
   const [tool, setTool] = useState<'draw' | 'arrow' | 'rect' | null>(null);
   const [color, setColor] = useState(COLORS[0]);
   const [shapes, setShapes] = useState<Shape[]>([]);
@@ -218,7 +217,7 @@ export default function RevisaoPublica() {
     if (videoRef.current) { videoRef.current.pause(); setPlaying(false); }
     setViewingShapes([]); setShapes([]); setComposing(true);
   };
-  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setShowTools(false); setCommentText(''); };
+  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); };
 
   // Enter envia o comentário; Shift/Cmd/Ctrl+Enter quebra linha
   const onCommentKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -336,9 +335,11 @@ export default function RevisaoPublica() {
         {/* Player */}
         <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0', isFs ? 'bg-black' : 'p-4 gap-2')}>
           <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 flex items-center justify-center' : 'w-full aspect-video rounded-lumos')}>
+            {/* object-contain: vídeo vertical (9:16) entra inteiro no player 16:9, com
+                barras pretas nas laterais. Com object-cover ele era cortado/ampliado. */}
             <video
               ref={videoRef} src={streamUrl} preload="metadata"
-              className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full h-full object-cover')}
+              className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full h-full object-contain')}
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
               onLoadedData={() => setReady(true)} onCanPlay={() => setReady(true)}
@@ -439,54 +440,50 @@ export default function RevisaoPublica() {
             )}
           </div>
 
-          {/* Compositor fixo (sempre visível) */}
-          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50">
-            <div className="flex items-center justify-between mb-2">
+          {/* Compositor — mesma diagramação da revisão interna (InternalReviewModal) */}
+          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2">
+            <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1">
                 <Clock className="w-3 h-3" /> em {fmtTime(currentMs)}
               </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => { ensureComposing(); setShowTools(s => !s); if (!showTools && !tool) setTool('draw'); }}
-                  className={clsx('text-[10px] font-bold flex items-center gap-1 px-2 py-1 rounded-full border transition-colors', showTools ? 'border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                  <Pencil className="w-3 h-3" /> Anotar
+              {composing && (
+                <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors">
+                  <X className="w-3 h-3" /> Cancelar
                 </button>
-                {composing && (
-                  <button onClick={resetComposer} title="Cancelar" className="p-1 rounded-full text-lumos-text-secondary hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Ferramentas de anotação */}
-            {showTools && (
-              <div className="flex items-center gap-1.5 mb-2 flex-wrap p-2 bg-lumos-bg/40 rounded-lumos">
-                {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
-                  <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
-                    className={clsx('p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                    <Icon className="w-3.5 h-3.5" />
-                  </button>
+            {/* Ferramentas de anotação — sempre visíveis */}
+            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-lumos">
+              {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
+                <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
+                  title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}
+                  className={clsx('p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                  <Icon className="w-3.5 h-3.5" />
+                </button>
+              ))}
+              <div className="flex items-center gap-1 ml-1">
+                {COLORS.map(c => (
+                  <button key={c} onClick={() => setColor(c)} style={{ background: c }} title="Cor"
+                    className={clsx('w-4 h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />
                 ))}
-                <div className="flex items-center gap-1 ml-1">
-                  {COLORS.map(c => (
-                    <button key={c} onClick={() => setColor(c)} style={{ background: c }}
-                      className={clsx('w-4 h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />
-                  ))}
-                </div>
-                <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
               </div>
-            )}
+              <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
+            </div>
 
             <div className="flex items-end gap-2">
               <textarea
                 value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
                 onKeyDown={onCommentKey}
-                rows={1} placeholder={`Comentar em ${fmtTime(currentMs)}… (Enter envia, Shift+Enter quebra linha)`}
-                className="input-lumos flex-1 text-xs resize-none min-h-[40px] max-h-28 py-2.5"
+                rows={2} placeholder={`Comentar em ${fmtTime(currentMs)}…`}
+                className="input-lumos flex-1 text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug"
               />
               <button onClick={submitComment} disabled={sending || (!commentText.trim() && shapes.length === 0)}
-                className="btn-primary h-10 w-10 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
+                className="btn-primary h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
+            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">Enter envia · Shift+Enter quebra linha</p>
           </div>
         </aside>
       </div>
