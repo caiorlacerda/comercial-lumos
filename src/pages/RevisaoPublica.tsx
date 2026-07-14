@@ -294,10 +294,13 @@ export default function RevisaoPublica() {
   ];
   const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
 
+  // No desktop a tela inteira cabe na viewport (sem rolar para achar os controles):
+  // altura travada e o vídeo ocupa só a altura que sobra. No mobile segue o fluxo
+  // normal, empilhado e rolável.
   return (
-    <div className={clsx('min-h-screen bg-lumos-bg text-lumos-text-primary font-work-sans', themeClass)}>
+    <div className={clsx('min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-lumos-bg text-lumos-text-primary font-work-sans', themeClass)}>
       {/* Header (sem logo) */}
-      <header className="h-14 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
+      <header className="h-14 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
         <div className="flex items-center gap-3 min-w-0">
           <img src={theme === 'dark' ? LOGO.dark : LOGO.light} alt="Lumos" className="h-7 transition-all duration-300 flex-shrink-0" />
           <span className="text-sm font-black truncate border-l border-lumos-border pl-3">
@@ -331,10 +334,14 @@ export default function RevisaoPublica() {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row" onClick={() => showInfo && setShowInfo(false)}>
+      <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0" onClick={() => showInfo && setShowInfo(false)}>
         {/* Player */}
-        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0', isFs ? 'bg-black' : 'p-4 gap-2')}>
-          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 flex items-center justify-center' : 'w-full aspect-video rounded-lumos')}>
+        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0 lg:min-h-0', isFs ? 'bg-black' : 'p-4 gap-2')}>
+          {/* Área do vídeo: no desktop ocupa a altura que sobra (depois do header e dos
+              controles) e o box 16:9 é limitado por max-h-full, então nunca empurra os
+              controles para fora da tela. No mobile segue o fluxo normal (sem esticar). */}
+          <div className="lg:flex-1 lg:min-h-0 flex items-center justify-center">
+          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 w-full flex items-center justify-center' : 'w-full aspect-video max-h-full rounded-lumos')}>
             {/* object-contain: vídeo vertical (9:16) entra inteiro no player 16:9, com
                 barras pretas nas laterais. Com object-cover ele era cortado/ampliado. */}
             <video
@@ -371,9 +378,10 @@ export default function RevisaoPublica() {
               onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp}
             />
           </div>
+          </div>
 
           {/* Barra de progresso com marcadores de comentário */}
-          <div className={clsx('pt-1', isFs ? 'px-4' : 'px-1')}>
+          <div className={clsx('flex-shrink-0 pt-1', isFs ? 'px-4' : 'px-1')}>
             <div ref={barRef} onPointerDown={onBarDown} className="relative h-5 flex items-center cursor-pointer group">
               <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
               <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
@@ -391,7 +399,7 @@ export default function RevisaoPublica() {
           </div>
 
           {/* Controles (estilo Frame.io) */}
-          <div className={clsx('flex items-center gap-2 flex-wrap', isFs && 'px-4 pb-3')}>
+          <div className={clsx('flex-shrink-0 flex items-center gap-2 flex-wrap', isFs && 'px-4 pb-3')}>
             <button onClick={togglePlay} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
               {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
@@ -416,7 +424,7 @@ export default function RevisaoPublica() {
         </div>
 
         {/* Comentários */}
-        <aside className={clsx('w-full lg:w-[380px] border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:max-h-[calc(100vh-3.5rem)]', isFs && 'hidden')}>
+        <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:h-full lg:min-h-0', isFs && 'hidden')}>
           <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between">
             <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários</span>
             <span className="text-[10px] font-bold text-lumos-text-secondary/70">{data.comments.length}</span>
