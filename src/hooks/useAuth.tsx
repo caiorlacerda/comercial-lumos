@@ -4,6 +4,20 @@ import { User } from '@supabase/supabase-js';
 
 export type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
 
+// Login diário obrigatório: toda sessão anterior às 6h (horário de São Paulo)
+// expira, forçando reautenticação de senha (e recarregando o app com as novidades).
+// "Dia" do corte = data (em SP) de (instante - 6h): antes das 6h pertence ao dia
+// anterior, depois das 6h ao dia atual.
+function relogDay(ms: number): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(ms - 6 * 60 * 60 * 1000));
+}
+function isSessionStale(u?: User | null): boolean {
+  if (!u?.last_sign_in_at) return false;
+  return relogDay(Date.now()) !== relogDay(new Date(u.last_sign_in_at).getTime());
+}
+
 // Permissões padrão por cargo. custom_permissions (por usuário) sobrescreve.
 // Editor e Atendimento veem toda a Produção; Início e Configurações não têm
 // gate de permissão (visíveis a qualquer logado). O cofre de senhas fica em
@@ -98,7 +112,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    // Se a sessão é de antes do corte diário (6h SP), desloga e força novo login.
+    const forceReloginIfStale = (u?: User | null): boolean => {
+      if (u && isSessionStale(u)) {
+        supabase.auth.signOut();
+        setUser(null); setProfile(null); setProfileChecked(true); setLoading(false);
+        return true;
+      }
+      return false;
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (forceReloginIfStale(session?.user)) return;
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false));
@@ -112,6 +137,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (forceReloginIfStale(session?.user)) return;
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false));
@@ -122,7 +148,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Verifica periodicamente (pega quem está com a aba aberta às 6h em ponto).
+    const relogTimer = setInterval(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => forceReloginIfStale(session?.user));
+    }, 5 * 60 * 1000);
+
+    return () => { subscription.unsubscribe(); clearInterval(relogTimer); };
   }, []);
 
   const signOut = async () => { await supabase.auth.signOut(); };
