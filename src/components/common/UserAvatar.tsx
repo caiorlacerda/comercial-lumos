@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { clsx } from 'clsx';
 import { useLayout } from '@/context/LayoutContext';
 import StatusDot from '@/components/common/StatusDot';
+import { effectiveStatus } from '@/lib/presence';
 
 export interface AvatarUser {
   id?: string | null;
@@ -15,6 +16,8 @@ interface Props {
   size?: number;
   /** Mostra a bolinha de presença (online/ocupado/ausente/offline). */
   showStatus?: boolean;
+  /** last_seen do usuário — usado como fallback quando o realtime não conecta. */
+  lastSeen?: string | null;
   className?: string;
   title?: string;
 }
@@ -31,10 +34,10 @@ function initials(name?: string | null) {
  * fallback para iniciais, e uma bolinha de presença ao vivo no canto. O status
  * vem de getLiveStatus (Realtime presence), não da coluna estática.
  */
-export default function UserAvatar({ user, size = 28, showStatus = false, className, title }: Props) {
+export default function UserAvatar({ user, size = 28, showStatus = false, lastSeen, className, title }: Props) {
   const { getLiveStatus } = useLayout();
   const [imgOk, setImgOk] = useState(true);
-  const status = user?.id ? getLiveStatus(user.id) : 'offline';
+  const status = user?.id ? effectiveStatus(getLiveStatus(user.id), lastSeen) : 'offline';
   const dot = Math.max(8, Math.round(size * 0.34));
 
   return (

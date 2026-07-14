@@ -13,6 +13,7 @@ import { useLayout } from '@/context/LayoutContext';
 import UserAvatar from '@/components/common/UserAvatar';
 import Select from '@/components/ui/Select';
 import { isDone, isActive, isOpen, taskLabel, TASK_ACTIVE } from '@/lib/taskStatus';
+import { effectiveStatus } from '@/lib/presence';
 import { formatBudgetCode } from '@/utils/formatters';
 
 interface AppUser {
@@ -64,6 +65,8 @@ export default function MonitoramentoEquipe() {
 
   useEffect(() => { load(); }, []);
   useRealtimeRefetch(['project_tasks', 'app_users', 'team_members', 'projects'], () => load(true));
+  // Poll de fallback: last_seen fresco mesmo sem realtime.
+  useEffect(() => { const t = setInterval(() => load(true), 60_000); return () => clearInterval(t); }, []);
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -118,7 +121,7 @@ export default function MonitoramentoEquipe() {
       const current = active.find(t => t.status === 'em_progresso')
         || [...active].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]
         || null;
-      const online = getLiveStatus(u.id) === 'online';
+      const online = effectiveStatus(getLiveStatus(u.id), u.last_seen) === 'online';
       const h = hrByUser.get(u.id);
       const hrFilled = !!h && !!(h.cpf || h.whatsapp || h.birth_date);
       return {
@@ -271,7 +274,7 @@ export default function MonitoramentoEquipe() {
                 <tr key={p.user.id} onClick={() => setDetailId(p.user.id)} className="hover:bg-lumos-text-primary/5 cursor-pointer">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <UserAvatar user={p.user as any} size={36} showStatus />
+                      <UserAvatar user={p.user as any} size={36} showStatus lastSeen={p.user.last_seen} />
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-lumos-text-primary truncate">{p.user.full_name}</p>
                         <p className="text-[11px] text-lumos-text-secondary">
@@ -404,7 +407,7 @@ export default function MonitoramentoEquipe() {
           <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl">
             <div className="sticky top-0 bg-lumos-surface border-b border-lumos-border px-5 py-3 flex items-center justify-between z-10">
               <div className="flex items-center gap-3 min-w-0">
-                <UserAvatar user={detailPerson.user as any} size={40} showStatus />
+                <UserAvatar user={detailPerson.user as any} size={40} showStatus lastSeen={detailPerson.user.last_seen} />
                 <div className="min-w-0">
                   <h2 className="text-base font-black text-lumos-text-primary truncate">{detailPerson.user.full_name}</h2>
                   <p className="text-[11px] text-lumos-text-secondary">
