@@ -185,6 +185,21 @@ export default function Equipe() {
     if (error) toast.error('Erro ao reenviar.'); else toast.success(`Tour reenviado — ${detail.user.full_name.split(' ')[0]} verá no próximo login.`);
   };
 
+  // Reenvia um link de acesso (para quem o convite expirou / não se cadastrou).
+  // Manda um e-mail que leva ao mesmo /definir-senha do convite; a pessoa define
+  // a senha e entra. Funciona via recovery, sem recriar a conta.
+  const [resendingInvite, setResendingInvite] = useState(false);
+  const resendInvite = async () => {
+    if (!detail?.user?.email) return;
+    setResendingInvite(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(detail.user.email, {
+      redirectTo: `${window.location.origin}/definir-senha`,
+    });
+    setResendingInvite(false);
+    if (error) toast.error('Erro ao reenviar o acesso.');
+    else toast.success(`Link de acesso reenviado para ${detail.user.email}.`);
+  };
+
   const deleteUser = async () => {
     if (!detail?.user) return;
     if (!(await confirm({ message: `Excluir ${detail.user.full_name} da plataforma? A conta de acesso será removida.`, confirmLabel: 'Excluir', danger: true }))) return;
@@ -438,6 +453,9 @@ export default function Equipe() {
                   <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
                     <button onClick={saveAccess} disabled={saving} className="btn-primary h-9 px-4 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Salvar acesso
+                    </button>
+                    <button onClick={resendInvite} disabled={resendingInvite} className="h-9 px-3 text-xs font-bold rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow flex items-center gap-1.5 disabled:opacity-50">
+                      {resendingInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />} Reenviar acesso
                     </button>
                     <button onClick={resendTour} className="h-9 px-3 text-xs font-bold rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow">🎬 Reenviar tour</button>
                     <button onClick={deleteUser} className="h-9 px-3 text-xs font-bold rounded-lumos text-red-400 hover:bg-red-500/10 flex items-center gap-1.5 ml-auto"><Trash2 className="w-3.5 h-3.5" /> Excluir</button>
