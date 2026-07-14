@@ -185,19 +185,17 @@ export default function Equipe() {
     if (error) toast.error('Erro ao reenviar.'); else toast.success(`Tour reenviado — ${detail.user.full_name.split(' ')[0]} verá no próximo login.`);
   };
 
-  // Reenvia um link de acesso (para quem o convite expirou / não se cadastrou).
-  // Manda um e-mail que leva ao mesmo /definir-senha do convite; a pessoa define
-  // a senha e entra. Funciona via recovery, sem recriar a conta.
+  // Reenvia o CONVITE (para quem não se cadastrou e o link expirou). Vai por uma
+  // edge function admin que reinvita de verdade (o recovery não chega em conta
+  // ainda não confirmada). Manda a pessoa pro mesmo /definir-senha.
   const [resendingInvite, setResendingInvite] = useState(false);
   const resendInvite = async () => {
-    if (!detail?.user?.email) return;
+    if (!detail?.user) return;
     setResendingInvite(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(detail.user.email, {
-      redirectTo: `${window.location.origin}/definir-senha`,
-    });
+    const { data, error } = await supabase.functions.invoke('resend-invite', { body: { id: detail.user.id } });
     setResendingInvite(false);
-    if (error) toast.error('Erro ao reenviar o acesso.');
-    else toast.success(`Link de acesso reenviado para ${detail.user.email}.`);
+    if (error || data?.error) toast.error(data?.error || 'Erro ao reenviar o convite.');
+    else toast.success(`Convite reenviado para ${detail.user.email}.`);
   };
 
   const deleteUser = async () => {
