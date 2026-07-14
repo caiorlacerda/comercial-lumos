@@ -36,6 +36,7 @@ import { syncBudgetApprovalFlow } from '@/utils/financeiro';
 import { formatBudgetCode } from '@/utils/formatters';
 import { getPdfFileName } from '@/utils/pdfFileName';
 import { useToast } from '@/context/ToastContext';
+import { useSaveOsToDrive } from '@/hooks/useSaveOsToDrive';
 import { logAudit } from '@/hooks/useAuditLog';
 
 interface Budget {
@@ -69,6 +70,7 @@ function parseBudgetCodeNumeric(code: string): number {
 export default function Budgets() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { saveOsToDrive } = useSaveOsToDrive();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -232,6 +234,17 @@ export default function Budgets() {
       // Sincroniza recebíveis e projeto quando aprovado
       if (newStatus === 'aprovado') {
         await syncBudgetApprovalFlow(id);
+        // OS automática no Drive (silenciosa; só sobe se já estiver logado no Google).
+        // Fire-and-forget pra não travar a UI (gera PDF + espera a pasta provisionar).
+        (async () => {
+          try {
+            const { data: proj } = await supabase.from('projects').select('id').eq('budget_id', id).maybeSingle();
+            if (proj?.id) {
+              const r = await saveOsToDrive({ budgetId: id, projectId: proj.id, interactive: false });
+              if (r.ok) toast.success('OS salva no Drive do projeto!');
+            }
+          } catch { /* silencioso */ }
+        })();
       }
 
       setBudgets(prev => prev.map(b => b.id === id ? { ...b, status: newStatus as any } : b));

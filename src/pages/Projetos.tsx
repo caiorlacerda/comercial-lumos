@@ -62,6 +62,7 @@ import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import UserAvatar from '@/components/common/UserAvatar';
 import AssigneePicker from '@/components/common/AssigneePicker';
 import { useToast } from '@/context/ToastContext';
+import { useSaveOsToDrive } from '@/hooks/useSaveOsToDrive';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
 import { pdf } from '@react-pdf/renderer';
 import {
@@ -103,7 +104,8 @@ import {
   MessageSquare,
   History,
   Edit2,
-  Menu
+  Menu,
+  FolderUp
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -776,6 +778,8 @@ export default function Projetos() {
 
   // PDF Generation State
   const [isGeneratingOS, setIsGeneratingOS] = useState<string | null>(null);
+  const [savingOs, setSavingOs] = useState(false);
+  const { saveOsToDrive } = useSaveOsToDrive();
 
   // Modal State for Manual Creation
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1554,6 +1558,17 @@ export default function Projetos() {
     }
   };
 
+  const handleSaveOs = async (projectId: string, budgetId: string) => {
+    setSavingOs(true);
+    try {
+      const r = await saveOsToDrive({ budgetId, projectId, interactive: true });
+      if (r.ok) toast.success('OS salva na pasta OS do projeto no Drive!');
+      else if (!r.skipped) toast.error(r.error || 'Não foi possível salvar a OS.');
+    } finally {
+      setSavingOs(false);
+    }
+  };
+
   // Modal Creation Submit
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1820,6 +1835,18 @@ export default function Projetos() {
                             Abrir OS (PDF)
                           </>
                         )}
+                      </button>
+                    )}
+
+                    {canManage && selectedProject.budget_id && (
+                      <button
+                        onClick={() => handleSaveOs(selectedProject.id, selectedProject.budget_id!)}
+                        disabled={savingOs}
+                        className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
+                        title="Gera a OS e salva na subpasta OS do projeto no Drive"
+                      >
+                        {savingOs ? <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow" /> : <FolderUp className="w-3.5 h-3.5" />}
+                        {savingOs ? 'Salvando...' : 'Salvar OS no Drive'}
                       </button>
                     )}
 
