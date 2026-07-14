@@ -84,13 +84,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profileChecked, setProfileChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, attempt = 0) => {
     try {
       const { data } = await supabase
         .from('app_users')
         .select('*')
         .eq('auth_user_id', userId)
-        .single();
+        .maybeSingle();
+
+      // Logo após o login o token de auth pode ainda não ter propagado, e o RLS
+      // devolve 0 linhas por um instante — o que fazia piscar "Acesso Pendente".
+      // Enquanto não confirmamos, tentamos de novo (sem marcar profileChecked,
+      // então a tela mostra o loader, não o "pendente").
+      if (!data && attempt < 4) {
+        await new Promise(r => setTimeout(r, 500));
+        return fetchProfile(userId, attempt + 1);
+      }
+
       setProfile(data ?? null);
       // Espelha a foto do Auth (user_metadata) na coluna app_users.avatar_url,
       // para que OUTROS usuários consigam ver a foto (metadata só é legível pelo
@@ -103,10 +113,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setProfile({ ...data, avatar_url: metaAvatar });
         }
       }
+      setProfileChecked(true);
     } catch (err) {
+      if (attempt < 4) {
+        await new Promise(r => setTimeout(r, 500));
+        return fetchProfile(userId, attempt + 1);
+      }
       console.error('Error fetching profile:', err);
       setProfile(null);
-    } finally {
       setProfileChecked(true);
     }
   };
