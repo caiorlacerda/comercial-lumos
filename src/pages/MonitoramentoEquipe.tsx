@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, Users, UserX,
   ListChecks, Coffee, ShieldCheck, IdCard, PauseCircle, Zap, Radio,
-  Search, X, Hourglass, ChevronRight,
+  Search, X, Hourglass, ChevronRight, PartyPopper,
 } from 'lucide-react';
+import { CELEBRATE_TEST_EVENT } from '@/components/common/NewProjectCelebration';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -193,10 +194,24 @@ export default function MonitoramentoEquipe() {
           </h1>
           <p className="text-lumos-text-secondary text-sm">Visão ao vivo de quem está online, o que cada um faz e o que falta entregar. Reservado à direção.</p>
         </div>
-        <span className="flex items-center gap-1.5 text-[11px] font-bold text-green-500 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full">
-          <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" /></span>
-          Tempo real
-        </span>
+        <div className="flex items-center gap-2">
+          {/* ⚠️ TEMPORÁRIO — botão só para testar o layout do popup de projeto novo.
+              Remover junto com este bloco quando a fase de teste acabar. */}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent(CELEBRATE_TEST_EVENT, {
+              detail: { budgetId: null, projectName: 'Heinz | Maionese Saborizada', code: '#2026-228' },
+            }))}
+            className="flex items-center gap-1.5 text-[11px] font-bold text-lumos-text-secondary border border-dashed border-lumos-border hover:text-lumos-yellow hover:border-lumos-yellow/50 px-2.5 py-1 rounded-full transition-colors"
+            title="Apenas teste: abre o popup de comemoração"
+          >
+            <PartyPopper className="w-3.5 h-3.5" /> Testar popup
+          </button>
+
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-green-500 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full">
+            <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" /></span>
+            Tempo real
+          </span>
+        </div>
       </div>
 
       {/* Filtros */}
