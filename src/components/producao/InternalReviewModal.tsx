@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,6 +9,7 @@ import { COLORS, SPEEDS, STREAM_BASE, fmtTime, drawShape, type Shape, type Point
 
 interface TeamComment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number; body: string; created_at: string;
+  author_user_id: string | null; edited_at: string | null; // dono do comentário + marca de edição
   annotations: { type: string; data: { color?: string; points?: Point[] } }[];
 }
 
@@ -69,7 +70,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('review_comments')
-      .select('id, author_name, is_team, timecode_ms, body, created_at, review_annotations(type, data)')
+      .select('id, author_name, is_team, timecode_ms, body, created_at, author_user_id, edited_at, review_annotations(type, data)')
       .eq('video_version_id', versionId)
       .order('timecode_ms', { ascending: true });
     setComments((data || []).map((c: any) => ({ ...c, annotations: (c.review_annotations || []).map((a: any) => ({ type: a.type, data: a.data })) })));
@@ -194,7 +195,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     if (!commentText.trim() && shapes.length === 0) return;
     setSending(true);
     const { data: c, error } = await supabase.from('review_comments')
-      .insert({ video_version_id: versionId, author_name: authorName, is_team: true, timecode_ms: Math.round(currentMs), body: commentText.trim() })
+      .insert({ video_version_id: versionId, author_name: authorName, author_user_id: profile?.id ?? null, is_team: true, timecode_ms: Math.round(currentMs), body: commentText.trim() })
       .select('id').single();
     if (!error && c && shapes.length) {
       await supabase.from('review_annotations').insert(shapes.map(s => ({ comment_id: c.id, type: s.type, data: { color: s.color, points: s.points } })));
@@ -207,6 +208,37 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const viewComment = (c: TeamComment) => {
     seekTo(c.timecode_ms); setComposing(false);
     setViewingShapes(c.annotations.map(a => ({ type: (a.type as any) || 'draw', color: a.data?.color || COLORS[0], points: a.data?.points || [] })));
+  };
+
+  // --- Editar/excluir o PRÓPRIO comentário ---------------------------------
+  // Dono = author_user_id igual ao meu perfil. O RLS no banco também só permite
+  // UPDATE/DELETE dos próprios, então a interface e o banco concordam.
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const isMine = (c: TeamComment) => !!profile?.id && c.author_user_id === profile.id;
+
+  const startEdit = (c: TeamComment) => { setMenuFor(null); setEditingId(c.id); setEditText(c.body || ''); };
+  const cancelEdit = () => { setEditingId(null); setEditText(''); };
+
+  const saveEdit = async (c: TeamComment) => {
+    if (!editText.trim()) return;
+    setSavingEdit(true);
+    const { error } = await supabase.from('review_comments')
+      .update({ body: editText.trim(), edited_at: new Date().toISOString() })
+      .eq('id', c.id);
+    setSavingEdit(false);
+    if (error) { toast.error('Não foi possível editar o comentário.'); return; }
+    cancelEdit(); await load();
+  };
+
+  const removeComment = async (c: TeamComment) => {
+    setMenuFor(null);
+    if (!window.confirm('Excluir este comentário? Não dá para desfazer.')) return;
+    const { error } = await supabase.from('review_comments').delete().eq('id', c.id);
+    if (error) { toast.error('Não foi possível excluir o comentário.'); return; }
+    setViewingShapes([]); await load();
   };
 
   const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
@@ -290,7 +322,16 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             {comments.length === 0 ? (
               <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.</p>
             ) : comments.map(c => (
-              <button key={c.id} onClick={() => viewComment(c)} className="w-full text-left p-2.5 rounded-lumos border border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] transition-all">
+              <div
+                key={c.id}
+                onClick={() => editingId !== c.id && viewComment(c)}
+                className={clsx(
+                  'relative w-full text-left p-2.5 rounded-lumos border transition-all',
+                  editingId === c.id
+                    ? 'border-lumos-yellow/60 bg-lumos-text-secondary/[0.03]'
+                    : 'border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer'
+                )}
+              >
                 <div className="flex items-start gap-2">
                   <UserAvatar
                     user={userByName[(c.author_name || '').trim().toLowerCase()] || { full_name: c.author_name }}
@@ -301,13 +342,82 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <span className="text-[11px] font-black text-lumos-text-primary truncate">{c.author_name}{!c.is_team && <span className="ml-1 text-[8px] uppercase text-amber-400">Cliente</span>}</span>
-                      <span className="text-[10px] font-mono font-bold text-lumos-yellow flex-shrink-0">{fmtTime(c.timecode_ms)}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className="text-[10px] font-mono font-bold text-lumos-yellow">{fmtTime(c.timecode_ms)}</span>
+
+                        {/* Três pontinhos: só no MEU comentário */}
+                        {isMine(c) && editingId !== c.id && (
+                          <div className="relative">
+                            <button
+                              onClick={e => { e.stopPropagation(); setMenuFor(m => (m === c.id ? null : c.id)); }}
+                              title="Opções"
+                              className="p-0.5 rounded text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                            {menuFor === c.id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuFor(null); }} />
+                                <div className="absolute right-0 top-6 z-50 w-32 py-1 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl">
+                                  <button
+                                    onClick={e => { e.stopPropagation(); startEdit(c); }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10"
+                                  >
+                                    <Pencil className="w-3 h-3" /> Editar
+                                  </button>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); removeComment(c); }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-500/10"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Excluir
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug whitespace-pre-line break-words">{c.body}</p>}
-                    {c.annotations.length > 0 && <span className="text-[9px] text-lumos-text-secondary/60 flex items-center gap-1 mt-1"><Pencil className="w-2.5 h-2.5" /> {c.annotations.length} anotação(ões)</span>}
+
+                    {editingId === c.id ? (
+                      <div onClick={e => e.stopPropagation()} className="space-y-1.5 mt-1">
+                        <textarea
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          rows={2}
+                          autoFocus
+                          className="input-lumos w-full text-[11px] resize-none min-h-[44px] max-h-28 py-1.5 leading-snug"
+                        />
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => saveEdit(c)}
+                            disabled={savingEdit || !editText.trim()}
+                            className="btn-primary h-7 px-3 text-[10px] font-black uppercase tracking-widest rounded-lumos disabled:opacity-40"
+                          >
+                            {savingEdit ? 'Salvando…' : 'Salvar'}
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="h-7 px-3 rounded-lumos border border-lumos-border text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {c.body && <p className="text-[11px] text-lumos-text-secondary leading-snug whitespace-pre-line break-words">{c.body}</p>}
+                        <div className="flex items-center gap-2 mt-1">
+                          {c.annotations.length > 0 && (
+                            <span className="text-[9px] text-lumos-text-secondary/60 flex items-center gap-1"><Pencil className="w-2.5 h-2.5" /> {c.annotations.length} anotação(ões)</span>
+                          )}
+                          {c.edited_at && <span className="text-[9px] text-lumos-text-secondary/50 italic">editado</span>}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
 
