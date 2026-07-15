@@ -11,7 +11,9 @@ import {
   Trash2,
   Check,
   AlertTriangle,
-  FileDown
+  FileDown,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
@@ -56,6 +58,15 @@ export default function ContasReceber() {
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'aguardando' | 'parcial' | 'recebido' | 'atrasado'>('todos');
+  const [sortConfig, setSortConfig] = useState<{ key: 'cliente' | 'vencimento' | 'total' | 'recebido' | 'saldo'; direction: 'asc' | 'desc' }>({ key: 'vencimento', direction: 'asc' });
+  const handleSort = (key: typeof sortConfig.key) =>
+    setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }));
+  const SortIcon = ({ column }: { column: typeof sortConfig.key }) =>
+    sortConfig.key !== column ? null
+      : sortConfig.direction === 'asc'
+        ? <ChevronUp className="w-3 h-3 text-lumos-yellow" />
+        : <ChevronDown className="w-3 h-3 text-lumos-yellow" />;
   const [paymentData, setPaymentData] = useState({
     amount: 0,
     received_at: new Date().toISOString().split('T')[0],
@@ -231,10 +242,55 @@ export default function ContasReceber() {
     overdue: receivables.filter(r => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date()).length
   };
 
-  const filtered = receivables.filter(r => 
-    r.description?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    r.client?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  // "Atrasado" não é um status na tabela — é um recebível não recebido cujo
+  // vencimento já passou. Tratamos como um filtro derivado.
+  const isOverdue = (r: any) => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date();
+
+  const statusOf = (r: any): string => (isOverdue(r) ? 'atrasado' : r.status);
+
+  const filtered = React.useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    let list = receivables.filter(r =>
+      (r.description?.toLowerCase().includes(q) || r.client?.name?.toLowerCase().includes(q))
+    );
+    if (statusFilter !== 'todos') {
+      list = list.filter(r => (statusFilter === 'atrasado' ? isOverdue(r) : r.status === statusFilter && !isOverdue(r)));
+    }
+    const dir = sortConfig.direction === 'asc' ? 1 : -1;
+    const saldo = (r: any) => Number(r.total_amount || 0) - Number(r.received_amount || 0);
+    return [...list].sort((a, b) => {
+      switch (sortConfig.key) {
+        case 'cliente': return (a.description || '').localeCompare(b.description || '', 'pt-BR', { sensitivity: 'base' }) * dir;
+        case 'vencimento': {
+          // "A definir" (sem data) sempre por último, independente da direção.
+          const av = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+          const bv = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+          if (av === Infinity && bv === Infinity) return 0;
+          if (av === Infinity) return 1;
+          if (bv === Infinity) return -1;
+          return (av - bv) * dir;
+        }
+        case 'total': return (Number(a.total_amount || 0) - Number(b.total_amount || 0)) * dir;
+        case 'recebido': return (Number(a.received_amount || 0) - Number(b.received_amount || 0)) * dir;
+        case 'saldo': return (saldo(a) - saldo(b)) * dir;
+        default: return 0;
+      }
+    });
+  }, [receivables, searchTerm, statusFilter, sortConfig]);
+
+  // Totais do que está na tela (rodapé) e do que está selecionado (barra).
+  const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+  const sum = (rows: any[]) => rows.reduce(
+    (acc, r) => {
+      acc.total += Number(r.total_amount || 0);
+      acc.recebido += Number(r.received_amount || 0);
+      acc.saldo += Number(r.total_amount || 0) - Number(r.received_amount || 0);
+      return acc;
+    },
+    { total: 0, recebido: 0, saldo: 0 }
   );
+  const totaisFiltrados = sum(filtered);
+  const totaisSelecionados = sum(filtered.filter(r => selectedIds.has(r.id)));
 
   return (
     <div className="space-y-6 font-work-sans">
@@ -286,10 +342,45 @@ export default function ContasReceber() {
         </div>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-4 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
           <input type="text" placeholder="Buscar por projeto ou cliente..." className="input-lumos pl-10 w-full h-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        </div>
+
+        {/* Filtro por status (Atrasado é derivado do vencimento) */}
+        <div className="flex flex-wrap items-center gap-2">
+          {([
+            ['todos', 'Todos'],
+            ['aguardando', 'Aguardando'],
+            ['parcial', 'Parcial'],
+            ['recebido', 'Recebido'],
+            ['atrasado', 'Atrasado'],
+          ] as const).map(([key, label]) => {
+            const count = key === 'todos'
+              ? receivables.length
+              : key === 'atrasado'
+                ? receivables.filter(isOverdue).length
+                : receivables.filter(r => r.status === key && !isOverdue(r)).length;
+            const active = statusFilter === key;
+            const danger = key === 'atrasado';
+            return (
+              <button
+                key={key}
+                onClick={() => setStatusFilter(key)}
+                className={clsx(
+                  'px-3 py-1.5 rounded-full text-[11px] font-bold border transition-colors',
+                  active
+                    ? danger
+                      ? 'bg-red-500/15 text-red-500 border-red-500/30'
+                      : 'bg-lumos-yellow/15 text-lumos-yellow border-lumos-yellow/40'
+                    : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary'
+                )}
+              >
+                {label} <span className="opacity-60">{count}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -311,19 +402,30 @@ export default function ContasReceber() {
                     {selectedIds.size === filtered.length && filtered.length > 0 && <Check className="w-3.5 h-3.5" />}
                   </div>
                 </th>
-                <th className="px-6 py-4">Projeto / Cliente</th>
-                <th className="px-6 py-4">Vencimento</th>
-                <th className="px-6 py-4 text-right">Valor Total</th>
-                <th className="px-6 py-4 text-right">Recebido</th>
+                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('cliente')}>
+                  <div className="flex items-center gap-1">Projeto / Cliente <SortIcon column="cliente" /></div>
+                </th>
+                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('vencimento')}>
+                  <div className="flex items-center gap-1">Vencimento <SortIcon column="vencimento" /></div>
+                </th>
+                <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('total')}>
+                  <div className="flex items-center justify-end gap-1">Valor Total <SortIcon column="total" /></div>
+                </th>
+                <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('recebido')}>
+                  <div className="flex items-center justify-end gap-1">Recebido <SortIcon column="recebido" /></div>
+                </th>
+                <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('saldo')}>
+                  <div className="flex items-center justify-end gap-1">Saldo <SortIcon column="saldo" /></div>
+                </th>
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={7} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <tr><td colSpan={8} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível registrado.</td></tr>
+                <tr><td colSpan={8} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível encontrado com esse filtro.</td></tr>
               ) : (
                 filtered.map((r) => (
                   <tr 
@@ -359,8 +461,18 @@ export default function ContasReceber() {
                     <td className="px-6 py-4 text-right">
                       <span className="text-sm font-bold text-green-500">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.received_amount)}</span>
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="text-sm font-black text-lumos-text-primary">{brl(Number(r.total_amount || 0) - Number(r.received_amount || 0))}</span>
+                    </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${r.status === 'recebido' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'}`}>{r.status.toUpperCase()}</span>
+                      {(() => {
+                        const s = statusOf(r);
+                        const cls = s === 'recebido' ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                          : s === 'atrasado' ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                          : s === 'parcial' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                          : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+                        return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cls}`}>{s.toUpperCase()}</span>;
+                      })()}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
@@ -378,6 +490,21 @@ export default function ContasReceber() {
                 ))
               )}
             </tbody>
+            {!loading && filtered.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-lumos-border bg-lumos-text-primary/5 font-black">
+                  <td />
+                  <td className="px-6 py-4 text-[11px] uppercase tracking-widest text-lumos-text-secondary">
+                    Total ({filtered.length} {filtered.length === 1 ? 'título' : 'títulos'})
+                  </td>
+                  <td />
+                  <td className="px-6 py-4 text-right text-sm text-lumos-text-primary">{brl(totaisFiltrados.total)}</td>
+                  <td className="px-6 py-4 text-right text-sm text-green-500">{brl(totaisFiltrados.recebido)}</td>
+                  <td className="px-6 py-4 text-right text-sm text-lumos-yellow">{brl(totaisFiltrados.saldo)}</td>
+                  <td colSpan={2} className="px-6 py-4 text-right text-[10px] uppercase tracking-widest text-lumos-text-secondary">a receber</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -390,9 +517,12 @@ export default function ContasReceber() {
               <div className="w-8 h-8 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-sm">
                 {selectedIds.size}
               </div>
-              <span className="text-sm font-bold text-lumos-text-primary uppercase tracking-tight">
-                {selectedIds.size === 1 ? 'Item selecionado' : 'Itens selecionados'}
-              </span>
+              <div className="flex flex-col leading-tight">
+                <span className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-tight">
+                  {selectedIds.size === 1 ? 'selecionado' : 'selecionados'} · a receber
+                </span>
+                <span className="text-base font-black text-lumos-yellow tabular-nums">{brl(totaisSelecionados.saldo)}</span>
+              </div>
             </div>
             
             <div className="flex items-center gap-3">
