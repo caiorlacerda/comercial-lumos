@@ -48,6 +48,13 @@ function relTime(iso: string | null) {
 }
 const fmtDate = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—';
 const prioColor = (p: string) => p === 'alta' ? 'text-red-500' : p === 'baixa' ? 'text-lumos-text-secondary' : 'text-amber-500';
+// Minutos online → "3h20", "45min" ou "—".
+const fmtOnline = (min: number) => {
+  const m = Number(min) || 0;
+  if (m < 1) return '—';
+  const h = Math.floor(m / 60), r = m % 60;
+  return h ? `${h}h${r ? String(r).padStart(2, '0') : ''}` : `${r}min`;
+};
 
 export default function MonitoramentoEquipe() {
   const navigate = useNavigate();
@@ -62,6 +69,16 @@ export default function MonitoramentoEquipe() {
   const [projectFilter, setProjectFilter] = useState('');
   const [period, setPeriod] = useState(7); // dias, para produtividade
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [ranking, setRanking] = useState<any[]>([]);
+
+  // Ranking de atividade (admin): quem mais mexeu no app na janela de `period` dias.
+  useEffect(() => {
+    let alive = true;
+    supabase.rpc('get_activity_ranking', { p_days: period }).then(({ data }) => {
+      if (alive) setRanking((data as any[]) || []);
+    });
+    return () => { alive = false; };
+  }, [period]);
 
   useEffect(() => { load(); }, []);
   useRealtimeRefetch(['project_tasks', 'app_users', 'team_members', 'projects'], () => load(true));
@@ -323,6 +340,60 @@ export default function MonitoramentoEquipe() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Ranking de atividade — quem mais mexeu no app (admin) */}
+      <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden">
+        <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2">
+          <Zap className="w-4 h-4 text-lumos-yellow" />
+          <h2 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Ranking de atividade</h2>
+          <span className="text-[11px] text-lumos-text-secondary">quem mais mexeu no app · últimos {period}d</span>
+        </div>
+        {ranking.filter(r => r.total > 0 || r.minutos_online > 0).length === 0 ? (
+          <div className="py-8 text-center text-sm text-lumos-text-secondary">Sem atividade registrada no período.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[9px] font-black text-lumos-text-secondary uppercase tracking-widest">
+                  <th className="px-4 py-2.5">#</th>
+                  <th className="px-4 py-2.5">Pessoa</th>
+                  <th className="px-4 py-2.5 text-right" title="Total de ações no período">Ações</th>
+                  <th className="px-4 py-2.5 text-right" title="Tarefas criadas">Tarefas</th>
+                  <th className="px-4 py-2.5 text-right" title="Comentários em tarefas e em revisão de vídeo">Coment.</th>
+                  <th className="px-4 py-2.5 text-right" title="Documentos subidos">Docs</th>
+                  <th className="px-4 py-2.5 text-right" title="Dias com alguma atividade">Dias ativos</th>
+                  <th className="px-4 py-2.5 text-right" title="Tempo online acumulado (registrado a partir de agora)">Online</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-lumos-border">
+                {ranking.filter(r => r.total > 0 || r.minutos_online > 0).map((r, i) => (
+                  <tr key={r.user_id} className="hover:bg-lumos-text-primary/5 transition-colors">
+                    <td className="px-4 py-2.5">
+                      <span className={clsx('inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black',
+                        i === 0 ? 'bg-lumos-yellow text-black' : i < 3 ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary')}>{i + 1}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <UserAvatar user={{ id: r.user_id, full_name: r.full_name, avatar_url: r.avatar_url }} size={28} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-lumos-text-primary truncate">{r.full_name}</p>
+                          <p className="text-[9px] uppercase tracking-wide text-lumos-text-secondary">{ROLE_LABEL[r.role] || r.role}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-sm font-black text-lumos-text-primary">{r.total}</td>
+                    <td className="px-4 py-2.5 text-right text-xs text-lumos-text-secondary">{r.tarefas_criadas}</td>
+                    <td className="px-4 py-2.5 text-right text-xs text-lumos-text-secondary">{Number(r.comentarios) + Number(r.comentarios_video)}</td>
+                    <td className="px-4 py-2.5 text-right text-xs text-lumos-text-secondary">{r.documentos}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-bold text-lumos-text-primary">{r.dias_ativos}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-bold text-lumos-text-primary">{fmtOnline(r.minutos_online)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Gargalos por etapa */}
