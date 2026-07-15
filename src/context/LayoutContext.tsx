@@ -132,6 +132,9 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
       if (active && profile.id) {
         supabase.from('app_users').update({ last_seen: new Date().toISOString() }).eq('id', profile.id)
           .then(undefined, () => { /* ignora */ });
+        // Acumula tempo online (o RPC conta no máximo 1 min por batida, então
+        // chamar a cada 30s não infla). Alimenta o ranking do Monitoramento.
+        supabase.rpc('track_presence').then(undefined, () => { /* ignora */ });
       }
       const ch = channelRef.current;
       if (!ch) return;
