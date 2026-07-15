@@ -14,6 +14,7 @@ import {
   FileDown,
   ChevronUp,
   ChevronDown,
+  Pencil,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
@@ -73,6 +74,38 @@ export default function ContasReceber() {
     received_at: new Date().toISOString().split('T')[0],
     payment_method: 'pix'
   });
+  // Edição de um recebível (descrição, cliente, valor, vencimento, data de recebimento).
+  const [editing, setEditing] = useState<any | null>(null);
+  const [editData, setEditData] = useState({ description: '', client_id: '', total_amount: 0, due_date: '', received_at: '' });
+
+  const openEdit = (r: any) => {
+    setEditData({
+      description: r.description || '',
+      client_id: r.client_id || '',
+      total_amount: Number(r.total_amount || 0),
+      due_date: r.due_date ? r.due_date.slice(0, 10) : '',
+      received_at: r.received_at ? r.received_at.slice(0, 10) : '',
+    });
+    setEditing(r);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    try {
+      const { error } = await supabase.from('receivables').update({
+        description: editData.description.trim(),
+        client_id: editData.client_id || null,
+        total_amount: editData.total_amount,
+        due_date: editData.due_date || null,            // vazio = "A definir"
+        received_at: editData.received_at || null,      // só a DATA; não mexe no status/valor recebido
+      }).eq('id', editing.id);
+      if (error) throw error;
+      toast.success('Recebível atualizado.');
+      setEditing(null);
+      fetchReceivables();
+    } catch (error: any) { toast.error(error.message); }
+  };
 
   useEffect(() => {
     fetchReceivables();
@@ -314,7 +347,7 @@ export default function ContasReceber() {
         'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
         selectedIds.has(r.id) && 'bg-lumos-yellow/[0.03]'
       )}
-      onClick={() => r.status !== 'recebido' ? (setSelectedReceivable(r), setPaymentData({ ...paymentData, amount: r.total_amount - r.received_amount }), setIsPayModalOpen(true)) : null}
+      onClick={() => openEdit(r)}
     >
       <td className="px-6 py-4">
         <div
@@ -351,10 +384,11 @@ export default function ContasReceber() {
         })()}
       </td>
       <td className="px-6 py-4 text-right">
-        <div className="flex justify-end gap-2">
-          {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({ ...paymentData, amount: r.total_amount - r.received_amount }); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
-          {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
-          <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors">
+        <div className="flex justify-end items-center gap-1" onClick={e => e.stopPropagation()}>
+          {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({ ...paymentData, amount: r.total_amount - r.received_amount, received_at: new Date().toISOString().split('T')[0] }); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
+          <button onClick={() => openEdit(r)} title="Editar" className="p-2 text-lumos-text-secondary hover:text-lumos-yellow rounded transition-colors"><Pencil className="w-4 h-4" /></button>
+          {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} title="Ver orçamento" className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
+          <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} title="Excluir" className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
@@ -675,6 +709,43 @@ export default function ContasReceber() {
           <div className="pt-4 flex gap-3">
             <button type="button" onClick={() => setIsNewModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
             <button type="submit" className="btn-primary flex-1 h-10">Cadastrar Recebível</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Editar recebível (descrição, cliente, valor, vencimento, data de recebimento) */}
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Editar Recebível">
+        <form onSubmit={handleSaveEdit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Descrição</label>
+            <input required type="text" className="input-lumos w-full" value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
+            <select className="input-lumos w-full" value={editData.client_id} onChange={e => setEditData({ ...editData, client_id: e.target.value })}>
+              <option value="">Sem cliente</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Valor Total (R$)</label>
+              <CurrencyInput className="input-lumos w-full font-bold" value={editData.total_amount} onChange={(val: number) => setEditData({ ...editData, total_amount: val })} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Vencimento</label>
+              <input type="date" className="input-lumos w-full" value={editData.due_date} onChange={e => setEditData({ ...editData, due_date: e.target.value })} />
+              <p className="text-[9px] text-lumos-text-secondary/60">Deixe vazio para "A definir".</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Data de recebimento</label>
+            <input type="date" className="input-lumos w-full" value={editData.received_at} onChange={e => setEditData({ ...editData, received_at: e.target.value })} />
+            <p className="text-[9px] text-lumos-text-secondary/60">Só ajusta a data. Para marcar como recebido/valor, use o botão "Receber".</p>
+          </div>
+          <div className="pt-4 flex gap-3">
+            <button type="button" onClick={() => setEditing(null)} className="btn-secondary flex-1">Cancelar</button>
+            <button type="submit" className="btn-primary flex-1 h-10">Salvar</button>
           </div>
         </form>
       </Modal>
