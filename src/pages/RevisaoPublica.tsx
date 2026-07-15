@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import {
   Play, Pause, Maximize, Download, Pencil, MoveUpRight,
   Square, Eraser, Send, Clock, Check, Sun, Moon, Volume2, VolumeX, Info, X,
-  MoreVertical, Trash2,
+  MoreVertical, Trash2, AlertTriangle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -73,6 +73,7 @@ export default function RevisaoPublica() {
   const [showInfo, setShowInfo] = useState(false);
   const [isFs, setIsFs] = useState(false);
   const [ready, setReady] = useState(false);
+  const [videoUnsupported, setVideoUnsupported] = useState(false);
 
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
@@ -386,13 +387,27 @@ export default function RevisaoPublica() {
               className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full h-full object-contain')}
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
-              onLoadedData={() => setReady(true)} onCanPlay={() => setReady(true)}
+              onLoadedData={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
+              onCanPlay={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
+              onError={() => { setReady(true); setVideoUnsupported(true); }}
               onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
               onClick={togglePlay} playsInline
             />
-            {!ready && (
+            {!ready && !videoUnsupported && (
               <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" />
+              </div>
+            )}
+            {videoUnsupported && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/90 text-center px-6 z-10">
+                <AlertTriangle className="w-8 h-8 text-lumos-yellow" />
+                <p className="text-sm font-bold text-white max-w-sm">Não foi possível exibir este vídeo no seu navegador.</p>
+                <p className="text-xs text-white/60 max-w-sm leading-relaxed">Pode ser um formato não suportado. Tente outro navegador (Chrome) ou peça à produtora uma versão em MP4.</p>
+                {data.link.allow_download && (
+                  <a href={`${streamUrl}&download=1`} download className="btn-primary h-9 px-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest rounded-lumos">
+                    Baixar o arquivo
+                  </a>
+                )}
               </div>
             )}
             {/* Marca d'água = logo Lumos + nome (atribuição) */}

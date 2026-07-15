@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2 } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -68,15 +68,20 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   const streamUrl = useMemo(() => `${STREAM_BASE}?token=${encodeURIComponent(token)}`, [token]);
   const [poster, setPoster] = useState<string | null>(null);
+  const [driveLink, setDriveLink] = useState<string | null>(null);
+  // O navegador não conseguiu exibir a imagem do vídeo (codec não suportado, ex.:
+  // ProRes/.mov — toca o áudio mas não mostra vídeo).
+  const [videoUnsupported, setVideoUnsupported] = useState(false);
 
-  // Thumbnail: usa a salva se existir; senão captura um frame e persiste (o Drive
-  // não gera thumbnail para arquivos da service account). Backfill natural: cada
-  // vídeo ganha thumb ao ser aberto na revisão.
+  // Thumbnail + link do Drive (fallback). A thumb usa a salva se existir; senão
+  // captura um frame e persiste (o Drive não gera thumbnail para arquivos da
+  // service account). Backfill natural: cada vídeo ganha thumb ao ser aberto.
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data } = await supabase.from('video_versions').select('thumb_url').eq('id', versionId).maybeSingle();
+      const { data } = await supabase.from('video_versions').select('thumb_url, drive_web_link, drive_file_id').eq('id', versionId).maybeSingle();
       if (!alive) return;
+      setDriveLink((data as any)?.drive_web_link || ((data as any)?.drive_file_id ? `https://drive.google.com/file/d/${(data as any).drive_file_id}/view` : null));
       if (data?.thumb_url) { setPoster(data.thumb_url); return; }
       const thumb = await captureVideoThumb(streamUrl);
       if (!alive || !thumb) return;
@@ -286,11 +291,33 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             <video ref={videoRef} src={streamUrl} poster={poster || undefined} preload="metadata" className="w-full h-full object-contain block"
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
-              onLoadedData={() => setReady(true)} onCanPlay={() => setReady(true)}
+              // videoWidth 0 depois de carregar = o navegador não decodifica a trilha
+              // de vídeo (codec, ex.: ProRes/.mov): toca o áudio mas não mostra imagem.
+              onLoadedData={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
+              onCanPlay={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
+              onError={() => { setReady(true); setVideoUnsupported(true); }}
               onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onClick={togglePlay} playsInline />
             <canvas ref={canvasRef} className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
               onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp} />
-            {!ready && <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" /></div>}
+            {!ready && !videoUnsupported && <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" /></div>}
+
+            {/* Fallback: o navegador não conseguiu exibir o vídeo (codec). Some o
+                preto silencioso e dá um caminho: abrir no Drive (transcodifica). */}
+            {videoUnsupported && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/90 text-center px-6 z-10">
+                <AlertTriangle className="w-8 h-8 text-lumos-yellow" />
+                <p className="text-sm font-bold text-white max-w-sm">Não foi possível exibir este vídeo no navegador.</p>
+                <p className="text-xs text-white/60 max-w-sm leading-relaxed">
+                  Provável formato/codec não suportado (ex.: .mov/ProRes). Para revisar aqui, exporte em <b>MP4 (H.264)</b>. Enquanto isso, dá para abrir no Drive.
+                </p>
+                {driveLink && (
+                  <a href={driveLink} target="_blank" rel="noopener noreferrer"
+                    className="btn-primary h-9 px-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest rounded-lumos">
+                    Abrir no Google Drive
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Barra de progresso com marcadores */}
