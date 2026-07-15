@@ -43,6 +43,8 @@ export default function ContasReceber() {
   const { profile } = useAuth();
   const toast = useToast();
   const [receivables, setReceivables] = useState<any[]>([]);
+  // Lucro líquido por orçamento (vw_rentabilidade), para a coluna Lucro.
+  const [lucroByBudget, setLucroByBudget] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
@@ -62,7 +64,7 @@ export default function ContasReceber() {
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'todos' | 'aguardando' | 'parcial' | 'recebido' | 'atrasado'>('todos');
   const [groupByClient, setGroupByClient] = useState(false);
-  const [sortConfig, setSortConfig] = useState<{ key: 'cliente' | 'vencimento' | 'total' | 'recebido' | 'saldo'; direction: 'asc' | 'desc' }>({ key: 'vencimento', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState<{ key: 'cliente' | 'total' | 'lucro' | 'data'; direction: 'asc' | 'desc' }>({ key: 'data', direction: 'asc' });
   const handleSort = (key: typeof sortConfig.key) =>
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }));
   const SortIcon = ({ column }: { column: typeof sortConfig.key }) =>
@@ -165,9 +167,15 @@ export default function ContasReceber() {
   async function fetchReceivables(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const { data, error } = await supabase.from('receivables').select('*, client:clients(name), budget:budgets(id, project_name)').order('due_date', { ascending: true });
-      if (error) throw error;
-      setReceivables(data || []);
+      const [rec, rent] = await Promise.all([
+        supabase.from('receivables').select('*, client:clients(name), budget:budgets(id, project_name)').order('due_date', { ascending: true }),
+        supabase.from('vw_rentabilidade').select('proposta_id, lucro_liquido'),
+      ]);
+      if (rec.error) throw rec.error;
+      setReceivables(rec.data || []);
+      const map: Record<string, number> = {};
+      (rent.data || []).forEach((r: any) => { if (r.proposta_id) map[r.proposta_id] = Number(r.lucro_liquido || 0); });
+      setLucroByBudget(map);
     } catch (error) {
       console.error('Erro ao buscar recebíveis:', error);
     } finally {
@@ -324,6 +332,16 @@ export default function ContasReceber() {
 
   const statusOf = (r: any): string => (isOverdue(r) ? 'atrasado' : r.status);
 
+  // Lucro líquido do recebível (via orçamento vinculado).
+  const lucroOf = (r: any): number | null => (r.budget_id != null && lucroByBudget[r.budget_id] != null ? lucroByBudget[r.budget_id] : null);
+  // Data sem fuso: received_at é timestamptz (meia-noite UTC); formatar pela parte
+  // da data evita o "1 dia antes" no fuso do Brasil.
+  const fmtDate = (d: any): string => {
+    if (!d) return '—';
+    const [y, m, day] = String(d).slice(0, 10).split('-');
+    return (y && m && day) ? `${day}/${m}/${y}` : '—';
+  };
+
   const filtered = React.useMemo(() => {
     const q = searchTerm.toLowerCase();
     let list = receivables.filter(r =>
@@ -333,37 +351,34 @@ export default function ContasReceber() {
       list = list.filter(r => (statusFilter === 'atrasado' ? isOverdue(r) : r.status === statusFilter && !isOverdue(r)));
     }
     const dir = sortConfig.direction === 'asc' ? 1 : -1;
-    const saldo = (r: any) => Number(r.total_amount || 0) - Number(r.received_amount || 0);
     return [...list].sort((a, b) => {
       switch (sortConfig.key) {
         case 'cliente': return (a.description || '').localeCompare(b.description || '', 'pt-BR', { sensitivity: 'base' }) * dir;
-        case 'vencimento': {
-          // "A definir" (sem data) sempre por último, independente da direção.
-          const av = a.due_date ? new Date(a.due_date).getTime() : Infinity;
-          const bv = b.due_date ? new Date(b.due_date).getTime() : Infinity;
-          if (av === Infinity && bv === Infinity) return 0;
-          if (av === Infinity) return 1;
-          if (bv === Infinity) return -1;
-          return (av - bv) * dir;
+        case 'data': {
+          // Sem data sempre por último, independente da direção.
+          const av = a.received_at ? String(a.received_at).slice(0, 10) : '';
+          const bv = b.received_at ? String(b.received_at).slice(0, 10) : '';
+          if (!av && !bv) return 0;
+          if (!av) return 1;
+          if (!bv) return -1;
+          return av.localeCompare(bv) * dir;
         }
         case 'total': return (Number(a.total_amount || 0) - Number(b.total_amount || 0)) * dir;
-        case 'recebido': return (Number(a.received_amount || 0) - Number(b.received_amount || 0)) * dir;
-        case 'saldo': return (saldo(a) - saldo(b)) * dir;
+        case 'lucro': return ((lucroOf(a) ?? -Infinity) - (lucroOf(b) ?? -Infinity)) * dir;
         default: return 0;
       }
     });
-  }, [receivables, searchTerm, statusFilter, sortConfig]);
+  }, [receivables, searchTerm, statusFilter, sortConfig, lucroByBudget]);
 
   // Totais do que está na tela (rodapé) e do que está selecionado (barra).
   const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
   const sum = (rows: any[]) => rows.reduce(
     (acc, r) => {
       acc.total += Number(r.total_amount || 0);
-      acc.recebido += Number(r.received_amount || 0);
-      acc.saldo += Number(r.total_amount || 0) - Number(r.received_amount || 0);
+      acc.lucro += lucroOf(r) ?? 0;
       return acc;
     },
-    { total: 0, recebido: 0, saldo: 0 }
+    { total: 0, lucro: 0 }
   );
   const totaisFiltrados = sum(filtered);
   const totaisSelecionados = sum(filtered.filter(r => selectedIds.has(r.id)));
@@ -411,10 +426,12 @@ export default function ContasReceber() {
           <span className="text-[10px] text-lumos-text-secondary flex items-center gap-1 uppercase"><Building2 className="w-2.5 h-2.5" /> {r.client?.name}</span>
         </div>
       </td>
-      <td className="px-6 py-4 text-sm text-lumos-text-secondary">{r.due_date ? new Date(r.due_date).toLocaleDateString('pt-BR') : 'A definir'}</td>
-      <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">{brl(Number(r.total_amount || 0))}</td>
-      <td className="px-6 py-4 text-right"><span className="text-sm font-bold text-green-500">{brl(Number(r.received_amount || 0))}</span></td>
-      <td className="px-6 py-4 text-right"><span className="text-sm font-black text-lumos-text-primary">{brl(Number(r.total_amount || 0) - Number(r.received_amount || 0))}</span></td>
+      <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary whitespace-nowrap">{brl(Number(r.total_amount || 0))}</td>
+      <td className="px-6 py-4 text-right whitespace-nowrap">
+        {lucroOf(r) != null
+          ? <span className={clsx('text-sm font-black', (lucroOf(r) as number) >= 0 ? 'text-green-500' : 'text-red-500')}>{brl(lucroOf(r) as number)}</span>
+          : <span className="text-sm text-lumos-text-secondary/50">—</span>}
+      </td>
       <td className="px-6 py-4 text-center">
         <div className="flex justify-center relative" onClick={e => e.stopPropagation()}>
           <button
@@ -442,6 +459,7 @@ export default function ContasReceber() {
           )}
         </div>
       </td>
+      <td className="px-6 py-4 text-sm text-lumos-text-secondary whitespace-nowrap">{fmtDate(r.received_at)}</td>
       <td className="px-6 py-4 text-right">
         <div className="flex justify-end items-center gap-1" onClick={e => e.stopPropagation()}>
           <button onClick={() => openEdit(r)} title="Editar" className="p-2 text-lumos-text-secondary hover:text-lumos-yellow rounded transition-colors"><Pencil className="w-4 h-4" /></button>
@@ -468,11 +486,10 @@ export default function ContasReceber() {
                 'Descrição': r.description || '',
                 'Cliente': r.client?.name || '',
                 'Projeto': r.budget?.project_name || '',
-                'Valor Total (R$)': r.total_amount,
-                'Valor Recebido (R$)': r.received_amount || 0,
-                'Saldo (R$)': r.total_amount - (r.received_amount || 0),
-                'Vencimento': r.due_date ? new Date(r.due_date).toLocaleDateString('pt-BR') : '',
-                'Status': r.status === 'recebido' ? 'Recebido' : r.status === 'aprovado' ? 'Aprovado' : 'Pendente',
+                'Valor (R$)': r.total_amount,
+                'Lucro Líquido (R$)': lucroOf(r) ?? '',
+                'Status': statusOf(r).toUpperCase(),
+                'Recebimento': fmtDate(r.received_at),
               }));
               const ws = XLSX.utils.json_to_sheet(rows);
               const wb = XLSX.utils.book_new();
@@ -579,27 +596,24 @@ export default function ContasReceber() {
                 <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('cliente')}>
                   <div className="flex items-center gap-1">Projeto / Cliente <SortIcon column="cliente" /></div>
                 </th>
-                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('vencimento')}>
-                  <div className="flex items-center gap-1">Vencimento <SortIcon column="vencimento" /></div>
-                </th>
                 <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('total')}>
-                  <div className="flex items-center justify-end gap-1">Valor Total <SortIcon column="total" /></div>
+                  <div className="flex items-center justify-end gap-1">Valor <SortIcon column="total" /></div>
                 </th>
-                <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('recebido')}>
-                  <div className="flex items-center justify-end gap-1">Recebido <SortIcon column="recebido" /></div>
-                </th>
-                <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('saldo')}>
-                  <div className="flex items-center justify-end gap-1">Saldo <SortIcon column="saldo" /></div>
+                <th className="px-6 py-4 text-right cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('lucro')}>
+                  <div className="flex items-center justify-end gap-1">Lucro Líq. <SortIcon column="lucro" /></div>
                 </th>
                 <th className="px-6 py-4 text-center">Status</th>
+                <th className="px-6 py-4 cursor-pointer hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('data')}>
+                  <div className="flex items-center gap-1">Recebimento <SortIcon column="data" /></div>
+                </th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={8} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <tr><td colSpan={7} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível encontrado com esse filtro.</td></tr>
+                <tr><td colSpan={7} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível encontrado com esse filtro.</td></tr>
               ) : groupByClient ? (
                 grupos.map(g => (
                   <React.Fragment key={g.cliente}>
@@ -611,11 +625,9 @@ export default function ContasReceber() {
                           <span className="text-[10px] font-bold text-lumos-text-secondary/70">({g.itens.length})</span>
                         </span>
                       </td>
-                      <td />
-                      <td className="px-6 py-2.5 text-right text-xs font-bold text-lumos-text-secondary">{brl(g.tot.total)}</td>
-                      <td className="px-6 py-2.5 text-right text-xs font-bold text-green-500">{brl(g.tot.recebido)}</td>
-                      <td className="px-6 py-2.5 text-right text-xs font-black text-lumos-yellow">{brl(g.tot.saldo)}</td>
-                      <td colSpan={2} className="px-6 py-2.5 text-right text-[9px] uppercase tracking-widest text-lumos-text-secondary/70">a receber</td>
+                      <td className="px-6 py-2.5 text-right text-xs font-black text-lumos-text-primary">{brl(g.tot.total)}</td>
+                      <td className="px-6 py-2.5 text-right text-xs font-bold text-green-500">{brl(g.tot.lucro)}</td>
+                      <td colSpan={3} />
                     </tr>
                     {g.itens.map(renderRow)}
                   </React.Fragment>
@@ -631,11 +643,9 @@ export default function ContasReceber() {
                   <td className="px-6 py-4 text-[11px] uppercase tracking-widest text-lumos-text-secondary">
                     Total ({filtered.length} {filtered.length === 1 ? 'título' : 'títulos'})
                   </td>
-                  <td />
                   <td className="px-6 py-4 text-right text-sm text-lumos-text-primary">{brl(totaisFiltrados.total)}</td>
-                  <td className="px-6 py-4 text-right text-sm text-green-500">{brl(totaisFiltrados.recebido)}</td>
-                  <td className="px-6 py-4 text-right text-sm text-lumos-yellow">{brl(totaisFiltrados.saldo)}</td>
-                  <td colSpan={2} className="px-6 py-4 text-right text-[10px] uppercase tracking-widest text-lumos-text-secondary">a receber</td>
+                  <td className="px-6 py-4 text-right text-sm text-green-500">{brl(totaisFiltrados.lucro)}</td>
+                  <td colSpan={3} />
                 </tr>
               </tfoot>
             )}
@@ -653,11 +663,17 @@ export default function ContasReceber() {
               </div>
               <div className="flex flex-col leading-tight">
                 <span className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-tight">
-                  {selectedIds.size === 1 ? 'selecionado' : 'selecionados'} · a receber
+                  {selectedIds.size === 1 ? 'selecionado' : 'selecionados'} · valor
                 </span>
-                <span className="text-base font-black text-lumos-yellow tabular-nums">{brl(totaisSelecionados.saldo)}</span>
+                <span className="text-base font-black text-lumos-yellow tabular-nums">{brl(totaisSelecionados.total)}</span>
               </div>
             </div>
+            {totaisSelecionados.lucro !== 0 && (
+              <div className="flex flex-col leading-tight pr-6 border-r border-lumos-border">
+                <span className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-tight">lucro líq.</span>
+                <span className="text-base font-black text-green-500 tabular-nums">{brl(totaisSelecionados.lucro)}</span>
+              </div>
+            )}
             
             <div className="flex items-center gap-3">
               <button 
