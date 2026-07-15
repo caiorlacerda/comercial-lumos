@@ -57,6 +57,8 @@ export default function VideoReviewHub() {
     const m = new Map<string, { project: NonNullable<VV['project']>; count: number; latest: string; latestStatus: string }>();
     rows.forEach(r => {
       if (!r.project_id || !r.project) return;
+      // Só projetos ativos: os encerrados somem do hub de revisão.
+      if (r.project.status === 'concluido') return;
       const cur = m.get(r.project_id);
       if (!cur) m.set(r.project_id, { project: r.project, count: 1, latest: r.updated_at, latestStatus: r.status });
       else {
