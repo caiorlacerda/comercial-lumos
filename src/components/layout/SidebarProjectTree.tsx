@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2, Pencil } from 'lucide-react';
+import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2, Pencil, Archive } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,6 +39,7 @@ interface TreeProject {
   client_id: string | null;
   code: string | null;
   category: string | null;
+  status?: string;
 }
 
 // Sequência numérica do código (ex.: "2026-229" -> 229) para ordenar
@@ -65,6 +66,7 @@ export default function SidebarProjectTree() {
   const [open, setOpen] = useState(true);
   const [clients, setClients] = useState<TreeClient[]>([]);
   const [noClientProjects, setNoClientProjects] = useState<TreeProject[]>([]);
+  const [concluded, setConcluded] = useState<TreeProject[]>([]);
   const [colors, setColors] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -83,13 +85,16 @@ export default function SidebarProjectTree() {
     (async () => {
       try {
         const [projRes, cliRes, colorRes] = await Promise.all([
-          supabase.from('projects').select('id, name, client_id, code, category').eq('status', 'ativo').order('name'),
+          supabase.from('projects').select('id, name, client_id, code, category, status').in('status', ['ativo', 'concluido']).order('name'),
           supabase.from('clients').select('id, name').order('name'),
           supabase.from('client_colors').select('client_id, color'),
         ]);
         if (cancelled) return;
 
-        const projects = (projRes.data as TreeProject[]) || [];
+        const all = (projRes.data as TreeProject[]) || [];
+        const projects = all.filter(p => p.status !== 'concluido');
+        // Encerrados: lista plana (arquivo), mais recentes primeiro.
+        setConcluded(all.filter(p => p.status === 'concluido').sort((a, b) => codeSeq(b) - codeSeq(a)));
         const byClient: Record<string, TreeProject[]> = {};
         const orphans: TreeProject[] = [];
         projects.forEach(p => {
@@ -197,6 +202,7 @@ export default function SidebarProjectTree() {
       arr.map(p => (p.id === editProj.id ? { ...p, ...patch } : p)).sort((a, b) => codeSeq(a) - codeSeq(b));
     setClients(prev => prev.map(c => ({ ...c, projects: applyAndSort(c.projects) })));
     setNoClientProjects(prev => applyAndSort(prev));
+    setConcluded(prev => applyAndSort(prev));
     toast.success('Projeto atualizado!');
     setEditProj(null);
   };
@@ -216,6 +222,7 @@ export default function SidebarProjectTree() {
         .map(c => ({ ...c, projects: c.projects.filter(p => p.id !== id) }))
         .filter(c => c.projects.length > 0));
       setNoClientProjects(prev => prev.filter(p => p.id !== id));
+      setConcluded(prev => prev.filter(p => p.id !== id));
 
       toast.success(`Projeto "${name}" excluído.`);
       setConfirmDelete(null);
@@ -371,6 +378,43 @@ export default function SidebarProjectTree() {
 
               {clients.length === 0 && noClientProjects.length === 0 && (
                 <p className="px-2.5 py-2 text-[10px] text-lumos-text-secondary/50 italic">Nenhum projeto ativo.</p>
+              )}
+
+              {/* Encerrados (arquivo) — projetos concluídos, sempre acessíveis aqui */}
+              {concluded.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setExpanded(prev => ({ ...prev, __done__: !(prev.__done__ ?? false) }))}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all"
+                  >
+                    {(expanded.__done__ ?? false)
+                      ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
+                      : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60" />}
+                    <Archive className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
+                    <span className="truncate flex-1 text-left">Encerrados</span>
+                    <span className="text-[9px] font-black opacity-40">{concluded.length}</span>
+                  </button>
+                  {(expanded.__done__ ?? false) && (
+                    <div className="ml-[22px] border-l border-lumos-border/40 pl-2 space-y-0.5 py-0.5">
+                      {concluded.map(proj => (
+                        <button
+                          key={proj.id}
+                          onClick={() => openProject(proj.id)}
+                          onContextMenu={e => openProjMenu(e, proj)}
+                          title={proj.name}
+                          className={clsx(
+                            'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
+                            proj.id === activeProjectId
+                              ? 'bg-lumos-yellow/10 text-lumos-yellow'
+                              : 'text-lumos-text-secondary/70 hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
+                          )}
+                        >
+                          {proj.code && <span className="font-mono text-[9px] text-lumos-text-secondary/50 mr-1">{formatBudgetCode(proj.code)}</span>}{proj.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Novo projeto → abre o modal de criação direto */}
