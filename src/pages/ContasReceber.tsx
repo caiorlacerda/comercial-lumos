@@ -59,6 +59,7 @@ export default function ContasReceber() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'todos' | 'aguardando' | 'parcial' | 'recebido' | 'atrasado'>('todos');
+  const [groupByClient, setGroupByClient] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: 'cliente' | 'vencimento' | 'total' | 'recebido' | 'saldo'; direction: 'asc' | 'desc' }>({ key: 'vencimento', direction: 'asc' });
   const handleSort = (key: typeof sortConfig.key) =>
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }));
@@ -292,6 +293,75 @@ export default function ContasReceber() {
   const totaisFiltrados = sum(filtered);
   const totaisSelecionados = sum(filtered.filter(r => selectedIds.has(r.id)));
 
+  // Agrupamento por cliente (subtotal por cliente). Preserva a ordenação dentro de
+  // cada grupo; os grupos vêm do maior saldo a receber para o menor.
+  const grupos = React.useMemo(() => {
+    if (!groupByClient) return [];
+    const map = new Map<string, any[]>();
+    filtered.forEach(r => {
+      const nome = r.client?.name || 'Sem cliente';
+      map.set(nome, [...(map.get(nome) || []), r]);
+    });
+    return [...map.entries()]
+      .map(([cliente, itens]) => ({ cliente, itens, tot: sum(itens) }))
+      .sort((a, b) => b.tot.saldo - a.tot.saldo);
+  }, [filtered, groupByClient]);
+
+  const renderRow = (r: any) => (
+    <tr
+      key={r.id}
+      className={clsx(
+        'hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group',
+        selectedIds.has(r.id) && 'bg-lumos-yellow/[0.03]'
+      )}
+      onClick={() => r.status !== 'recebido' ? (setSelectedReceivable(r), setPaymentData({ ...paymentData, amount: r.total_amount - r.received_amount }), setIsPayModalOpen(true)) : null}
+    >
+      <td className="px-6 py-4">
+        <div
+          onClick={(e) => toggleSelect(r.id, e)}
+          className={clsx(
+            'w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all',
+            selectedIds.has(r.id)
+              ? 'bg-lumos-yellow border-lumos-yellow text-lumos-bg'
+              : 'border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100',
+            selectedIds.size > 0 && 'opacity-100'
+          )}
+        >
+          {selectedIds.has(r.id) && <Check className="w-3.5 h-3.5" />}
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex flex-col">
+          <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
+          <span className="text-[10px] text-lumos-text-secondary flex items-center gap-1 uppercase"><Building2 className="w-2.5 h-2.5" /> {r.client?.name}</span>
+        </div>
+      </td>
+      <td className="px-6 py-4 text-sm text-lumos-text-secondary">{r.due_date ? new Date(r.due_date).toLocaleDateString('pt-BR') : 'A definir'}</td>
+      <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">{brl(Number(r.total_amount || 0))}</td>
+      <td className="px-6 py-4 text-right"><span className="text-sm font-bold text-green-500">{brl(Number(r.received_amount || 0))}</span></td>
+      <td className="px-6 py-4 text-right"><span className="text-sm font-black text-lumos-text-primary">{brl(Number(r.total_amount || 0) - Number(r.received_amount || 0))}</span></td>
+      <td className="px-6 py-4 text-center">
+        {(() => {
+          const s = statusOf(r);
+          const cls = s === 'recebido' ? 'bg-green-500/10 text-green-500 border-green-500/20'
+            : s === 'atrasado' ? 'bg-red-500/10 text-red-500 border-red-500/20'
+            : s === 'parcial' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+            : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+          return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cls}`}>{s.toUpperCase()}</span>;
+        })()}
+      </td>
+      <td className="px-6 py-4 text-right">
+        <div className="flex justify-end gap-2">
+          {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({ ...paymentData, amount: r.total_amount - r.received_amount }); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
+          {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
+          <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+
   return (
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -348,8 +418,20 @@ export default function ContasReceber() {
           <input type="text" placeholder="Buscar por projeto ou cliente..." className="input-lumos pl-10 w-full h-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
 
-        {/* Filtro por status (Atrasado é derivado do vencimento) */}
+        {/* Filtro por status (Atrasado é derivado do vencimento) + agrupar por cliente */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setGroupByClient(v => !v)}
+            aria-pressed={groupByClient}
+            className={clsx(
+              'order-last ml-auto h-8 px-3 inline-flex items-center gap-1.5 rounded-full border text-[11px] font-bold whitespace-nowrap transition-colors',
+              groupByClient
+                ? 'bg-lumos-yellow/15 text-lumos-yellow border-lumos-yellow/40'
+                : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary'
+            )}
+          >
+            <Building2 className="w-3.5 h-3.5" /> Agrupar por cliente
+          </button>
           {([
             ['todos', 'Todos'],
             ['aguardando', 'Aguardando'],
@@ -426,68 +508,28 @@ export default function ContasReceber() {
                 <tr><td colSpan={8} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível encontrado com esse filtro.</td></tr>
-              ) : (
-                filtered.map((r) => (
-                  <tr 
-                    key={r.id} 
-                    className={clsx(
-                      "hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group",
-                      selectedIds.has(r.id) && "bg-lumos-yellow/[0.03]"
-                    )}
-                    onClick={() => r.status !== 'recebido' ? (setSelectedReceivable(r), setPaymentData({...paymentData, amount: r.total_amount - r.received_amount}), setIsPayModalOpen(true)) : null}
-                  >
-                    <td className="px-6 py-4">
-                      <div 
-                        onClick={(e) => toggleSelect(r.id, e)}
-                        className={clsx(
-                          "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
-                          selectedIds.has(r.id)
-                            ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
-                            : "border-lumos-border group-hover:border-lumos-yellow/50 opacity-0 group-hover:opacity-100",
-                          selectedIds.size > 0 && "opacity-100"
-                        )}
-                      >
-                        {selectedIds.has(r.id) && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
-                        <span className="text-[10px] text-lumos-text-secondary flex items-center gap-1 uppercase"><Building2 className="w-2.5 h-2.5" /> {r.client?.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-lumos-text-secondary">{r.due_date ? new Date(r.due_date).toLocaleDateString('pt-BR') : 'A definir'}</td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.total_amount)}</td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-bold text-green-500">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.received_amount)}</span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-black text-lumos-text-primary">{brl(Number(r.total_amount || 0) - Number(r.received_amount || 0))}</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {(() => {
-                        const s = statusOf(r);
-                        const cls = s === 'recebido' ? 'bg-green-500/10 text-green-500 border-green-500/20'
-                          : s === 'atrasado' ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                          : s === 'parcial' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                          : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
-                        return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cls}`}>{s.toUpperCase()}</span>;
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({...paymentData, amount: r.total_amount - r.received_amount}); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
-                        {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
-                        <button 
-                          onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }}
-                          className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+              ) : groupByClient ? (
+                grupos.map(g => (
+                  <React.Fragment key={g.cliente}>
+                    <tr className="bg-lumos-text-primary/[0.06] border-y border-lumos-border">
+                      <td />
+                      <td className="px-6 py-2.5">
+                        <span className="text-xs font-black uppercase tracking-wide text-lumos-text-primary flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-lumos-yellow" /> {g.cliente}
+                          <span className="text-[10px] font-bold text-lumos-text-secondary/70">({g.itens.length})</span>
+                        </span>
+                      </td>
+                      <td />
+                      <td className="px-6 py-2.5 text-right text-xs font-bold text-lumos-text-secondary">{brl(g.tot.total)}</td>
+                      <td className="px-6 py-2.5 text-right text-xs font-bold text-green-500">{brl(g.tot.recebido)}</td>
+                      <td className="px-6 py-2.5 text-right text-xs font-black text-lumos-yellow">{brl(g.tot.saldo)}</td>
+                      <td colSpan={2} className="px-6 py-2.5 text-right text-[9px] uppercase tracking-widest text-lumos-text-secondary/70">a receber</td>
+                    </tr>
+                    {g.itens.map(renderRow)}
+                  </React.Fragment>
                 ))
+              ) : (
+                filtered.map(renderRow)
               )}
             </tbody>
             {!loading && filtered.length > 0 && (
