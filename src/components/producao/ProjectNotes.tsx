@@ -250,8 +250,8 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     ],
     content: '',
     onUpdate: ({ editor }) => { if (canManage) save(editor.getHTML()); },
-    // leading-none: espaçamento compacto fixo nas anotações (o "Compacto" aprovado).
-    editorProps: { attributes: { class: 'ProseMirror focus:outline-none leading-none' } },
+    // lumos-notes: espaçamento compacto fixo, escoped nas anotações (ver index.css).
+    editorProps: { attributes: { class: 'ProseMirror focus:outline-none lumos-notes' } },
   });
 
   // Carrega itens de menção + as notas do projeto
