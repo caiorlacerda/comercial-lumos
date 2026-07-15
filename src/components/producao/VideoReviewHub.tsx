@@ -4,15 +4,18 @@ import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import { formatBudgetCode } from '@/utils/formatters';
-import { Film, X, PlayCircle, Loader2 } from 'lucide-react';
+import { Film, X, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import VideoThumb from '@/components/producao/VideoThumb';
 
 interface VV {
+  id: string;
   project_id: string;
   versao: number;
   status: string;
   updated_at: string;
   file_name: string;
+  thumb_url: string | null;
   project: { id: string; name: string; code: string | null; status: string; client: { name: string } | null } | null;
 }
 
@@ -44,26 +47,37 @@ export default function VideoReviewHub() {
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
-    const { data } = await supabase
+    const projJoin = 'project:projects(id, name, code, status, client:clients(name))';
+    const res = await supabase
       .from('video_versions')
-      .select('project_id, versao, status, updated_at, file_name, project:projects(id, name, code, status, client:clients(name))')
+      .select(`id, project_id, versao, status, updated_at, file_name, thumb_url, ${projJoin}`)
       .order('updated_at', { ascending: false });
-    setRows((data as any as VV[]) || []);
+    let data: any = res.data;
+    // Fallback caso a coluna thumb_url ainda não exista (migration não rodada).
+    if (res.error) {
+      const r = await supabase
+        .from('video_versions')
+        .select(`id, project_id, versao, status, updated_at, file_name, ${projJoin}`)
+        .order('updated_at', { ascending: false });
+      data = r.data;
+    }
+    setRows((data as VV[]) || []);
     setLoading(false);
   }
 
   // Agrupa por projeto: contagem de vídeos, último update e status mais recente.
   const projects = useMemo(() => {
-    const m = new Map<string, { project: NonNullable<VV['project']>; count: number; latest: string; latestStatus: string }>();
+    const m = new Map<string, { project: NonNullable<VV['project']>; count: number; latest: string; latestStatus: string; thumb: string | null }>();
+    // rows já vem ordenado por updated_at desc → o 1º de cada projeto é o mais recente.
     rows.forEach(r => {
       if (!r.project_id || !r.project) return;
       // Só projetos ativos: os encerrados somem do hub de revisão.
       if (r.project.status === 'concluido') return;
       const cur = m.get(r.project_id);
-      if (!cur) m.set(r.project_id, { project: r.project, count: 1, latest: r.updated_at, latestStatus: r.status });
+      if (!cur) m.set(r.project_id, { project: r.project, count: 1, latest: r.updated_at, latestStatus: r.status, thumb: r.thumb_url });
       else {
         cur.count++;
-        if (r.updated_at > cur.latest) { cur.latest = r.updated_at; cur.latestStatus = r.status; }
+        if (r.updated_at > cur.latest) { cur.latest = r.updated_at; cur.latestStatus = r.status; cur.thumb = r.thumb_url; }
       }
     });
     return Array.from(m.values()).sort((a, b) => b.latest.localeCompare(a.latest));
@@ -100,10 +114,10 @@ export default function VideoReviewHub() {
                 onClick={() => openReview(p)}
                 className="group text-left rounded-lumos border border-lumos-border overflow-hidden hover:border-lumos-yellow/40 hover:shadow-lg transition-all"
               >
-                {/* "Capa" do projeto (sem thumb do vídeo — placeholder com play) */}
-                <div className="relative aspect-video bg-gradient-to-br from-lumos-bg to-lumos-surface flex items-center justify-center">
-                  <PlayCircle className="w-9 h-9 text-lumos-text-secondary/40 group-hover:text-lumos-yellow transition-colors" />
-                  <span className="absolute top-1.5 right-1.5 text-[10px] font-black bg-black/60 text-white px-1.5 py-0.5 rounded-full">{p.count} {p.count === 1 ? 'vídeo' : 'vídeos'}</span>
+                {/* Capa = thumbnail do vídeo mais recente (fallback para o play). */}
+                <div className="relative aspect-video">
+                  <VideoThumb src={p.thumb} className="w-full h-full" iconSize="w-11 h-11" />
+                  <span className="absolute top-1.5 right-1.5 z-10 text-[10px] font-black bg-black/60 text-white px-1.5 py-0.5 rounded-full">{p.count} {p.count === 1 ? 'vídeo' : 'vídeos'}</span>
                 </div>
                 <div className="p-2.5 space-y-1.5">
                   <div>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Film, MessageSquare, Play, Link2, Unlink, Loader2 } from 'lucide-react';
+import { MessageSquare, Play, Link2, Unlink, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Select from '@/components/ui/Select';
 import InternalReviewModal from './InternalReviewModal';
+import VideoThumb from './VideoThumb';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
 
 interface Version {
@@ -15,6 +16,7 @@ interface Version {
   versao: number;
   file_name: string;
   status: ReviewStatus;
+  thumb_url: string | null;
 }
 interface Group { id: string; current: Version; count: number }
 
@@ -42,7 +44,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('video_versions')
-      .select('id, group_id, task_id, versao, file_name, status')
+      .select('id, group_id, task_id, versao, file_name, status, thumb_url')
       .eq('project_id', projectId)
       .order('versao', { ascending: false });
 
@@ -135,7 +137,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
 
         {linked ? (
           <div className="flex items-center gap-2 p-2.5 rounded-lumos border border-lumos-border bg-lumos-bg/40">
-            <Film className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
+            <VideoThumb src={linked.current.thumb_url} className="w-16 aspect-video rounded flex-shrink-0" iconSize="w-6 h-6" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-mono font-black text-lumos-text-secondary">v{String(linked.current.versao).padStart(2, '0')}</span>

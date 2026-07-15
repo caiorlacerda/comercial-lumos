@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import UserAvatar from '@/components/common/UserAvatar';
 import { COLORS, SPEEDS, STREAM_BASE, fmtTime, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
+import { captureVideoThumb } from '@/lib/videoThumb';
 
 interface TeamComment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number; body: string; created_at: string;
@@ -66,6 +67,24 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [sending, setSending] = useState(false);
 
   const streamUrl = useMemo(() => `${STREAM_BASE}?token=${encodeURIComponent(token)}`, [token]);
+  const [poster, setPoster] = useState<string | null>(null);
+
+  // Thumbnail: usa a salva se existir; senão captura um frame e persiste (o Drive
+  // não gera thumbnail para arquivos da service account). Backfill natural: cada
+  // vídeo ganha thumb ao ser aberto na revisão.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.from('video_versions').select('thumb_url').eq('id', versionId).maybeSingle();
+      if (!alive) return;
+      if (data?.thumb_url) { setPoster(data.thumb_url); return; }
+      const thumb = await captureVideoThumb(streamUrl);
+      if (!alive || !thumb) return;
+      setPoster(thumb);
+      await supabase.from('video_versions').update({ thumb_url: thumb }).eq('id', versionId);
+    })();
+    return () => { alive = false; };
+  }, [versionId, streamUrl]);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -264,7 +283,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         {/* Player */}
         <div className="flex-1 p-4 flex flex-col gap-2 min-w-0">
           <div ref={wrapRef} className="relative w-full aspect-video bg-black rounded-lumos overflow-hidden select-none">
-            <video ref={videoRef} src={streamUrl} preload="metadata" className="w-full h-full object-contain block"
+            <video ref={videoRef} src={streamUrl} poster={poster || undefined} preload="metadata" className="w-full h-full object-contain block"
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
               onLoadedData={() => setReady(true)} onCanPlay={() => setReady(true)}
