@@ -278,7 +278,7 @@ export default function CronogramaEdicao() {
           <div className="overflow-x-auto">
             <div className="min-w-[900px]">
               {/* Cabeçalho dos dias */}
-              <div className="grid border-b border-lumos-border" style={{ gridTemplateColumns: '180px repeat(7, 1fr)' }}>
+              <div className="grid border-b border-lumos-border" style={{ gridTemplateColumns: '180px repeat(7, minmax(0, 1fr))' }}>
                 <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Pessoa</div>
                 {days.map(d => (
                   <div key={d.toISOString()} className={clsx('px-2 py-2 text-center border-l border-lumos-border', isToday(d) && 'bg-lumos-yellow/[0.06]')}>
@@ -293,7 +293,7 @@ export default function CronogramaEdicao() {
                 <div className="px-3 py-8 text-center text-sm text-lumos-text-secondary">Nenhum editor cadastrado. Defina o cargo “Editor” em Equipe.</div>
               )}
               {editors.map(u => (
-                <div key={u.id} className="grid border-b border-lumos-border/60 last:border-0" style={{ gridTemplateColumns: '180px repeat(7, 1fr)' }}>
+                <div key={u.id} className="grid border-b border-lumos-border/60 last:border-0" style={{ gridTemplateColumns: '180px repeat(7, minmax(0, 1fr))' }}>
                   <div className="px-3 py-2 flex items-center gap-2 min-w-0">
                     <UserAvatar user={u as any} size={28} showStatus />
                     <div className="min-w-0">
@@ -304,7 +304,7 @@ export default function CronogramaEdicao() {
                     const items = cellTasks(u.id, d);
                     return (
                       <Cell key={d.toISOString()} id={`cell__${u.id}__${format(d, 'yyyy-MM-dd')}`} canManage={canManage}
-                        className={clsx('min-h-[68px] p-1.5 border-l border-lumos-border/60 space-y-1.5', isToday(d) && 'bg-lumos-yellow/[0.03]')}>
+                        className={clsx('min-w-0 min-h-[68px] p-1.5 border-l border-lumos-border/60 space-y-1.5', isToday(d) && 'bg-lumos-yellow/[0.03]')}>
                         {items.map(t => <TaskCard key={t.id} task={t} canManage={canManage} onOpen={openTask} />)}
                       </Cell>
                     );
