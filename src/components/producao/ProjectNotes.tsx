@@ -5,7 +5,7 @@ import Underline from '@tiptap/extension-underline';
 import Mention from '@tiptap/extension-mention';
 import Suggestion from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
-import { mergeAttributes, Extension } from '@tiptap/core';
+import { mergeAttributes } from '@tiptap/core';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -162,24 +162,6 @@ function makeSuggestion(char: string, pluginKey: PluginKey, getItems: () => MIte
   };
 }
 
-// Espaçamento entre linhas: o StarterKit não tem, então registramos um atributo
-// lineHeight em parágrafos e títulos (persiste no HTML, via style="line-height:…").
-const LineHeight = Extension.create({
-  name: 'lineHeight',
-  addGlobalAttributes() {
-    return [{
-      types: ['paragraph', 'heading'],
-      attributes: {
-        lineHeight: {
-          default: null,
-          parseHTML: (el: any) => el.style?.lineHeight || null,
-          renderHTML: (attrs: any) => (attrs.lineHeight ? { style: `line-height:${attrs.lineHeight}` } : {}),
-        },
-      },
-    }];
-  },
-});
-
 function TBtn({ active, onClick, title, children }: any) {
   return (
     <button type="button" onMouseDown={e => e.preventDefault()} onClick={onClick} title={title}
@@ -257,7 +239,6 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5] } }),
       Underline,
-      LineHeight,
       LumosMention.configure({
         HTMLAttributes: { class: 'lumos-mention' },
         suggestions: [
@@ -269,7 +250,8 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     ],
     content: '',
     onUpdate: ({ editor }) => { if (canManage) save(editor.getHTML()); },
-    editorProps: { attributes: { class: 'ProseMirror focus:outline-none' } },
+    // leading-none: espaçamento compacto fixo nas anotações (o "Compacto" aprovado).
+    editorProps: { attributes: { class: 'ProseMirror focus:outline-none leading-none' } },
   });
 
   // Carrega itens de menção + as notas do projeto
@@ -329,14 +311,6 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     return l ? String(l) : 'p';
   }, [editor?.state]);
 
-  // Espaçamento entre linhas do bloco atual (parágrafo/título).
-  const lineHeightValue = useMemo(() =>
-    (editor?.getAttributes('paragraph').lineHeight || editor?.getAttributes('heading').lineHeight || '') as string,
-    [editor?.state]);
-  const setLineHeight = (lh: string) => {
-    const v = lh || null;
-    editor?.chain().focus().updateAttributes('paragraph', { lineHeight: v }).updateAttributes('heading', { lineHeight: v }).run();
-  };
 
   if (!editor) return null;
 
@@ -362,14 +336,6 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
           <select value={headingValue} onChange={e => { const v = e.target.value; if (v === 'p') editor.chain().focus().setParagraph().run(); else editor.chain().focus().setHeading({ level: Number(v) as any }).run(); }}
             className="h-7 text-xs font-semibold bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5 outline-none cursor-pointer">
             <option value="p">Texto</option><option value="1">Título 1</option><option value="2">Título 2</option><option value="3">Título 3</option><option value="4">Título 4</option><option value="5">Título 5</option>
-          </select>
-          <select value={lineHeightValue} onChange={e => setLineHeight(e.target.value)} title="Espaçamento entre linhas"
-            className="h-7 text-xs font-semibold bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5 outline-none cursor-pointer ml-0.5">
-            <option value="">Espaçamento</option>
-            <option value="1">Compacto</option>
-            <option value="1.5">Normal</option>
-            <option value="2">Largo</option>
-            <option value="2.5">Duplo</option>
           </select>
           <Sep />
           <TBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito"><Bold className="w-4 h-4" /></TBtn>
