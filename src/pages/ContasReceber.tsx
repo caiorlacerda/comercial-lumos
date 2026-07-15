@@ -74,6 +74,49 @@ export default function ContasReceber() {
     received_at: new Date().toISOString().split('T')[0],
     payment_method: 'pix'
   });
+  // Menu de status por linha (mesmo padrão do dropdown de status dos Orçamentos).
+  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  const statusOptions = [
+    { value: 'aguardando', label: 'Aguardando', color: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20' },
+    { value: 'parcial', label: 'Parcial', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
+    { value: 'recebido', label: 'Recebido', color: 'text-green-500 bg-green-500/10 border-green-500/20' },
+  ];
+  const statusPillClass = (s: string) =>
+    s === 'recebido' ? 'text-green-500 bg-green-500/10 border-green-500/20'
+      : s === 'atrasado' ? 'text-red-500 bg-red-500/10 border-red-500/20'
+      : s === 'parcial' ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
+      : 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
+
+  // Aplica um status pelo menu. "Parcial" precisa de valor, então abre o modal de
+  // recebimento; os outros são diretos.
+  const applyStatus = async (r: any, newStatus: string) => {
+    setStatusMenuOpen(null);
+    if (newStatus === 'parcial') {
+      setSelectedReceivable(r);
+      setPaymentData({ ...paymentData, amount: Number(r.total_amount || 0) - Number(r.received_amount || 0), received_at: new Date().toISOString().split('T')[0] });
+      setIsPayModalOpen(true);
+      return;
+    }
+    try {
+      const patch = newStatus === 'recebido'
+        ? { status: 'recebido', received_amount: Number(r.total_amount || 0), received_at: (r.received_at || new Date().toISOString().split('T')[0]) }
+        : { status: 'aguardando', received_amount: 0, received_at: null };
+      const { error } = await supabase.from('receivables').update(patch).eq('id', r.id);
+      if (error) throw error;
+      if (newStatus === 'recebido') {
+        const admins = await getAdminUserIds();
+        await notify({
+          userIds: admins,
+          event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
+          title: 'Pagamento recebido',
+          body: `${brl(Number(r.total_amount || 0))} recebido de "${r.client?.name || 'Cliente'}" para: ${r.description}.`,
+          link: '/financeiro/contas-receber',
+        });
+      }
+      fetchReceivables();
+    } catch (error: any) { toast.error(error.message); }
+  };
+
   // Edição de um recebível (descrição, cliente, valor, vencimento, data de recebimento).
   const [editing, setEditing] = useState<any | null>(null);
   const [editData, setEditData] = useState({ description: '', client_id: '', total_amount: 0, due_date: '', received_at: '' });
@@ -374,18 +417,34 @@ export default function ContasReceber() {
       <td className="px-6 py-4 text-right"><span className="text-sm font-bold text-green-500">{brl(Number(r.received_amount || 0))}</span></td>
       <td className="px-6 py-4 text-right"><span className="text-sm font-black text-lumos-text-primary">{brl(Number(r.total_amount || 0) - Number(r.received_amount || 0))}</span></td>
       <td className="px-6 py-4 text-center">
-        {(() => {
-          const s = statusOf(r);
-          const cls = s === 'recebido' ? 'bg-green-500/10 text-green-500 border-green-500/20'
-            : s === 'atrasado' ? 'bg-red-500/10 text-red-500 border-red-500/20'
-            : s === 'parcial' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-            : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
-          return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cls}`}>{s.toUpperCase()}</span>;
-        })()}
+        <div className="flex justify-center relative" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => setStatusMenuOpen(statusMenuOpen === r.id ? null : r.id)}
+            className={clsx('px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all hover:scale-105 active:scale-95', statusPillClass(statusOf(r)))}
+          >
+            {statusOf(r)}
+          </button>
+          {statusMenuOpen === r.id && (
+            <>
+              <div className="fixed inset-0 z-[40]" onClick={() => setStatusMenuOpen(null)} />
+              <div className="absolute top-9 left-1/2 -translate-x-1/2 w-44 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[50] py-1 animate-in fade-in zoom-in-95 duration-150">
+                {statusOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => applyStatus(r, opt.value)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-lumos-bg transition-colors"
+                  >
+                    <span className={opt.color + ' px-2 py-0.5 rounded-full border'}>{opt.label}</span>
+                    {r.status === opt.value && <Check className="w-3.5 h-3.5 text-lumos-yellow" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </td>
       <td className="px-6 py-4 text-right">
         <div className="flex justify-end items-center gap-1" onClick={e => e.stopPropagation()}>
-          {r.status !== 'recebido' && <button onClick={() => { setSelectedReceivable(r); setPaymentData({ ...paymentData, amount: r.total_amount - r.received_amount, received_at: new Date().toISOString().split('T')[0] }); setIsPayModalOpen(true); }} className="btn-primary text-[10px] px-3 py-1.5 h-auto">Receber</button>}
           <button onClick={() => openEdit(r)} title="Editar" className="p-2 text-lumos-text-secondary hover:text-lumos-yellow rounded transition-colors"><Pencil className="w-4 h-4" /></button>
           {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} title="Ver orçamento" className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
           <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} title="Excluir" className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors">
