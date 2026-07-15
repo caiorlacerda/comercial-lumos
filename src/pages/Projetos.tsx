@@ -2147,7 +2147,7 @@ export default function Projetos() {
                                       )}
                                       {(taskTags[task.id]?.length ?? 0) > 0 && (
                                         <div className="flex flex-wrap gap-1 mt-1">
-                                          {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).map(t => <TagChip key={t!.id} tag={t!} small />)}
+                                          {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR')).map(t => <TagChip key={t!.id} tag={t!} small />)}
                                         </div>
                                       )}
                                         </div>
