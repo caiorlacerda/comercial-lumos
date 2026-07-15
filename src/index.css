@@ -138,6 +138,17 @@ body {
 .lumos-mention-video { background: rgb(158 119 237 / 0.15); color: #9e77ed; cursor: pointer; }
 .lumos-mention-file:hover, .lumos-mention-video:hover { filter: brightness(1.1); text-decoration: underline; }
 .ProseMirror p { line-height: 1.65; }
+
+/* Anotações do Projeto: espaçamento compacto fixo (só neste editor). A
+   especificidade dupla (.ProseMirror.lumos-notes) vence as regras acima. */
+.ProseMirror.lumos-notes > * + * { margin-top: 0.15rem; }
+.ProseMirror.lumos-notes p { line-height: 1.2; }
+.ProseMirror.lumos-notes h1,
+.ProseMirror.lumos-notes h2,
+.ProseMirror.lumos-notes h3,
+.ProseMirror.lumos-notes h4,
+.ProseMirror.lumos-notes h5 { margin-top: 0.35rem; line-height: 1.15; }
+
 .ProseMirror ul {
   list-style-type: disc;
   padding-left: 1.4rem;
