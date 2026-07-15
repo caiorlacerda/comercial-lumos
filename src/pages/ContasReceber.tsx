@@ -15,6 +15,7 @@ import {
   ChevronUp,
   ChevronDown,
   Pencil,
+  X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
@@ -119,14 +120,13 @@ export default function ContasReceber() {
 
   // Edição de um recebível (descrição, cliente, valor, vencimento, data de recebimento).
   const [editing, setEditing] = useState<any | null>(null);
-  const [editData, setEditData] = useState({ description: '', client_id: '', total_amount: 0, due_date: '', received_at: '' });
+  const [editData, setEditData] = useState({ description: '', client_id: '', total_amount: 0, received_at: '' });
 
   const openEdit = (r: any) => {
     setEditData({
       description: r.description || '',
       client_id: r.client_id || '',
       total_amount: Number(r.total_amount || 0),
-      due_date: r.due_date ? r.due_date.slice(0, 10) : '',
       received_at: r.received_at ? r.received_at.slice(0, 10) : '',
     });
     setEditing(r);
@@ -140,7 +140,6 @@ export default function ContasReceber() {
         description: editData.description.trim(),
         client_id: editData.client_id || null,
         total_amount: editData.total_amount,
-        due_date: editData.due_date || null,            // vazio = "A definir"
         received_at: editData.received_at || null,      // só a DATA; não mexe no status/valor recebido
       }).eq('id', editing.id);
       if (error) throw error;
@@ -772,42 +771,55 @@ export default function ContasReceber() {
         </form>
       </Modal>
 
-      {/* Editar recebível (descrição, cliente, valor, vencimento, data de recebimento) */}
-      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Editar Recebível">
-        <form onSubmit={handleSaveEdit} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Descrição</label>
-            <input required type="text" className="input-lumos w-full" value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
-            <select className="input-lumos w-full" value={editData.client_id} onChange={e => setEditData({ ...editData, client_id: e.target.value })}>
-              <option value="">Sem cliente</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Valor Total (R$)</label>
-              <CurrencyInput className="input-lumos w-full font-bold" value={editData.total_amount} onChange={(val: number) => setEditData({ ...editData, total_amount: val })} />
+      {/* Editar recebível — estilo dos modais de Produção (overlay custom, lumos) */}
+      {editing && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditing(null)}>
+          <form
+            onClick={e => e.stopPropagation()}
+            onSubmit={handleSaveEdit}
+            className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-200"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black uppercase tracking-tight text-lumos-text-primary flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-lumos-yellow" /> Editar recebível
+              </h3>
+              <button type="button" onClick={() => setEditing(null)} className="p-1.5 rounded-full text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Vencimento</label>
-              <input type="date" className="input-lumos w-full" value={editData.due_date} onChange={e => setEditData({ ...editData, due_date: e.target.value })} />
-              <p className="text-[9px] text-lumos-text-secondary/60">Deixe vazio para "A definir".</p>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Descrição</label>
+              <input required type="text" className="input-lumos w-full h-10 text-sm" value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} />
             </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Data de recebimento</label>
-            <input type="date" className="input-lumos w-full" value={editData.received_at} onChange={e => setEditData({ ...editData, received_at: e.target.value })} />
-            <p className="text-[9px] text-lumos-text-secondary/60">Só ajusta a data. Para marcar como recebido/valor, use o botão "Receber".</p>
-          </div>
-          <div className="pt-4 flex gap-3">
-            <button type="button" onClick={() => setEditing(null)} className="btn-secondary flex-1">Cancelar</button>
-            <button type="submit" className="btn-primary flex-1 h-10">Salvar</button>
-          </div>
-        </form>
-      </Modal>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Cliente</label>
+              <select className="input-lumos w-full h-10 text-sm cursor-pointer" value={editData.client_id} onChange={e => setEditData({ ...editData, client_id: e.target.value })}>
+                <option value="">Sem cliente</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Valor Total (R$)</label>
+                <CurrencyInput className="input-lumos w-full h-10 text-sm font-bold" value={editData.total_amount} onChange={(val: number) => setEditData({ ...editData, total_amount: val })} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Data de recebimento</label>
+                <input type="date" className="input-lumos w-full h-10 text-sm" value={editData.received_at} onChange={e => setEditData({ ...editData, received_at: e.target.value })} />
+              </div>
+            </div>
+            <p className="text-[10px] text-lumos-text-secondary/60 -mt-1">Quando o valor será/foi recebido. Para marcar como recebido, use o status.</p>
+
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setEditing(null)} className="btn-secondary flex-1 h-10 text-sm">Cancelar</button>
+              <button type="submit" className="btn-primary flex-1 h-10 text-sm font-bold">Salvar</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Excluir Recebível">
         <div className="space-y-4">
