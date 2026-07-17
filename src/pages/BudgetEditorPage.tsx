@@ -682,6 +682,43 @@ export default function BudgetEditorPage() {
     }
   };
 
+  // Troca a versão VISUALIZADA. Salva o que estiver pendente antes (senão o guard
+  // isDirty de fetchBudgetData bloqueava a troca em silêncio — era o "não abre").
+  const handleSelectVersion = async (versionId: string) => {
+    if (!budget || !versionId || versionId === version?.id) return;
+    if (isDirty.current) { await handleSave(false); }
+    isDirty.current = false;
+    await fetchBudgetData(budget.id, versionId);
+  };
+
+  // Define a versão VISUALIZADA como a ATIVA e faz o Custo de Projeto / Contas a
+  // Receber seguirem os valores dela (só propaga ao financeiro se o projeto já
+  // existe, ou seja, o orçamento já foi aprovado antes).
+  const [settingActive, setSettingActive] = useState(false);
+  const handleSetActiveVersion = async () => {
+    if (!budget || !version || isDraft) return;
+    if (!confirm(`Tornar a Versão ${version.version_number} a versão ATIVA?\n\nO Custo de Projeto e o Contas a Receber vão passar a seguir os valores dela.`)) return;
+    setSettingActive(true);
+    try {
+      const { error } = await supabase.from('budgets').update({ active_version_id: version.id }).eq('id', budget.id);
+      if (error) throw error;
+      logActivity('version_activated', `Versão ${version.version_number} definida como ativa`);
+
+      const { data: proj } = await supabase.from('projects').select('id').eq('budget_id', budget.id).maybeSingle();
+      if (proj) {
+        await syncBudgetApprovalFlow(budget.id); // recalcula valor_vendido pela versão ativa
+        toast.success(`Versão ${version.version_number} ativa. Custo de Projeto atualizado.`);
+      } else {
+        toast.success(`Versão ${version.version_number} definida como ativa.`);
+      }
+      await fetchBudgetData(budget.id, version.id);
+    } catch (err: any) {
+      toast.error('Não foi possível definir a versão ativa.');
+    } finally {
+      setSettingActive(false);
+    }
+  };
+
   const handleSaveAsTemplate = async () => {
     if (!budget || !templateCategory.trim()) return;
     
@@ -1235,13 +1272,25 @@ export default function BudgetEditorPage() {
                 <Select
                   className="w-auto! text-xs font-black uppercase text-lumos-yellow hover:text-lumos-yellow"
                   value={version?.id || ''}
-                  onChange={(v) => fetchBudgetData(budget!.id, v)}
+                  onChange={handleSelectVersion}
                   options={[
                     ...versions.map(v => ({ value: v.id, label: `Versão ${v.version_number}${v.id === budget?.active_version_id ? ' (Ativa)' : ''}` })),
                     ...(isDraft ? [{ value: 'draft-v1', label: 'Versão 1 (Rascunho)' }] : []),
                   ]}
                 />
               </div>
+              {/* Definir como ativa: aparece quando você está vendo uma versão que
+                  NÃO é a ativa. Faz o Custo de Projeto seguir esta versão. */}
+              {!isDraft && version && budget?.active_version_id && budget.active_version_id !== version.id && (
+                <button
+                  onClick={handleSetActiveVersion}
+                  disabled={settingActive}
+                  title="Tornar esta a versão ativa (o Custo de Projeto passa a seguir ela)"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lumos border border-green-500/40 text-green-600 dark:text-green-400 text-[11px] font-black uppercase hover:bg-green-500/10 transition-colors disabled:opacity-50"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" /> {settingActive ? 'Definindo…' : 'Tornar ativa'}
+                </button>
+              )}
             </div>
           </div>
         </div>
