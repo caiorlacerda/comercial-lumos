@@ -13,6 +13,9 @@ Font.register({
     { src: 'https://cdn.jsdelivr.net/fontsource/fonts/poppins@latest/latin-400-normal.ttf' },
     { src: 'https://cdn.jsdelivr.net/fontsource/fonts/poppins@latest/latin-600-normal.ttf', fontWeight: 600 },
     { src: 'https://cdn.jsdelivr.net/fontsource/fonts/poppins@latest/latin-700-normal.ttf', fontWeight: 700 },
+    // Itálicas: sem elas, um texto em itálico nas notas quebrava o PDF inteiro.
+    { src: 'https://cdn.jsdelivr.net/fontsource/fonts/poppins@latest/latin-400-italic.ttf', fontStyle: 'italic' },
+    { src: 'https://cdn.jsdelivr.net/fontsource/fonts/poppins@latest/latin-700-italic.ttf', fontWeight: 700, fontStyle: 'italic' },
   ],
 });
 
@@ -22,6 +25,8 @@ Font.register({
     { src: 'https://cdn.jsdelivr.net/fontsource/fonts/work-sans@latest/latin-400-normal.ttf' },
     { src: 'https://cdn.jsdelivr.net/fontsource/fonts/work-sans@latest/latin-600-normal.ttf', fontWeight: 600 },
     { src: 'https://cdn.jsdelivr.net/fontsource/fonts/work-sans@latest/latin-700-normal.ttf', fontWeight: 700 },
+    { src: 'https://cdn.jsdelivr.net/fontsource/fonts/work-sans@latest/latin-400-italic.ttf', fontStyle: 'italic' },
+    { src: 'https://cdn.jsdelivr.net/fontsource/fonts/work-sans@latest/latin-700-italic.ttf', fontWeight: 700, fontStyle: 'italic' },
   ],
 });
 
