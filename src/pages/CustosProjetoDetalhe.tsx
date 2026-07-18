@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { formatBudgetCode } from '@/utils/formatters';
 import { ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
@@ -27,7 +27,6 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
 
 export default function CustosProjetoDetalhe() {
   const { id } = useParams(); // agora é o project id
-  const navigate = useNavigate();
   const goBack = useGoBack('/financeiro/custos-projeto');
   const { profile } = useAuth();
   const toast = useToast();
@@ -363,8 +362,11 @@ export default function CustosProjetoDetalhe() {
       });
 
     } catch (error) {
+      // NÃO redirecionar aqui: se um fetch em andamento termina/falha logo depois
+      // de o usuário clicar para sair, este navigate sequestrava a navegação e o
+      // jogava de volta para a lista. Em erro real, project fica null e a tela
+      // "Projeto não encontrado" abaixo é exibida.
       console.error('Erro ao carregar projeto:', error);
-      navigate('/financeiro/custos-projeto');
     } finally {
       setLoading(false);
     }
