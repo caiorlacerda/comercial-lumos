@@ -4,8 +4,9 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
-import { ArrowLeft, RefreshCw, Trash2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Trash2, CheckCircle2, BellRing, Smartphone } from 'lucide-react';
 import { clsx } from 'clsx';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export default function ConfiguracoesNotificacoes() {
   const { profile, isAdmin } = useAuth();
@@ -14,6 +15,13 @@ export default function ConfiguracoesNotificacoes() {
   const [preferences, setPreferences] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState(false);
+  const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
+
+  // No iPhone o push só funciona com o app instalado na Tela de Início.
+  const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true);
 
   const userId = profile?.id;
 
@@ -70,7 +78,9 @@ export default function ConfiguracoesNotificacoes() {
         .upsert({
           user_id: userId,
           event_type: eventKey,
-          in_app: newVal
+          in_app: newVal,
+          // Push acompanha o mesmo botão: desligou o evento, não recebe push dele.
+          push: newVal
         });
 
       if (error) throw error;
@@ -150,6 +160,62 @@ export default function ConfiguracoesNotificacoes() {
           <h1 className="text-3xl font-black text-lumos-text-primary tracking-tight">Notificações</h1>
           <p className="text-lumos-text-secondary mt-1 font-medium">Escolha o que você quer receber no sino do sistema.</p>
         </div>
+      </div>
+
+      {/* Push neste aparelho */}
+      <div className="card space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lumos bg-lumos-yellow/10 text-lumos-yellow flex-shrink-0">
+            <BellRing className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-black text-lumos-text-primary">Notificações push neste aparelho</h3>
+            <p className="text-[13px] text-lumos-text-secondary mt-0.5">
+              Receba avisos no celular mesmo com o app fechado, igual a um app instalado.
+            </p>
+          </div>
+        </div>
+
+        {!pushStatus.supported ? (
+          <p className="text-[13px] text-lumos-text-secondary italic px-1">
+            Este navegador não suporta notificações push.
+          </p>
+        ) : isIOS && !isStandalone ? (
+          <div className="flex items-start gap-2 text-[13px] text-lumos-text-secondary bg-lumos-bg border border-lumos-border rounded-lumos p-3">
+            <Smartphone className="w-4 h-4 text-lumos-yellow flex-shrink-0 mt-0.5" />
+            <span>No iPhone, primeiro adicione o app à Tela de Início (botão compartilhar, Adicionar à Tela de Início). Depois abra por lá e volte aqui para ativar.</span>
+          </div>
+        ) : !pushStatus.configured ? (
+          <p className="text-[13px] text-lumos-text-secondary italic px-1">
+            Push ainda não configurado no servidor (chave VAPID pendente).
+          </p>
+        ) : pushStatus.permission === 'denied' ? (
+          <p className="text-[13px] text-lumos-text-secondary italic px-1">
+            As notificações estão bloqueadas nas configurações do navegador. Libere-as para este site e tente de novo.
+          </p>
+        ) : pushStatus.subscribed ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-green-500">
+              <CheckCircle2 className="w-4 h-4" /> Ativado neste aparelho
+            </span>
+            <button
+              onClick={pushUnsubscribe}
+              disabled={pushStatus.busy}
+              className="btn-secondary text-xs h-9 px-4 disabled:opacity-50"
+            >
+              Desativar
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={pushSubscribe}
+            disabled={pushStatus.busy}
+            className="btn-primary h-10 px-5 flex items-center gap-2 disabled:opacity-50"
+          >
+            <BellRing className="w-4 h-4" />
+            {pushStatus.busy ? 'Ativando…' : 'Ativar notificações neste aparelho'}
+          </button>
+        )}
       </div>
 
       {loading ? (
