@@ -34,7 +34,9 @@ export default defineConfig(({ command }) => {
           theme_color: '#0a0a0a',
           background_color: '#0a0a0a',
           display: 'standalone',
-          orientation: 'portrait',
+          // Sem trava de orientação: no tablet (e no celular) o app pode girar
+          // para paisagem. O layout é responsivo e se adapta à largura.
+          orientation: 'any',
           start_url: '/',
           scope: '/',
           icons: [
