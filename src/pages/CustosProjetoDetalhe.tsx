@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { MobileCardList, MobileCard, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,6 +187,58 @@ export default function CustosProjetoDetalhe() {
 
   // Helper pra exibir o nome da categoria com a primeira letra maiúscula
   const formatCategoryLabel = (c: string) => c.charAt(0).toUpperCase() + c.slice(1);
+
+  // Cartão de custo para o celular (usado nas duas tabelas: Equipe e Produção).
+  const renderCostCard = (c: any) => {
+    const paid = c.status === 'pago' || c.paid_at;
+    let dueEl = null;
+    if (c.payment_due_date) {
+      const due = new Date(c.payment_due_date + 'T00:00:00');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isOverdue = due < today && !paid;
+      dueEl = <span className={clsx('font-bold', isOverdue ? 'text-red-500' : 'text-lumos-text-secondary')}>vence {due.toLocaleDateString('pt-BR')}</span>;
+    }
+    return (
+      <MobileCard key={c.id} onClick={() => handleEdit(c)} className={clsx(paid && 'opacity-65')}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-lumos-text-primary truncate">{c.description}</div>
+            {c.fornecedor?.nome && (
+              <div className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest truncate mt-0.5">Fornecedor: {c.fornecedor.nome}</div>
+            )}
+          </div>
+          <span className="text-sm font-black text-lumos-text-primary whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}</span>
+        </div>
+        <div className="flex items-center gap-2 mt-1 text-[11px] text-lumos-text-secondary">
+          <span>{new Date(c.cost_date).toLocaleDateString('pt-BR')}</span>
+          {c.category && <span className="uppercase font-bold">· {formatCategoryLabel(c.category)}</span>}
+          {dueEl && <span>· {dueEl}</span>}
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-2" onClick={e => e.stopPropagation()}>
+          {paid ? (
+            <button
+              onClick={() => handleTogglePaid(c.id, false)}
+              className="inline-flex items-center text-[9px] font-black text-green-500 uppercase bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full"
+            >
+              Pago · desfazer
+            </button>
+          ) : (
+            <button
+              onClick={() => handleTogglePaid(c.id, true)}
+              className="inline-flex items-center text-[9px] font-black text-yellow-500 uppercase bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 px-2.5 py-1 rounded-full transition-all"
+            >
+              Marcar Pago
+            </button>
+          )}
+          <div className="flex items-center gap-1">
+            <button onClick={() => handleEdit(c)} className="p-1.5 text-lumos-text-secondary hover:text-blue-500 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+            <button onClick={() => { setDeletingId(c.id); setIsDeleteModalOpen(true); }} className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+      </MobileCard>
+    );
+  };
 
   async function fetchProjectData() {
     try {
@@ -993,7 +1046,7 @@ export default function CustosProjetoDetalhe() {
                 Subtotal: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalEquipe)}
               </span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto hidden lg:block">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
@@ -1151,6 +1204,12 @@ export default function CustosProjetoDetalhe() {
                 </tbody>
               </table>
             </div>
+            {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+            <MobileCardList>
+              {equipeCosts.length === 0 ? (
+                <MobileCardEmpty>Nenhum custo de equipe registrado.</MobileCardEmpty>
+              ) : equipeCosts.map(renderCostCard)}
+            </MobileCardList>
           </div>
 
           {/* Tabela de Produção (Logística, Alimentação, Locação e Outros) (Melhoria C) */}
@@ -1163,7 +1222,7 @@ export default function CustosProjetoDetalhe() {
                 Subtotal: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalProducao)}
               </span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto hidden lg:block">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
@@ -1321,6 +1380,12 @@ export default function CustosProjetoDetalhe() {
                 </tbody>
               </table>
             </div>
+            {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+            <MobileCardList>
+              {producaoCosts.length === 0 ? (
+                <MobileCardEmpty>Nenhum custo de produção registrado.</MobileCardEmpty>
+              ) : producaoCosts.map(renderCostCard)}
+            </MobileCardList>
           </div>
         </div>
 

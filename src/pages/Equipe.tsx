@@ -17,6 +17,7 @@ import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import { logAudit } from '@/hooks/useAuditLog';
 import UserAvatar from '@/components/common/UserAvatar';
 import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
+import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 import Select from '@/components/ui/Select';
 
 type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
@@ -306,7 +307,7 @@ export default function Equipe() {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto hidden lg:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-lumos-bg/40 border-b border-lumos-border">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
@@ -338,6 +339,25 @@ export default function Equipe() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+          <MobileCardList>
+            {filtered.map(p => (
+              <MobileCard key={p.key} onClick={() => openDetail(p)}>
+                <div className="flex items-center gap-3">
+                  <UserAvatar user={avatarOf(p) as any} size={40} showStatus lastSeen={p.user?.last_seen} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="font-bold text-lumos-text-primary truncate">{nameOf(p)}</p>
+                      {statusPill(p)}
+                    </div>
+                    <p className="text-[11px] text-lumos-text-secondary truncate">{cargoOf(p)}</p>
+                  </div>
+                  {p.user && <span className={clsx('text-[9px] font-black uppercase px-2 py-0.5 rounded-full border flex-shrink-0', roleBadge(p.user.role))}>{roleLabel(p.user.role)}</span>}
+                </div>
+              </MobileCard>
+            ))}
+          </MobileCardList>
         </div>
       )}
 
