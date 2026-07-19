@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/context/ToastContext';
 
 // Web Push no cliente: pede permissão, inscreve o aparelho no PushManager e
 // salva a inscrição em push_subscriptions (uma linha por aparelho). O envio é
@@ -27,6 +28,7 @@ export type PushStatus = {
 
 export function usePushNotifications() {
   const { profile } = useAuth();
+  const toast = useToast();
   const supported =
     typeof window !== 'undefined' &&
     'serviceWorker' in navigator &&
@@ -40,21 +42,44 @@ export function usePushNotifications() {
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Descobre se este aparelho já está inscrito.
+  // Descobre se este aparelho já está inscrito e AUTO-REPARA: se o navegador
+  // tem inscrição mas o banco não a registrou (salvamento anterior falhou),
+  // re-salva silenciosamente ao abrir a tela.
   useEffect(() => {
-    if (!supported) return;
+    if (!supported || !profile?.id) return;
     let cancelled = false;
     (async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
-        if (!cancelled) setSubscribed(!!sub);
+        if (cancelled) return;
+        if (!sub) { setSubscribed(false); return; }
+        const json = sub.toJSON();
+        const { count } = await supabase
+          .from('push_subscriptions')
+          .select('id', { count: 'exact', head: true })
+          .eq('endpoint', json.endpoint);
+        if (!count) {
+          // Navegador inscrito mas banco vazio → re-salva.
+          await supabase.from('push_subscriptions').upsert(
+            {
+              user_id: profile.id,
+              endpoint: json.endpoint,
+              p256dh: json.keys?.p256dh,
+              auth: json.keys?.auth,
+              user_agent: navigator.userAgent,
+              last_used_at: new Date().toISOString(),
+            },
+            { onConflict: 'endpoint' }
+          );
+        }
+        if (!cancelled) setSubscribed(true);
       } catch {
         /* noop */
       }
     })();
     return () => { cancelled = true; };
-  }, [supported]);
+  }, [supported, profile?.id]);
 
   const subscribe = useCallback(async () => {
     if (!supported || !configured || !profile?.id) return false;
@@ -62,7 +87,10 @@ export function usePushNotifications() {
     try {
       const perm = await Notification.requestPermission();
       setPermission(perm);
-      if (perm !== 'granted') return false;
+      if (perm !== 'granted') {
+        toast.error('Permissão de notificação negada neste aparelho.');
+        return false;
+      }
 
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
@@ -88,9 +116,12 @@ export function usePushNotifications() {
       if (error) throw error;
 
       setSubscribed(true);
+      toast.success('Notificações ativadas neste aparelho!');
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('push subscribe failed', err);
+      // Mostra o motivo real na tela (no celular não dá pra ver o console).
+      toast.error(`Falha ao ativar: ${err?.message || err?.error_description || 'erro desconhecido'}`);
       return false;
     } finally {
       setBusy(false);
