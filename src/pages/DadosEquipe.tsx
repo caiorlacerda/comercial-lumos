@@ -10,6 +10,7 @@ import { useToast } from '@/context/ToastContext';
 import { useConfirm } from '@/components/ui/useConfirm';
 import UserAvatar from '@/components/common/UserAvatar';
 import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
+import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 
 interface TeamMember {
   id: string;
@@ -190,7 +191,7 @@ export default function DadosEquipe() {
       ) : (
         /* Visão em LISTA */
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto hidden lg:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-lumos-bg/40 border-b border-lumos-border">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
@@ -222,6 +223,29 @@ export default function DadosEquipe() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+          <MobileCardList>
+            {filtered.map(m => (
+              <MobileCard key={m.id} onClick={() => openEdit(m)}>
+                <div className="flex items-center gap-3">
+                  <UserAvatar user={{ id: m.app_user_id, full_name: m.full_name, avatar_url: m.app_user?.avatar_url ?? m.photo_url } as any} size={40} showStatus />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-lumos-text-primary truncate">{m.full_name}</p>
+                    <p className="text-[11px] text-lumos-text-secondary truncate">
+                      {m.role_title || 'Função não definida'}{m.department ? ` · ${m.department}` : ''}
+                    </p>
+                  </div>
+                </div>
+                {(m.whatsapp || m.birth_date) && (
+                  <div className="flex items-center gap-4 mt-2 pl-[52px] text-[11px] text-lumos-text-secondary">
+                    {m.whatsapp && <span className="flex items-center gap-1.5 truncate"><Phone className="w-3.5 h-3.5 flex-shrink-0" /> {m.whatsapp}</span>}
+                    {m.birth_date && <span className="flex items-center gap-1.5 truncate"><Cake className="w-3.5 h-3.5 text-lumos-yellow flex-shrink-0" /> {fmtBirthday(m.birth_date)}</span>}
+                  </div>
+                )}
+              </MobileCard>
+            ))}
+          </MobileCardList>
         </div>
       )}
 

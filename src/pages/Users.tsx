@@ -381,8 +381,8 @@ export default function UsersPage() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto hidden lg:block">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse hidden lg:table">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border">
                 <th className="px-6 py-4 w-10">

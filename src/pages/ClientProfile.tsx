@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import { Edit2 } from 'lucide-react';
+import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 import ClientModal from '@/components/clients/ClientModal';
 
 interface Client {
@@ -289,7 +290,7 @@ export default function ClientProfile() {
           </div>
 
           <div className="card !p-0 overflow-hidden">
-            <table className="w-full text-left">
+            <table className="w-full text-left hidden lg:table">
               <thead>
                 <tr className="bg-lumos-bg/50 border-b border-lumos-border">
                   <th className="px-6 py-4 text-[10px] font-black uppercase text-lumos-text-primary tracking-widest">Código / Projeto</th>
@@ -335,11 +336,35 @@ export default function ClientProfile() {
                 ))}
               </tbody>
             </table>
+
+            {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+            <MobileCardList>
+              {budgets.length === 0 ? (
+                <div className="px-6 py-10 text-center italic text-lumos-text-secondary text-sm">Nenhum orçamento encontrado.</div>
+              ) : budgets.map(budget => (
+                <MobileCard key={budget.id} onClick={() => navigate(`/orcamentos/${budget.id}`)}>
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="text-[10px] font-black text-lumos-yellow uppercase tracking-tighter">{budget.code}</span>
+                    <span className={clsx(
+                      "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-wider whitespace-nowrap",
+                      statusColors[budget.status]
+                    )}>
+                      {statusIcons[budget.status]}
+                      {budget.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-black text-lumos-text-primary truncate">{budget.project_name}</span>
+                    <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">{formatCurrency(budget.total || 0)}</span>
+                  </div>
+                </MobileCard>
+              ))}
+            </MobileCardList>
           </div>
         </div>
       </div>
 
-      <ClientModal 
+      <ClientModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchClientData}
