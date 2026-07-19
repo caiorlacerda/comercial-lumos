@@ -562,7 +562,7 @@ export default function CustosProjeto() {
 
   const renderProjectList = (items: any[]) => (
     <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden shadow-sm">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto hidden lg:block">
         <table className="w-full text-left">
           <thead>
             <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider">
@@ -703,6 +703,10 @@ export default function CustosProjeto() {
             })}
           </tbody>
         </table>
+      </div>
+      {/* Mobile: reaproveita os cartões (a tabela acima fica só no desktop) */}
+      <div className="lg:hidden p-3 flex flex-col gap-3">
+        {items.map(p => renderProjectCard(p))}
       </div>
     </div>
   );

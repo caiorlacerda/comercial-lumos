@@ -23,6 +23,7 @@ import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -421,12 +422,12 @@ export default function ContasPagar() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden lg:block">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
                 <th className="px-6 py-4 w-10">
-                  <div 
+                  <div
                     onClick={toggleSelectAll}
                     className={clsx(
                       "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
@@ -578,6 +579,60 @@ export default function ContasPagar() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+        <MobileCardList>
+          {loading ? (
+            <MobileCardSkeleton rows={6} />
+          ) : filtered.length === 0 ? (
+            <MobileCardEmpty>Nenhuma conta encontrada.</MobileCardEmpty>
+          ) : (
+            filtered.map((p) => (
+              <MobileCard key={p.id} onClick={p._type === 'payable' ? () => handleEdit(p) : undefined}>
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <span className="text-[11px] font-bold text-lumos-text-primary flex items-center gap-1 whitespace-nowrap">
+                    <Calendar className="w-3 h-3 text-lumos-text-secondary" />
+                    {p.due_date ? new Date(p.due_date).toLocaleDateString('pt-BR') : 'Sem vencimento'}
+                  </span>
+                  {p.paid_at ? (
+                    <span className="inline-flex items-center text-[9px] font-black text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full whitespace-nowrap"><CheckCircle2 className="w-2.5 h-2.5 mr-1" /> Pago</span>
+                  ) : p._type === 'payable' ? (
+                    <span className="inline-flex items-center text-[9px] font-black text-yellow-500 uppercase bg-yellow-500/10 px-2 py-0.5 rounded-full whitespace-nowrap"><Calendar className="w-2.5 h-2.5 mr-1" /> Pendente</span>
+                  ) : (
+                    <span className="text-[9px] text-lumos-text-secondary italic">Leitura</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate">{p.description}</span>
+                  {p._type === 'project_cost' && (
+                    <span className="bg-blue-500/10 text-blue-500 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter border border-blue-500/20 flex-shrink-0">Projeto</span>
+                  )}
+                </div>
+                <div className="text-[11px] text-lumos-text-secondary uppercase tracking-tight truncate mt-0.5 mb-2">
+                  {p._type === 'project_cost'
+                    ? `Projeto: ${p.budget?.project_name}`
+                    : p.project?.name
+                      ? `Projeto: ${p.project.name}`
+                      : p.category}
+                  {p.supplier ? ` · ${p.supplier}` : ''}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.amount)}
+                  </span>
+                  {!p.paid_at && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); markAsPaid(p); }}
+                      className="btn-primary text-[10px] px-3 py-1.5 h-auto"
+                    >
+                      Pagar
+                    </button>
+                  )}
+                </div>
+              </MobileCard>
+            ))
+          )}
+        </MobileCardList>
       </div>
 
       {/* Batch Action Bar */}

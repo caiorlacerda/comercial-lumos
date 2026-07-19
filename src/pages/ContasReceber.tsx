@@ -28,6 +28,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
@@ -489,6 +490,39 @@ export default function ContasReceber() {
     </tr>
   );
 
+  // Mesma linha, em formato de cartão para o celular.
+  const renderMobileCard = (r: any) => (
+    <MobileCard key={r.id} onClick={() => openEdit(r)}>
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <div className="min-w-0">
+          {codeOf(r) && (
+            <span className="text-[10px] font-black text-amber-600 dark:text-lumos-yellow bg-amber-500/10 dark:bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase tracking-tight">
+              {codeOf(r)}
+            </span>
+          )}
+        </div>
+        <span className={clsx('px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border whitespace-nowrap', statusPillClass(statusOf(r)))}>
+          {statusOf(r)}
+        </span>
+      </div>
+      <div className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate">{r.description}</div>
+      <div className="text-[11px] text-lumos-text-secondary flex items-center gap-1 truncate mt-0.5 mb-2">
+        <Building2 className="w-3 h-3 flex-shrink-0" /> {r.client?.name || '—'}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">{brl(Number(r.total_amount || 0))}</span>
+          {lucroOf(r) != null && (
+            <span className={clsx('text-[11px] font-bold whitespace-nowrap', (lucroOf(r) as number) >= 0 ? 'text-green-500' : 'text-red-500')}>
+              {brl(lucroOf(r) as number)}
+            </span>
+          )}
+        </div>
+        <span className="text-[11px] text-lumos-text-secondary whitespace-nowrap">{fmtDate(r.received_at)}</span>
+      </div>
+    </MobileCard>
+  );
+
   return (
     <div className="space-y-6 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -593,7 +627,7 @@ export default function ContasReceber() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden lg:block">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
@@ -671,6 +705,38 @@ export default function ContasReceber() {
             )}
           </table>
         </div>
+
+        {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+        <MobileCardList>
+          {loading ? (
+            <MobileCardSkeleton rows={6} />
+          ) : filtered.length === 0 ? (
+            <MobileCardEmpty>Nenhum recebível encontrado com esse filtro.</MobileCardEmpty>
+          ) : groupByClient ? (
+            grupos.map(g => (
+              <React.Fragment key={g.cliente}>
+                <div className="px-4 py-2 bg-lumos-text-primary/[0.06] flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-lumos-text-primary flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-lumos-yellow" /> {g.cliente}
+                    <span className="text-[10px] font-bold text-lumos-text-secondary/70">({g.itens.length})</span>
+                  </span>
+                  <span className="text-[11px] font-black text-lumos-text-primary whitespace-nowrap">{brl(g.tot.total)}</span>
+                </div>
+                {g.itens.map(renderMobileCard)}
+              </React.Fragment>
+            ))
+          ) : (
+            filtered.map(renderMobileCard)
+          )}
+          {!loading && filtered.length > 0 && (
+            <div className="px-4 py-3 bg-lumos-text-primary/5 flex items-center justify-between gap-3 font-black">
+              <span className="text-[10px] uppercase tracking-widest text-lumos-text-secondary">
+                Total ({filtered.length} {filtered.length === 1 ? 'título' : 'títulos'})
+              </span>
+              <span className="text-sm text-lumos-text-primary whitespace-nowrap">{brl(totaisFiltrados.total)}</span>
+            </div>
+          )}
+        </MobileCardList>
       </div>
 
       {/* Batch Action Bar */}
