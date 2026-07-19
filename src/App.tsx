@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import throttle from 'lodash/throttle';
+import { RefreshCw } from 'lucide-react';
 
 // Shell da aplicação — carregado sempre (eager).
 import Login from '@/pages/Login';
@@ -347,30 +348,9 @@ function VersionWatcher() {
 
     if (!pathChanged) return;
 
-    if (updatePending) {
-      console.log('[VersionWatcher] Navigation detected and update is pending. Reloading page...');
-      
-      try {
-        const targetVersion = latestServerVersionRef.current;
-        if (targetVersion) {
-          const currentPending = sessionStorage.getItem('lumos_pending_reload_version');
-          if (currentPending === targetVersion) {
-            const count = parseInt(sessionStorage.getItem('lumos_reload_count') || '0', 10);
-            sessionStorage.setItem('lumos_reload_count', (count + 1).toString());
-          } else {
-            sessionStorage.setItem('lumos_pending_reload_version', targetVersion);
-            sessionStorage.setItem('lumos_reload_count', '1');
-          }
-        }
-      } catch (e) {
-        // Ignora
-      }
-
-      window.location.reload();
-      return;
-    }
-
-    // Checagem na navegação (throttled: mínimo 30s de intervalo)
+    // Não recarrega mais sozinho: quando há atualização pendente, mostramos um
+    // banner e o usuário decide quando aplicar (botão "Atualizar"). Aqui só
+    // fazemos a checagem periódica na navegação (throttled: mínimo 30s).
     const now = Date.now();
     if (now - lastCheckedRef.current > 30 * 1000) {
       lastCheckedRef.current = now;
@@ -378,7 +358,43 @@ function VersionWatcher() {
     }
   }, [location.pathname, updatePending]);
 
-  return null;
+  // Aplica a atualização: registra o alvo (anti-loop) e recarrega.
+  const applyUpdate = () => {
+    try {
+      const targetVersion = latestServerVersionRef.current;
+      if (targetVersion) {
+        const currentPending = sessionStorage.getItem('lumos_pending_reload_version');
+        if (currentPending === targetVersion) {
+          const count = parseInt(sessionStorage.getItem('lumos_reload_count') || '0', 10);
+          sessionStorage.setItem('lumos_reload_count', (count + 1).toString());
+        } else {
+          sessionStorage.setItem('lumos_pending_reload_version', targetVersion);
+          sessionStorage.setItem('lumos_reload_count', '1');
+        }
+      }
+    } catch (e) {
+      // Ignora
+    }
+    window.location.reload();
+  };
+
+  if (!updatePending) return null;
+
+  return (
+    <div className="fixed inset-x-0 z-[60] flex justify-center px-4 pointer-events-none bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] lg:bottom-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="pointer-events-auto flex items-center gap-3 bg-lumos-surface border border-lumos-yellow/30 rounded-full pl-4 pr-2 py-2 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl max-w-md w-full sm:w-auto">
+        <span className="text-lg leading-none">✨</span>
+        <span className="text-sm font-bold text-lumos-text-primary flex-1 sm:flex-initial">Nova versão disponível</span>
+        <button
+          onClick={applyUpdate}
+          className="flex items-center gap-1.5 bg-lumos-yellow text-lumos-bg font-black text-xs uppercase tracking-wide px-4 py-2 rounded-full hover:scale-105 active:scale-95 transition-transform whitespace-nowrap"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Atualizar
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function AppContent() {
