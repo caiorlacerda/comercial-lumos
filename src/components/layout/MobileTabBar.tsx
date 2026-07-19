@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell, Home as HomeIcon } from 'lucide-react';
+import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell, Megaphone, Home as HomeIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
@@ -169,6 +169,23 @@ export default function MobileTabBar() {
             <ChevronRight className="w-4 h-4 text-lumos-text-secondary opacity-50" />
           </button>
 
+
+          {/* Comunicados (só admin) */}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                setMaisOpen(false);
+                navigate('/comunicados');
+              }}
+              className="flex items-center justify-between w-full h-12 px-3 rounded-lumos hover:bg-lumos-text-secondary/5 transition-colors text-left"
+            >
+              <div className="flex items-center gap-3">
+                <Megaphone className="w-5 h-5 text-lumos-text-secondary" />
+                <span className="text-sm font-bold text-lumos-text-primary">Comunicados</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-lumos-text-secondary opacity-50" />
+            </button>
+          )}
 
           {/* Usuários (só admin) */}
           {isAdmin && (

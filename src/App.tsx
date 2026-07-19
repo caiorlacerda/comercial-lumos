@@ -28,6 +28,7 @@ const AuditLog = lazy(() => import('@/pages/AuditLog'));
 const AprovacaoPublica = lazy(() => import('@/pages/AprovacaoPublica'));
 const Equipe = lazy(() => import('@/pages/Equipe'));
 const MonitoramentoEquipe = lazy(() => import('@/pages/MonitoramentoEquipe'));
+const Comunicados = lazy(() => import('@/pages/Comunicados'));
 
 // Financeiro
 const FinanceiroDashboard = lazy(() => import('@/pages/FinanceiroDashboard'));
@@ -744,6 +745,16 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="admin">
                   <AuditLog />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/comunicados"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <Comunicados />
                 </PermissionGuard>
               </AuthWrapper>
             }

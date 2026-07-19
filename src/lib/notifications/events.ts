@@ -29,6 +29,7 @@ export const NOTIFICATION_EVENTS = {
   // SISTEMA
   NOVO_USUARIO_ACESSO: { key: 'novo_usuario_acesso', category: 'sistema', label: 'Novo usuário pediu acesso (admin)', defaultEnabled: true, adminOnly: true, priority: 'high' },
   PERMISSAO_ALTERADA: { key: 'permissao_alterada', category: 'sistema', label: 'Suas permissões foram alteradas', defaultEnabled: true },
+  COMUNICADO: { key: 'comunicado', category: 'sistema', label: 'Comunicados da administração', defaultEnabled: true, priority: 'high' },
 } as const;
 
 export type NotificationEventKey = typeof NOTIFICATION_EVENTS[keyof typeof NOTIFICATION_EVENTS]['key'];
