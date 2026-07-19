@@ -9,6 +9,7 @@ import { formatName, formatDoc, formatPhone } from '@/lib/format';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { Fornecedor } from '@/types/fornecedor';
+import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 
 export default function Fornecedores() {
   const navigate = useNavigate();
@@ -238,7 +239,7 @@ export default function Fornecedores() {
       ) : (
         /* Visão em LISTA */
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto hidden lg:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-lumos-bg/40 border-b border-lumos-border">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
@@ -306,6 +307,53 @@ export default function Fornecedores() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+          <MobileCardList>
+            {filteredFornecedores.map(f => (
+              <MobileCard key={f.id} onClick={() => navigate(`/producao/fornecedores/${f.id}`)}>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold text-lumos-text-primary truncate">{formatName(f.nome)}</span>
+                    {f.status_cadastro === 'pendente' && (
+                      <span className="bg-yellow-500/15 text-yellow-500 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-yellow-500/20 flex-shrink-0">Pendente</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {f.status_cadastro === 'pendente' && (
+                      <button onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const { error } = await supabase.from('fornecedores').update({ status_cadastro: 'aprovado' }).eq('id', f.id);
+                          if (error) throw error;
+                          toast.success('Fornecedor aprovado com sucesso!');
+                          fetchFornecedores();
+                        } catch (err: any) { toast.error(`Erro ao aprovar: ${err.message}`); }
+                      }} className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-all" title="Aprovar">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button onClick={e => { e.stopPropagation(); setDeletingId(f.id); setIsDeleteModalOpen(true); }}
+                      className="p-1.5 text-lumos-text-secondary hover:text-red-500 rounded hover:bg-red-500/10 transition-all" title="Excluir">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-[11px] text-lumos-text-secondary truncate">
+                  {[formatDoc(f.cnpj), formatPhone(f.telefone), f.email].filter(Boolean).join(' · ') || '—'}
+                </div>
+                {f.servicos?.length ? (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {f.servicos.map((s: any) => (
+                      <span key={s.id} className="text-[10px] font-semibold px-2 py-0.5 rounded bg-lumos-text-secondary/10 text-lumos-text-primary border border-lumos-border whitespace-nowrap">
+                        {s.tipo_servico}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </MobileCard>
+            ))}
+          </MobileCardList>
         </div>
       )}
 
