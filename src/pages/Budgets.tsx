@@ -35,6 +35,7 @@ import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { syncBudgetApprovalFlow } from '@/utils/financeiro';
 import { celebrateNewProject } from '@/components/common/NewProjectCelebration';
 import { formatBudgetCode } from '@/utils/formatters';
+import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 import { getPdfFileName } from '@/utils/pdfFileName';
 import { useToast } from '@/context/ToastContext';
 import { useSaveOsToDrive } from '@/hooks/useSaveOsToDrive';
@@ -701,7 +702,7 @@ export default function Budgets() {
 
       {/* Table Container with minimum height to prevent clipping when few items exist */}
       <div className="card !p-0 shadow-sm border-lumos-border animate-in fade-in slide-in-from-bottom-6 duration-700 min-h-[200px] overflow-visible">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden lg:block">
         <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-lumos-bg/50 border-b border-lumos-border">
@@ -954,6 +955,55 @@ export default function Budgets() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+        <MobileCardList>
+          {loading ? (
+            <MobileCardSkeleton rows={6} />
+          ) : filteredBudgets.length === 0 ? (
+            <MobileCardEmpty>Nenhum orçamento encontrado.</MobileCardEmpty>
+          ) : (
+            pagedBudgets.map((budget) => (
+              <MobileCard key={budget.id} onClick={() => navigate(`/orcamentos/${budget.id}`)}>
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <span className="font-mono text-lumos-yellow text-xs font-black whitespace-nowrap">
+                    {formatBudgetCode(budget.code)}
+                  </span>
+                  <span className={clsx(
+                    "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border whitespace-nowrap",
+                    budget.status === 'aprovado' ? 'text-green-600 bg-green-500/10 border-green-500/20' :
+                    budget.status === 'em_negociacao' ? 'text-[#F5D87A] bg-[#F5D87A]/10 border-[#F5D87A]/20' :
+                    budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10 border-red-500/20' :
+                    'text-lumos-text-secondary bg-lumos-bg border-lumos-border'
+                  )}>
+                    {budget.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <div className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate">
+                  {budget.project_name}
+                </div>
+                <div className="text-[11px] text-lumos-text-secondary font-black uppercase tracking-tight truncate mt-0.5 mb-2">
+                  {budget.clients?.agency_name ? `${budget.clients.agency_name} + ${budget.clients.name}` : (budget.clients?.name || 'Cliente Direto')}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[9px] font-black uppercase py-0.5 px-2 bg-lumos-text-secondary/10 border border-lumos-border rounded-full text-lumos-text-primary whitespace-nowrap">
+                    {budget.category}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1 text-[10px] text-lumos-yellow font-bold whitespace-nowrap">
+                      <Clock className="w-2.5 h-2.5" />
+                      {format(new Date(budget.updated_at), 'dd/MM/yy', { locale: ptBR })}
+                    </span>
+                    <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">
+                      {formatCurrency((budget as any).valorFinal || 0)}
+                    </span>
+                  </div>
+                </div>
+              </MobileCard>
+            ))
+          )}
+        </MobileCardList>
+
           <div className="px-6 pb-4">
             <Pagination
               currentPage={currentPage}
