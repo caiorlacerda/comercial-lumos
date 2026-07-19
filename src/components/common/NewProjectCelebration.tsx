@@ -71,6 +71,8 @@ export default function NewProjectCelebration() {
   };
 
   // 1) Catch-up no login: aprovações recentes que a pessoa ainda não viu.
+  //    Filtra por read_at IS NULL — assim o "já vi" é compartilhado entre
+  //    aparelhos (não recomemora no celular o que já foi fechado no desktop).
   useEffect(() => {
     if (!userId || !canCelebrate) return;
     let alive = true;
@@ -81,12 +83,26 @@ export default function NewProjectCelebration() {
         .select('id, data, created_at')
         .eq('user_id', userId)
         .eq('event_type', 'orcamento_aprovado')
+        .is('read_at', null)
         .gte('created_at', since)
         .order('created_at', { ascending: true });
       if (!alive || !data) return;
       const seen = getSeen();
-      const pending = data.filter(r => !seen.includes(r.id)).map(toCelebration);
-      if (pending.length) setQueue(prev => [...prev, ...pending.filter(p => !prev.some(x => x.id === p.id))]);
+      // De-duplica por projeto (uma linha duplicada não vira dois popups).
+      const byProject = new Map<string, Celebration>();
+      for (const r of data) {
+        if (seen.includes(r.id)) continue;
+        const c = toCelebration(r);
+        const key = c.budgetId || c.code || c.projectName;
+        if (!byProject.has(key)) byProject.set(key, c);
+      }
+      const pending = [...byProject.values()];
+      if (pending.length) {
+        setQueue(prev => [
+          ...prev,
+          ...pending.filter(p => !prev.some(x => x.id === p.id || (p.budgetId && x.budgetId === p.budgetId))),
+        ]);
+      }
     })();
     return () => { alive = false; };
   }, [userId, canCelebrate]);
@@ -129,8 +145,26 @@ export default function NewProjectCelebration() {
   // Fecha a atual e passa para a próxima da fila (se houver).
   const close = () => {
     markSeen(current.id);
+    const c = current;
     setQueue(prev => prev.slice(1));
     setGoing(false);
+    // Marca a notificação como lida no banco: assim não recomemora em outro
+    // aparelho. Se o projeto tiver linhas duplicadas, marca todas de uma vez.
+    // Comemorações locais (id 'local:...') não têm linha no banco.
+    if (userId && !c.id.startsWith('local:')) {
+      (async () => {
+        try {
+          let upd = supabase
+            .from('notifications')
+            .update({ read_at: new Date().toISOString() })
+            .eq('user_id', userId)
+            .eq('event_type', 'orcamento_aprovado')
+            .is('read_at', null);
+          upd = c.budgetId ? upd.eq('data->>budget_id', c.budgetId) : upd.eq('id', c.id);
+          await upd;
+        } catch { /* noop */ }
+      })();
+    }
   };
 
   // O projeto é criado logo após a aprovação; resolvemos pelo budget_id no clique
