@@ -37,14 +37,23 @@ export function MobileCard({
 }) {
   const base = 'w-full text-left px-4 py-3.5 block transition-colors';
   if (onClick) {
+    // Renderiza como div (não <button>) para permitir botões de ação aninhados
+    // no cartão sem gerar HTML inválido. Mantém acessível via teclado.
     return (
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
-        className={clsx(base, 'active:bg-lumos-yellow/[0.04] hover:bg-lumos-yellow/[0.02]', className)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        className={clsx(base, 'cursor-pointer active:bg-lumos-yellow/[0.04] hover:bg-lumos-yellow/[0.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-lumos-yellow/40', className)}
       >
         {children}
-      </button>
+      </div>
     );
   }
   return <div className={clsx(base, className)}>{children}</div>;
