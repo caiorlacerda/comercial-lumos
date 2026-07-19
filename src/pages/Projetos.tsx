@@ -2032,7 +2032,8 @@ export default function Projetos() {
                           )}
                         </div>
                       ) : (
-                        <div className="overflow-x-auto">
+                        <>
+                        <div className="overflow-x-auto hidden lg:block">
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
                               <tr className="border-b border-lumos-border/40 text-lumos-text-secondary font-black uppercase tracking-wider text-[9px] opacity-70">
@@ -2236,6 +2237,96 @@ export default function Projetos() {
                             </tbody>
                           </table>
                         </div>
+
+                        {/* Mobile: cartões de tarefa (a tabela acima fica só no desktop) */}
+                        <div className="lg:hidden divide-y divide-lumos-border/40">
+                          {displayedTasks.map((task) => {
+                            const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
+                            const tags = (taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR'));
+                            return (
+                              <div
+                                key={task.id}
+                                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, taskId: task.id }); }}
+                                className={clsx('py-3', selTaskIds.has(task.id) && 'bg-lumos-yellow/[0.05]')}
+                              >
+                                <div className="flex items-start gap-2.5">
+                                  {canManage && (
+                                    <input
+                                      type="checkbox"
+                                      checked={selTaskIds.has(task.id)}
+                                      onChange={() => toggleSelTask(task.id)}
+                                      className="mt-1 rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer flex-shrink-0"
+                                    />
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={!canManage}
+                                    onClick={() => handleUpdateTask(task.id, { status: isTaskCompleted ? 'iniciar' : 'concluido' })}
+                                    className={clsx(
+                                      'mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors',
+                                      isTaskCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-lumos-border text-transparent',
+                                      !canManage && 'opacity-40'
+                                    )}
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedTaskId(task.id)}
+                                    className="min-w-0 flex-1 text-left"
+                                  >
+                                    <span className={clsx('font-semibold text-sm text-lumos-text-primary', isTaskCompleted && 'line-through text-lumos-text-secondary/50')}>
+                                      {task.titulo}
+                                    </span>
+                                    {tags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {tags.map(t => <TagChip key={t!.id} tag={t!} small />)}
+                                      </div>
+                                    )}
+                                  </button>
+                                  {canManage && (
+                                    <button type="button" onClick={() => handleDeleteTask(task.id)} className="p-1 text-lumos-text-secondary hover:text-red-500 rounded flex-shrink-0" title="Excluir">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center flex-wrap gap-2 mt-2.5 pl-[30px]">
+                                  <Select
+                                    value={task.status}
+                                    disabled={!canManage}
+                                    onChange={(v) => handleUpdateTask(task.id, { status: v })}
+                                    options={STATUS_OPTIONS}
+                                    className={clsx('border border-transparent rounded px-1.5 py-1 text-[10px] font-black uppercase tracking-wider', getStatusDetails(task.status).color)}
+                                  />
+                                  <Select
+                                    value={task.prioridade}
+                                    disabled={!canManage}
+                                    onChange={(v) => handleUpdateTask(task.id, { prioridade: v as any })}
+                                    options={PRIORITY_OPTIONS}
+                                    className={clsx('border border-transparent rounded px-1.5 py-1 text-[10px] font-black uppercase tracking-wider', getPriorityTheme(task.prioridade))}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between gap-3 mt-2 pl-[30px]">
+                                  <AssigneePicker
+                                    value={task.responsavel_id || null}
+                                    disabled={!canManage}
+                                    onChange={(v) => handleUpdateTask(task.id, { responsavel_id: v })}
+                                    className="text-[11px] font-medium text-lumos-text-primary"
+                                    users={teamUsers as any}
+                                  />
+                                  <input
+                                    type="date"
+                                    value={task.data_fim || ''}
+                                    disabled={!canManage}
+                                    onChange={(e) => handleUpdateTask(task.id, { data_fim: e.target.value || null })}
+                                    className="bg-transparent border border-lumos-border/40 rounded text-[11px] font-bold text-lumos-text-primary px-2 py-1 outline-none cursor-pointer focus:border-lumos-yellow"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        </>
                       )}
 
                       {/* Barra de ações em lote */}
