@@ -58,6 +58,41 @@
     @apply bg-lumos-surface border border-lumos-border rounded-lumos p-4 shadow-sm transition-all;
   }
 
+  /* Coluna-rótulo fixa em tabelas de relatório no celular (Tipo 2). No desktop
+     (>=1024px) a tabela é normal; abaixo disso a 1ª coluna congela enquanto os
+     números rolam na horizontal. Usar na <table>: className="... lumos-sticky-1". */
+  @media (max-width: 1023px) {
+    .lumos-sticky-1 th:first-child,
+    .lumos-sticky-1 td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: var(--color-lumos-surface);
+    }
+    .lumos-sticky-1 thead th:first-child {
+      z-index: 3;
+    }
+    /* Variante p/ tabelas com gutter estreito (w-8 = 2rem) antes da coluna-rótulo. */
+    .lumos-sticky-2 th:nth-child(1),
+    .lumos-sticky-2 td:nth-child(1) {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: var(--color-lumos-surface);
+    }
+    .lumos-sticky-2 th:nth-child(2),
+    .lumos-sticky-2 td:nth-child(2) {
+      position: sticky;
+      left: 2rem;
+      z-index: 2;
+      background: var(--color-lumos-surface);
+    }
+    .lumos-sticky-2 thead th:nth-child(1),
+    .lumos-sticky-2 thead th:nth-child(2) {
+      z-index: 3;
+    }
+  }
+
   .btn-primary {
     @apply bg-lumos-yellow text-black font-semibold py-2 px-4 rounded-lumos hover:bg-yellow-400 border border-lumos-yellow transition-all disabled:opacity-50 active:scale-95;
   }
