@@ -19,6 +19,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -276,7 +277,8 @@ export default function CustosFixos() {
             Nenhum custo fixo cadastrado. Clique em "Adicionar" para começar.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="overflow-x-auto hidden lg:block">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
@@ -404,6 +406,59 @@ export default function CustosFixos() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile: cartões agrupados (a tabela acima fica só no desktop) */}
+          <MobileCardList>
+            {grouped.map(group => {
+              const Icon = group.icon;
+              const subtotal = group.items.filter(i => i.is_active).reduce((acc, i) => acc + i.amount, 0);
+              const isCollapsed = collapsedCategories.has(group.value);
+              return (
+                <React.Fragment key={group.value}>
+                  <div
+                    className="px-4 py-2.5 bg-lumos-text-primary/[0.04] flex items-center justify-between gap-2 cursor-pointer select-none"
+                    onClick={() => toggleCategory(group.value)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isCollapsed ? <ChevronRight className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" />}
+                      <Icon className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
+                      <span className="text-[11px] font-black text-lumos-text-secondary uppercase tracking-widest truncate">{group.label}</span>
+                      <span className="text-[10px] text-lumos-text-secondary/60">({group.items.length})</span>
+                    </div>
+                    <span className="text-sm font-black text-lumos-text-primary whitespace-nowrap">{formatBRL(subtotal)}<span className="text-[10px] text-lumos-text-secondary font-normal ml-1">/mês</span></span>
+                  </div>
+                  {!isCollapsed && group.items.map(cost => (
+                    <MobileCard key={cost.id} className={clsx(!cost.is_active && 'opacity-50')}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-lumos-text-primary truncate">{cost.name}</div>
+                          {cost.notes && <div className="text-[10px] text-lumos-text-secondary italic truncate">{cost.notes}</div>}
+                        </div>
+                        <span className="text-sm font-black text-lumos-text-primary whitespace-nowrap">{formatBRL(cost.amount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-2">
+                        <span className="text-[11px] text-lumos-text-secondary truncate">
+                          {(PAYMENT_METHODS.find(m => m.value === cost.payment_method)?.label ?? cost.payment_method)} · {cost.paid_by || 'Lumos'}
+                        </span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button onClick={() => toggleActive(cost)} className="text-lumos-text-secondary hover:text-lumos-yellow transition-colors" title={cost.is_active ? 'Desativar' : 'Ativar'}>
+                            {cost.is_active ? <ToggleRight className="w-6 h-6 text-green-500" /> : <ToggleLeft className="w-6 h-6" />}
+                          </button>
+                          <button onClick={() => handleEdit(cost)} className="p-1.5 text-lumos-text-secondary hover:text-blue-400 hover:bg-blue-500/10 rounded-lumos transition-all" title="Editar"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => { setDeletingId(cost.id); setIsDeleteModalOpen(true); }} className="p-1.5 text-lumos-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lumos transition-all" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                    </MobileCard>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+            <div className="px-4 py-3 bg-lumos-yellow/5 border-t-2 border-lumos-yellow/30 flex items-center justify-between gap-3">
+              <span className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Total Mensal (ativos)</span>
+              <span className="text-lg font-black text-lumos-yellow whitespace-nowrap">{formatBRL(totalMonthly)}</span>
+            </div>
+          </MobileCardList>
+          </>
         )}
       </div>
 
