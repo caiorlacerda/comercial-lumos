@@ -27,41 +27,15 @@ serve(async (req) => {
     return new Response('unauthorized', { status: 401 })
   }
 
-  let payloadReq: { notification_id?: string; debug?: boolean; email?: string } = {}
+  let notification_id: string | undefined
   try {
-    payloadReq = await req.json()
+    ({ notification_id } = await req.json())
   } catch {
     return new Response('bad request', { status: 400 })
   }
+  if (!notification_id) return new Response('missing notification_id', { status: 400 })
 
   const supa = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
-
-  // --- Modo debug temporário: { debug: true, email } ---------------------
-  // Conta as inscrições do usuário e tenta enviar um push de teste, devolvendo
-  // o resultado detalhado (contagem + erros) de forma síncrona.
-  if (payloadReq.debug) {
-    const { data: u } = await supa.from('app_users').select('id').eq('email', payloadReq.email).maybeSingle()
-    if (!u) return new Response(JSON.stringify({ step: 'user', found: false, email: payloadReq.email }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    const { data: subs, error: subErr } = await supa.from('push_subscriptions').select('id, endpoint, p256dh, auth').eq('user_id', u.id)
-    if (subErr) return new Response(JSON.stringify({ step: 'subs', error: subErr.message }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    const out = { step: 'send', user_id: u.id, subscription_count: subs?.length ?? 0, results: [] as any[] }
-    if (subs?.length) {
-      webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
-      const payload = JSON.stringify({ title: '🔔 Teste de push', body: 'Debug: chegou!', link: '/', tag: 'debug' })
-      for (const s of subs) {
-        try {
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload)
-          out.results.push({ endpoint: s.endpoint.slice(0, 40), ok: true })
-        } catch (err) {
-          out.results.push({ endpoint: s.endpoint.slice(0, 40), ok: false, statusCode: (err as any)?.statusCode, message: String((err as any)?.message ?? err).slice(0, 300) })
-        }
-      }
-    }
-    return new Response(JSON.stringify(out, null, 2), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  }
-
-  const notification_id = payloadReq.notification_id
-  if (!notification_id) return new Response('missing notification_id', { status: 400 })
 
   // 1) Carrega a notificação criada.
   const { data: n } = await supa
