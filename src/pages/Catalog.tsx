@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
 import { useToast } from '@/context/ToastContext';
+import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 
 interface CatalogItem {
   id: string;
@@ -283,7 +284,7 @@ export default function Catalog() {
               
               {isExpanded && (
                 <div className="card !p-0 overflow-hidden border-lumos-yellow/10">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto hidden lg:block">
                     <table className="w-full text-sm table-fixed">
                       <thead>
                         <tr className="text-left text-xs uppercase text-lumos-text-secondary bg-lumos-bg/30 border-b border-lumos-border">
@@ -318,6 +319,20 @@ export default function Catalog() {
                       </tbody>
                     </table>
                   </div>
+                  {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+                  <MobileCardList>
+                    {groupItems.length === 0 ? (
+                      <div className="px-6 py-8 text-center text-lumos-text-secondary italic text-sm">Nenhum item encontrado neste grupo.</div>
+                    ) : groupItems.map((item) => (
+                      <CatalogCard
+                        key={item.id}
+                        item={item}
+                        onToggleStatus={toggleStatus}
+                        onEdit={handleOpenModal}
+                        onDelete={triggerSingleDelete}
+                      />
+                    ))}
+                  </MobileCardList>
                 </div>
               )}
             </div>
@@ -613,6 +628,55 @@ const CatalogRow = memo(({
       </div>
     </td>
   </tr>
+));
+
+// Versão em cartão do CatalogRow, usada no celular.
+const CatalogCard = memo(({
+  item,
+  onToggleStatus,
+  onEdit,
+  onDelete,
+}: {
+  item: CatalogItem;
+  onToggleStatus: (item: CatalogItem) => void;
+  onEdit: (item: CatalogItem) => void;
+  onDelete: (item: CatalogItem) => void;
+}) => (
+  <MobileCard className={clsx(!item.is_active && 'opacity-60')}>
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="font-medium text-lumos-text-primary truncate">{item.name}</div>
+        {item.description && (
+          <div className="text-[11px] text-lumos-text-secondary mt-0.5 line-clamp-1">{item.description}</div>
+        )}
+      </div>
+      <span className="font-mono text-sm font-bold text-lumos-text-primary whitespace-nowrap">{formatCurrency(item.default_unit_cost)}</span>
+    </div>
+    <div className="flex items-center justify-between gap-2 mt-2">
+      <div className="flex items-center gap-2 min-w-0">
+        {item.subcategory && (
+          <span className="text-[11px] text-lumos-text-secondary truncate">{item.subcategory}</span>
+        )}
+        <span className="uppercase text-[9px] font-bold text-lumos-text-primary bg-lumos-bg/50 px-2 py-0.5 rounded-full border border-lumos-border flex-shrink-0">
+          {item.unit_label}
+        </span>
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          onClick={() => onToggleStatus(item)}
+          className={clsx(
+            'flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-1 rounded-full border transition-colors',
+            item.is_active ? 'text-green-500 bg-green-500/10 border-green-500/20' : 'text-lumos-text-secondary bg-lumos-text-secondary/10 border-lumos-text-secondary/20'
+          )}
+        >
+          {item.is_active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+          {item.is_active ? 'Ativo' : 'Inativo'}
+        </button>
+        <button onClick={() => onEdit(item)} className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow transition-colors"><Edit2 className="w-4 h-4" /></button>
+        <button onClick={() => onDelete(item)} className="p-1.5 text-lumos-text-secondary hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+      </div>
+    </div>
+  </MobileCard>
 ));
 
 const CatalogGroupHeader = memo(({ 

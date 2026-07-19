@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
+import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 import ClientModal from '@/components/clients/ClientModal';
 
 interface Client {
@@ -278,7 +279,7 @@ export default function Clients() {
       ) : (
         <div className="space-y-4">
         <div className="card !p-0 overflow-hidden shadow-sm animate-in fade-in zoom-in-95 duration-500">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto hidden lg:block">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-bg/50 border-b border-lumos-border">
@@ -343,6 +344,33 @@ export default function Clients() {
             </tbody>
           </table>
           </div>
+          {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+          <MobileCardList>
+            {pagedClients.map((client) => (
+              <MobileCard key={client.id} onClick={() => navigate(`/clientes/${client.id}`)}>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lumos bg-lumos-bg border border-lumos-border flex items-center justify-center text-lumos-yellow flex-shrink-0">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-black text-lumos-text-primary tracking-tight truncate">{client.name}</p>
+                    {client.agency_name && (
+                      <p className="text-[10px] font-bold text-lumos-text-secondary uppercase truncate">Via {client.agency_name}</p>
+                    )}
+                  </div>
+                  <span className="font-black text-green-500 text-sm whitespace-nowrap">{formatCurrency(client.total_approved || 0)}</span>
+                </div>
+                <div className="flex items-center gap-4 mt-2 pl-12">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-lumos-text-secondary">
+                    <Users className="w-3.5 h-3.5 text-lumos-yellow" /> {client.contact_count} contatos
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-lumos-text-secondary">
+                    <Briefcase className="w-3.5 h-3.5 text-lumos-yellow" /> {client.budget_count} projetos
+                  </span>
+                </div>
+              </MobileCard>
+            ))}
+          </MobileCardList>
         </div>
         <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredClients.length} pageSize={PAGE_SIZE} />
         </div>

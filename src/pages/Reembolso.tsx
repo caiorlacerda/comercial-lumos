@@ -23,6 +23,7 @@ import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
@@ -451,7 +452,7 @@ export default function Reembolso() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden lg:block">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
@@ -550,6 +551,58 @@ export default function Reembolso() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+        <MobileCardList>
+          {loading ? (
+            <MobileCardSkeleton rows={5} />
+          ) : reimbursements.length === 0 ? (
+            <MobileCardEmpty>Nenhum reembolso.</MobileCardEmpty>
+          ) : (
+            reimbursements.map((r) => (
+              <MobileCard key={r.id}>
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <span className="text-[11px] font-bold text-lumos-text-primary truncate">
+                    {isAdmin ? (r.requester?.full_name || '—') : new Date(r.expense_date).toLocaleDateString('pt-BR')}
+                  </span>
+                  <StatusBadge status={r.status} />
+                </div>
+                <div className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate">{r.description}</div>
+                {r.project && (
+                  <div className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest truncate mt-0.5">Projeto: {r.project.name}</div>
+                )}
+                <div className="flex items-center justify-between gap-3 mt-2">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}
+                    </span>
+                    {isAdmin && (
+                      <span className="text-[10px] text-lumos-text-secondary">{new Date(r.expense_date).toLocaleDateString('pt-BR')}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {isAdmin ? (
+                      <>
+                        {r.status === 'pendente' && (
+                          <>
+                            <button onClick={() => updateStatus(r.id, 'aprovado')} title="Aprovar" className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-colors"><CheckCircle2 className="w-4 h-4" /></button>
+                            <button onClick={() => updateStatus(r.id, 'rejeitado')} title="Rejeitar" className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors"><XCircle className="w-4 h-4" /></button>
+                          </>
+                        )}
+                        {r.status === 'aprovado' && <button onClick={() => updateStatus(r.id, 'pago')} className="btn-primary text-[10px] px-2 py-1 h-auto">Pagar</button>}
+                        <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} title="Excluir" className="p-1.5 text-lumos-text-secondary hover:text-red-500 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      </>
+                    ) : (
+                      r.status === 'pendente' && (
+                        <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} title="Excluir" className="p-1.5 text-lumos-text-secondary hover:text-red-500 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      )
+                    )}
+                  </div>
+                </div>
+              </MobileCard>
+            ))
+          )}
+        </MobileCardList>
       </div>
 
       {/* Batch Action Bar */}

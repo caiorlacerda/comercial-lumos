@@ -22,6 +22,7 @@ import { useToast } from '@/context/ToastContext';
 
 import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
+import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
 
@@ -380,7 +381,7 @@ export default function UsersPage() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden lg:block">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border">
@@ -497,6 +498,42 @@ export default function UsersPage() {
               )}
             </tbody>
           </table>
+
+          {/* Mobile: cartões (a tabela acima fica só no desktop) */}
+          <MobileCardList>
+            {loading ? (
+              <MobileCardSkeleton rows={6} />
+            ) : filteredUsers.length === 0 ? (
+              <MobileCardEmpty>Nenhum usuário encontrado.</MobileCardEmpty>
+            ) : (
+              pagedUsers.map((user) => (
+                <MobileCard key={user.id} onClick={() => openEditModal(user)}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lumos bg-lumos-yellow/10 flex items-center justify-center text-lumos-yellow font-bold text-sm border border-lumos-yellow/20 flex-shrink-0">
+                      {user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-lumos-text-primary tracking-tight truncate">{user.full_name}</div>
+                      <div className="text-xs text-lumos-text-secondary truncate">{user.email}</div>
+                    </div>
+                    {user.status === 'ativo' ? (
+                      <span className="flex items-center text-[10px] text-green-500 font-bold uppercase tracking-wider flex-shrink-0"><CheckCircle2 className="w-3 h-3 mr-1" /> Ativo</span>
+                    ) : (
+                      <span className="flex items-center text-[10px] text-red-500 font-bold uppercase tracking-wider flex-shrink-0"><XCircle className="w-3 h-3 mr-1" /> Inativo</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 pl-[52px]">
+                    <span className="text-[11px] font-medium text-lumos-text-primary truncate">{user.job_title || 'Não definido'}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border flex-shrink-0 ${getRoleBadgeColor(user.role)}`}>
+                      <Shield className="w-2.5 h-2.5 mr-1" />
+                      {user.role.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                </MobileCard>
+              ))
+            )}
+          </MobileCardList>
+
           <div className="px-6 pb-4">
             <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredUsers.length} pageSize={PAGE_SIZE} />
           </div>
