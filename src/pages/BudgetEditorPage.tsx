@@ -20,7 +20,6 @@ import {
   ExternalLink,
   MessageSquare,
   FileText,
-  Info,
   Library,
   X,
   FileStack,
@@ -361,7 +360,7 @@ export default function BudgetEditorPage() {
         nf_pct: 0.18,
         discount_value: 0,
         validity_days: 7,
-        payment_terms: '60 dias após a emissão da nota'
+        payment_terms: '30 dias após a emissão da nota'
       };
       
       setBudget(draftBudget);
@@ -1460,7 +1459,7 @@ export default function BudgetEditorPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               <div className="space-y-4">
                 <div>
                   <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block flex items-center gap-1">
@@ -1468,7 +1467,7 @@ export default function BudgetEditorPage() {
                   </label>
                   <RichTextEditor
                     editable={!isReadOnly}
-                    minHeight={160}
+                    minHeight={360}
                     value={version?.notes_client || ''}
                     onChange={(html) => {
                       setVersion(v => v ? { ...v, notes_client: html } : null);
@@ -1527,20 +1526,6 @@ export default function BudgetEditorPage() {
                 </div>
               </div>
               <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block flex items-center gap-1">
-                    <Info className="w-3 h-3" /> Observações Internas (Não aparecem no PDF)
-                  </label>
-                  <RichTextEditor
-                    editable={!isReadOnly}
-                    minHeight={80}
-                    value={version?.notes_internal || ''}
-                    onChange={(html) => {
-                      setVersion(v => v ? { ...v, notes_internal: html } : null);
-                      isDirty.current = true;
-                    }}
-                  />
-                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Pagamento</label>
