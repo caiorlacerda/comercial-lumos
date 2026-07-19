@@ -1095,7 +1095,7 @@ export default function FinanceiroDashboard() {
                         </div>
 
                         <div className="overflow-x-auto custom-scrollbar">
-                          <table className="w-full text-left text-xs font-medium border-collapse">
+                          <table className="w-full text-left text-xs font-medium border-collapse lumos-sticky-1">
                             <thead>
                               <tr className="bg-lumos-surface/40 text-[9px] font-black text-lumos-text-secondary uppercase tracking-wider border-b border-lumos-border">
                                 <th className="py-2.5 px-3">Cliente</th>

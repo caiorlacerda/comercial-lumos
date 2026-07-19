@@ -272,7 +272,7 @@ export default function MonitoramentoEquipe() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left lumos-sticky-1">
             <thead>
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider">
                 <th className="px-4 py-3">Pessoa</th>
@@ -353,7 +353,7 @@ export default function MonitoramentoEquipe() {
           <div className="py-8 text-center text-sm text-lumos-text-secondary">Sem atividade registrada no período.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-left lumos-sticky-1">
               <thead>
                 <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[9px] font-black text-lumos-text-secondary uppercase tracking-widest">
                   <th className="px-4 py-2.5">#</th>
@@ -436,7 +436,7 @@ export default function MonitoramentoEquipe() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-left lumos-sticky-1">
               <thead>
                 <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider">
                   <th className="px-4 py-3">Tarefa</th>

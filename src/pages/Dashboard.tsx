@@ -459,7 +459,7 @@ export default function Dashboard() {
         {/* Budgets List (Recent 5) */}
         <div className="card overflow-visible !p-0 shadow-sm border-lumos-border animate-in fade-in slide-in-from-bottom-6 duration-700">
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-left lumos-sticky-1">
               <thead>
                 <tr className="bg-lumos-bg/50 border-b border-lumos-border">
                   <th 
