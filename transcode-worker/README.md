@@ -31,20 +31,25 @@ Guarde esse valor — ele vai no `TRANSCODE_SECRET` (abaixo) e no `<SEGREDO>` da
 
 ## 2) Crie o arquivo de variáveis `env.yaml` (NÃO comitar)
 
-Nesta pasta (`transcode-worker/`), crie `env.yaml`:
+Nesta pasta (`transcode-worker/`), crie `env.yaml` com **3 valores** (sem o JSON —
+a autenticação no Drive é feita pela identidade do Cloud Run, ver passo 3):
 
 ```yaml
 TRANSCODE_SECRET: "COLE_O_SEGREDO_DO_PASSO_1"
 SUPABASE_URL: "https://byntpekyfhzwfihjhzuo.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY: "COLE_A_SERVICE_ROLE_KEY_DO_SUPABASE"
-GOOGLE_SERVICE_ACCOUNT_JSON: '{"type":"service_account", ... COLE O JSON INTEIRO EM UMA LINHA ... }'
 ```
 
 > A `service_role key` está em Supabase → Project Settings → API.
-> O `GOOGLE_SERVICE_ACCOUNT_JSON` é o mesmo JSON do service account do Drive
-> (o mesmo já usado nas edge functions). Cole o conteúdo inteiro entre aspas simples.
 
 ## 3) Deploy (na pasta `transcode-worker/`)
+
+Descubra o e-mail do service account do Drive (o que já é usado na integração):
+```bash
+gcloud iam service-accounts list
+```
+Copie o e-mail (algo como `...@comercial-lumos.iam.gserviceaccount.com`) e use em
+`--service-account` abaixo:
 
 ```bash
 gcloud run deploy lumos-transcode \
@@ -57,8 +62,13 @@ gcloud run deploy lumos-transcode \
   --timeout 3600 \
   --concurrency 1 \
   --max-instances 3 \
+  --service-account SEU_SERVICE_ACCOUNT_EMAIL \
   --env-vars-file env.yaml
 ```
+
+> O worker usa a identidade desse service account (ADC) pra falar com o Drive —
+> por isso não precisa colar o JSON. Alternativa: se preferir, dá pra passar
+> `GOOGLE_SERVICE_ACCOUNT_JSON` no `env.yaml` e omitir o `--service-account`.
 
 - `--allow-unauthenticated` + o header `x-transcode-secret` fazem a autenticação
   (mesmo padrão das nossas edge functions públicas).

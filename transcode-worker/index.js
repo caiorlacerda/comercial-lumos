@@ -11,7 +11,7 @@
 //      GOOGLE_SERVICE_ACCOUNT_JSON (o mesmo JSON do service account do Drive).
 
 import express from 'express';
-import { JWT } from 'google-auth-library';
+import { JWT, GoogleAuth } from 'google-auth-library';
 import { createClient } from '@supabase/supabase-js';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
@@ -24,18 +24,26 @@ const PORT = process.env.PORT || 8080;
 const SECRET = process.env.TRANSCODE_SECRET || '';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SA = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '{}');
+const SA = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON)
+  : null;
 
 const supa = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
+const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive'];
+
 async function driveToken() {
-  const client = new JWT({
-    email: SA.client_email,
-    key: SA.private_key,
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  });
-  const { access_token } = await client.authorize();
-  return access_token;
+  // Se o JSON do service account foi passado, usa ele. Senão, usa a identidade
+  // do Cloud Run (ADC) — deploy com --service-account=<email-do-SA-do-Drive>.
+  if (SA?.client_email && SA?.private_key) {
+    const client = new JWT({ email: SA.client_email, key: SA.private_key, scopes: DRIVE_SCOPES });
+    const { access_token } = await client.authorize();
+    return access_token;
+  }
+  const auth = new GoogleAuth({ scopes: DRIVE_SCOPES });
+  const client = await auth.getClient();
+  const { token } = await client.getAccessToken();
+  return token;
 }
 
 function runFfmpeg(inPath, outPath) {
