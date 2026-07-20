@@ -54,23 +54,28 @@ serve(async (req) => {
     const { data: cur } = await db.from('video_versions').select('id').eq('group_id', link.group_id).order('versao', { ascending: false }).limit(1).maybeSingle()
     if (cur?.id) versionId = cur.id
   }
-  const { data: version } = await db.from('video_versions').select('drive_file_id, mime_type, file_name').eq('id', versionId).maybeSingle()
+  const { data: version } = await db.from('video_versions').select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status').eq('id', versionId).maybeSingle()
   if (!version?.drive_file_id) return new Response('not found', { status: 404, headers: CORS })
+
+  // Se há um proxy MP4 pronto (transcode do ProRes/.mov), reproduz ele. O
+  // download continua entregando o arquivo original.
+  const useProxy = !!version.proxy_file_id && version.transcode_status === 'ready' && !wantsDownload
+  const fileId = useProxy ? version.proxy_file_id : version.drive_file_id
 
   const gToken = await googleToken()
   const range = req.headers.get('range')
   const driveRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${version.drive_file_id}?alt=media&supportsAllDrives=true`,
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
     { headers: { Authorization: `Bearer ${gToken}`, ...(range ? { Range: range } : {}) } }
   )
 
   const headers = new Headers(CORS)
   const rawType = version.mime_type || driveRes.headers.get('content-type') || 'video/mp4'
-  // .mov/quicktime com codec H.264 muitas vezes só toca no Chrome quando servido
-  // como video/mp4 (o container é compatível). Não conserta ProRes/HEVC — esses
-  // exigem transcodificação. Só afeta a reprodução; no download mantém o tipo real.
+  // Proxy já é MP4. Para o original .mov/quicktime, servir como video/mp4 ajuda
+  // o Chrome a tocar os que são H.264 (container compatível). No download,
+  // mantém o tipo real.
   const isMov = /quicktime/i.test(rawType) || /\.mov$/i.test(version.file_name || '')
-  headers.set('Content-Type', (isMov && !wantsDownload) ? 'video/mp4' : rawType)
+  headers.set('Content-Type', useProxy ? 'video/mp4' : ((isMov && !wantsDownload) ? 'video/mp4' : rawType))
   headers.set('Accept-Ranges', 'bytes')
   const cr = driveRes.headers.get('content-range'); if (cr) headers.set('Content-Range', cr)
   const cl = driveRes.headers.get('content-length'); if (cl) headers.set('Content-Length', cl)
