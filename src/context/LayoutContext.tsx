@@ -32,9 +32,11 @@ export function getSectionFromPath(path: string): SectionType {
   if (
     path === '/usuarios' ||
     path === '/auditoria' ||
-    path === '/configuracoes' ||
+    path.startsWith('/configuracoes') ||
     path === '/equipe' ||
-    path === '/monitoramento'
+    path === '/monitoramento' ||
+    path === '/mural' ||
+    path === '/comunicados'
   ) {
     return 'configuracoes';
   }
