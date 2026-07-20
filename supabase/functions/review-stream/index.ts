@@ -65,7 +65,12 @@ serve(async (req) => {
   )
 
   const headers = new Headers(CORS)
-  headers.set('Content-Type', version.mime_type || driveRes.headers.get('content-type') || 'video/mp4')
+  const rawType = version.mime_type || driveRes.headers.get('content-type') || 'video/mp4'
+  // .mov/quicktime com codec H.264 muitas vezes só toca no Chrome quando servido
+  // como video/mp4 (o container é compatível). Não conserta ProRes/HEVC — esses
+  // exigem transcodificação. Só afeta a reprodução; no download mantém o tipo real.
+  const isMov = /quicktime/i.test(rawType) || /\.mov$/i.test(version.file_name || '')
+  headers.set('Content-Type', (isMov && !wantsDownload) ? 'video/mp4' : rawType)
   headers.set('Accept-Ranges', 'bytes')
   const cr = driveRes.headers.get('content-range'); if (cr) headers.set('Content-Range', cr)
   const cl = driveRes.headers.get('content-length'); if (cl) headers.set('Content-Length', cl)
