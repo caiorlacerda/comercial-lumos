@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone
+  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone, Newspaper
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -80,6 +80,7 @@ export const NAV_SECTIONS: Section[] = [
     title: 'CONFIGURAÇÕES',
     visibleWhen: () => true,
     items: [
+      { icon: Newspaper, label: 'Mural de Recados', path: '/mural' },
       { icon: Users2, label: 'Equipe', path: '/equipe' },
       { icon: Megaphone, label: 'Comunicados', path: '/comunicados', permission: 'admin' },
       { icon: Radio, label: 'Monitoramento', path: '/monitoramento', permission: 'admin' },

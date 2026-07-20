@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell, Megaphone, Home as HomeIcon } from 'lucide-react';
+import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell, Megaphone, Newspaper, Home as HomeIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
@@ -124,6 +124,21 @@ export default function MobileTabBar() {
       {/* Bottom Sheet "Mais" */}
       <BottomSheet open={maisOpen} onOpenChange={setMaisOpen} title="Menu">
         <div className="space-y-1.5 font-work-sans">
+          {/* Mural de Recados */}
+          <button
+            onClick={() => {
+              setMaisOpen(false);
+              navigate('/mural');
+            }}
+            className="flex items-center justify-between w-full h-12 px-3 rounded-lumos hover:bg-lumos-text-secondary/5 transition-colors text-left"
+          >
+            <div className="flex items-center gap-3">
+              <Newspaper className="w-5 h-5 text-lumos-text-secondary" />
+              <span className="text-sm font-bold text-lumos-text-primary">Mural de Recados</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-lumos-text-secondary opacity-50" />
+          </button>
+
           {/* Equipe */}
           <button
             onClick={() => {
