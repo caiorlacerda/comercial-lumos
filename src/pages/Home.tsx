@@ -15,9 +15,11 @@ import {
   ChevronRight, 
   Flame, 
   ExternalLink,
-  CheckCircle2
+  CheckCircle2,
+  Newspaper
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { MuralFeed } from '@/components/mural/MuralFeed';
 import Confetti from '@/components/common/Confetti';
 import UserAvatar from '@/components/common/UserAvatar';
 import OnboardingGate from '@/components/common/OnboardingGate';
@@ -322,9 +324,25 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Mural de Recados (feed do time) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between pb-1.5">
+          <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2">
+            <Newspaper className="w-4 h-4 text-lumos-yellow" /> Mural de Recados
+          </h2>
+          <button
+            onClick={() => navigate('/mural')}
+            className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary hover:text-lumos-yellow transition-colors flex items-center gap-1"
+          >
+            Ver tudo <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+        <MuralFeed limit={3} emptyHint="Nenhum recado ainda. Os avisos da administração aparecem aqui." />
+      </div>
+
       {/* Main Grid Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left / Main: Tasks List */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between pb-1.5">

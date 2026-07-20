@@ -30,6 +30,7 @@ const AprovacaoPublica = lazy(() => import('@/pages/AprovacaoPublica'));
 const Equipe = lazy(() => import('@/pages/Equipe'));
 const MonitoramentoEquipe = lazy(() => import('@/pages/MonitoramentoEquipe'));
 const Comunicados = lazy(() => import('@/pages/Comunicados'));
+const Mural = lazy(() => import('@/pages/Mural'));
 
 // Financeiro
 const FinanceiroDashboard = lazy(() => import('@/pages/FinanceiroDashboard'));
@@ -772,6 +773,14 @@ function AppContent() {
                 <PermissionGuard permission="admin">
                   <Comunicados />
                 </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/mural"
+            element={
+              <AuthWrapper>
+                <Mural />
               </AuthWrapper>
             }
           />

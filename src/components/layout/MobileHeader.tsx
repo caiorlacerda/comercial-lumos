@@ -18,7 +18,7 @@ export default function MobileHeader() {
     '/financeiro', '/financeiro/contas-pagar', '/financeiro/contas-receber', '/financeiro/reembolso',
     '/financeiro/custos-projeto', '/financeiro/fluxo-de-caixa', '/financeiro/custos-fixos',
     '/financeiro/configuracao', '/financeiro/relatorios', '/producao/dashboard', '/ordem-do-dia',
-    '/producao/fornecedores', '/usuarios', '/auditoria', '/comunicados'
+    '/producao/fornecedores', '/usuarios', '/auditoria', '/comunicados', '/mural'
   ];
 
   const isDetailPage = !mainScreens.includes(location.pathname);
@@ -47,6 +47,7 @@ export default function MobileHeader() {
     if (path === '/usuarios') return 'Usuários';
     if (path === '/auditoria') return 'Auditoria';
     if (path === '/comunicados') return 'Comunicados';
+    if (path === '/mural') return 'Mural de Recados';
     
     if (path.startsWith('/clientes/')) return 'Perfil do Cliente';
     if (path.startsWith('/orcamentos/')) return 'Editor de Orçamento';
