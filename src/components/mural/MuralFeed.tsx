@@ -2,16 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/context/ToastContext';
 import UserAvatar from '@/components/common/UserAvatar';
-import { Pin, PinOff, Pencil, Trash2, Megaphone } from 'lucide-react';
+import { Pin, PinOff, Pencil, Trash2, Megaphone, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
+import { getVideoEmbed } from '@/lib/videoEmbed';
 
 export type MuralPost = {
   id: string;
   author_id: string | null;
   title: string | null;
   content: string;
+  image_url: string | null;
+  video_url: string | null;
   pinned: boolean;
   created_at: string;
   updated_at: string | null;
@@ -38,7 +41,7 @@ export function MuralFeed({
   const fetchPosts = useCallback(async () => {
     let q = supabase
       .from('mural_posts')
-      .select('id, author_id, title, content, pinned, created_at, updated_at, author:app_users(id, full_name, avatar_url, role)')
+      .select('id, author_id, title, content, image_url, video_url, pinned, created_at, updated_at, author:app_users(id, full_name, avatar_url, role)')
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false });
     if (limit) q = q.limit(limit);
@@ -141,7 +144,42 @@ export function MuralFeed({
 
           <div className="mt-3">
             {post.title && <h3 className="text-base font-black text-lumos-text-primary tracking-tight mb-1">{post.title}</h3>}
-            <p className="text-sm text-lumos-text-primary/90 leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
+            {post.content && <p className="text-sm text-lumos-text-primary/90 leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>}
+
+            {post.image_url && (
+              <a href={post.image_url} target="_blank" rel="noopener noreferrer" className="block mt-3">
+                <img
+                  src={post.image_url}
+                  alt={post.title || 'Imagem do recado'}
+                  loading="lazy"
+                  className="w-full max-h-[26rem] object-cover rounded-lumos border border-lumos-border"
+                />
+              </a>
+            )}
+
+            {post.video_url && (() => {
+              const embed = getVideoEmbed(post.video_url);
+              return embed ? (
+                <div className="mt-3 aspect-video w-full overflow-hidden rounded-lumos border border-lumos-border bg-black">
+                  <iframe
+                    src={embed.embedUrl}
+                    title={post.title || 'Vídeo do recado'}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <a
+                  href={post.video_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-lumos-yellow hover:underline"
+                >
+                  <ExternalLink className="w-4 h-4" /> Assistir ao vídeo
+                </a>
+              );
+            })()}
           </div>
         </article>
       ))}
