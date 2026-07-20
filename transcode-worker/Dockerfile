@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # ffmpeg para o transcode.
 RUN apt-get update \
