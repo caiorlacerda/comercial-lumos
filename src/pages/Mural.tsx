@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { MuralFeed, type MuralPost } from '@/components/mural/MuralFeed';
-import { Megaphone, Send, X, Pin } from 'lucide-react';
+import { getVideoEmbed } from '@/lib/videoEmbed';
+import { Megaphone, Send, X, Pin, ImagePlus, Film, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function Mural() {
@@ -13,14 +14,21 @@ export default function Mural() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [pinned, setPinned] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
     setTitle('');
     setContent('');
     setPinned(false);
+    setImageUrl(null);
+    setVideoUrl('');
     setEditingId(null);
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const startEdit = (post: MuralPost) => {
@@ -28,25 +36,57 @@ export default function Mural() {
     setTitle(post.title || '');
     setContent(post.content);
     setPinned(post.pinned);
+    setImageUrl(post.image_url || null);
+    setVideoUrl(post.video_url || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Selecione uma imagem.'); return; }
+    if (file.size > 8 * 1024 * 1024) { toast.error('Imagem muito grande (máx. 8MB).'); return; }
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `posts/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('mural').upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from('mural').getPublicUrl(path);
+      setImageUrl(data.publicUrl);
+    } catch (err: any) {
+      console.error('Erro no upload da imagem:', err);
+      toast.error(`Falha no upload: ${err?.message || 'erro'}`);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !profile?.id) return;
+    const hasContent = !!content.trim() || !!imageUrl || !!videoUrl.trim();
+    if (!hasContent || !profile?.id) return;
     setSaving(true);
     try {
+      const fields = {
+        title: title.trim() || null,
+        content: content.trim(),
+        image_url: imageUrl,
+        video_url: videoUrl.trim() || null,
+        pinned,
+      };
       if (editingId) {
         const { error } = await supabase
           .from('mural_posts')
-          .update({ title: title.trim() || null, content: content.trim(), pinned, updated_at: new Date().toISOString() })
+          .update({ ...fields, updated_at: new Date().toISOString() })
           .eq('id', editingId);
         if (error) throw error;
         toast.success('Recado atualizado.');
       } else {
         const { error } = await supabase
           .from('mural_posts')
-          .insert({ author_id: profile.id, title: title.trim() || null, content: content.trim(), pinned });
+          .insert({ author_id: profile.id, ...fields });
         if (error) throw error;
         toast.success('Recado publicado no mural!');
       }
@@ -102,6 +142,52 @@ export default function Mural() {
             placeholder="Escreva o recado para o time…"
             className="input-lumos w-full py-3 resize-none"
           />
+
+          {/* Foto */}
+          {imageUrl ? (
+            <div className="relative">
+              <img src={imageUrl} alt="Prévia" className="w-full max-h-72 object-cover rounded-lumos border border-lumos-border" />
+              <button
+                type="button"
+                onClick={() => setImageUrl(null)}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                title="Remover foto"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-2 h-9 px-3 rounded-lumos border border-lumos-border text-[13px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-text-secondary/40 transition-colors disabled:opacity-50"
+            >
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+              {uploading ? 'Enviando…' : 'Adicionar foto'}
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+
+          {/* Vídeo por link (YouTube ou Google Drive) */}
+          <div>
+            <div className="relative">
+              <Film className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
+              <input
+                type="text"
+                value={videoUrl}
+                onChange={e => setVideoUrl(e.target.value)}
+                placeholder="Link de vídeo (YouTube ou Google Drive)"
+                className="input-lumos pl-10 w-full h-11"
+              />
+            </div>
+            {videoUrl.trim() && !getVideoEmbed(videoUrl) && (
+              <p className="text-[11px] text-amber-600 dark:text-lumos-yellow mt-1">
+                Link não reconhecido como YouTube/Drive, vai aparecer como um link clicável. Para o player embutido, use a URL do vídeo no YouTube ou o link de compartilhamento do arquivo no Drive.
+              </p>
+            )}
+          </div>
+
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
@@ -115,7 +201,7 @@ export default function Mural() {
             </button>
             <button
               type="submit"
-              disabled={!content.trim() || saving}
+              disabled={(!content.trim() && !imageUrl && !videoUrl.trim()) || saving || uploading}
               className="btn-primary h-10 px-5 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
