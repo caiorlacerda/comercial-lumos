@@ -21,7 +21,7 @@ export const STATUS_UI: Record<ReviewStatus, { label: string; color: string }> =
 // Vídeo → tarefa (usado quando o status do vídeo muda no painel de revisão).
 export const STATUS_TO_TASK: Record<ReviewStatus, string> = {
   EM_REVISAO_INTERNA: 'revisao_interna', ALTERACOES_INTERNAS: 'alteracoes',
-  EM_REVISAO_CLIENTE: 'revisao_cliente', ALTERACOES_CLIENTE: 'alteracoes', APROVADO: 'entregue',
+  EM_REVISAO_CLIENTE: 'revisao_cliente', ALTERACOES_CLIENTE: 'alteracoes', APROVADO: 'concluido',
 };
 
 /**
