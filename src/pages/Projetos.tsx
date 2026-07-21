@@ -11,12 +11,13 @@ import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
 import { supabase } from '@/lib/supabase';
 
 const STATUS_OPTIONS = [
-  { value: 'iniciar', label: 'Iniciar' }, { value: 'pausado', label: 'Pausado' },
-  { value: 'aguard_captacao', label: 'Aguard. Captação' }, { value: 'aguard_material', label: 'Aguard. Material' },
-  { value: 'na_fila', label: 'Na Fila' }, { value: 'em_progresso', label: 'Em Progresso' },
-  { value: 'revisao_interna', label: 'Revisão Interna' }, { value: 'aprov_interna', label: 'Aprov. Interna' },
-  { value: 'revisao_cliente', label: 'Revisão do Cliente' }, { value: 'alteracoes', label: 'Alterações' },
-  { value: 'entregue', label: 'Entregue' }, { value: 'concluido', label: 'Concluído' },
+  { value: 'na_fila', label: 'Na fila' },
+  { value: 'em_progresso', label: 'Em andamento' },
+  { value: 'revisao_interna', label: 'Revisão interna' },
+  { value: 'revisao_cliente', label: 'Com o cliente' },
+  { value: 'alteracoes', label: 'Ajustes' },
+  { value: 'concluido', label: 'Concluído' },
+  { value: 'pausado', label: 'Pausado' },
 ];
 const PRIORITY_OPTIONS = [
   { value: 'baixa', label: 'Baixa' }, { value: 'media', label: 'Média' }, { value: 'alta', label: 'Alta' },
@@ -154,21 +155,16 @@ interface TaskSummary {
 
 export const TASK_STATUS_GROUPS = {
   nao_iniciado: [
-    { value: 'iniciar', label: 'Iniciar', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' },
-    { value: 'pausado', label: 'Pausado', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' },
-    { value: 'aguard_captacao', label: 'Aguard. Captação', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' },
-    { value: 'aguard_material', label: 'Aguard. Material', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' }
+    { value: 'na_fila', label: 'Na fila', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
+    { value: 'pausado', label: 'Pausado', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' }
   ],
   ativo: [
-    { value: 'na_fila', label: 'Na Fila', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
-    { value: 'em_progresso', label: 'Em Progresso', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
-    { value: 'revisao_interna', label: 'Revisão Interna', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-    { value: 'aprov_interna', label: 'Aprov. Interna', color: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
-    { value: 'revisao_cliente', label: 'Revisão do Cliente', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-    { value: 'alteracoes', label: 'Alterações', color: 'bg-red-500/10 text-red-400 border-red-500/20' }
+    { value: 'em_progresso', label: 'Em andamento', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+    { value: 'revisao_interna', label: 'Revisão interna', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+    { value: 'revisao_cliente', label: 'Com o cliente', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+    { value: 'alteracoes', label: 'Ajustes', color: 'bg-red-500/10 text-red-400 border-red-500/20' }
   ],
   concluido: [
-    { value: 'entregue', label: 'Entregue', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
     { value: 'concluido', label: 'Concluído', color: 'bg-green-500/10 text-green-400 border-green-500/20' }
   ]
 };
@@ -1347,7 +1343,7 @@ export default function Projetos() {
           project_id: selectedProjectId,
           titulo: newTaskTitle.trim(),
           descricao: '',
-          status: 'iniciar',
+          status: 'na_fila',
           prioridade: 'media',
           ordem: nextOrder,
           data_inicio: null,
@@ -1488,7 +1484,7 @@ export default function Projetos() {
         project_id: selectedProjectId,
         titulo: t.titulo,
         descricao: t.descricao,
-        status: 'iniciar',
+        status: 'na_fila',
         prioridade: t.prioridade,
         ordem: startOrder + (index * 10),
         data_inicio: null,
@@ -1619,7 +1615,7 @@ export default function Projetos() {
             project_id: newProj.id,
             titulo: t.titulo,
             descricao: t.descricao,
-            status: 'iniciar',
+            status: 'na_fila',
             prioridade: t.prioridade,
             ordem: t.ordem,
             data_inicio: null,
@@ -2097,7 +2093,7 @@ export default function Projetos() {
                                         <button
                                           type="button"
                                           disabled={!canManage}
-                                          onClick={(e) => { e.stopPropagation(); handleUpdateTask(task.id, { status: isTaskCompleted ? 'iniciar' : 'concluido' }); }}
+                                          onClick={(e) => { e.stopPropagation(); handleUpdateTask(task.id, { status: isTaskCompleted ? 'na_fila' : 'concluido' }); }}
                                           title={isTaskCompleted ? 'Reabrir tarefa' : 'Concluir tarefa'}
                                           className={clsx(
                                             'mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors',
@@ -2261,7 +2257,7 @@ export default function Projetos() {
                                   <button
                                     type="button"
                                     disabled={!canManage}
-                                    onClick={() => handleUpdateTask(task.id, { status: isTaskCompleted ? 'iniciar' : 'concluido' })}
+                                    onClick={() => handleUpdateTask(task.id, { status: isTaskCompleted ? 'na_fila' : 'concluido' })}
                                     className={clsx(
                                       'mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors',
                                       isTaskCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-lumos-border text-transparent',

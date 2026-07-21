@@ -1,20 +1,26 @@
 // Classificação dos status de tarefa (project_tasks) em grupos.
 // Mantém os status usados no board (Projetos.tsx) + legados do schema base.
 
-export const TASK_DONE = ['entregue', 'concluido'];
+// 6 status atuais (+ pausado). Os legados continuam aqui por compatibilidade
+// com dados antigos até a migração converter tudo.
+export const TASK_DONE = ['concluido', 'entregue'];
 export const TASK_ACTIVE = [
-  'na_fila', 'em_progresso', 'revisao_interna', 'aprov_interna',
-  'revisao_cliente', 'alteracoes', 'em_andamento',
+  'em_progresso', 'revisao_interna', 'revisao_cliente', 'alteracoes',
+  'aprov_interna', 'em_andamento', // legados
 ];
-export const TASK_TODO = ['iniciar', 'pausado', 'aguard_captacao', 'aguard_material', 'a_fazer'];
+export const TASK_TODO = [
+  'na_fila', 'pausado',
+  'iniciar', 'aguard_captacao', 'aguard_material', 'a_fazer', // legados
+];
 
 export const TASK_LABELS: Record<string, string> = {
-  iniciar: 'Iniciar', pausado: 'Pausado', aguard_captacao: 'Aguard. Captação',
-  aguard_material: 'Aguard. Material', a_fazer: 'A Fazer',
-  na_fila: 'Na Fila', em_progresso: 'Em Progresso', em_andamento: 'Em Andamento',
-  revisao_interna: 'Revisão Interna', aprov_interna: 'Aprov. Interna',
-  revisao_cliente: 'Revisão do Cliente', alteracoes: 'Alterações',
-  entregue: 'Entregue', concluido: 'Concluído',
+  // atuais
+  na_fila: 'Na fila', em_progresso: 'Em andamento', revisao_interna: 'Revisão interna',
+  revisao_cliente: 'Com o cliente', alteracoes: 'Ajustes', concluido: 'Concluído',
+  pausado: 'Pausado',
+  // legados (mapeados para o texto novo)
+  iniciar: 'Na fila', aguard_captacao: 'Na fila', aguard_material: 'Na fila', a_fazer: 'Na fila',
+  em_andamento: 'Em andamento', aprov_interna: 'Revisão interna', entregue: 'Concluído',
 };
 
 export const taskLabel = (s?: string | null) => (s ? TASK_LABELS[s] || s : '—');

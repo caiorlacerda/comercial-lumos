@@ -194,10 +194,13 @@ export default function Home() {
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, { label: string; class: string }> = {
-      'iniciar': { label: 'A Fazer', class: 'bg-lumos-text-secondary/15 text-lumos-text-secondary' },
-      'desenvolvimento': { label: 'Em Progresso', class: 'bg-blue-500/15 text-blue-400' },
-      'revisao': { label: 'Em Revisão', class: 'bg-purple-500/15 text-purple-400' },
-      'aprovado': { label: 'Aprovada', class: 'bg-green-500/15 text-green-400' },
+      'na_fila': { label: 'Na fila', class: 'bg-lumos-text-secondary/15 text-lumos-text-secondary' },
+      'pausado': { label: 'Pausado', class: 'bg-lumos-text-secondary/15 text-lumos-text-secondary' },
+      'em_progresso': { label: 'Em andamento', class: 'bg-orange-500/15 text-orange-400' },
+      'revisao_interna': { label: 'Revisão interna', class: 'bg-purple-500/15 text-purple-400' },
+      'revisao_cliente': { label: 'Com o cliente', class: 'bg-amber-500/15 text-amber-400' },
+      'alteracoes': { label: 'Ajustes', class: 'bg-red-500/15 text-red-400' },
+      'concluido': { label: 'Concluído', class: 'bg-green-500/15 text-green-400' },
     };
     const details = map[status] || { label: status, class: 'bg-lumos-text-secondary/15 text-lumos-text-secondary' };
     return (
