@@ -203,7 +203,9 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
       // Vídeos novos (qualquer nome). Cada upload nasce como um VÍDEO separado
       // (grupo próprio, versão 1) — a equipe empilha versões manualmente no app.
       const novos = (await listChildren(revisaoId))
-        .filter((f: any) => f.mimeType !== FOLDER_MIME && !SYSTEM_FILES.has(f.name) && !knownIds.has(f.id) && isVideoFile(f))
+        // Ignora os proxies gerados pelo transcode (__proxy.mp4): eles ficam
+        // "colados" na versão original (proxy_file_id), não são vídeos próprios.
+        .filter((f: any) => f.mimeType !== FOLDER_MIME && !SYSTEM_FILES.has(f.name) && !knownIds.has(f.id) && !String(f.name || '').includes('__proxy') && isVideoFile(f))
         .sort((a: any, b: any) => String(a.createdTime || '').localeCompare(String(b.createdTime || '')))
       if (!novos.length) continue
 
