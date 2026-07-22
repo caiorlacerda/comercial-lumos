@@ -87,7 +87,8 @@ export default function Equipe() {
       supabase.from('app_users').select('*').order('full_name'),
       supabase.from('team_members').select('*, app_user:app_users(avatar_url)').order('full_name'),
     ]);
-    setUsersRows((u.data as AppUserProfile[]) || []);
+    // Contas ocultas (de teste/visão) não entram na Equipe nem no contador.
+    setUsersRows(((u.data as AppUserProfile[]) || []).filter(x => !(x as any).hidden));
     setTeamRows((t.data as TeamMember[]) || []);
     setLoading(false);
   }, []);

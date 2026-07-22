@@ -59,6 +59,7 @@ export default function UsersPage() {
     role: 'basico' as UserRole,
     job_title: '',
     status: 'ativo' as UserStatus,
+    hidden: false,
     password: '',
     custom_permissions: {} as Record<string, boolean>,
   });
@@ -155,6 +156,7 @@ export default function UsersPage() {
           role: formData.role,
           job_title: formData.job_title,
           status: formData.status,
+          hidden: formData.hidden,
           custom_permissions: formData.custom_permissions,
         })
         .eq('id', selectedUser.id);
@@ -279,6 +281,7 @@ export default function UsersPage() {
       role: user.role,
       job_title: user.job_title || '',
       status: user.status,
+      hidden: (user as any).hidden || false,
       password: '',
       custom_permissions: { ...(user.custom_permissions || {}) },
     });
@@ -301,6 +304,7 @@ export default function UsersPage() {
       role: 'basico',
       job_title: '',
       status: 'ativo',
+      hidden: false,
       password: '',
       custom_permissions: {}
     });
@@ -459,7 +463,10 @@ export default function UsersPage() {
                           {user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-lumos-text-primary tracking-tight">{user.full_name}</span>
+                          <span className="text-sm font-bold text-lumos-text-primary tracking-tight">
+                            {user.full_name}
+                            {(user as any).hidden && <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary bg-lumos-text-secondary/15 border border-lumos-border px-1.5 py-0.5 rounded-full align-middle">Oculto</span>}
+                          </span>
                           <span className="text-xs text-lumos-text-secondary">{user.email}</span>
                         </div>
                       </div>
@@ -513,7 +520,10 @@ export default function UsersPage() {
                       {user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-lumos-text-primary tracking-tight truncate">{user.full_name}</div>
+                      <div className="text-sm font-bold text-lumos-text-primary tracking-tight truncate">
+                        {user.full_name}
+                        {(user as any).hidden && <span className="ml-1.5 text-[9px] font-black uppercase text-lumos-text-secondary bg-lumos-text-secondary/15 border border-lumos-border px-1.5 py-0.5 rounded-full">Oculto</span>}
+                      </div>
                       <div className="text-xs text-lumos-text-secondary truncate">{user.email}</div>
                     </div>
                     {user.status === 'ativo' ? (
@@ -751,6 +761,21 @@ export default function UsersPage() {
               onChange={(e) => setFormData({...formData, job_title: e.target.value})}
             />
           </div>
+
+          <label className="flex items-start gap-2.5 p-2.5 rounded-lumos border border-lumos-border/50 bg-lumos-bg/20 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.hidden}
+              onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
+              className="mt-0.5 rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer flex-shrink-0"
+            />
+            <span className="min-w-0">
+              <span className="text-xs font-bold text-lumos-text-primary block">Conta oculta</span>
+              <span className="text-[10px] text-lumos-text-secondary/80 leading-relaxed">
+                Não aparece na Equipe nem conta no total, e não pode ser atribuída em tarefas. Use para contas de teste que servem só pra você ver a visão de cada cargo.
+              </span>
+            </span>
+          </label>
 
           {formData.role !== 'admin' && (
             <div className="space-y-2">
