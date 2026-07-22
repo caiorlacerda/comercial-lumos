@@ -327,21 +327,20 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
         </div>
       )}
 
-      {/* Cabeçalho + ações */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-lumos-border">
-        <button
-          type="button"
-          onClick={toggleDocsCollapsed}
-          className="flex items-center gap-2 -my-1 py-1 pr-2 rounded-lumos hover:bg-lumos-text-secondary/[0.04] transition-colors"
-        >
+      {/* Cabeçalho + ações — a barra toda recolhe (ações param o clique). */}
+      <div
+        onClick={toggleDocsCollapsed}
+        className={clsx('flex flex-wrap items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-lumos-text-secondary/[0.03] transition-colors', !docsCollapsed && 'border-b border-lumos-border')}
+      >
+        <div className="flex items-center gap-2">
           <FolderOpen className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
           <h3 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Documentos</h3>
           <span className="text-[11px] text-lumos-text-secondary">{docs.length}</span>
           {docsCollapsed ? <ChevronDown className="w-4 h-4 text-lumos-text-secondary" /> : <ChevronUp className="w-4 h-4 text-lumos-text-secondary" />}
-        </button>
+        </div>
 
         {canManage && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             {folderId && (
               <a
                 href={`https://drive.google.com/drive/folders/${folderId}`}
