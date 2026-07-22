@@ -103,6 +103,16 @@ serve(async (req) => {
       }
     }
 
+    // 5b. Limpa referências que podem TRAVAR a exclusão do perfil (FKs sem
+    //     ON DELETE cascade/set null). invited_by aponta para app_users e não tem
+    //     ON DELETE; notifications/preferences podem não ter cascade. Falhas aqui
+    //     não são fatais (tabela pode nem existir).
+    for (const row of rows ?? []) {
+      await adminClient.from('app_users').update({ invited_by: null }).eq('invited_by', row.id)
+      await adminClient.from('notifications').delete().eq('user_id', row.id)
+      await adminClient.from('notification_preferences').delete().eq('user_id', row.id)
+    }
+
     // 6. Apaga os perfis em app_users (no-op se o cascade já removeu).
     const { error: profileDelErr } = await adminClient
       .from('app_users')
