@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FileText, FileSpreadsheet, Presentation, File as FileIcon, Link2,
-  Upload, Plus, Trash2, ExternalLink, FolderOpen, Loader2, ChevronDown,
+  Upload, Plus, Trash2, ExternalLink, FolderOpen, Loader2, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -301,6 +301,16 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     toast.success('Removido da lista. O arquivo continua no Drive.');
   };
 
+  // Seção recolhível (lembra a preferência entre projetos).
+  const [docsCollapsed, setDocsCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('lumos_docs_collapsed') === '1'; } catch { return false; }
+  });
+  const toggleDocsCollapsed = () => setDocsCollapsed(v => {
+    const n = !v;
+    try { localStorage.setItem('lumos_docs_collapsed', n ? '1' : '0'); } catch { /* noop */ }
+    return n;
+  });
+
   return (
     <div
       className={clsx('relative bg-lumos-surface border rounded-lumos overflow-hidden transition-colors', dragOver ? 'border-lumos-yellow' : 'border-lumos-border')}
@@ -319,11 +329,16 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
 
       {/* Cabeçalho + ações */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-lumos-border">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="w-4 h-4 text-lumos-yellow" />
+        <button
+          type="button"
+          onClick={toggleDocsCollapsed}
+          className="flex items-center gap-2 -my-1 py-1 pr-2 rounded-lumos hover:bg-lumos-text-secondary/[0.04] transition-colors"
+        >
+          <FolderOpen className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
           <h3 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Documentos</h3>
           <span className="text-[11px] text-lumos-text-secondary">{docs.length}</span>
-        </div>
+          {docsCollapsed ? <ChevronDown className="w-4 h-4 text-lumos-text-secondary" /> : <ChevronUp className="w-4 h-4 text-lumos-text-secondary" />}
+        </button>
 
         {canManage && (
           <div className="flex items-center gap-2">
@@ -364,6 +379,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
         )}
       </div>
 
+      <div className={clsx(docsCollapsed && 'hidden')}>
       {/* Abas de filtro: Todos + categorias. A aba ativa filtra a lista e é o
           destino dos uploads. */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-lumos-border overflow-x-auto">
@@ -464,6 +480,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
           })}
         </ul>
       )}
+      </div>
 
       {/* Modal: criar Google file */}
       <Modal isOpen={!!createType} onClose={() => setCreateType(null)}

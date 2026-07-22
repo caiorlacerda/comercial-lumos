@@ -311,25 +311,43 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     return l ? String(l) : 'p';
   }, [editor?.state]);
 
+  // Seção recolhível (lembra a preferência entre projetos).
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('lumos_notes_collapsed') === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => setCollapsed(v => {
+    const n = !v;
+    try { localStorage.setItem('lumos_notes_collapsed', n ? '1' : '0'); } catch { /* noop */ }
+    return n;
+  });
 
   if (!editor) return null;
 
   return (
     <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden">
-      <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2">
-        <StickyNote className="w-4 h-4 text-lumos-yellow" />
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        className={clsx('w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-lumos-text-secondary/[0.03] transition-colors', !collapsed && 'border-b border-lumos-border')}
+      >
+        <StickyNote className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
         <h3 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Anotações do Projeto</h3>
-        <span className="text-[11px] text-lumos-text-secondary">
-          <strong className="font-bold text-amber-500">@</strong> pessoas ·{' '}
-          <strong className="font-bold text-green-500">@@</strong> tarefas ·{' '}
-          <strong className="font-bold text-blue-500">@@@</strong> documentos
-        </span>
-        {saveState !== 'idle' && (
+        {!collapsed && (
+          <span className="text-[11px] text-lumos-text-secondary hidden sm:inline">
+            <strong className="font-bold text-amber-500">@</strong> pessoas ·{' '}
+            <strong className="font-bold text-green-500">@@</strong> tarefas ·{' '}
+            <strong className="font-bold text-blue-500">@@@</strong> documentos
+          </span>
+        )}
+        {saveState !== 'idle' && !collapsed && (
           <span className="ml-auto text-[10px] font-bold text-lumos-text-secondary flex items-center gap-1">
             {saveState === 'saving' ? <><Loader2 className="w-3 h-3 animate-spin" /> salvando…</> : 'salvo ✓'}
           </span>
         )}
-      </div>
+        {collapsed ? <ChevronDown className="w-4 h-4 text-lumos-text-secondary ml-auto flex-shrink-0" /> : <ChevronUp className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" />}
+      </button>
+
+      <div className={clsx(collapsed && 'hidden')}>
 
       {canManage && (
         <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b border-lumos-border/60 bg-lumos-bg/30">
@@ -411,6 +429,7 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

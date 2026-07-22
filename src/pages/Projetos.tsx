@@ -187,6 +187,7 @@ interface Task {
   ordem: number;
   data_inicio: string | null;
   data_fim: string | null;
+  data_entrega_cliente: string | null;
   responsavel_id: string | null;
 }
 
@@ -717,6 +718,8 @@ export default function Projetos() {
   
   // Permissions
   const canManage = isAdmin || can('ordem_do_dia');
+  // Prazo de entrega ao cliente: só admin, produção e atendimento veem (edição não).
+  const canSeeClientDeadline = ['admin', 'producao', 'atendimento'].includes(profile?.role || '');
 
   // Database States
   const [clients, setClients] = useState<Client[]>([]);
@@ -2048,7 +2051,8 @@ export default function Projetos() {
                                 <th className="py-2.5 px-2 w-36">Status</th>
                                 <th className="py-2.5 px-2 w-28">Prioridade</th>
                                 <th className="py-2.5 px-2 w-44">Responsável</th>
-                                <th className="py-2.5 px-2 w-32">Prazo</th>
+                                <th className="py-2.5 px-2 w-32">Prazo edição</th>
+                                {canSeeClientDeadline && <th className="py-2.5 px-2 w-32">Entrega cliente</th>}
                                 <th className="py-2.5 px-2 w-16 text-center">Ações</th>
                               </tr>
                             </thead>
@@ -2192,7 +2196,7 @@ export default function Projetos() {
                                       </div>
                                     </td>
 
-                                    {/* Date Picker End (Prazo) */}
+                                    {/* Date Picker End (Prazo de edição) */}
                                     <td className="py-2 px-2">
                                       <input
                                         type="date"
@@ -2202,6 +2206,19 @@ export default function Projetos() {
                                         className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-lumos-text-primary px-1.5 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
                                       />
                                     </td>
+
+                                    {/* Entrega ao cliente (só admin/produção/atendimento) */}
+                                    {canSeeClientDeadline && (
+                                      <td className="py-2 px-2">
+                                        <input
+                                          type="date"
+                                          value={task.data_entrega_cliente || ''}
+                                          disabled={!canManage}
+                                          onChange={(e) => handleUpdateTask(task.id, { data_entrega_cliente: e.target.value || null })}
+                                          className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-amber-600 dark:text-amber-400 px-1.5 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
+                                        />
+                                      </td>
+                                    )}
 
                                     {/* Actions cell */}
                                     <td className="py-2 px-2 text-center">
@@ -2316,8 +2333,21 @@ export default function Projetos() {
                                     disabled={!canManage}
                                     onChange={(e) => handleUpdateTask(task.id, { data_fim: e.target.value || null })}
                                     className="bg-transparent border border-lumos-border/40 rounded text-[11px] font-bold text-lumos-text-primary px-2 py-1 outline-none cursor-pointer focus:border-lumos-yellow"
+                                    title="Prazo de edição"
                                   />
                                 </div>
+                                {canSeeClientDeadline && (
+                                  <div className="flex items-center justify-between gap-3 mt-2 pl-[30px]">
+                                    <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">Entrega cliente</span>
+                                    <input
+                                      type="date"
+                                      value={task.data_entrega_cliente || ''}
+                                      disabled={!canManage}
+                                      onChange={(e) => handleUpdateTask(task.id, { data_entrega_cliente: e.target.value || null })}
+                                      className="bg-transparent border border-lumos-border/40 rounded text-[11px] font-bold text-amber-600 dark:text-amber-400 px-2 py-1 outline-none cursor-pointer focus:border-lumos-yellow"
+                                    />
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
