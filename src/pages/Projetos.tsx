@@ -1046,10 +1046,17 @@ export default function Projetos() {
 
   const tagById = (id: string) => allTags.find(t => t.id === id);
 
-  // Lista de tarefas exibida (aplica o filtro por tags — tarefa com QUALQUER das tags)
-  const displayedTasks = tagFilter.length
+  // Lista de tarefas exibida (aplica o filtro por tags — tarefa com QUALQUER das tags).
+  // Concluídas descem para o fim (ordenação estável: mantém a ordem das ativas e
+  // entre as concluídas). Não altera o campo `ordem` no banco — é só exibição.
+  const displayedTasks = (tagFilter.length
     ? projectTasks.filter(t => (taskTags[t.id] || []).some(id => tagFilter.includes(id)))
-    : projectTasks;
+    : projectTasks
+  ).slice().sort((a, b) => {
+    const aDone = a.status === 'concluido' || a.status === 'entregue';
+    const bDone = b.status === 'concluido' || b.status === 'entregue';
+    return aDone === bDone ? 0 : aDone ? 1 : -1;
+  });
 
   // Carregar comentários da tarefa
   const fetchTaskComments = async (taskId: string, silent = false) => {
