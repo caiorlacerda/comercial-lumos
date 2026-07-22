@@ -977,7 +977,7 @@ export default function Projetos() {
 
       const { data: usersData, error: uErr } = await supabase
         .from('app_users')
-        .select('id, full_name, avatar_url')
+        .select('*')
         .eq('status', 'ativo')
         .order('full_name', { ascending: true });
       if (uErr) throw uErr;
@@ -990,7 +990,8 @@ export default function Projetos() {
       setClients(clientsData || []);
       setProjects(projectsData || []);
       setTasks(tasksData || []);
-      setTeamUsers(usersData || []);
+      // Contas ocultas não entram no seletor de responsável.
+      setTeamUsers(((usersData as any[]) || []).filter(u => !u.hidden));
       setAllTags((tagsData as Tag[]) || []);
     } catch (err: any) {
       console.error('Error fetching project data:', err);
