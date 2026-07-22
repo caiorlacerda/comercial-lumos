@@ -64,7 +64,7 @@ export default function ContasReceber() {
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'todos' | 'aguardando' | 'parcial' | 'recebido' | 'atrasado'>('todos');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'aguardando' | 'emitir_nf' | 'nf_emitida' | 'recebido' | 'atrasado'>('todos');
   const [groupByClient, setGroupByClient] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: 'projeto' | 'cliente' | 'total' | 'lucro' | 'data'; direction: 'asc' | 'desc' }>({ key: 'data', direction: 'asc' });
   const handleSort = (key: typeof sortConfig.key) =>
@@ -81,31 +81,34 @@ export default function ContasReceber() {
   });
   // Menu de status por linha (mesmo padrão do dropdown de status dos Orçamentos).
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  // Status clicáveis (fluxo). "Em atraso" NÃO entra aqui: é derivado do
+  // vencimento (statusOf) e aparece sozinho em vermelho quando vence.
   const statusOptions = [
     { value: 'aguardando', label: 'Aguardando', color: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20' },
-    { value: 'parcial', label: 'Parcial', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
+    { value: 'emitir_nf', label: 'Emitir NF', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' },
+    { value: 'nf_emitida', label: 'NF Emitida', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
     { value: 'recebido', label: 'Recebido', color: 'text-green-500 bg-green-500/10 border-green-500/20' },
   ];
+  const statusLabels: Record<string, string> = {
+    aguardando: 'Aguardando', emitir_nf: 'Emitir NF', nf_emitida: 'NF Emitida',
+    recebido: 'Recebido', atrasado: 'Em atraso', parcial: 'Parcial',
+  };
+  const statusLabel = (s: string) => statusLabels[s] || s;
   const statusPillClass = (s: string) =>
     s === 'recebido' ? 'text-green-500 bg-green-500/10 border-green-500/20'
       : s === 'atrasado' ? 'text-red-500 bg-red-500/10 border-red-500/20'
-      : s === 'parcial' ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
+      : s === 'nf_emitida' ? 'text-blue-500 bg-blue-500/10 border-blue-500/20'
+      : s === 'emitir_nf' ? 'text-orange-500 bg-orange-500/10 border-orange-500/20'
       : 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
 
-  // Aplica um status pelo menu. "Parcial" precisa de valor, então abre o modal de
-  // recebimento; os outros são diretos.
+  // Aplica um status pelo menu. "Recebido" preenche o valor/data; os demais
+  // (aguardando, emitir_nf, nf_emitida) são diretos e zeram o recebido.
   const applyStatus = async (r: any, newStatus: string) => {
     setStatusMenuOpen(null);
-    if (newStatus === 'parcial') {
-      setSelectedReceivable(r);
-      setPaymentData({ ...paymentData, amount: Number(r.total_amount || 0) - Number(r.received_amount || 0), received_at: new Date().toISOString().split('T')[0] });
-      setIsPayModalOpen(true);
-      return;
-    }
     try {
       const patch = newStatus === 'recebido'
         ? { status: 'recebido', received_amount: Number(r.total_amount || 0), received_at: (r.received_at || new Date().toISOString().split('T')[0]) }
-        : { status: 'aguardando', received_amount: 0, received_at: null };
+        : { status: newStatus, received_amount: 0, received_at: null };
       const { error } = await supabase.from('receivables').update(patch).eq('id', r.id);
       if (error) throw error;
       if (newStatus === 'recebido') {
@@ -456,7 +459,7 @@ export default function ContasReceber() {
             onClick={() => setStatusMenuOpen(statusMenuOpen === r.id ? null : r.id)}
             className={clsx('px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all hover:scale-105 active:scale-95', statusPillClass(statusOf(r)))}
           >
-            {statusOf(r)}
+            {statusLabel(statusOf(r))}
           </button>
           {statusMenuOpen === r.id && (
             <>
@@ -502,7 +505,7 @@ export default function ContasReceber() {
           )}
         </div>
         <span className={clsx('px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border whitespace-nowrap', statusPillClass(statusOf(r)))}>
-          {statusOf(r)}
+          {statusLabel(statusOf(r))}
         </span>
       </div>
       <div className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate">{r.description}</div>
@@ -539,7 +542,7 @@ export default function ContasReceber() {
                 'Cliente': r.client?.name || '',
                 'Valor (R$)': r.total_amount,
                 'Lucro Líquido (R$)': lucroOf(r) ?? '',
-                'Status': statusOf(r).toUpperCase(),
+                'Status': statusLabel(statusOf(r)).toUpperCase(),
                 'Recebimento': fmtDate(r.received_at),
               }));
               const ws = XLSX.utils.json_to_sheet(rows);
@@ -595,9 +598,10 @@ export default function ContasReceber() {
           {([
             ['todos', 'Todos'],
             ['aguardando', 'Aguardando'],
-            ['parcial', 'Parcial'],
+            ['emitir_nf', 'Emitir NF'],
+            ['nf_emitida', 'NF Emitida'],
             ['recebido', 'Recebido'],
-            ['atrasado', 'Atrasado'],
+            ['atrasado', 'Em atraso'],
           ] as const).map(([key, label]) => {
             const count = key === 'todos'
               ? receivables.length
