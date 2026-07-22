@@ -203,7 +203,13 @@ export default function Equipe() {
     if (!detail?.user) return;
     if (!(await confirm({ message: `Excluir ${detail.user.full_name} da plataforma? A conta de acesso será removida.`, confirmLabel: 'Excluir', danger: true }))) return;
     const { data, error } = await supabase.functions.invoke('delete-user', { body: { ids: [detail.user.id] } });
-    if (error || data?.error) { toast.error(`Erro ao excluir: ${error?.message || data?.error}`); return; }
+    if (error || data?.error) {
+      // Em erro HTTP, a mensagem real vem no corpo da resposta (não em error.message).
+      let msg = data?.error || error?.message || 'erro desconhecido';
+      try { const body = await (error as any)?.context?.json?.(); if (body?.error) msg = body.error; } catch { /* noop */ }
+      toast.error(`Erro ao excluir: ${msg}`);
+      return;
+    }
     toast.success('Usuário excluído.');
     setDetail(null);
     load(true);
