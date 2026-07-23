@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, SlidersHorizontal, X, Upload, Play, Trash2 } from 'lucide-react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, Scissors, SlidersHorizontal, X, Upload, Play, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -89,6 +89,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [renaming, setRenaming] = useState<{ id: string; value: string; orig: string } | null>(null);
   const [stackMenuFor, setStackMenuFor] = useState<string | null>(null);
+  const [unstackMenuFor, setUnstackMenuFor] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [showCols, setShowCols] = useState(false);
@@ -353,6 +354,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   };
   // Tira uma versão do stack e a torna um vídeo próprio (v01, grupo novo)
   const unstack = async (v: VideoVersion) => {
+    setUnstackMenuFor(null);
     setBusy(v.id);
     const { error } = await supabase.from('video_versions').update({ group_id: crypto.randomUUID(), versao: 1 }).eq('id', v.id);
     if (error) toast.error('Não foi possível desagrupar.'); else { toast.success('Desagrupado ✓'); await fetchVersions(); }
@@ -455,7 +457,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
 
         {canManage && groups.length > 1 && (
           <div className="relative">
-            <IconBtn title="Agrupar como versão de outro vídeo" onClick={() => setStackMenuFor(stackMenuFor === g.id ? null : g.id)}><Layers className="w-3.5 h-3.5" /></IconBtn>
+            <IconBtn title="Agrupar como versão de outro vídeo" onClick={() => { setUnstackMenuFor(null); setStackMenuFor(stackMenuFor === g.id ? null : g.id); }}><Layers className="w-3.5 h-3.5" /></IconBtn>
             {stackMenuFor === g.id && (
               <div className="absolute right-0 top-9 z-30 w-56 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
                 <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Empilhar como versão de:</p>
@@ -463,6 +465,24 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                   <button key={o.id} type="button" onClick={() => stackInto(g, o)}
                     className="w-full text-left px-2 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded truncate">
                     {o.current.file_name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {canManage && g.count > 1 && (
+          <div className="relative">
+            <IconBtn title="Desagrupar versões deste vídeo" onClick={() => { setStackMenuFor(null); setUnstackMenuFor(unstackMenuFor === g.id ? null : g.id); }}><Scissors className="w-3.5 h-3.5" /></IconBtn>
+            {unstackMenuFor === g.id && (
+              <div className="absolute right-0 top-9 z-30 w-64 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
+                <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Separar versão (vira vídeo próprio):</p>
+                {g.versions.map(v => (
+                  <button key={v.id} type="button" onClick={() => unstack(v)}
+                    className="w-full text-left px-2 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded flex items-center gap-2">
+                    <span className="font-black text-lumos-text-secondary flex-shrink-0">{vLabel(v.versao)}</span>
+                    <span className="truncate">{v.file_name}</span>
                   </button>
                 ))}
               </div>
