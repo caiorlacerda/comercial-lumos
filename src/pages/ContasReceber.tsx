@@ -66,7 +66,8 @@ export default function ContasReceber() {
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'todos' | 'aguardando' | 'emitir_nf' | 'nf_emitida' | 'recebido' | 'atrasado'>('todos');
   const [groupByClient, setGroupByClient] = useState(false);
-  const [sortConfig, setSortConfig] = useState<{ key: 'projeto' | 'cliente' | 'total' | 'lucro' | 'data'; direction: 'asc' | 'desc' }>({ key: 'data', direction: 'asc' });
+  // 'padrao' = ordem estável de vencimento (do banco); não reordena ao mudar status.
+  const [sortConfig, setSortConfig] = useState<{ key: 'padrao' | 'projeto' | 'cliente' | 'total' | 'lucro' | 'data'; direction: 'asc' | 'desc' }>({ key: 'padrao', direction: 'asc' });
   const handleSort = (key: typeof sortConfig.key) =>
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }));
   const SortIcon = ({ column }: { column: typeof sortConfig.key }) =>
