@@ -109,6 +109,8 @@ export default function ContasReceber() {
       const patch = newStatus === 'recebido'
         ? { status: 'recebido', received_amount: Number(r.total_amount || 0), received_at: (r.received_at || new Date().toISOString().split('T')[0]) }
         : { status: newStatus, received_amount: 0, received_at: null };
+      // Atualização otimista: muda só a linha na hora, sem recarregar a tela toda.
+      setReceivables((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patch } : x)));
       const { error } = await supabase.from('receivables').update(patch).eq('id', r.id);
       if (error) throw error;
       if (newStatus === 'recebido') {
@@ -121,8 +123,8 @@ export default function ContasReceber() {
           link: '/financeiro/contas-receber',
         });
       }
-      fetchReceivables();
-    } catch (error: any) { toast.error(error.message); }
+      fetchReceivables(true);
+    } catch (error: any) { toast.error(error.message); fetchReceivables(true); }
   };
 
   // Edição de um recebível (descrição, cliente, valor, vencimento, data de recebimento).
