@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import throttle from 'lodash/throttle';
-import { RefreshCw } from 'lucide-react';
 
 // Shell da aplicação — carregado sempre (eager).
 import Login from '@/pages/Login';
@@ -290,17 +289,17 @@ function VersionWatcher() {
 
         latestServerVersionRef.current = data.version;
 
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          const registration = await navigator.serviceWorker.getRegistration();
-          if (registration) {
-            console.log('[VersionWatcher] Triggering service worker update check...');
-            await registration.update();
-          } else {
-            setUpdatePending(true);
-          }
-        } else {
-          setUpdatePending(true);
+        // Dispara a atualização do service worker (registerType 'autoUpdate' já
+        // faz skipWaiting, então o novo SW assume sozinho). Independente disso,
+        // marcamos que há atualização pronta — ela é aplicada sozinha na próxima
+        // navegação (troca de página), sem banner nem clique.
+        if ('serviceWorker' in navigator) {
+          try {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration) await registration.update();
+          } catch { /* ignora */ }
         }
+        setUpdatePending(true);
       }
     } catch (err) {
       console.warn('[VersionWatcher] Failed to check version (ignoring silently):', err);
@@ -349,9 +348,16 @@ function VersionWatcher() {
 
     if (!pathChanged) return;
 
-    // Não recarrega mais sozinho: quando há atualização pendente, mostramos um
-    // banner e o usuário decide quando aplicar (botão "Atualizar"). Aqui só
-    // fazemos a checagem periódica na navegação (throttled: mínimo 30s).
+    // Se já detectamos uma nova versão, aplica agora — na navegação. O reload
+    // acontece na página de destino, de forma silenciosa (sem banner, sem
+    // clique). Como só dispara na troca de rota, nunca interrompe o usuário
+    // parado numa tela (ex.: preenchendo um formulário).
+    if (updatePending) {
+      applyUpdate();
+      return;
+    }
+
+    // Senão, faz a checagem periódica na navegação (throttled: mínimo 30s).
     const now = Date.now();
     if (now - lastCheckedRef.current > 30 * 1000) {
       lastCheckedRef.current = now;
@@ -379,23 +385,9 @@ function VersionWatcher() {
     window.location.reload();
   };
 
-  if (!updatePending) return null;
-
-  return (
-    <div className="fixed inset-x-0 z-[60] flex justify-center px-4 pointer-events-none bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] lg:bottom-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <div className="pointer-events-auto flex items-center gap-3 bg-lumos-surface border border-lumos-yellow/30 rounded-full pl-4 pr-2 py-2 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl max-w-md w-full sm:w-auto">
-        <span className="text-lg leading-none">✨</span>
-        <span className="text-sm font-bold text-lumos-text-primary flex-1 sm:flex-initial">Nova versão disponível</span>
-        <button
-          onClick={applyUpdate}
-          className="flex items-center gap-1.5 bg-lumos-yellow text-lumos-bg font-black text-xs uppercase tracking-wide px-4 py-2 rounded-full hover:scale-105 active:scale-95 transition-transform whitespace-nowrap"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Atualizar
-        </button>
-      </div>
-    </div>
-  );
+  // Atualização é aplicada sozinha na próxima navegação (ver efeito acima).
+  // Não há mais banner "Nova versão disponível" — nada a renderizar.
+  return null;
 }
 
 function AppContent() {
