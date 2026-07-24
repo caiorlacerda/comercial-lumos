@@ -483,7 +483,10 @@ export default function BudgetEditorPage() {
         
         if (bError) throw bError;
         currentBudgetId = bData.id;
-        
+        // O código real é gerado pelo banco no insert; usa ele daqui pra frente
+        // (log de auditoria e notificação), não o placeholder do draft ("----").
+        finalCode = bData.code;
+
         // Atualiza o estado local do orçamento com o código real gerado pelo banco
         setBudget(prev => prev ? { ...prev, code: bData.code } : null);
 
