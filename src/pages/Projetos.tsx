@@ -99,7 +99,7 @@ import {
   Trash2,
   Columns,
   Layers,
-  ArrowRight,
+  MoreVertical,
   User,
   PlusCircle,
   HelpCircle,
@@ -751,7 +751,13 @@ export default function Projetos() {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'lista' | 'kanban' | 'gantt'>('lista');
+  // Lista dividida em duas abas: tarefas ativas (em aberto) e finalizadas.
+  const [activeTab, setActiveTab] = useState<'ativas' | 'finalizadas'>('ativas');
+  // Lixeira: tarefas com soft delete (recuperáveis por 30 dias).
+  const [trashCount, setTrashCount] = useState(0);
+  const [showTrash, setShowTrash] = useState(false);
+  const [trashedTasks, setTrashedTasks] = useState<any[]>([]);
+  const [trashLoading, setTrashLoading] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const quickAddInputRef = useRef<HTMLInputElement>(null);
   const [isConfirmTemplateOpen, setIsConfirmTemplateOpen] = useState(false);
@@ -975,7 +981,8 @@ export default function Projetos() {
 
       const { data: tasksData, error: tErr } = await supabase
         .from('project_tasks')
-        .select('id, project_id, status');
+        .select('id, project_id, status')
+        .is('deleted_at', null);
       if (tErr) throw tErr;
 
       const { data: usersData, error: uErr } = await supabase
@@ -1018,9 +1025,18 @@ export default function Projetos() {
         .from('project_tasks')
         .select('*')
         .eq('project_id', projectId)
+        .is('deleted_at', null)                 // não traz as que estão na lixeira
         .order('ordem', { ascending: true });
       if (error) throw error;
       setProjectTasks(data || []);
+
+      // Contagem da lixeira (badge do botão), sem trazer as linhas.
+      const { count } = await supabase
+        .from('project_tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .not('deleted_at', 'is', null);
+      setTrashCount(count || 0);
 
       // Tags das tarefas do projeto
       const ids = (data || []).map((t: any) => t.id);
@@ -1068,6 +1084,46 @@ export default function Projetos() {
     const bDone = b.status === 'concluido' || b.status === 'entregue';
     return aDone === bDone ? 0 : aDone ? 1 : -1;
   });
+
+  // Divisão da lista em duas abas: ativas (em aberto) x finalizadas (concluídas).
+  const isTaskDone = (t: any) => t.status === 'concluido' || t.status === 'entregue';
+  const activeCount = displayedTasks.filter(t => !isTaskDone(t)).length;
+  const doneCount = displayedTasks.filter(t => isTaskDone(t)).length;
+  const activeListTasks = displayedTasks.filter(t => activeTab === 'finalizadas' ? isTaskDone(t) : !isTaskDone(t));
+
+  // ── Lixeira ────────────────────────────────────────────────────────────────
+  const openTrash = async () => {
+    if (!selectedProjectId) return;
+    setShowTrash(true);
+    setTrashLoading(true);
+    const { data } = await supabase
+      .from('project_tasks')
+      .select('id, titulo, status, deleted_at')
+      .eq('project_id', selectedProjectId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    setTrashedTasks(data || []);
+    setTrashCount((data || []).length);
+    setTrashLoading(false);
+  };
+
+  const restoreTask = async (taskId: string) => {
+    const { error } = await supabase
+      .from('project_tasks')
+      .update({ deleted_at: null })
+      .eq('id', taskId);
+    if (error) { toast.error('Não foi possível restaurar a tarefa.'); return; }
+    setTrashedTasks(prev => prev.filter(t => t.id !== taskId));
+    setTrashCount(c => Math.max(0, c - 1));
+    toast.success('Tarefa restaurada ✓');
+    if (selectedProjectId) fetchProjectTasks(selectedProjectId, true);
+  };
+
+  // Quantos dias faltam até a purga definitiva (30 dias após o delete).
+  const daysUntilPurge = (deletedAt: string) => {
+    const ms = new Date(deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000 - Date.now();
+    return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+  };
 
   // Carregar comentários da tarefa
   const fetchTaskComments = async (taskId: string, silent = false) => {
@@ -1422,22 +1478,24 @@ export default function Projetos() {
 
   // Delete task
   const handleDeleteTask = async (taskId: string) => {
-    if (!(await confirm({ message: 'Tem certeza que deseja excluir esta tarefa? Essa ação não pode ser desfeita.', confirmLabel: 'Excluir', danger: true }))) return;
+    if (!(await confirm({ title: 'Excluir tarefa', message: 'Tem certeza que deseja excluir esta tarefa? Ela vai para a lixeira e pode ser recuperada por 30 dias.', confirmLabel: 'Excluir', danger: true }))) return;
 
     try {
+      // Soft delete: marca deleted_at em vez de apagar (recuperável na lixeira).
       const { error } = await supabase
         .from('project_tasks')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', taskId);
 
       if (error) throw error;
 
-      toast.success('Tarefa excluída.');
+      toast.success('Tarefa movida para a lixeira.');
       if (selectedTaskId === taskId) {
         setSelectedTaskId(null);
       }
       setProjectTasks(prev => prev.filter(t => t.id !== taskId));
       setTasks(prev => prev.filter(t => t.id !== taskId));
+      setTrashCount(c => c + 1);
     } catch (err: any) {
       console.error('Error deleting task:', err);
       toast.error('Erro ao excluir tarefa.');
@@ -1454,7 +1512,7 @@ export default function Projetos() {
   };
   const toggleSelAll = () => {
     setSelTaskIds(prev => {
-      const ids = displayedTasks.map(t => t.id);
+      const ids = activeListTasks.map(t => t.id);
       const allSel = ids.length > 0 && ids.every(id => prev.has(id));
       return allSel ? new Set() : new Set(ids);
     });
@@ -1463,14 +1521,15 @@ export default function Projetos() {
   const handleBatchDelete = async () => {
     const ids = Array.from(selTaskIds);
     if (ids.length === 0) return;
-    if (!(await confirm({ message: `Excluir ${ids.length} tarefa(s)? Essa ação não pode ser desfeita.`, confirmLabel: 'Excluir', danger: true }))) return;
-    const { error } = await supabase.from('project_tasks').delete().in('id', ids);
+    if (!(await confirm({ title: 'Excluir tarefas', message: `Excluir ${ids.length} tarefa(s)? Elas vão para a lixeira e podem ser recuperadas por 30 dias.`, confirmLabel: 'Excluir', danger: true }))) return;
+    const { error } = await supabase.from('project_tasks').update({ deleted_at: new Date().toISOString() }).in('id', ids);
     if (error) { console.error(error); toast.error('Erro ao excluir as tarefas.'); return; }
     setProjectTasks(prev => prev.filter(t => !selTaskIds.has(t.id)));
     setTasks(prev => prev.filter(t => !selTaskIds.has(t.id)));
     if (selectedTaskId && selTaskIds.has(selectedTaskId)) setSelectedTaskId(null);
+    setTrashCount(c => c + ids.length);
     setSelTaskIds(new Set());
-    toast.success(`${ids.length} tarefa(s) excluída(s).`);
+    toast.success(`${ids.length} tarefa(s) movida(s) para a lixeira.`);
   };
 
   const handleBatchStatus = async (status: string) => {
@@ -2010,17 +2069,30 @@ export default function Projetos() {
 
                 {/* ================= TABS FOR TASK VIEWS ================= */}
                 <div className="flex items-center justify-between border-b border-lumos-border/50">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <button
-                      onClick={() => setActiveTab('lista')}
+                      onClick={() => { setActiveTab('ativas'); setSelTaskIds(new Set()); }}
                       className={clsx(
-                        "px-4 py-2 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px",
-                        activeTab === 'lista'
+                        "px-4 py-2 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px flex items-center gap-1.5",
+                        activeTab === 'ativas'
                           ? "border-lumos-yellow text-lumos-yellow font-black"
                           : "border-transparent text-lumos-text-secondary hover:text-lumos-text-primary"
                       )}
                     >
-                      Lista
+                      Ativas
+                      <span className="text-[10px] font-black bg-lumos-text-secondary/15 rounded-full px-1.5 py-0.5">{activeCount}</span>
+                    </button>
+                    <button
+                      onClick={() => { setActiveTab('finalizadas'); setSelTaskIds(new Set()); }}
+                      className={clsx(
+                        "px-4 py-2 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px flex items-center gap-1.5",
+                        activeTab === 'finalizadas'
+                          ? "border-lumos-yellow text-lumos-yellow font-black"
+                          : "border-transparent text-lumos-text-secondary hover:text-lumos-text-primary"
+                      )}
+                    >
+                      Finalizadas
+                      <span className="text-[10px] font-black bg-lumos-text-secondary/15 rounded-full px-1.5 py-0.5">{doneCount}</span>
                     </button>
                     <button
                       onClick={() => navigate(`/producao/board?projectId=${selectedProjectId}`)}
@@ -2039,6 +2111,19 @@ export default function Projetos() {
                       <ExternalLink className="w-3 h-3 opacity-50" />
                     </button>
                   </div>
+                  {canManage && (
+                    <button
+                      onClick={openTrash}
+                      className="px-3 py-2 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 transition-colors"
+                      title="Tarefas excluídas (recuperáveis por 30 dias)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Lixeira
+                      {trashCount > 0 && (
+                        <span className="text-[9px] font-black bg-red-500/15 text-red-400 rounded-full px-1.5 py-0.5">{trashCount}</span>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Tab Content */}
@@ -2047,8 +2132,8 @@ export default function Projetos() {
                     <div className="flex-grow flex items-center justify-center py-16">
                       <Loader2 className="w-8 h-8 animate-spin text-lumos-yellow" />
                     </div>
-                  ) : activeTab === 'lista' ? (
-                    /* ================= LIST VIEW (ACTIVE) ================= */
+                  ) : (
+                    /* ================= LIST VIEW (Ativas / Finalizadas) ================= */
                     <div className="space-y-4 flex-grow flex flex-col justify-between">
 
                       {allTags.length > 0 && projectTasks.length > 0 && (
@@ -2067,7 +2152,7 @@ export default function Projetos() {
                       {projectTasks.length === 0 ? (
                         <div className="flex-grow border border-dashed border-lumos-border/50 rounded-lumos flex flex-col justify-center items-center text-center p-8 bg-lumos-bg/10 py-16">
                           <ClipboardList className="w-8 h-8 text-lumos-text-secondary opacity-30 mb-3" />
-                          <h4 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">Nenhuma tarefa ativa</h4>
+                          <h4 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider">Nenhuma tarefa</h4>
                           <p className="text-xs text-lumos-text-secondary mt-1 max-w-xs">
                             Comece aplicando o template padrão para este segmento ou digite uma tarefa na linha abaixo.
                           </p>
@@ -2083,6 +2168,12 @@ export default function Projetos() {
                         </div>
                       ) : (
                         <>
+                        {activeListTasks.length === 0 && (
+                          <div className="text-center py-10 text-xs text-lumos-text-secondary/70">
+                            {activeTab === 'finalizadas' ? 'Nenhuma tarefa finalizada ainda.' : 'Tudo em dia por aqui, nenhuma tarefa ativa. 🎉'}
+                          </div>
+                        )}
+                        {activeListTasks.length > 0 && (<>
                         <div className="overflow-x-auto hidden lg:block">
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
@@ -2108,7 +2199,7 @@ export default function Projetos() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-lumos-border/20">
-                              {displayedTasks.map((task) => {
+                              {activeListTasks.map((task) => {
                                 const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
                                 return (
                                   <tr 
@@ -2275,26 +2366,19 @@ export default function Projetos() {
 
                                     {/* Actions cell */}
                                     <td className="py-2 px-2 text-center">
-                                      <div className="flex items-center justify-center gap-1.5">
+                                      <div className="flex items-center justify-center">
                                         <button
                                           type="button"
-                                          onClick={() => setSelectedTaskId(task.id)}
-                                          className="p-1 text-lumos-text-secondary hover:text-lumos-yellow rounded hover:bg-lumos-border/20 transition-all"
-                                          title="Ver detalhes da tarefa"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                            setContextMenu({ x: Math.max(8, r.right - 150), y: r.bottom + 4, taskId: task.id });
+                                          }}
+                                          className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary rounded hover:bg-lumos-border/20 transition-all"
+                                          title="Ações da tarefa"
                                         >
-                                          <ArrowRight className="w-3.5 h-3.5" />
+                                          <MoreVertical className="w-4 h-4" />
                                         </button>
-                                        
-                                        {canManage && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleDeleteTask(task.id)}
-                                            className="p-1 text-lumos-text-secondary hover:text-red-500 rounded hover:bg-red-500/10 opacity-0 group-hover/row:opacity-100 transition-all"
-                                            title="Excluir tarefa"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        )}
                                       </div>
                                     </td>
                                   </tr>
@@ -2306,7 +2390,7 @@ export default function Projetos() {
 
                         {/* Mobile: cartões de tarefa (a tabela acima fica só no desktop) */}
                         <div className="lg:hidden divide-y divide-lumos-border/40">
-                          {displayedTasks.map((task) => {
+                          {activeListTasks.map((task) => {
                             const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
                             const tags = (taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR'));
                             return (
@@ -2351,8 +2435,16 @@ export default function Projetos() {
                                     )}
                                   </button>
                                   {canManage && (
-                                    <button type="button" onClick={() => handleDeleteTask(task.id)} className="p-1 text-lumos-text-secondary hover:text-red-500 rounded flex-shrink-0" title="Excluir">
-                                      <Trash2 className="w-4 h-4" />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                        setContextMenu({ x: Math.max(8, r.right - 150), y: r.bottom + 4, taskId: task.id });
+                                      }}
+                                      className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary rounded flex-shrink-0"
+                                      title="Ações da tarefa"
+                                    >
+                                      <MoreVertical className="w-4 h-4" />
                                     </button>
                                   )}
                                 </div>
@@ -2407,6 +2499,7 @@ export default function Projetos() {
                             );
                           })}
                         </div>
+                        </>)}
                         </>
                       )}
 
@@ -2452,7 +2545,7 @@ export default function Projetos() {
                       )}
 
                     </div>
-                  ) : null}
+                  )}
                 </div>
 
                 {/* ============ DOCUMENTOS DO PROJETO (entre lista e revisão) ============ */}
@@ -3005,6 +3098,16 @@ export default function Projetos() {
         >
           <button
             onClick={() => {
+              setSelectedTaskId(contextMenu.taskId);
+              setContextMenu(null);
+            }}
+            className="px-3 py-1.5 text-[11px] font-semibold text-left text-lumos-text-primary hover:bg-lumos-bg rounded transition-all flex items-center gap-1.5"
+          >
+            <ChevronRight className="w-3.5 h-3.5 text-lumos-yellow" />
+            Ver detalhes
+          </button>
+          <button
+            onClick={() => {
               setRenamingTaskId(contextMenu.taskId);
               setContextMenu(null);
             }}
@@ -3026,6 +3129,49 @@ export default function Projetos() {
               Excluir
             </button>
           )}
+        </div>
+      )}
+
+      {/* ================= LIXEIRA (tarefas excluídas) ================= */}
+      {showTrash && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowTrash(false)}>
+          <div className="w-full max-w-lg bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-lumos-border">
+              <h3 className="text-lg font-black uppercase tracking-tight text-lumos-yellow flex items-center gap-2">
+                <Trash2 className="w-4 h-4" /> Lixeira
+              </h3>
+              <button onClick={() => setShowTrash(false)} className="text-lumos-text-secondary hover:text-lumos-text-primary"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-[11px] text-lumos-text-secondary">
+              Tarefas excluídas ficam aqui por <span className="font-bold text-lumos-text-primary">30 dias</span> e depois são apagadas de vez. Clique em restaurar para trazer de volta.
+            </p>
+            <div className="flex-1 overflow-y-auto custom-scrollbar -mx-1 px-1">
+              {trashLoading ? (
+                <div className="flex items-center justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
+              ) : trashedTasks.length === 0 ? (
+                <div className="text-center py-10 text-xs text-lumos-text-secondary/70">A lixeira está vazia.</div>
+              ) : (
+                <div className="divide-y divide-lumos-border/40">
+                  {trashedTasks.map(t => (
+                    <div key={t.id} className="flex items-center gap-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-lumos-text-primary truncate">{t.titulo}</p>
+                        <p className="text-[10px] text-lumos-text-secondary">
+                          Excluída {t.deleted_at ? fmtActDate(t.deleted_at) : ''} · apaga de vez em {daysUntilPurge(t.deleted_at)} dia(s)
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => restoreTask(t.id)}
+                        className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-green-400" /> Restaurar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
