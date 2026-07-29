@@ -6,7 +6,7 @@ import Link from '@tiptap/extension-link';
 import { clsx } from 'clsx';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-  List, ListOrdered, Quote, Minus, Undo2, Redo2,
+  List, ListOrdered, Quote, Minus, Undo2, Redo2, Link2, Link2Off,
 } from 'lucide-react';
 
 interface Props {
@@ -33,8 +33,14 @@ const Sep = () => <span className="w-px h-4 bg-lumos-border/70 mx-1" />;
 export default function RichTextEditor({ value, onChange, editable = true, className, minHeight = 160 }: Props) {
   const editor = useEditor({
     editable,
+    // immediatelyRender: false é o recomendado pro React (evita edge cases de
+    // render/flushSync). O StarterKit v3 já traz Link e Underline, então
+    // desabilitamos os embutidos e usamos os explícitos (com config própria) —
+    // sem isso ficam extensões DUPLICADAS ('link'/'underline'), que geram
+    // marcas ambíguas no schema e instabilidade.
+    immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5] } }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5] }, link: false, underline: false }),
       Underline,
       Link.configure({ openOnClick: false }),
     ],
@@ -60,6 +66,13 @@ export default function RichTextEditor({ value, onChange, editable = true, class
     if (v === 'p') editor.chain().focus().setParagraph().run();
     else editor.chain().focus().setHeading({ level: Number(v) as 1 | 2 | 3 | 4 | 5 }).run();
   };
+  const setLink = () => {
+    const prev = editor.getAttributes('link').href as string | undefined;
+    const url = window.prompt('Endereço do link (URL):', prev || 'https://');
+    if (url === null) return;                    // cancelou
+    if (url.trim() === '') { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+  };
 
   return (
     <div className={clsx('border border-lumos-border rounded-lumos bg-lumos-surface overflow-hidden', className)}>
@@ -79,6 +92,11 @@ export default function RichTextEditor({ value, onChange, editable = true, class
           <TBtn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico (Ctrl+I)"><Italic className="w-4 h-4" /></TBtn>
           <TBtn active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado (Ctrl+U)"><UnderlineIcon className="w-4 h-4" /></TBtn>
           <TBtn active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()} title="Tachado"><Strikethrough className="w-4 h-4" /></TBtn>
+          <Sep />
+          <TBtn active={editor.isActive('link')} onClick={setLink} title="Inserir/editar link"><Link2 className="w-4 h-4" /></TBtn>
+          {editor.isActive('link') && (
+            <TBtn onClick={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()} title="Remover link"><Link2Off className="w-4 h-4" /></TBtn>
+          )}
           <Sep />
           <TBtn active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Lista"><List className="w-4 h-4" /></TBtn>
           <TBtn active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada"><ListOrdered className="w-4 h-4" /></TBtn>
