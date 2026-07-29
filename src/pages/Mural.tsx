@@ -11,6 +11,17 @@ import { clsx } from 'clsx';
 // Texto puro a partir do HTML do editor, pra decidir se o recado está "vazio".
 const htmlToText = (h: string) => h.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
 
+// O recado pode ter sido salvo como texto puro (antigo) ou HTML (novo editor).
+const looksLikeHtml = (s: string) => /<[a-z][\s\S]*>/i.test(s);
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Converte texto puro (com \n) em HTML preservando parágrafos e quebras de linha,
+// pra que editar um recado antigo mantenha a formatação em linhas.
+const textToHtml = (t: string) =>
+  escapeHtml(t.trim())
+    .split(/\n{2,}/)
+    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('') || '<p></p>';
+
 export default function Mural() {
   const { profile, isAdmin } = useAuth();
   const toast = useToast();
@@ -38,7 +49,8 @@ export default function Mural() {
   const startEdit = (post: MuralPost) => {
     setEditingId(post.id);
     setTitle(post.title || '');
-    setContent(post.content);
+    // Recado antigo (texto puro) vira HTML preservando as quebras de linha.
+    setContent(looksLikeHtml(post.content) ? post.content : textToHtml(post.content));
     setPinned(post.pinned);
     setImageUrl(post.image_url || null);
     setVideoUrl(post.video_url || '');
