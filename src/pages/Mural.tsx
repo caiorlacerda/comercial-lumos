@@ -3,24 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { MuralFeed, type MuralPost } from '@/components/mural/MuralFeed';
-import RichTextEditor from '@/components/common/RichTextEditor';
 import { getVideoEmbed } from '@/lib/videoEmbed';
 import { Megaphone, Send, X, Pin, ImagePlus, Film, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
-
-// Texto puro a partir do HTML do editor, pra decidir se o recado está "vazio".
-const htmlToText = (h: string) => h.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
-
-// O recado pode ter sido salvo como texto puro (antigo) ou HTML (novo editor).
-const looksLikeHtml = (s: string) => /<[a-z][\s\S]*>/i.test(s);
-const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-// Converte texto puro (com \n) em HTML preservando parágrafos e quebras de linha,
-// pra que editar um recado antigo mantenha a formatação em linhas.
-const textToHtml = (t: string) =>
-  escapeHtml(t.trim())
-    .split(/\n{2,}/)
-    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-    .join('') || '<p></p>';
 
 export default function Mural() {
   const { profile, isAdmin } = useAuth();
@@ -49,8 +34,7 @@ export default function Mural() {
   const startEdit = (post: MuralPost) => {
     setEditingId(post.id);
     setTitle(post.title || '');
-    // Recado antigo (texto puro) vira HTML preservando as quebras de linha.
-    setContent(looksLikeHtml(post.content) ? post.content : textToHtml(post.content));
+    setContent(post.content);
     setPinned(post.pinned);
     setImageUrl(post.image_url || null);
     setVideoUrl(post.video_url || '');
@@ -81,15 +65,13 @@ export default function Mural() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // content agora é HTML do editor; considera "vazio" se não sobra texto.
-    const hasText = !!htmlToText(content);
-    const hasContent = hasText || !!imageUrl || !!videoUrl.trim();
+    const hasContent = !!content.trim() || !!imageUrl || !!videoUrl.trim();
     if (!hasContent || !profile?.id) return;
     setSaving(true);
     try {
       const fields = {
         title: title.trim() || null,
-        content: hasText ? content : '',
+        content: content.trim(),
         image_url: imageUrl,
         video_url: videoUrl.trim() || null,
         pinned,
@@ -153,16 +135,18 @@ export default function Mural() {
             placeholder="Título (opcional)"
             className="input-lumos w-full h-11 font-bold"
           />
-          <RichTextEditor
+          <textarea
             value={content}
-            onChange={setContent}
-            minHeight={140}
+            onChange={e => setContent(e.target.value)}
+            rows={4}
+            placeholder="Escreva o recado para o time…"
+            className="input-lumos w-full py-3 resize-none"
           />
 
           {/* Foto */}
           {imageUrl ? (
             <div className="relative">
-              <img src={imageUrl} alt="Prévia" className="max-h-72 w-auto max-w-full object-contain rounded-lumos border border-lumos-border bg-lumos-bg/40" />
+              <img src={imageUrl} alt="Prévia" className="w-full max-h-72 object-cover rounded-lumos border border-lumos-border" />
               <button
                 type="button"
                 onClick={() => setImageUrl(null)}
@@ -217,7 +201,7 @@ export default function Mural() {
             </button>
             <button
               type="submit"
-              disabled={(!htmlToText(content) && !imageUrl && !videoUrl.trim()) || saving || uploading}
+              disabled={(!content.trim() && !imageUrl && !videoUrl.trim()) || saving || uploading}
               className="btn-primary h-10 px-5 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />

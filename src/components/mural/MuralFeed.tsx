@@ -7,17 +7,6 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import { getVideoEmbed } from '@/lib/videoEmbed';
-import DOMPurify from 'dompurify';
-
-// Links do conteúdo abrem em nova aba, com segurança.
-DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  if (node.tagName === 'A') {
-    node.setAttribute('target', '_blank');
-    node.setAttribute('rel', 'noopener noreferrer');
-  }
-});
-// Recado pode ser HTML (novo, com negrito/itálico/link) ou texto puro (antigo).
-const looksLikeHtml = (s: string) => /<[a-z][\s\S]*>/i.test(s);
 
 export type MuralPost = {
   id: string;
@@ -155,16 +144,7 @@ export function MuralFeed({
 
           <div className="mt-3">
             {post.title && <h3 className="text-base font-black text-lumos-text-primary tracking-tight mb-1">{post.title}</h3>}
-            {post.content && (
-              looksLikeHtml(post.content) ? (
-                <div
-                  className="text-sm text-lumos-text-primary/90 leading-relaxed break-words [&_p]:mb-2 last:[&_p]:mb-0 [&_a]:text-lumos-yellow [&_a]:underline [&_a]:font-medium [&_strong]:font-bold [&_b]:font-bold [&_em]:italic [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-0.5 [&_blockquote]:border-l-2 [&_blockquote]:border-lumos-border [&_blockquote]:pl-3 [&_blockquote]:text-lumos-text-secondary [&_h1]:text-base [&_h1]:font-black [&_h2]:font-black [&_h3]:font-bold"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
-                />
-              ) : (
-                <p className="text-sm text-lumos-text-primary/90 leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
-              )
-            )}
+            {post.content && <p className="text-sm text-lumos-text-primary/90 leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>}
 
             {post.image_url && (
               <a href={post.image_url} target="_blank" rel="noopener noreferrer" className="block mt-3">
@@ -172,7 +152,7 @@ export function MuralFeed({
                   src={post.image_url}
                   alt={post.title || 'Imagem do recado'}
                   loading="lazy"
-                  className="max-h-[24rem] w-auto max-w-full object-contain rounded-lumos border border-lumos-border bg-lumos-bg/40"
+                  className="w-full max-h-[26rem] object-cover rounded-lumos border border-lumos-border"
                 />
               </a>
             )}
