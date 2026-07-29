@@ -67,7 +67,8 @@ export default function ContasReceber() {
   const [statusFilter, setStatusFilter] = useState<'todos' | 'aguardando' | 'emitir_nf' | 'nf_emitida' | 'recebido' | 'atrasado'>('todos');
   const [groupByClient, setGroupByClient] = useState(false);
   // 'padrao' = ordem estável de vencimento (do banco); não reordena ao mudar status.
-  const [sortConfig, setSortConfig] = useState<{ key: 'padrao' | 'projeto' | 'cliente' | 'total' | 'lucro' | 'data'; direction: 'asc' | 'desc' }>({ key: 'padrao', direction: 'asc' });
+  // Padrão: por número do projeto (código), mais recente no topo.
+  const [sortConfig, setSortConfig] = useState<{ key: 'padrao' | 'projeto' | 'cliente' | 'total' | 'lucro' | 'data'; direction: 'asc' | 'desc' }>({ key: 'projeto', direction: 'desc' });
   const handleSort = (key: typeof sortConfig.key) =>
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }));
   const SortIcon = ({ column }: { column: typeof sortConfig.key }) =>
@@ -365,7 +366,15 @@ export default function ContasReceber() {
     const dir = sortConfig.direction === 'asc' ? 1 : -1;
     return [...list].sort((a, b) => {
       switch (sortConfig.key) {
-        case 'projeto': return (a.description || '').localeCompare(b.description || '', 'pt-BR', { sensitivity: 'base' }) * dir;
+        case 'projeto': {
+          // Ordena pelo número do projeto (código). Sem código sempre por último.
+          const ac = a.budget?.code ? formatBudgetCode(a.budget.code) : '';
+          const bc = b.budget?.code ? formatBudgetCode(b.budget.code) : '';
+          if (!ac && !bc) return 0;
+          if (!ac) return 1;
+          if (!bc) return -1;
+          return ac.localeCompare(bc, 'pt-BR', { numeric: true }) * dir;
+        }
         case 'cliente': return (a.client?.name || '').localeCompare(b.client?.name || '', 'pt-BR', { sensitivity: 'base' }) * dir;
         case 'data': {
           // Sem data sempre por último, independente da direção.

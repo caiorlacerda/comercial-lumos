@@ -44,7 +44,9 @@ export default function CustosProjeto() {
   // alimenta o mesmo estado.
   type SortKey = 'recente' | 'code' | 'name' | 'totalProductionValue' | 'totalCosts' | 'saldoProducao' | 'margin' | 'marginPercent' | 'tetoCustos';
   const NUMERIC_SORT_KEYS = new Set<SortKey>(['totalProductionValue', 'totalCosts', 'saldoProducao', 'margin', 'marginPercent', 'tetoCustos']);
-  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'recente', direction: 'desc' });
+  // Padrão: por número do projeto (código), mais recente no topo. Antes era por
+  // data de criação, que não bate com a ordem dos números e parecia aleatório.
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'code', direction: 'desc' });
   const handleSort = (key: SortKey) => {
     setSortConfig(prev =>
       prev.key === key
@@ -333,7 +335,14 @@ export default function CustosProjeto() {
         return (new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()) * dir;
       }
       if (key === 'code') {
-        return formatBudgetCode(a.code || '').localeCompare(formatBudgetCode(b.code || ''), 'pt-BR', { numeric: true }) * dir;
+        // Ordena pelo número do projeto (numeric: 2026-238 > 2026-40).
+        // Projetos sem código vão sempre para o fim, independente da direção.
+        const ac = a.code ? formatBudgetCode(a.code) : '';
+        const bc = b.code ? formatBudgetCode(b.code) : '';
+        if (!ac && !bc) return 0;
+        if (!ac) return 1;
+        if (!bc) return -1;
+        return ac.localeCompare(bc, 'pt-BR', { numeric: true }) * dir;
       }
       if (key === 'name') {
         return (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }) * dir;
