@@ -41,11 +41,17 @@ export async function syncBudgetApprovalFlow(budgetId: string, optionalTotalAmou
 
   // 2. Sync PROJECTS table
   let projectId: string | null = null;
-  const { data: existingProj, error: errProjFind } = await supabase.from('projects').select('id').eq('budget_id', budgetId).maybeSingle();
+  const { data: existingProj, error: errProjFind } = await supabase.from('projects').select('id, code').eq('budget_id', budgetId).maybeSingle();
   if (errProjFind) throw new Error('Erro ao buscar projeto: ' + errProjFind.message);
 
   if (existingProj) {
     projectId = existingProj.id;
+    // Auto-corrige o código do projeto quando ele ficou vazio na criação (ex.:
+    // projeto criado antes do orçamento ter código). O código do orçamento é a
+    // fonte da verdade; só preenche quando está faltando, nunca sobrescreve.
+    if ((!existingProj.code || existingProj.code === '' || existingProj.code === '----') && budget.code) {
+      await supabase.from('projects').update({ code: budget.code }).eq('id', existingProj.id);
+    }
   } else {
     const { data: newProj, error: pErr } = await supabase.from('projects').insert([{
       name: budget.project_name,
