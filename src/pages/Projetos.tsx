@@ -31,6 +31,11 @@ const fmtActDate = (d: string | null) => {
   const [y, m, day] = d.split('-');
   return (y && m && day) ? `${day}/${m}/${y.slice(2)}` : d;
 };
+// Compara descrições ignorando o "ruído" do editor (parágrafos vazios que o
+// TipTap gera para conteúdo vazio), pra não acusar "alteração não salva" quando
+// nada foi realmente editado.
+const normalizeDesc = (h: string | null | undefined) =>
+  (h || '').replace(/<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '').trim();
 function describeActivity(a: { action: string; old_value: string | null; new_value: string | null }): string {
   switch (a.action) {
     case 'created': return 'criou a tarefa';
@@ -940,7 +945,7 @@ export default function Projetos() {
           setRenamingTaskId(null);
         } else if (selectedTaskId) {
           const taskObj = projectTasks.find(t => t.id === selectedTaskId);
-          if (taskObj && descHTML !== (taskObj.descricao || '')) {
+          if (taskObj && normalizeDesc(descHTML) !== normalizeDesc(taskObj.descricao)) {
             confirm({ title: 'Alterações não salvas', message: 'Você tem alterações não salvas na descrição. Deseja realmente fechar?', confirmLabel: 'Fechar sem salvar', danger: true })
               .then(ok => { if (ok) setSelectedTaskId(null); });
           } else {
@@ -1817,9 +1822,12 @@ export default function Projetos() {
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
-  // Fecha o modal da tarefa, pedindo confirmação (custom) se houver descrição não salva
+  const descDirty = !!selectedTask && normalizeDesc(descHTML) !== normalizeDesc(selectedTask.descricao);
+
+  // Fecha o modal da tarefa. Só pede confirmação se houver descrição não salva
+  // de verdade; sem alteração, fecha direto.
   const requestCloseTask = () => {
-    if (!canManage || !selectedTask || descHTML === (selectedTask.descricao || '')) { setSelectedTaskId(null); return; }
+    if (!canManage || !descDirty) { setSelectedTaskId(null); return; }
     confirm({ title: 'Alterações não salvas', message: 'Você tem alterações não salvas na descrição. Deseja realmente fechar?', confirmLabel: 'Fechar sem salvar', danger: true })
       .then(ok => { if (ok) setSelectedTaskId(null); });
   };
@@ -2752,13 +2760,28 @@ export default function Projetos() {
                 )}
               </div>
               
-              <button
-                onClick={requestCloseTask}
-                className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-                title="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {canManage && descDirty && (
+                  <button
+                    onClick={handleSaveDescription}
+                    disabled={isSavingDesc}
+                    className="text-[11px] font-black uppercase tracking-wider bg-lumos-yellow text-black px-3 py-1.5 rounded-lumos hover:bg-yellow-400 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                  >
+                    {isSavingDesc ? (
+                      <><Loader2 className="w-3 h-3 animate-spin" /> Salvando…</>
+                    ) : (
+                      'Salvar'
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={requestCloseTask}
+                  className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
+                  title="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Columns Grid (Left: Description/Meta; Right: Comments Feed) */}
@@ -2865,23 +2888,6 @@ export default function Projetos() {
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-widest">
                       Descrição da Tarefa
                     </span>
-                    
-                    {canManage && descHTML !== (selectedTask.descricao || '') && (
-                      <button
-                        onClick={handleSaveDescription}
-                        disabled={isSavingDesc}
-                        className="text-[10px] font-bold bg-lumos-yellow text-black px-2.5 py-1 rounded hover:bg-yellow-400 disabled:opacity-50 transition-all flex items-center gap-1 shadow-md shadow-lumos-yellow/10"
-                      >
-                        {isSavingDesc ? (
-                          <>
-                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                            Salvando...
-                          </>
-                        ) : (
-                          'Salvar Descrição'
-                        )}
-                      </button>
-                    )}
                   </div>
 
                   {canManage ? (
