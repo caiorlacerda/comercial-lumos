@@ -63,7 +63,7 @@ function describeActivity(a: { action: string; old_value: string | null; new_val
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import UserAvatar from '@/components/common/UserAvatar';
-import AssigneePicker from '@/components/common/AssigneePicker';
+import AssigneePicker, { type AssigneeValue, type PickableUser } from '@/components/common/AssigneePicker';
 import { useToast } from '@/context/ToastContext';
 import { useSaveOsToDrive } from '@/hooks/useSaveOsToDrive';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
@@ -189,6 +189,7 @@ interface Task {
   data_fim: string | null;
   data_entrega_cliente: string | null;
   responsavel_id: string | null;
+  responsavel_freela_id: string | null;
 }
 
 interface TeamUser {
@@ -726,6 +727,8 @@ export default function Projetos() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
+  // Freelancers = fornecedores, disponíveis como responsável externo de tarefas.
+  const [freelancers, setFreelancers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   // UI Selection States
@@ -987,11 +990,18 @@ export default function Projetos() {
         .select('id, name, color, ordem')
         .order('ordem', { ascending: true });
 
+      // Freelancers/parceiros = fornecedores (mapeados para o formato do picker).
+      const { data: freelaData } = await supabase
+        .from('fornecedores')
+        .select('id, nome')
+        .order('nome', { ascending: true });
+
       setClients(clientsData || []);
       setProjects(projectsData || []);
       setTasks(tasksData || []);
       // Contas ocultas não entram no seletor de responsável.
       setTeamUsers(((usersData as any[]) || []).filter(u => !u.hidden));
+      setFreelancers(((freelaData as any[]) || []).map(f => ({ id: f.id, full_name: f.nome, avatar_url: null })));
       setAllTags((tagsData as Tag[]) || []);
     } catch (err: any) {
       console.error('Error fetching project data:', err);
@@ -1320,6 +1330,39 @@ export default function Projetos() {
       console.error('Error updating task:', err);
       toast.error('Erro ao atualizar tarefa.');
       if (selectedProjectId) fetchProjectTasks(selectedProjectId);
+    }
+  };
+
+  // Responsável (interno ou freelancer) → valor do picker. Só um dos dois é
+  // usado por vez; o interno tem precedência caso ambos estejam preenchidos.
+  const assigneeOf = (t: { responsavel_id: string | null; responsavel_freela_id: string | null }): AssigneeValue =>
+    t.responsavel_id ? { type: 'user', id: t.responsavel_id }
+      : t.responsavel_freela_id ? { type: 'freela', id: t.responsavel_freela_id }
+        : null;
+
+  const setAssignee = (taskId: string, sel: AssigneeValue) =>
+    handleUpdateTask(taskId, {
+      responsavel_id: sel?.type === 'user' ? sel.id : null,
+      responsavel_freela_id: sel?.type === 'freela' ? sel.id : null,
+    });
+
+  // Cadastro rápido de freelancer a partir do picker: cria um fornecedor só com
+  // o nome (aprovado) e o disponibiliza na lista na hora.
+  const quickAddFreela = async (nome: string): Promise<PickableUser | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('fornecedores')
+        .insert([{ nome: nome.trim(), status_cadastro: 'aprovado', created_by: profile?.id }])
+        .select('id, nome')
+        .single();
+      if (error || !data) throw error;
+      const novo: PickableUser = { id: data.id, full_name: data.nome, avatar_url: null };
+      setFreelancers(prev => [...prev, novo].sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')));
+      toast.success('Freelancer adicionado ✓');
+      return novo;
+    } catch (err: any) {
+      toast.error('Não foi possível adicionar o freelancer.');
+      return null;
     }
   };
 
@@ -2195,11 +2238,13 @@ export default function Projetos() {
                                     <td className="py-2 px-2">
                                       <div className="flex items-center gap-1.5 min-w-[140px] border border-transparent hover:border-lumos-border/30 rounded px-1">
                                         <AssigneePicker
-                                          value={task.responsavel_id || null}
+                                          value={assigneeOf(task)}
                                           disabled={!canManage}
-                                          onChange={(v) => handleUpdateTask(task.id, { responsavel_id: v })}
+                                          onChange={(v) => setAssignee(task.id, v)}
                                           className="text-[11px] font-medium text-lumos-text-primary py-0.5"
                                           users={teamUsers as any}
+                                          freelancers={freelancers as PickableUser[]}
+                                          onQuickAddFreela={quickAddFreela}
                                         />
                                       </div>
                                     </td>
@@ -2329,11 +2374,13 @@ export default function Projetos() {
                                 </div>
                                 <div className="flex items-center justify-between gap-3 mt-2 pl-[30px]">
                                   <AssigneePicker
-                                    value={task.responsavel_id || null}
+                                    value={assigneeOf(task)}
                                     disabled={!canManage}
-                                    onChange={(v) => handleUpdateTask(task.id, { responsavel_id: v })}
+                                    onChange={(v) => setAssignee(task.id, v)}
                                     className="text-[11px] font-medium text-lumos-text-primary"
                                     users={teamUsers as any}
+                                    freelancers={freelancers as PickableUser[]}
+                                    onQuickAddFreela={quickAddFreela}
                                   />
                                   <input
                                     type="date"
@@ -2676,11 +2723,13 @@ export default function Projetos() {
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Responsável</span>
                     <div className="flex items-center gap-1.5 border border-lumos-border/40 rounded px-2.5 py-1.5">
                       <AssigneePicker
-                        value={selectedTask.responsavel_id || null}
+                        value={assigneeOf(selectedTask)}
                         disabled={!canManage}
-                        onChange={(v) => handleUpdateTask(selectedTask.id, { responsavel_id: v })}
+                        onChange={(v) => setAssignee(selectedTask.id, v)}
                         className="text-[11px] font-medium text-lumos-text-primary py-0.5"
                         users={teamUsers as any}
+                        freelancers={freelancers as PickableUser[]}
+                        onQuickAddFreela={quickAddFreela}
                       />
                     </div>
                   </div>
