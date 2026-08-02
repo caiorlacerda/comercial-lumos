@@ -6,7 +6,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 
 export default function NotificationBell() {
-  const { items, unreadCount, markAsRead, markAllAsRead, removeOne } = useNotifications();
+  const { items, unreadCount, markAsRead, markAllAsRead, removeOne, clearAll } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const navigate = useNavigate();
@@ -40,6 +40,7 @@ export default function NotificationBell() {
       onMarkAllRead={markAllAsRead}
       onMarkRead={markAsRead}
       onRemove={removeOne}
+      onClearAll={clearAll}
       onItemClick={handleItemClick}
       onOpenSettings={() => { setIsOpen(false); navigate('/configuracoes/notificacoes'); }}
       onViewAll={() => { setIsOpen(false); navigate('/notificacoes'); }}

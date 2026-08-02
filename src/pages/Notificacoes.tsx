@@ -5,7 +5,7 @@ import NotificationPanel from '@/components/notifications/NotificationPanel';
 // Página "Ver todas" — histórico completo com as mesmas abas e agrupamento do
 // popover do sino, num layout de página.
 export default function Notificacoes() {
-  const { items, unreadCount, markAsRead, markAllAsRead, removeOne } = useNotifications();
+  const { items, unreadCount, markAsRead, markAllAsRead, removeOne, clearAll } = useNotifications();
   const navigate = useNavigate();
 
   return (
@@ -17,6 +17,7 @@ export default function Notificacoes() {
           onMarkAllRead={markAllAsRead}
           onMarkRead={markAsRead}
           onRemove={removeOne}
+          onClearAll={clearAll}
           onItemClick={async (item) => {
             if (!item.read_at) await markAsRead(item.id);
             if (item.link) navigate(item.link);

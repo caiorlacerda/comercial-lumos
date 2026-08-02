@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import {
-  Bell, BellOff, CheckCheck, Settings, X, DollarSign, Clapperboard, Briefcase, Cog, Users2,
+  Bell, BellOff, CheckCheck, Settings, X, DollarSign, Clapperboard, Briefcase, Cog, Users2, Trash2,
 } from 'lucide-react';
 import UserAvatar from '@/components/common/UserAvatar';
 import type { Notification } from '@/hooks/useNotifications';
@@ -45,6 +45,7 @@ interface Props {
   onMarkAllRead: () => void;
   onMarkRead: (id: string) => void;
   onRemove: (id: string) => void;
+  onClearAll: () => void;
   onItemClick: (item: Notification) => void;
   onOpenSettings: () => void;
   onViewAll?: () => void;         // só no popover
@@ -52,7 +53,7 @@ interface Props {
 }
 
 export default function NotificationPanel({
-  items, unreadCount, onMarkAllRead, onMarkRead, onRemove, onItemClick, onOpenSettings, onViewAll, variant = 'popover',
+  items, unreadCount, onMarkAllRead, onMarkRead, onRemove, onClearAll, onItemClick, onOpenSettings, onViewAll, variant = 'popover',
 }: Props) {
   const [tab, setTab] = useState<TabKey>('all');
   const teamCount = items.filter(n => n.scope === 'team').length;
@@ -102,6 +103,14 @@ export default function NotificationPanel({
               <button onClick={onMarkAllRead} title="Marcar todas como lidas"
                 className="w-8 h-8 rounded-lumos flex items-center justify-center text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/10 transition-colors">
                 <CheckCheck className="w-[18px] h-[18px]" />
+              </button>
+            )}
+            {items.length > 0 && (
+              <button
+                onClick={() => { if (window.confirm('Limpar todas as notificações? Isso remove todas da sua lista.')) onClearAll(); }}
+                title="Limpar todas"
+                className="w-8 h-8 rounded-lumos flex items-center justify-center text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 transition-colors">
+                <Trash2 className="w-[18px] h-[18px]" />
               </button>
             )}
             <button onClick={onOpenSettings} title="Configurar notificações"

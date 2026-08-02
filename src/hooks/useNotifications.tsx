@@ -125,13 +125,28 @@ export function useNotifications() {
     }
   };
 
-  return { 
-    items, 
-    loading, 
-    unreadCount, 
-    markAsRead, 
-    markAllAsRead, 
-    removeOne, 
-    refresh: fetchAll 
+  const clearAll = async () => {
+    if (!userId) return;
+    const prev = items;
+    setItems([]); // otimista
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', userId);
+    if (error) {
+      console.error('Error clearing notifications:', error);
+      setItems(prev); // rollback
+    }
+  };
+
+  return {
+    items,
+    loading,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    removeOne,
+    clearAll,
+    refresh: fetchAll
   };
 }
