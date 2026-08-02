@@ -80,7 +80,6 @@ export const NAV_SECTIONS: Section[] = [
     title: 'CONFIGURAÇÕES',
     visibleWhen: () => true,
     items: [
-      { icon: BookOpen, label: 'Wiki', path: '/wiki' },
       { icon: Newspaper, label: 'Mural de Recados', path: '/mural' },
       { icon: Users2, label: 'Equipe', path: '/equipe' },
       { icon: Megaphone, label: 'Comunicados', path: '/comunicados', permission: 'admin' },

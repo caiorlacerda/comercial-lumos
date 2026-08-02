@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Home, Briefcase, Hammer, DollarSign, Settings, Sun, Moon, LogOut,
+  Home, Briefcase, Hammer, DollarSign, Settings, Sun, Moon, LogOut, BookOpen,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
@@ -19,6 +19,7 @@ import { clsx } from 'clsx';
 // getSectionItems (fonte única em navigation.ts).
 const SECTION_META: Record<SectionType, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   home: { label: 'Início', icon: Home },
+  wiki: { label: 'Wiki', icon: BookOpen },
   comercial: { label: 'Comercial', icon: Briefcase },
   producao: { label: 'Produção', icon: Hammer },
   financeiro: { label: 'Financeiro', icon: DollarSign },
@@ -34,9 +35,10 @@ export default function DesktopNav() {
 
   const ctx = { can, isAdmin };
 
-  // Rail: Início + seções visíveis por permissão (fonte única).
+  // Rail: Início + Wiki (todo o time) + seções visíveis por permissão (fonte única).
   const railSections: NavSectionMeta[] = [
     { id: 'home', label: SECTION_META.home.label, icon: SECTION_META.home.icon },
+    { id: 'wiki', label: SECTION_META.wiki.label, icon: SECTION_META.wiki.icon },
     ...getVisibleSections(ctx).map((s) => ({
       id: s.id,
       label: SECTION_META[s.id].label,
@@ -53,15 +55,18 @@ export default function DesktopNav() {
 
   // Colapso: Início sempre recolhido (é a tela cheia); nas demais seções,
   // respeita a preferência manual (lembrada por usuário).
+  // Início é tela cheia e a Wiki tem navegação própria (espaços + árvore),
+  // então ambas mantêm o painel de detalhe recolhido.
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => localStorage.getItem('lumos-nav-collapsed') === '1');
-  const collapsed = activeSection === 'home' ? true : userCollapsed;
+  const collapsed = activeSection === 'home' || activeSection === 'wiki' ? true : userCollapsed;
   const setCollapsed = (v: boolean) => {
     setUserCollapsed(v);
     localStorage.setItem('lumos-nav-collapsed', v ? '1' : '0');
   };
 
   const onSelectSection = (id: string) => {
-    if (id !== 'home') setCollapsed(false);   // abrir a seção mostra os itens
+    // Início e Wiki não têm painel de detalhe (têm navegação própria).
+    if (id !== 'home' && id !== 'wiki') setCollapsed(false);   // abrir a seção mostra os itens
     navigateToSection(id as SectionType);
   };
 
