@@ -24,6 +24,7 @@ const BudgetEditorPage = lazy(() => import('@/pages/BudgetEditorPage'));
 const Templates = lazy(() => import('@/pages/Templates'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const ConfiguracoesNotificacoes = lazy(() => import('@/pages/ConfiguracoesNotificacoes'));
+const Notificacoes = lazy(() => import('@/pages/Notificacoes'));
 const AuditLog = lazy(() => import('@/pages/AuditLog'));
 const AprovacaoPublica = lazy(() => import('@/pages/AprovacaoPublica'));
 const Equipe = lazy(() => import('@/pages/Equipe'));
@@ -505,9 +506,14 @@ function AppContent() {
             element={<AuthWrapper><Settings /></AuthWrapper>} 
           />
           
-          <Route 
-            path="/configuracoes/notificacoes" 
-            element={<AuthWrapper><ConfiguracoesNotificacoes /></AuthWrapper>} 
+          <Route
+            path="/configuracoes/notificacoes"
+            element={<AuthWrapper><ConfiguracoesNotificacoes /></AuthWrapper>}
+          />
+
+          <Route
+            path="/notificacoes"
+            element={<AuthWrapper><Notificacoes /></AuthWrapper>}
           />
 
           <Route 

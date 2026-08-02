@@ -79,6 +79,8 @@ export default function Comunicados() {
         title: title.trim(),
         body: message.trim() || undefined,
         link: link.trim() || undefined,
+        // Comunicado pra todo mundo = marco do time; pra pessoas específicas = pessoal.
+        scope: mode === 'todos' ? 'team' : 'personal',
       });
       toast.success(`Comunicado enviado para ${count} ${count === 1 ? 'pessoa' : 'pessoas'}!`);
       setTitle('');

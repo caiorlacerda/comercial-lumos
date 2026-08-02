@@ -26,7 +26,7 @@ import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
-import { notify, getAdminUserIds } from '@/lib/notifications/notify';
+import { notify, getAllActiveUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
@@ -116,9 +116,10 @@ export default function ContasReceber() {
       const { error } = await supabase.from('receivables').update(patch).eq('id', r.id);
       if (error) throw error;
       if (newStatus === 'recebido') {
-        const admins = await getAdminUserIds();
+        const everyone = await getAllActiveUserIds();
         await notify({
-          userIds: admins,
+          userIds: everyone,
+          scope: 'team',
           event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
           title: 'Pagamento recebido',
           body: `${brl(Number(r.total_amount || 0))} recebido de "${r.client?.name || 'Cliente'}" para: ${r.description}.`,
@@ -216,9 +217,10 @@ export default function ContasReceber() {
       if (error) throw error;
 
       if (newStatus === 'recebido') {
-        const admins = await getAdminUserIds();
+        const everyone = await getAllActiveUserIds();
         await notify({
-          userIds: admins,
+          userIds: everyone,
+          scope: 'team',
           event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
           title: 'Pagamento recebido',
           body: `Valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(paymentData.amount)} recebido de "${selectedReceivable.client?.name || 'Cliente'}" para: ${selectedReceivable.description}.`,
@@ -281,10 +283,11 @@ export default function ContasReceber() {
       await Promise.all(updates);
 
       // Trigger notifications for payments received
-      const admins = await getAdminUserIds();
+      const everyone = await getAllActiveUserIds();
       for (const item of toReceive) {
         await notify({
-          userIds: admins,
+          userIds: everyone,
+          scope: 'team',
           event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
           title: 'Pagamento recebido (Lote)',
           body: `Valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.total_amount)} recebido de "${item.client?.name || 'Cliente'}" para: ${item.description}.`,
