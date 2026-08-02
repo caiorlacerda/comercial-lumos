@@ -62,7 +62,7 @@ export default function NewProjectCelebration() {
   const [going, setGoing] = useState(false);
 
   const userId = profile?.id;
-  const canCelebrate = profile?.role === 'admin' || profile?.role === 'producao' || profile?.role === 'atendimento';
+  const canCelebrate = profile?.role === 'admin' || profile?.role === 'producao' || profile?.role === 'time' || profile?.role === 'atendimento';
 
   // Enfileira sem duplicar (o realtime pode chegar junto com o catch-up do login).
   const enqueue = (c: Celebration) => {

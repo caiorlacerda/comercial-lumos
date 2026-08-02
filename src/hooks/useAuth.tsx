@@ -2,7 +2,10 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 
-export type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
+// Níveis de acesso oferecidos hoje: admin, producao (Gestão de Produção) e time
+// (Time de Produção). Os valores legados continuam no tipo só pra não quebrar
+// comparações antigas — não são mais oferecidos e são migrados pra 'time'.
+export type UserRole = 'admin' | 'producao' | 'time' | 'atendimento' | 'editor' | 'social_media' | 'basico';
 
 // Login diário obrigatório: toda sessão anterior às 6h (horário de São Paulo)
 // expira, forçando reautenticação de senha (e recarregando o app com as novidades).
@@ -24,10 +27,16 @@ function isSessionStale(u?: User | null): boolean {
 // 'acessos' (só produção/admin) por ser sensível.
 export const ROLE_DEFAULTS: Record<string, string[]> = {
   admin: ['*'],
+  // Gestão de Produção: produção completa + custos de projeto + RH + reembolso + cofre.
   producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados'],
-  atendimento: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
-  editor: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
-  social_media: ['ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  // Time de Produção: produção do dia a dia + reembolso (todo mundo pede reembolso).
+  time: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  // Legado — Atendimento/Editor/Social/Básico foram unificados em 'time' (migração
+  // por SQL). Mantidos como fallback pra ninguém ficar sem acesso se algum registro
+  // ainda não tiver sido migrado. IMPORTANTE: manter em sincronia com notify.ts.
+  atendimento: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  editor: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  social_media: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
   basico: ['reembolso'],
 };
 

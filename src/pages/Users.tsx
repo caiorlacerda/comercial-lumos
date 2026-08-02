@@ -24,7 +24,13 @@ import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
 import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
-type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
+type UserRole = 'admin' | 'producao' | 'time' | 'atendimento' | 'editor' | 'social_media' | 'basico';
+
+// Rótulo curto do nível de acesso (legados caem em "Time", já que foram unificados).
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Admin', producao: 'Gestão', time: 'Time',
+  atendimento: 'Time', editor: 'Time', social_media: 'Time', basico: 'Básico',
+};
 
 // Permissões que o admin pode liberar/bloquear por usuário (sobre o padrão do cargo)
 const PERM_OPTIONS: { key: string; label: string }[] = [
@@ -56,7 +62,7 @@ export default function UsersPage() {
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
-    role: 'basico' as UserRole,
+    role: 'time' as UserRole,
     job_title: '',
     status: 'ativo' as UserStatus,
     hidden: false,
@@ -126,7 +132,7 @@ export default function UsersPage() {
         userIds: admins,
         event: NOTIFICATION_EVENTS.NOVO_USUARIO_ACESSO,
         title: 'Novo acesso solicitado',
-        body: `Convite enviado para o funcionário "${formData.full_name}" (${formData.role}).`,
+        body: `Convite enviado para o funcionário "${formData.full_name}" (${ROLE_LABEL[formData.role] || formData.role}).`,
         link: '/usuarios'
       });
 
@@ -169,7 +175,7 @@ export default function UsersPage() {
           userIds: [selectedUser.id],
           event: NOTIFICATION_EVENTS.PERMISSAO_ALTERADA,
           title: 'Suas permissões foram alteradas',
-          body: `Seu nível de acesso foi alterado para "${formData.role}".`,
+          body: `Seu nível de acesso foi alterado para "${ROLE_LABEL[formData.role] || formData.role}".`,
           link: '/configuracoes'
         });
       }
@@ -301,7 +307,7 @@ export default function UsersPage() {
     setFormData({
       full_name: '',
       email: '',
-      role: 'basico',
+      role: 'time',
       job_title: '',
       status: 'ativo',
       hidden: false,
@@ -324,9 +330,8 @@ export default function UsersPage() {
     switch (role) {
       case 'admin': return 'bg-lumos-yellow/20 text-lumos-yellow border-lumos-yellow/30';
       case 'producao': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'atendimento': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-      case 'editor': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      case 'social_media': return 'bg-pink-500/20 text-pink-400 border-pink-500/30';
+      case 'time': case 'atendimento': case 'editor': case 'social_media':
+        return 'bg-teal-500/20 text-teal-400 border-teal-500/30';
       default: return 'bg-lumos-text-primary/10 text-lumos-text-secondary border-lumos-border';
     }
   };
@@ -366,11 +371,8 @@ export default function UsersPage() {
           >
             <option value="all">Todos os Cargos</option>
             <option value="admin">Admin</option>
-            <option value="producao">Produção</option>
-            <option value="atendimento">Atendimento</option>
-            <option value="editor">Editor</option>
-            <option value="social_media">Social Media</option>
-            <option value="basico">Básico</option>
+            <option value="producao">Gestão de Produção</option>
+            <option value="time">Time de Produção</option>
           </select>
           <select 
             className="input-lumos text-sm h-10 px-4"
@@ -476,7 +478,7 @@ export default function UsersPage() {
                         <span className="text-xs font-medium text-lumos-text-primary">{user.job_title || 'Não definido'}</span>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit ${getRoleBadgeColor(user.role)}`}>
                           <Shield className="w-2.5 h-2.5 mr-1" />
-                          {user.role.replace('_', ' ').toUpperCase()}
+                          {(ROLE_LABEL[user.role] || user.role).toUpperCase()}
                         </span>
                       </div>
                     </td>
@@ -536,7 +538,7 @@ export default function UsersPage() {
                     <span className="text-[11px] font-medium text-lumos-text-primary truncate">{user.job_title || 'Não definido'}</span>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border flex-shrink-0 ${getRoleBadgeColor(user.role)}`}>
                       <Shield className="w-2.5 h-2.5 mr-1" />
-                      {user.role.replace('_', ' ').toUpperCase()}
+                      {(ROLE_LABEL[user.role] || user.role).toUpperCase()}
                     </span>
                   </div>
                 </MobileCard>
@@ -662,11 +664,8 @@ export default function UsersPage() {
                 value={formData.role}
                 onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
               >
-                <option value="basico">Básico</option>
-                <option value="producao">Produção</option>
-                <option value="atendimento">Atendimento</option>
-                <option value="editor">Editor</option>
-                <option value="social_media">Social Media</option>
+                <option value="time">Time de Produção</option>
+                <option value="producao">Gestão de Produção</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -732,11 +731,8 @@ export default function UsersPage() {
                 value={formData.role}
                 onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
               >
-                <option value="basico">Básico</option>
-                <option value="producao">Produção</option>
-                <option value="atendimento">Atendimento</option>
-                <option value="editor">Editor</option>
-                <option value="social_media">Social Media</option>
+                <option value="time">Time de Produção</option>
+                <option value="producao">Gestão de Produção</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
