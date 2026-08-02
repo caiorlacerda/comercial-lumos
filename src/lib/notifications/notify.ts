@@ -65,6 +65,19 @@ export async function getAdminUserIds(): Promise<string[]> {
   return (data ?? []).map(u => u.id);
 }
 
+// Todos os usuários ativos — usado no fan-out dos "marcos do time" (scope='team').
+export async function getAllActiveUserIds(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('app_users')
+    .select('id')
+    .eq('status', 'ativo');
+  if (error) {
+    console.error('Error fetching active user ids:', error);
+    return [];
+  }
+  return (data ?? []).map(u => u.id);
+}
+
 export async function getUserIdsWithPermission(permission: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('app_users')
