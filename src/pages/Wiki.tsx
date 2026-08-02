@@ -36,6 +36,14 @@ function withHeadings(html: string): { html: string; outline: { id: string; text
   return { html: out, outline };
 }
 
+// Cache em memória (vive enquanto a aba estiver aberta). A Wiki remonta a cada
+// entrada; sem cache, ela refazia o fetch do zero e trocava o layout por um
+// spinner — dando aquele "pisca/carregada" toda vez. Com o cache, a reentrada
+// renderiza na hora com o último estado e revalida em silêncio, igual às outras
+// páginas.
+let cachedSpaces: Space[] | null = null;
+const cachedPages: Record<string, Page[]> = {};
+
 export default function Wiki() {
   const { pageId } = useParams();
   const navigate = useNavigate();
@@ -44,10 +52,13 @@ export default function Wiki() {
   const toast = useToast();
   const { confirm, dialog } = useConfirm();
 
-  const [spaces, setSpaces] = useState<Space[]>([]);
-  const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
-  const [pages, setPages] = useState<Page[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [spaces, setSpaces] = useState<Space[]>(() => cachedSpaces ?? []);
+  const [activeSpaceId, setActiveSpaceId] = useState<string | null>(() => cachedSpaces?.[0]?.id ?? null);
+  const [pages, setPages] = useState<Page[]>(() => {
+    const sid = cachedSpaces?.[0]?.id;
+    return sid ? (cachedPages[sid] ?? []) : [];
+  });
+  const [loading, setLoading] = useState(() => cachedSpaces === null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [spaceMenu, setSpaceMenu] = useState(false);
 
@@ -64,14 +75,23 @@ export default function Wiki() {
   async function loadSpaces() {
     const { data } = await supabase.from('wiki_spaces').select('*').order('ordem').order('created_at');
     const sp = (data as Space[]) || [];
+    cachedSpaces = sp;
     setSpaces(sp);
     setActiveSpaceId(prev => prev || sp[0]?.id || null);
     setLoading(false);
   }
-  useEffect(() => { if (activeSpaceId) loadPages(activeSpaceId); }, [activeSpaceId]);
+  // Ao trocar de espaço, mostra na hora as páginas do cache (se houver) e
+  // revalida por baixo — sem esvaziar a árvore.
+  useEffect(() => {
+    if (!activeSpaceId) return;
+    if (cachedPages[activeSpaceId]) setPages(cachedPages[activeSpaceId]);
+    loadPages(activeSpaceId);
+  }, [activeSpaceId]);
   async function loadPages(spaceId: string) {
     const { data } = await supabase.from('wiki_pages').select('*').eq('space_id', spaceId).order('ordem').order('created_at');
-    setPages((data as Page[]) || []);
+    const ps = (data as Page[]) || [];
+    cachedPages[spaceId] = ps;
+    setPages(ps);
   }
 
   // Ao entrar sem página selecionada, abre a primeira do espaço.
@@ -191,7 +211,9 @@ export default function Wiki() {
     });
   };
 
-  if (loading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-lumos-yellow" /></div>;
+  // Nada de spinner de página inteira: ele trocava todo o layout e dava o
+  // "pisca". O shell (árvore + colunas) sempre renderiza; o carregamento inicial
+  // (só na 1ª vez, sem cache) aparece de leve dentro da área de conteúdo.
 
   return (
     <div className="-m-4 lg:-m-8 h-[calc(100vh-0px)] flex min-h-0 font-work-sans">
@@ -250,7 +272,9 @@ export default function Wiki() {
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {!activePage ? (
+          {loading ? (
+            <div className="flex justify-center py-32"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow/70" /></div>
+          ) : !activePage ? (
             <div className="max-w-2xl mx-auto text-center py-32 px-6">
               <BookOpen className="w-10 h-10 text-lumos-text-secondary/40 mx-auto mb-4" />
               <h2 className="text-lg font-bold text-lumos-text-primary">Comece sua Wiki</h2>
