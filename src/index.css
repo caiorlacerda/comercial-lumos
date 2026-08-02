@@ -306,3 +306,28 @@ body {
   opacity: 0.05;
   mix-blend-mode: overlay;
 }
+
+/* ============================================================================
+   Conteúdo da Wiki (HTML renderizado) — tipografia estilo GitBook, tema-aware.
+   ============================================================================ */
+.wiki-content { color: var(--color-lumos-text-primary); font-size: 15px; line-height: 1.75; }
+.wiki-content > *:first-child { margin-top: 0; }
+.wiki-content h1 { font-size: 28px; font-weight: 900; letter-spacing: -0.02em; margin: 32px 0 12px; scroll-margin-top: 80px; }
+.wiki-content h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin: 34px 0 12px; scroll-margin-top: 80px; }
+.wiki-content h3 { font-size: 18px; font-weight: 700; margin: 26px 0 10px; scroll-margin-top: 80px; }
+.wiki-content p { margin: 0 0 16px; color: var(--color-lumos-text-primary); opacity: 0.92; }
+.wiki-content ul { list-style: disc; padding-left: 22px; margin: 0 0 16px; }
+.wiki-content ol { list-style: decimal; padding-left: 22px; margin: 0 0 16px; }
+.wiki-content li { margin-bottom: 6px; opacity: 0.92; }
+.wiki-content a { color: var(--color-lumos-yellow); text-decoration: underline; text-underline-offset: 2px; font-weight: 500; }
+.wiki-content strong, .wiki-content b { font-weight: 700; opacity: 1; }
+.wiki-content em { font-style: italic; }
+.wiki-content blockquote { border-left: 3px solid var(--color-lumos-yellow); padding: 2px 0 2px 16px; margin: 0 0 18px; color: var(--color-lumos-text-secondary); font-style: italic; }
+.wiki-content pre { background: rgba(0,0,0,0.30); border: 1px solid var(--color-lumos-border); border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 0 0 18px; }
+.wiki-content code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.wiki-content :not(pre) > code { background: rgba(127,127,127,0.15); padding: 2px 5px; border-radius: 4px; }
+.wiki-content img { max-width: 100%; height: auto; border-radius: 10px; margin: 8px 0; border: 1px solid var(--color-lumos-border); }
+.wiki-content hr { border: none; border-top: 1px solid var(--color-lumos-border); margin: 28px 0; }
+.wiki-content table { width: 100%; border-collapse: collapse; margin: 0 0 18px; font-size: 14px; }
+.wiki-content th, .wiki-content td { border: 1px solid var(--color-lumos-border); padding: 8px 12px; text-align: left; }
+.wiki-content th { background: rgba(127,127,127,0.08); font-weight: 700; }

@@ -25,6 +25,7 @@ const Templates = lazy(() => import('@/pages/Templates'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const ConfiguracoesNotificacoes = lazy(() => import('@/pages/ConfiguracoesNotificacoes'));
 const Notificacoes = lazy(() => import('@/pages/Notificacoes'));
+const Wiki = lazy(() => import('@/pages/Wiki'));
 const AuditLog = lazy(() => import('@/pages/AuditLog'));
 const AprovacaoPublica = lazy(() => import('@/pages/AprovacaoPublica'));
 const Equipe = lazy(() => import('@/pages/Equipe'));
@@ -403,7 +404,7 @@ function AppContent() {
           <Route path="/cadastro-fornecedor" element={<CadastroFornecedorPublico />} />
           <Route path="/definir-senha" element={<DefinirSenha />} />
           <Route path="/revisao/:token" element={<RevisaoPublica />} />
-          
+
           <Route 
             path="/" 
             element={
@@ -515,6 +516,9 @@ function AppContent() {
             path="/notificacoes"
             element={<AuthWrapper><Notificacoes /></AuthWrapper>}
           />
+
+          <Route path="/wiki" element={<AuthWrapper><Wiki /></AuthWrapper>} />
+          <Route path="/wiki/:pageId" element={<AuthWrapper><Wiki /></AuthWrapper>} />
 
           <Route 
             path="/home" 
