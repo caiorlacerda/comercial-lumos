@@ -23,8 +23,10 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       <MobileSubNav />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Navegação desktop: rail fixo de seções + painel expansível */}
-        <div className="hidden lg:flex flex-shrink-0">
+        {/* Navegação desktop: rail fixo de seções + painel expansível.
+            relative z-30 garante que o rail fique sempre acima do conteúdo da
+            página (ex.: páginas full-bleed como a Wiki) e receba os cliques. */}
+        <div className="hidden lg:flex flex-shrink-0 relative z-30">
           <DesktopNav />
         </div>
 

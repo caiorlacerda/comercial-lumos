@@ -35,15 +35,21 @@ export default function DesktopNav() {
 
   const ctx = { can, isAdmin };
 
-  // Rail: Início + Wiki (todo o time) + seções visíveis por permissão (fonte única).
+  // Rail: Início + seções visíveis por permissão + Wiki na penúltima posição
+  // (antes de Configurações), disponível pra todo o time.
+  const permissionSections = getVisibleSections(ctx).map((s) => ({
+    id: s.id as string,
+    label: SECTION_META[s.id].label,
+    icon: SECTION_META[s.id].icon,
+  }));
+  const wikiEntry = { id: 'wiki', label: SECTION_META.wiki.label, icon: SECTION_META.wiki.icon };
+  // Insere a Wiki logo antes de "Configurações" (se visível); senão, no fim.
+  const cfgIdx = permissionSections.findIndex((s) => s.id === 'configuracoes');
+  if (cfgIdx >= 0) permissionSections.splice(cfgIdx, 0, wikiEntry);
+  else permissionSections.push(wikiEntry);
   const railSections: NavSectionMeta[] = [
     { id: 'home', label: SECTION_META.home.label, icon: SECTION_META.home.icon },
-    { id: 'wiki', label: SECTION_META.wiki.label, icon: SECTION_META.wiki.icon },
-    ...getVisibleSections(ctx).map((s) => ({
-      id: s.id,
-      label: SECTION_META[s.id].label,
-      icon: SECTION_META[s.id].icon,
-    })),
+    ...permissionSections,
   ];
 
   const items: NavItemMeta[] = activeSection === 'home'

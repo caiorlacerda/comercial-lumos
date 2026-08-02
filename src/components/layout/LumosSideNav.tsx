@@ -173,8 +173,10 @@ export default function LumosSideNav({
         </div>
       </div>
 
-      {/* Botão flutuante pra reabrir quando colapsado */}
-      {collapsed && (
+      {/* Botão flutuante pra reabrir quando colapsado — só quando a seção tem
+          painel de detalhe (itens). Em Início/Wiki (sem itens, navegação própria)
+          não faz sentido: a seta ficava órfã ao lado do logo. */}
+      {collapsed && items.length > 0 && (
         <button
           type="button"
           onClick={onToggleCollapse}
