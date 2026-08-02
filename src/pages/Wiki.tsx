@@ -159,6 +159,15 @@ export default function Wiki() {
     toast.success('Página salva ✓');
   };
 
+  // Modo leitura: clicar num chip de menção (@página) navega pra ela.
+  const onContentClick = (e: React.MouseEvent) => {
+    const chip = (e.target as HTMLElement).closest('[data-type="mention"][data-id]');
+    if (!chip) return;
+    e.preventDefault();
+    const id = chip.getAttribute('data-id');
+    if (id) navigate(`/wiki/${id}`);
+  };
+
   const deletePage = async (p: Page) => {
     const kids = pages.filter(x => x.parent_id === p.id).length;
     if (!(await confirm({ title: 'Excluir página', message: kids ? `Excluir "${p.title}" e suas ${kids} sub-página(s)? Não dá pra desfazer.` : `Excluir "${p.title}"? Não dá pra desfazer.`, confirmLabel: 'Excluir', danger: true }))) return;
@@ -220,28 +229,42 @@ export default function Wiki() {
       {dialog}
       {/* ------- Coluna esquerda: espaço + árvore ------- */}
       <aside className="lumos-nav-surface w-72 flex-shrink-0 border-r border-lumos-border hidden md:flex flex-col">
-        {/* seletor de espaço */}
+        {/* Cabeçalho do espaço. Com um único espaço (padrão hoje), é um título
+            simples, sem troca de espaço, pra ficar mais fácil de usar. Se um dia
+            houver mais de um, volta a ser um seletor. */}
         <div className="relative border-b border-lumos-border/60">
-          <button onClick={() => setSpaceMenu(o => !o)} className="w-full flex items-center gap-2.5 p-3.5 text-left hover:bg-white/[0.03] transition-colors">
-            <span className="w-9 h-9 rounded-lumos bg-lumos-yellow/15 flex items-center justify-center text-lg flex-shrink-0">{activeSpace?.icon || '📘'}</span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm font-black text-lumos-text-primary truncate">{activeSpace?.name || 'Wiki'}</span>
-              <span className="block text-[11px] text-lumos-text-secondary">{spaces.length} espaço(s) · Wiki</span>
-            </span>
-            <ChevronDown className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" />
-          </button>
-          {spaceMenu && (
-            <div className="absolute left-2 right-2 top-full mt-1 z-30 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
-              {spaces.map(s => (
-                <button key={s.id} onClick={() => { setActiveSpaceId(s.id); setSpaceMenu(false); }}
-                  className={clsx('w-full flex items-center gap-2 px-2 py-2 rounded text-sm text-left', s.id === activeSpaceId ? 'bg-lumos-yellow/10 text-lumos-yellow font-bold' : 'text-lumos-text-primary hover:bg-white/5')}>
-                  <span>{s.icon || '📘'}</span><span className="truncate">{s.name}</span>
-                </button>
-              ))}
-              <button onClick={createSpace} className="w-full flex items-center gap-2 px-2 py-2 rounded text-sm text-lumos-yellow hover:bg-lumos-yellow/10 border-t border-lumos-border/50 mt-1">
-                <Plus className="w-4 h-4" /> Novo espaço
-              </button>
+          {spaces.length <= 1 ? (
+            <div className="w-full flex items-center gap-2.5 p-3.5">
+              <span className="w-9 h-9 rounded-lumos bg-lumos-yellow/15 flex items-center justify-center text-lg flex-shrink-0">{activeSpace?.icon || '📘'}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-black text-lumos-text-primary truncate">{activeSpace?.name || 'Wiki'}</span>
+                <span className="block text-[11px] text-lumos-text-secondary">Base de conhecimento</span>
+              </span>
             </div>
+          ) : (
+            <>
+              <button onClick={() => setSpaceMenu(o => !o)} className="w-full flex items-center gap-2.5 p-3.5 text-left hover:bg-white/[0.03] transition-colors">
+                <span className="w-9 h-9 rounded-lumos bg-lumos-yellow/15 flex items-center justify-center text-lg flex-shrink-0">{activeSpace?.icon || '📘'}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-black text-lumos-text-primary truncate">{activeSpace?.name || 'Wiki'}</span>
+                  <span className="block text-[11px] text-lumos-text-secondary">{spaces.length} espaços · Wiki</span>
+                </span>
+                <ChevronDown className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" />
+              </button>
+              {spaceMenu && (
+                <div className="absolute left-2 right-2 top-full mt-1 z-30 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
+                  {spaces.map(s => (
+                    <button key={s.id} onClick={() => { setActiveSpaceId(s.id); setSpaceMenu(false); }}
+                      className={clsx('w-full flex items-center gap-2 px-2 py-2 rounded text-sm text-left', s.id === activeSpaceId ? 'bg-lumos-yellow/10 text-lumos-yellow font-bold' : 'text-lumos-text-primary hover:bg-white/5')}>
+                      <span>{s.icon || '📘'}</span><span className="truncate">{s.name}</span>
+                    </button>
+                  ))}
+                  <button onClick={createSpace} className="w-full flex items-center gap-2 px-2 py-2 rounded text-sm text-lumos-yellow hover:bg-lumos-yellow/10 border-t border-lumos-border/50 mt-1">
+                    <Plus className="w-4 h-4" /> Novo espaço
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
         {/* árvore */}
@@ -292,7 +315,12 @@ export default function Wiki() {
                 <>
                   <input value={draftTitle} onChange={e => setDraftTitle(e.target.value)} placeholder="Título da página"
                     className="w-full bg-transparent text-3xl lg:text-4xl font-black tracking-tight text-lumos-text-primary outline-none mb-4 placeholder:text-lumos-text-secondary/40" />
-                  <RichTextEditor value={draftContent} onChange={setDraftContent} minHeight={400} />
+                  <RichTextEditor
+                    value={draftContent}
+                    onChange={setDraftContent}
+                    minHeight={400}
+                    mentionPages={pages.filter(p => p.id !== activePage.id).map(p => ({ id: p.id, title: p.title }))}
+                  />
                 </>
               ) : (
                 <>
@@ -300,7 +328,7 @@ export default function Wiki() {
                     {activePage.icon && <span>{activePage.icon}</span>}{activePage.title}
                   </h1>
                   {rendered.html.trim() ? (
-                    <div className="wiki-content" dangerouslySetInnerHTML={{ __html: rendered.html }} />
+                    <div className="wiki-content" onClick={onContentClick} dangerouslySetInnerHTML={{ __html: rendered.html }} />
                   ) : (
                     <p className="text-lumos-text-secondary/60 italic">Página vazia. Clique em <b>Editar</b> pra escrever.</p>
                   )}

@@ -172,6 +172,10 @@ body {
 .lumos-mention-file { background: rgb(46 144 250 / 0.15); color: #2e90fa; cursor: pointer; }
 .lumos-mention-video { background: rgb(158 119 237 / 0.15); color: #9e77ed; cursor: pointer; }
 .lumos-mention-file:hover, .lumos-mention-video:hover { filter: brightness(1.1); text-decoration: underline; }
+/* Menção de página da Wiki: chip amarelo (marca Lumos), clicável na leitura. */
+.lumos-mention-page { background: rgb(239 199 0 / 0.15); color: #b8940b; cursor: pointer; }
+.dark .lumos-mention-page { color: #efc700; }
+.lumos-mention-page:hover { filter: brightness(1.08); text-decoration: underline; }
 .ProseMirror p { line-height: 1.65; }
 
 /* Anotações do Projeto: espaçamento compacto fixo (só neste editor). A
