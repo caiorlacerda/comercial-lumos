@@ -72,7 +72,7 @@ export default function LumosSideNav({
   return (
     <div className="relative flex h-full">
       {/* ---------------- Rail de ícones (sempre visível) ---------------- */}
-      <aside className="flex w-16 flex-col items-center gap-1.5 bg-lumos-surface border-r border-lumos-border py-3 flex-shrink-0">
+      <aside className="lumos-nav-surface flex w-16 flex-col items-center gap-1.5 border-r border-lumos-border py-3 flex-shrink-0">
         {/* Logo */}
         <div className="mb-2 flex size-10 items-center justify-center">{logo}</div>
 
@@ -100,7 +100,7 @@ export default function LumosSideNav({
 
       {/* ---------------- Painel de detalhe (expansível) ---------------- */}
       <div
-        className={clsx('bg-lumos-surface border-r border-lumos-border overflow-hidden flex flex-col', collapsed ? 'w-0' : 'w-60')}
+        className={clsx('lumos-nav-surface border-r border-lumos-border overflow-hidden flex flex-col', collapsed ? 'w-0' : 'w-60')}
         style={{ transition: `width 380ms ${SPRING}` }}
       >
         <div className="w-60 flex flex-col h-full">
