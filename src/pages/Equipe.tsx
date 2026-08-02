@@ -20,20 +20,26 @@ import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
 import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 import Select from '@/components/ui/Select';
 
-type UserRole = 'admin' | 'producao' | 'atendimento' | 'editor' | 'social_media' | 'basico';
+type UserRole = 'admin' | 'producao' | 'time' | 'atendimento' | 'editor' | 'social_media' | 'basico';
 
+// ROLE_OPTS = todos os rótulos (inclui legados, só pra exibir bem quem ainda não
+// foi migrado). SELECTABLE_ROLES = os 3 níveis oferecidos hoje.
 const ROLE_OPTS: { value: UserRole; label: string }[] = [
-  { value: 'admin', label: 'Admin' }, { value: 'producao', label: 'Produção' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'producao', label: 'Gestão de Produção' },
+  { value: 'time', label: 'Time de Produção' },
   { value: 'atendimento', label: 'Atendimento' }, { value: 'editor', label: 'Editor' },
   { value: 'social_media', label: 'Social Media' }, { value: 'basico', label: 'Básico' },
 ];
+const SELECTABLE_ROLES = ROLE_OPTS.filter(o => ['admin', 'producao', 'time'].includes(o.value));
 const roleLabel = (r?: string) => ROLE_OPTS.find(o => o.value === r)?.label || r || '—';
 const roleBadge = (r?: string) => ({
   admin: 'bg-lumos-yellow/20 text-lumos-yellow border-lumos-yellow/30',
   producao: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  atendimento: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  editor: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  social_media: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  time: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  atendimento: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  editor: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  social_media: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
 }[r || ''] || 'bg-lumos-text-primary/10 text-lumos-text-secondary border-lumos-border');
 
 const PERM_OPTIONS = [
@@ -125,7 +131,7 @@ export default function Equipe() {
   // ── Detalhe da pessoa ─────────────────────────────────────────────────────
   const [detail, setDetail] = useState<Person | null>(null);
   const [detailTab, setDetailTab] = useState<'dados' | 'acesso'>('dados');
-  const [access, setAccess] = useState({ role: 'basico' as UserRole, status: 'ativo' as 'ativo' | 'inativo', job_title: '', custom_permissions: {} as Record<string, boolean> });
+  const [access, setAccess] = useState({ role: 'time' as UserRole, status: 'ativo' as 'ativo' | 'inativo', job_title: '', custom_permissions: {} as Record<string, boolean> });
   const [hr, setHr] = useState<HrForm>(EMPTY_HR);
   const [saving, setSaving] = useState(false);
 
@@ -276,7 +282,7 @@ export default function Equipe() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <ViewToggle value={viewMode} onChange={setViewMode} />
           {isAdmin && (
-            <button onClick={() => setInvite({ full_name: '', email: '', role: 'basico', job_title: '' })} className="btn-primary h-10 px-4 text-sm font-bold flex items-center gap-1.5">
+            <button onClick={() => setInvite({ full_name: '', email: '', role: 'time', job_title: '' })} className="btn-primary h-10 px-4 text-sm font-bold flex items-center gap-1.5">
               <UserPlus className="w-4 h-4" /> Novo usuário
             </button>
           )}
@@ -290,7 +296,7 @@ export default function Equipe() {
         </div>
         <div className="w-full md:w-52">
           <Select value={roleFilter} onChange={setRoleFilter} className="input-lumos h-10 text-sm"
-            options={[{ value: 'all', label: 'Todos os cargos' }, ...ROLE_OPTS.map(o => ({ value: o.value, label: o.label }))]} />
+            options={[{ value: 'all', label: 'Todos os cargos' }, ...SELECTABLE_ROLES.map(o => ({ value: o.value, label: o.label }))]} />
         </div>
       </div>
 
@@ -440,7 +446,7 @@ export default function Equipe() {
                     <Field label="Cargo / função (exibição)" value={access.job_title} onChange={v => setAccess(a => ({ ...a, job_title: v }))} />
                     <div>
                       <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Nível de acesso</label>
-                      <Select value={access.role} onChange={v => setAccess(a => ({ ...a, role: v as UserRole }))} className="input-lumos h-9 text-sm" options={ROLE_OPTS} />
+                      <Select value={access.role} onChange={v => setAccess(a => ({ ...a, role: v as UserRole }))} className="input-lumos h-9 text-sm" options={SELECTABLE_ROLES} />
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Status</label>
@@ -540,7 +546,7 @@ export default function Equipe() {
               <Field label="Cargo (exibição)" value={invite.job_title} onChange={v => setInvite(i => i && { ...i, job_title: v })} />
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Nível</label>
-                <Select value={invite.role} onChange={v => setInvite(i => i && { ...i, role: v as UserRole })} className="input-lumos h-9 text-sm" options={ROLE_OPTS} />
+                <Select value={invite.role} onChange={v => setInvite(i => i && { ...i, role: v as UserRole })} className="input-lumos h-9 text-sm" options={SELECTABLE_ROLES} />
               </div>
             </div>
             <p className="text-[11px] text-lumos-text-secondary">A pessoa recebe um e-mail para definir a própria senha.</p>

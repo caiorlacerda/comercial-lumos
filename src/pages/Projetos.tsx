@@ -725,7 +725,7 @@ export default function Projetos() {
   // Permissions
   const canManage = isAdmin || can('ordem_do_dia');
   // Prazo de entrega ao cliente: só admin, produção e atendimento veem (edição não).
-  const canSeeClientDeadline = ['admin', 'producao', 'atendimento'].includes(profile?.role || '');
+  const canSeeClientDeadline = ['admin', 'producao', 'time', 'atendimento'].includes(profile?.role || '');
 
   // Database States
   const [clients, setClients] = useState<Client[]>([]);
