@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Home, Briefcase, Hammer, DollarSign, Settings, Sun, Moon, LogOut, BookOpen,
+  Home, Briefcase, Video, DollarSign, Settings, Sun, Moon, LogOut, BookOpen,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
@@ -13,6 +13,7 @@ import WorldClock from '@/components/layout/WorldClock';
 import SidebarProjectTree from '@/components/layout/SidebarProjectTree';
 import StatusDot from '@/components/common/StatusDot';
 import LumosSideNav, { type NavSectionMeta, type NavItemMeta } from '@/components/layout/LumosSideNav';
+import WikiTree from '@/components/layout/WikiTree';
 import { clsx } from 'clsx';
 
 // Ícone + rótulo de cada seção no rail. As sub-páginas continuam vindo de
@@ -21,7 +22,7 @@ const SECTION_META: Record<SectionType, { label: string; icon: React.ComponentTy
   home: { label: 'Início', icon: Home },
   wiki: { label: 'Wiki', icon: BookOpen },
   comercial: { label: 'Comercial', icon: Briefcase },
-  producao: { label: 'Produção', icon: Hammer },
+  producao: { label: 'Produção', icon: Video },
   financeiro: { label: 'Financeiro', icon: DollarSign },
   configuracoes: { label: 'Configurações', icon: Settings },
 };
@@ -59,20 +60,18 @@ export default function DesktopNav() {
   const isItemActive = (item: NavItemMeta) =>
     item.end ? location.pathname === item.path : location.pathname.startsWith(item.path);
 
-  // Colapso: Início sempre recolhido (é a tela cheia); nas demais seções,
+  // Colapso: Início sempre recolhido (é a tela cheia). Nas demais seções —
+  // inclusive a Wiki, que agora mostra a árvore de páginas NESTE mesmo painel —
   // respeita a preferência manual (lembrada por usuário).
-  // Início é tela cheia e a Wiki tem navegação própria (espaços + árvore),
-  // então ambas mantêm o painel de detalhe recolhido.
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => localStorage.getItem('lumos-nav-collapsed') === '1');
-  const collapsed = activeSection === 'home' || activeSection === 'wiki' ? true : userCollapsed;
+  const collapsed = activeSection === 'home' ? true : userCollapsed;
   const setCollapsed = (v: boolean) => {
     setUserCollapsed(v);
     localStorage.setItem('lumos-nav-collapsed', v ? '1' : '0');
   };
 
   const onSelectSection = (id: string) => {
-    // Início e Wiki não têm painel de detalhe (têm navegação própria).
-    if (id !== 'home' && id !== 'wiki') setCollapsed(false);   // abrir a seção mostra os itens
+    if (id !== 'home') setCollapsed(false);   // abrir a seção mostra o painel
     navigateToSection(id as SectionType);
   };
 
@@ -128,6 +127,7 @@ export default function DesktopNav() {
       onSearch={openCommandPalette}
       railFooter={railFooter}
       renderItem={(item) => renderItem(item)}
+      panelBody={activeSection === 'wiki' ? <WikiTree /> : undefined}
     />
   );
 }

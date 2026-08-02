@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import RichTextEditor from '@/components/common/RichTextEditor';
-import { useConfirm } from '@/components/ui/useConfirm';
 import DOMPurify from 'dompurify';
 import { clsx } from 'clsx';
-import {
-  ChevronRight, ChevronDown, Plus, Search, Pencil, Trash2, Check, X, Loader2, BookOpen, FileText, Smile,
-} from 'lucide-react';
+import { Search, Pencil, Check, X, Loader2, BookOpen, Smile, Plus } from 'lucide-react';
+import { useWiki, type WikiPage } from '@/context/WikiContext';
+import WikiTree from '@/components/layout/WikiTree';
 
 // Emojis sugeridos pro ícone da página (dá pra colar qualquer outro também).
 const WIKI_EMOJIS = ['📄','📘','📗','📕','📙','📚','📓','🗂️','📁','💛','⭐','🔥','🚀','✅','📌','🎬','🎥','🎨','💡','⚙️','🔧','🔑','👥','💰','📊','📈','📝','📢','🏆','🎯','🔒','🌟','🧠','🧩','🗓️','🔔','💬','🏷️','🧾','📦','🎓','🧭','⚡','❤️','👋','🙌','🎉','🛠️'];
@@ -19,10 +18,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') { node.setAttribute('target', '_blank'); node.setAttribute('rel', 'noopener noreferrer'); }
 });
 
-interface Space { id: string; name: string; icon: string | null; ordem: number; }
-interface Page { id: string; space_id: string; parent_id: string | null; title: string; content: string; icon: string | null; ordem: number; updated_at: string; }
-
-const slugify = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sec';
+const slugify = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sec';
 
 // Injeta ids nos títulos (h2/h3) do HTML e extrai o índice "nesta página".
 function withHeadings(html: string): { html: string; outline: { id: string; text: string; level: number }[] } {
@@ -39,31 +35,14 @@ function withHeadings(html: string): { html: string; outline: { id: string; text
   return { html: out, outline };
 }
 
-// Cache em memória (vive enquanto a aba estiver aberta). A Wiki remonta a cada
-// entrada; sem cache, ela refazia o fetch do zero e trocava o layout por um
-// spinner — dando aquele "pisca/carregada" toda vez. Com o cache, a reentrada
-// renderiza na hora com o último estado e revalida em silêncio, igual às outras
-// páginas.
-let cachedSpaces: Space[] | null = null;
-const cachedPages: Record<string, Page[]> = {};
-
 export default function Wiki() {
   const { pageId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useAuth();
   const toast = useToast();
-  const { confirm, dialog } = useConfirm();
-
-  const [spaces, setSpaces] = useState<Space[]>(() => cachedSpaces ?? []);
-  const [activeSpaceId, setActiveSpaceId] = useState<string | null>(() => cachedSpaces?.[0]?.id ?? null);
-  const [pages, setPages] = useState<Page[]>(() => {
-    const sid = cachedSpaces?.[0]?.id;
-    return sid ? (cachedPages[sid] ?? []) : [];
-  });
-  const [loading, setLoading] = useState(() => cachedSpaces === null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [spaceMenu, setSpaceMenu] = useState(false);
+  // Dados vêm do WikiContext — os MESMOS usados pela árvore no painel do app.
+  const { pages, activeSpace, loading, createPage, reload } = useWiki();
 
   // edição
   const [editing, setEditing] = useState(false);
@@ -75,79 +54,29 @@ export default function Wiki() {
 
   const activePage = pages.find(p => p.id === pageId) || null;
 
-  // ---- carregamento ----
-  useEffect(() => { loadSpaces(); }, []);
-  async function loadSpaces() {
-    const { data } = await supabase.from('wiki_spaces').select('*').order('ordem').order('created_at');
-    const sp = (data as Space[]) || [];
-    cachedSpaces = sp;
-    setSpaces(sp);
-    setActiveSpaceId(prev => prev || sp[0]?.id || null);
-    setLoading(false);
-  }
-  // Ao trocar de espaço, mostra na hora as páginas do cache (se houver) e
-  // revalida por baixo — sem esvaziar a árvore.
-  useEffect(() => {
-    if (!activeSpaceId) return;
-    if (cachedPages[activeSpaceId]) setPages(cachedPages[activeSpaceId]);
-    loadPages(activeSpaceId);
-  }, [activeSpaceId]);
-  async function loadPages(spaceId: string) {
-    const { data } = await supabase.from('wiki_pages').select('*').eq('space_id', spaceId).order('ordem').order('created_at');
-    const ps = (data as Page[]) || [];
-    cachedPages[spaceId] = ps;
-    setPages(ps);
-  }
-
-  // Ao entrar sem página selecionada, abre a primeira do espaço.
-  //
-  // IMPORTANTE: só redireciona quando ainda estamos DE FATO na raiz /wiki. Sem
-  // esse guard, ao clicar em outra seção (ex.: Início), o AnimatePresence mantém
-  // a Wiki montada durante o fade-out; o router zera o pageId e este efeito
-  // disparava um navigate de volta pra /wiki/:primeira, prendendo o usuário na
-  // Wiki. (O harness não pegava isso porque lá as páginas não carregavam.)
+  // Ao entrar sem página selecionada (raiz /wiki), abre a primeira. Só redireciona
+  // quando ainda estamos DE FATO na raiz — senão o AnimatePresence, ao sair da
+  // Wiki, dispararia um navigate de volta e prenderia o usuário.
   useEffect(() => {
     const naRaizDaWiki = location.pathname === '/wiki' || location.pathname === '/wiki/';
     if (naRaizDaWiki && !pageId && pages.length) navigate(`/wiki/${pages[0].id}`, { replace: true });
   }, [pages, pageId, navigate, location.pathname]);
 
-  // Sai do modo edição ao trocar de página.
-  useEffect(() => { setEditing(false); }, [pageId]);
-
-  const tree = useMemo(() => {
-    const byParent = new Map<string | null, Page[]>();
-    for (const p of pages) {
-      const k = p.parent_id;
-      if (!byParent.has(k)) byParent.set(k, []);
-      byParent.get(k)!.push(p);
+  // Troca de página: sai da edição — EXCETO quando a página acabou de ser criada
+  // (navigate com state.edit), aí já entra em edição na página nova.
+  const editConsumedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const wantEdit = !!(location.state as any)?.edit;
+    if (wantEdit && activePage && editConsumedRef.current !== activePage.id) {
+      editConsumedRef.current = activePage.id;
+      setDraftTitle(activePage.title); setDraftContent(activePage.content); setDraftIcon(activePage.icon);
+      setIconPicker(false); setEditing(true);
+    } else if (!wantEdit) {
+      setEditing(false);
     }
-    return byParent;
-  }, [pages]);
+  }, [pageId, activePage?.id, location.state]);
 
   const rendered = useMemo(() => activePage ? withHeadings(DOMPurify.sanitize(activePage.content || '')) : { html: '', outline: [] }, [activePage]);
-
-  // ---- ações ----
-  const createSpace = async () => {
-    const name = window.prompt('Nome do novo espaço:', 'Novo espaço');
-    if (!name) return;
-    const { data } = await supabase.from('wiki_spaces').insert([{ name: name.trim(), ordem: spaces.length, created_by: profile?.id }]).select('*').single();
-    if (data) { await loadSpaces(); setActiveSpaceId((data as Space).id); setSpaceMenu(false); }
-  };
-
-  const createPage = async (parentId: string | null) => {
-    if (!activeSpaceId) return;
-    const siblings = pages.filter(p => p.parent_id === parentId);
-    const { data } = await supabase.from('wiki_pages').insert([{
-      space_id: activeSpaceId, parent_id: parentId, title: 'Sem título', content: '', ordem: siblings.length, created_by: profile?.id,
-    }]).select('*').single();
-    if (data) {
-      if (parentId) setExpanded(prev => new Set(prev).add(parentId));
-      await loadPages(activeSpaceId);
-      const p = data as Page;
-      navigate(`/wiki/${p.id}`);
-      setDraftTitle(p.title); setDraftContent(p.content); setDraftIcon(p.icon); setEditing(true);
-    }
-  };
 
   const startEdit = () => { if (!activePage) return; setDraftTitle(activePage.title); setDraftContent(activePage.content); setDraftIcon(activePage.icon); setIconPicker(false); setEditing(true); };
 
@@ -160,7 +89,7 @@ export default function Wiki() {
     setSaving(false);
     if (error) { toast.error('Não foi possível salvar.'); return; }
     setEditing(false);
-    if (activeSpaceId) loadPages(activeSpaceId);
+    reload();
     toast.success('Página salva ✓');
   };
 
@@ -173,112 +102,27 @@ export default function Wiki() {
     if (id) navigate(`/wiki/${id}`);
   };
 
-  const deletePage = async (p: Page) => {
-    const kids = pages.filter(x => x.parent_id === p.id).length;
-    if (!(await confirm({ title: 'Excluir página', message: kids ? `Excluir "${p.title}" e suas ${kids} sub-página(s)? Não dá pra desfazer.` : `Excluir "${p.title}"? Não dá pra desfazer.`, confirmLabel: 'Excluir', danger: true }))) return;
-    const { error } = await supabase.from('wiki_pages').delete().eq('id', p.id);
-    if (error) { toast.error('Não foi possível excluir.'); return; }
-    if (activeSpaceId) await loadPages(activeSpaceId);
-    if (pageId === p.id) navigate('/wiki', { replace: true });
-    toast.success('Página excluída.');
-  };
-
-  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const activeSpace = spaces.find(s => s.id === activeSpaceId) || null;
-
   // breadcrumb (cadeia de pais até a raiz)
   const crumb = useMemo(() => {
-    const chain: Page[] = [];
+    const chain: WikiPage[] = [];
     let cur = activePage;
     while (cur) { chain.unshift(cur); cur = cur.parent_id ? pages.find(p => p.id === cur!.parent_id) || null : null; }
     return chain;
   }, [activePage, pages]);
 
-  // ---- render da árvore ----
-  const renderNodes = (parentId: string | null, depth = 0) => {
-    const nodes = (tree.get(parentId) || []);
-    return nodes.map(p => {
-      const kids = tree.get(p.id) || [];
-      const isOpen = expanded.has(p.id);
-      const isActive = p.id === pageId;
-      return (
-        <div key={p.id}>
-          <div
-            className={clsx('group flex items-center gap-1.5 rounded-lumos pr-1.5 text-[13.5px] transition-colors',
-              isActive ? 'bg-lumos-yellow/[0.12] text-lumos-yellow font-bold' : 'text-lumos-text-secondary hover:bg-white/[0.05] hover:text-lumos-text-primary')}
-            style={{ paddingLeft: 8 + depth * 14 }}
-          >
-            <button type="button" onClick={() => kids.length && toggleExpand(p.id)} className="w-4 flex-shrink-0 flex items-center justify-center text-lumos-text-secondary/70">
-              {kids.length ? (isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />) : <span className="w-3.5" />}
-            </button>
-            <button type="button" onClick={() => navigate(`/wiki/${p.id}`)} className="flex-1 min-w-0 text-left py-1.5 flex items-center gap-1.5">
-              <span className="flex-shrink-0">{p.icon || <FileText className="w-3.5 h-3.5 opacity-60" />}</span>
-              <span className="truncate">{p.title}</span>
-            </button>
-            <button type="button" onClick={() => createPage(p.id)} title="Nova sub-página" className="w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white/10 flex-shrink-0"><Plus className="w-3.5 h-3.5" /></button>
-            <button type="button" onClick={() => deletePage(p)} title="Excluir" className="w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
-          </div>
-          {isOpen && kids.length > 0 && renderNodes(p.id, depth + 1)}
-        </div>
-      );
-    });
-  };
-
-  // Nada de spinner de página inteira: ele trocava todo o layout e dava o
-  // "pisca". O shell (árvore + colunas) sempre renderiza; o carregamento inicial
-  // (só na 1ª vez, sem cache) aparece de leve dentro da área de conteúdo.
-
   return (
     <div className="-m-4 lg:-m-8 h-[calc(100vh-0px)] flex min-h-0 font-work-sans">
-      {dialog}
-      {/* ------- Coluna esquerda: espaço + árvore ------- */}
-      <aside className="lumos-nav-surface w-72 flex-shrink-0 border-r border-lumos-border hidden md:flex flex-col">
-        {/* Cabeçalho do espaço. Com um único espaço (padrão hoje), é um título
-            simples, sem troca de espaço, pra ficar mais fácil de usar. Se um dia
-            houver mais de um, volta a ser um seletor. */}
-        <div className="relative border-b border-lumos-border/60">
-          {spaces.length <= 1 ? (
-            <div className="w-full flex items-center gap-2.5 p-3.5">
-              <span className="w-9 h-9 rounded-lumos bg-lumos-yellow/15 flex items-center justify-center text-lg flex-shrink-0">{activeSpace?.icon || '📘'}</span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-black text-lumos-text-primary truncate">{activeSpace?.name || 'Wiki'}</span>
-                <span className="block text-[11px] text-lumos-text-secondary">Base de conhecimento</span>
-              </span>
-            </div>
-          ) : (
-            <>
-              <button onClick={() => setSpaceMenu(o => !o)} className="w-full flex items-center gap-2.5 p-3.5 text-left hover:bg-white/[0.03] transition-colors">
-                <span className="w-9 h-9 rounded-lumos bg-lumos-yellow/15 flex items-center justify-center text-lg flex-shrink-0">{activeSpace?.icon || '📘'}</span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-black text-lumos-text-primary truncate">{activeSpace?.name || 'Wiki'}</span>
-                  <span className="block text-[11px] text-lumos-text-secondary">{spaces.length} espaços · Wiki</span>
-                </span>
-                <ChevronDown className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" />
-              </button>
-              {spaceMenu && (
-                <div className="absolute left-2 right-2 top-full mt-1 z-30 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
-                  {spaces.map(s => (
-                    <button key={s.id} onClick={() => { setActiveSpaceId(s.id); setSpaceMenu(false); }}
-                      className={clsx('w-full flex items-center gap-2 px-2 py-2 rounded text-sm text-left', s.id === activeSpaceId ? 'bg-lumos-yellow/10 text-lumos-yellow font-bold' : 'text-lumos-text-primary hover:bg-white/5')}>
-                      <span>{s.icon || '📘'}</span><span className="truncate">{s.name}</span>
-                    </button>
-                  ))}
-                  <button onClick={createSpace} className="w-full flex items-center gap-2 px-2 py-2 rounded text-sm text-lumos-yellow hover:bg-lumos-yellow/10 border-t border-lumos-border/50 mt-1">
-                    <Plus className="w-4 h-4" /> Novo espaço
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+      {/* Árvore só no tablet (md→lg): no desktop (lg+) ela vive no painel do app,
+          igual às outras seções; no celular, fica pelo menu. */}
+      <aside className="lumos-nav-surface w-72 flex-shrink-0 border-r border-lumos-border hidden md:flex lg:hidden flex-col">
+        <div className="p-3.5 border-b border-lumos-border/60 flex items-center gap-2.5">
+          <span className="w-9 h-9 rounded-lumos bg-lumos-yellow/15 flex items-center justify-center text-lg flex-shrink-0">{activeSpace?.icon || '📘'}</span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-black text-lumos-text-primary truncate">{activeSpace?.name || 'Wiki'}</span>
+            <span className="block text-[11px] text-lumos-text-secondary">Base de conhecimento</span>
+          </span>
         </div>
-        {/* árvore */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-          {renderNodes(null)}
-          <button onClick={() => createPage(null)} className="mt-2 w-full flex items-center gap-2 px-3 py-2 rounded-lumos border border-dashed border-lumos-border text-lumos-text-secondary hover:border-lumos-yellow/40 hover:text-lumos-yellow text-[12.5px] font-bold transition-colors">
-            <Plus className="w-3.5 h-3.5" /> Nova página
-          </button>
-        </div>
+        <WikiTree />
       </aside>
 
       {/* ------- Centro: conteúdo ------- */}

@@ -31,6 +31,7 @@ interface Props {
   onSearch?: () => void;
   railFooter?: React.ReactNode;           // tema / notificações / avatar
   renderItem?: (item: NavItemMeta) => React.ReactNode; // p/ casos especiais (árvore de projetos)
+  panelBody?: React.ReactNode;            // substitui a lista de itens (ex.: árvore da Wiki)
 }
 
 /* --------------------------------- Rail ---------------------------------- */
@@ -67,7 +68,7 @@ function RailButton({
 export default function LumosSideNav({
   logo, sections, activeSectionId, onSelectSection,
   detailTitle, items, isItemActive, onNavigate,
-  collapsed, onToggleCollapse, onSearch, railFooter, renderItem,
+  collapsed, onToggleCollapse, onSearch, railFooter, renderItem, panelBody,
 }: Props) {
   return (
     <div className="relative flex h-full">
@@ -133,7 +134,10 @@ export default function LumosSideNav({
             </div>
           )}
 
-          {/* Itens da seção */}
+          {/* Corpo do painel: conteúdo custom (ex.: árvore da Wiki) ou a lista de itens */}
+          {panelBody ? (
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{panelBody}</div>
+          ) : (
           <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-1">
             {items.length === 0 ? (
               <p className="px-3 py-6 text-center text-[11px] text-lumos-text-secondary/60">Sem itens nesta seção.</p>
@@ -163,11 +167,12 @@ export default function LumosSideNav({
               })
             )}
           </nav>
+          )}
 
           {/* Rodapé */}
           <div className="p-3 border-t border-lumos-border/50 flex-shrink-0 text-center">
             <p className="text-[9px] text-lumos-text-secondary font-semibold uppercase tracking-widest opacity-40">
-              Lumos Studio © {new Date().getFullYear()}
+              Produtora Lumos © {new Date().getFullYear()}
             </p>
           </div>
         </div>
