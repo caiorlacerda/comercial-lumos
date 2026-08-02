@@ -70,6 +70,16 @@ export default function DesktopNav() {
     localStorage.setItem('lumos-nav-collapsed', v ? '1' : '0');
   };
 
+  // Largura do painel, ajustável arrastando a borda (lembrada por usuário).
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    const v = parseInt(localStorage.getItem('lumos-nav-width') || '', 10);
+    return v >= 220 && v <= 460 ? v : 240;
+  });
+  const resizePanel = (w: number) => {
+    setPanelWidth(w);
+    localStorage.setItem('lumos-nav-width', String(w));
+  };
+
   const onSelectSection = (id: string) => {
     if (id !== 'home') setCollapsed(false);   // abrir a seção mostra o painel
     navigateToSection(id as SectionType);
@@ -128,6 +138,8 @@ export default function DesktopNav() {
       railFooter={railFooter}
       renderItem={(item) => renderItem(item)}
       panelBody={activeSection === 'wiki' ? <WikiTree /> : undefined}
+      panelWidth={panelWidth}
+      onResizePanel={resizePanel}
     />
   );
 }
