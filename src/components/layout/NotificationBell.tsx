@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useNotifications, Notification } from '@/hooks/useNotifications';
@@ -9,8 +10,10 @@ export default function NotificationBell() {
   const { items, unreadCount, markAsRead, markAllAsRead, removeOne, clearAll } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
   const navigate = useNavigate();
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 1024);
@@ -18,13 +21,30 @@ export default function NotificationBell() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // Posiciona o popover: à DIREITA do sino (que fica no rail, à esquerda), com o
+  // rodapé alinhado ao sino, abrindo pra cima. Clamped pra nunca sair da tela.
+  useLayoutEffect(() => {
+    if (!isOpen || isMobile) return;
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = 400;
+    const left = Math.min(r.right + 8, window.innerWidth - width - 8);
+    const bottom = Math.max(8, window.innerHeight - r.bottom);
+    setPos({ left, bottom });
+  }, [isOpen, isMobile]);
+
   useEffect(() => {
     if (!isOpen || isMobile) return;
     const onDoc = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setIsOpen(false);
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setIsOpen(false);
     };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc); };
   }, [isOpen, isMobile]);
 
   const handleItemClick = async (item: Notification) => {
@@ -49,8 +69,9 @@ export default function NotificationBell() {
   );
 
   return (
-    <div className="relative" ref={popoverRef}>
+    <div className="relative">
       <button
+        ref={triggerRef}
         onClick={() => setIsOpen(o => !o)}
         className="relative p-2 text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 rounded-full transition-all flex items-center justify-center cursor-pointer"
         aria-label="Notificações"
@@ -63,11 +84,16 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Popover (desktop) */}
-      {isOpen && !isMobile && (
-        <div className="absolute right-0 top-full mt-2 w-[400px] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-50 p-3 animate-in fade-in slide-in-from-top-2 duration-150">
+      {/* Popover (desktop) — em portal, posição fixa, nunca cortado */}
+      {isOpen && !isMobile && pos && createPortal(
+        <div
+          ref={popRef}
+          style={{ position: 'fixed', left: pos.left, bottom: pos.bottom, width: 400, maxHeight: 'calc(100vh - 24px)' }}
+          className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[200] p-3 flex flex-col animate-in fade-in slide-in-from-left-2 duration-150"
+        >
           {panel}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Bottom sheet (mobile) */}
