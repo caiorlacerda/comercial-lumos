@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -39,6 +39,7 @@ function withHeadings(html: string): { html: string; outline: { id: string; text
 export default function Wiki() {
   const { pageId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile } = useAuth();
   const toast = useToast();
   const { confirm, dialog } = useConfirm();
@@ -74,9 +75,16 @@ export default function Wiki() {
   }
 
   // Ao entrar sem página selecionada, abre a primeira do espaço.
+  //
+  // IMPORTANTE: só redireciona quando ainda estamos DE FATO na raiz /wiki. Sem
+  // esse guard, ao clicar em outra seção (ex.: Início), o AnimatePresence mantém
+  // a Wiki montada durante o fade-out; o router zera o pageId e este efeito
+  // disparava um navigate de volta pra /wiki/:primeira, prendendo o usuário na
+  // Wiki. (O harness não pegava isso porque lá as páginas não carregavam.)
   useEffect(() => {
-    if (!pageId && pages.length) navigate(`/wiki/${pages[0].id}`, { replace: true });
-  }, [pages, pageId, navigate]);
+    const naRaizDaWiki = location.pathname === '/wiki' || location.pathname === '/wiki/';
+    if (naRaizDaWiki && !pageId && pages.length) navigate(`/wiki/${pages[0].id}`, { replace: true });
+  }, [pages, pageId, navigate, location.pathname]);
 
   // Sai do modo edição ao trocar de página.
   useEffect(() => { setEditing(false); }, [pageId]);
