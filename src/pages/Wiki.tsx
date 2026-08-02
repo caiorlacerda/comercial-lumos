@@ -8,8 +8,11 @@ import { useConfirm } from '@/components/ui/useConfirm';
 import DOMPurify from 'dompurify';
 import { clsx } from 'clsx';
 import {
-  ChevronRight, ChevronDown, Plus, Search, Pencil, Trash2, Check, X, Loader2, BookOpen, FileText,
+  ChevronRight, ChevronDown, Plus, Search, Pencil, Trash2, Check, X, Loader2, BookOpen, FileText, Smile,
 } from 'lucide-react';
+
+// Emojis sugeridos pro ícone da página (dá pra colar qualquer outro também).
+const WIKI_EMOJIS = ['📄','📘','📗','📕','📙','📚','📓','🗂️','📁','💛','⭐','🔥','🚀','✅','📌','🎬','🎥','🎨','💡','⚙️','🔧','🔑','👥','💰','📊','📈','📝','📢','🏆','🎯','🔒','🌟','🧠','🧩','🗓️','🔔','💬','🏷️','🧾','📦','🎓','🧭','⚡','❤️','👋','🙌','🎉','🛠️'];
 
 // Links do conteúdo abrem em nova aba, com segurança.
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
@@ -66,6 +69,8 @@ export default function Wiki() {
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
+  const [draftIcon, setDraftIcon] = useState<string | null>(null);
+  const [iconPicker, setIconPicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const activePage = pages.find(p => p.id === pageId) || null;
@@ -140,17 +145,17 @@ export default function Wiki() {
       await loadPages(activeSpaceId);
       const p = data as Page;
       navigate(`/wiki/${p.id}`);
-      setDraftTitle(p.title); setDraftContent(p.content); setEditing(true);
+      setDraftTitle(p.title); setDraftContent(p.content); setDraftIcon(p.icon); setEditing(true);
     }
   };
 
-  const startEdit = () => { if (!activePage) return; setDraftTitle(activePage.title); setDraftContent(activePage.content); setEditing(true); };
+  const startEdit = () => { if (!activePage) return; setDraftTitle(activePage.title); setDraftContent(activePage.content); setDraftIcon(activePage.icon); setIconPicker(false); setEditing(true); };
 
   const savePage = async () => {
     if (!activePage) return;
     setSaving(true);
     const { error } = await supabase.from('wiki_pages').update({
-      title: draftTitle.trim() || 'Sem título', content: draftContent, updated_at: new Date().toISOString(), updated_by: profile?.id,
+      title: draftTitle.trim() || 'Sem título', content: draftContent, icon: draftIcon, updated_at: new Date().toISOString(), updated_by: profile?.id,
     }).eq('id', activePage.id);
     setSaving(false);
     if (error) { toast.error('Não foi possível salvar.'); return; }
@@ -313,8 +318,33 @@ export default function Wiki() {
               )}
               {editing ? (
                 <>
-                  <input value={draftTitle} onChange={e => setDraftTitle(e.target.value)} placeholder="Título da página"
-                    className="w-full bg-transparent text-3xl lg:text-4xl font-black tracking-tight text-lumos-text-primary outline-none mb-4 placeholder:text-lumos-text-secondary/40" />
+                  <div className="flex items-start gap-3 mb-4">
+                    {/* Seletor de emoji da página */}
+                    <div className="relative flex-shrink-0">
+                      <button type="button" onClick={() => setIconPicker(o => !o)} title="Escolher emoji"
+                        className="w-12 h-12 lg:w-14 lg:h-14 rounded-lumos flex items-center justify-center text-3xl lg:text-4xl hover:bg-lumos-text-secondary/10 transition-colors">
+                        {draftIcon || <Smile className="w-6 h-6 text-lumos-text-secondary/40" />}
+                      </button>
+                      {iconPicker && (
+                        <div className="absolute left-0 top-full mt-1 z-30 w-64 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-2">
+                          <div className="grid grid-cols-8 gap-0.5 max-h-40 overflow-y-auto custom-scrollbar">
+                            {WIKI_EMOJIS.map(e => (
+                              <button key={e} type="button" onClick={() => { setDraftIcon(e); setIconPicker(false); }}
+                                className="w-7 h-7 flex items-center justify-center text-lg rounded hover:bg-lumos-yellow/10">{e}</button>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-lumos-border/50">
+                            <input value={draftIcon || ''} onChange={e => setDraftIcon(e.target.value || null)} maxLength={8} placeholder="ou cole um emoji"
+                              className="flex-1 min-w-0 bg-lumos-bg/40 border border-lumos-border rounded px-2 py-1 text-sm outline-none" />
+                            <button type="button" onClick={() => { setDraftIcon(null); setIconPicker(false); }}
+                              className="text-[11px] font-semibold text-lumos-text-secondary hover:text-red-400 px-1.5 py-1 flex-shrink-0">Limpar</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <input value={draftTitle} onChange={e => setDraftTitle(e.target.value)} placeholder="Título da página"
+                      className="flex-1 min-w-0 bg-transparent text-3xl lg:text-4xl font-black tracking-tight text-lumos-text-primary outline-none placeholder:text-lumos-text-secondary/40 mt-1" />
+                  </div>
                   <RichTextEditor
                     value={draftContent}
                     onChange={setDraftContent}
