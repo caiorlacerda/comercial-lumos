@@ -14,7 +14,7 @@ function partsFor(tz: string, now: Date) {
   return { time };
 }
 
-export default function WorldClock({ className }: { className?: string }) {
+export default function WorldClock({ className, vertical = false }: { className?: string; vertical?: boolean }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -26,6 +26,21 @@ export default function WorldClock({ className }: { className?: string }) {
     }, (60 - new Date().getSeconds()) * 1000);
     return () => { clearTimeout(align); if (interval) clearInterval(interval); };
   }, []);
+
+  // Versão vertical/compacta: usada no rail da navegação (largura ~64px). Cada
+  // fuso vira uma coluninha (bandeira em cima, hora embaixo).
+  if (vertical) {
+    return (
+      <div className={clsx('flex flex-col items-center gap-1.5', className)} title="São Paulo × Portugal">
+        {ZONES.map((z) => (
+          <div key={z.key} className="flex flex-col items-center leading-none gap-0.5" title={z.city}>
+            <span className="text-[13px]">{z.flag}</span>
+            <span className="text-[10px] font-bold text-lumos-text-primary tabular-nums">{partsFor(z.tz, now).time}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className={clsx('items-center gap-2', className)} title="São Paulo × Portugal">

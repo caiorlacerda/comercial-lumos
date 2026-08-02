@@ -274,3 +274,35 @@ body {
 }
 
 
+
+/* ============================================================================
+   Barra lateral (rail + painel) com gradiente "Ônix âmbar" + grão de seda.
+   Dá mais contraste e profundidade sem tocar nos demais componentes (que
+   seguem usando bg-lumos-surface). Tema-aware.
+   ============================================================================ */
+.lumos-nav-surface {
+  position: relative;
+  isolation: isolate;
+  /* Tema claro: off-white quente com um brilho âmbar sutil no topo. */
+  background:
+    radial-gradient(120% 55% at 50% -6%, rgba(239, 199, 0, 0.10), transparent 60%),
+    linear-gradient(180deg, #FFFFFF 0%, #F3F1EA 58%, #EDEAE1 100%);
+}
+.dark .lumos-nav-surface {
+  /* Tema escuro: Ônix âmbar (near-black quente + brilho amarelo). */
+  background:
+    radial-gradient(120% 55% at 50% -6%, rgba(239, 199, 0, 0.16), transparent 60%),
+    linear-gradient(180deg, #17130B 0%, #121011 55%, #0C0C0D 100%);
+}
+/* Grão de "seda" por cima do gradiente, atrás do conteúdo. */
+.lumos-nav-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+}
