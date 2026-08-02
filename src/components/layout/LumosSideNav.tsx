@@ -31,7 +31,14 @@ interface Props {
   onSearch?: () => void;
   railFooter?: React.ReactNode;           // tema / notificações / avatar
   renderItem?: (item: NavItemMeta) => React.ReactNode; // p/ casos especiais (árvore de projetos)
+  panelBody?: React.ReactNode;            // substitui a lista de itens (ex.: árvore da Wiki)
+  panelWidth: number;                     // largura do painel (px), ajustável arrastando
+  onResizePanel: (w: number) => void;
 }
+
+const RAIL_W = 64;              // largura do rail (w-16)
+const MIN_PANEL = 220;
+const MAX_PANEL = 460;
 
 /* --------------------------------- Rail ---------------------------------- */
 
@@ -67,8 +74,29 @@ function RailButton({
 export default function LumosSideNav({
   logo, sections, activeSectionId, onSelectSection,
   detailTitle, items, isItemActive, onNavigate,
-  collapsed, onToggleCollapse, onSearch, railFooter, renderItem,
+  collapsed, onToggleCollapse, onSearch, railFooter, renderItem, panelBody,
+  panelWidth, onResizePanel,
 }: Props) {
+  const [dragging, setDragging] = React.useState(false);
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    const onMove = (ev: MouseEvent) => {
+      onResizePanel(Math.min(MAX_PANEL, Math.max(MIN_PANEL, ev.clientX - RAIL_W)));
+    };
+    const onUp = () => {
+      setDragging(false);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
   return (
     <div className="relative flex h-full">
       {/* ---------------- Rail de ícones (sempre visível) ---------------- */}
@@ -98,12 +126,12 @@ export default function LumosSideNav({
         )}
       </aside>
 
-      {/* ---------------- Painel de detalhe (expansível) ---------------- */}
+      {/* ---------------- Painel de detalhe (expansível + redimensionável) ---------------- */}
       <div
-        className={clsx('lumos-nav-surface border-r border-lumos-border overflow-hidden flex flex-col', collapsed ? 'w-0' : 'w-60')}
-        style={{ transition: `width 380ms ${SPRING}` }}
+        className="lumos-nav-surface relative border-r border-lumos-border overflow-hidden flex flex-col flex-shrink-0"
+        style={{ width: collapsed ? 0 : panelWidth, transition: dragging ? 'none' : `width 380ms ${SPRING}` }}
       >
-        <div className="w-60 flex flex-col h-full">
+        <div className="flex flex-col h-full" style={{ width: panelWidth }}>
           {/* Cabeçalho: título da seção + colapsar */}
           <div className="flex items-center justify-between h-14 px-4 border-b border-lumos-border/60 flex-shrink-0">
             <h2 className="text-sm font-black uppercase tracking-wider text-lumos-text-primary truncate">{detailTitle}</h2>
@@ -133,7 +161,10 @@ export default function LumosSideNav({
             </div>
           )}
 
-          {/* Itens da seção */}
+          {/* Corpo do painel: conteúdo custom (ex.: árvore da Wiki) ou a lista de itens */}
+          {panelBody ? (
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{panelBody}</div>
+          ) : (
           <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-1">
             {items.length === 0 ? (
               <p className="px-3 py-6 text-center text-[11px] text-lumos-text-secondary/60">Sem itens nesta seção.</p>
@@ -163,14 +194,26 @@ export default function LumosSideNav({
               })
             )}
           </nav>
+          )}
 
           {/* Rodapé */}
           <div className="p-3 border-t border-lumos-border/50 flex-shrink-0 text-center">
             <p className="text-[9px] text-lumos-text-secondary font-semibold uppercase tracking-widest opacity-40">
-              Lumos Studio © {new Date().getFullYear()}
+              Produtora Lumos © {new Date().getFullYear()}
             </p>
           </div>
         </div>
+
+        {/* Alça de redimensionamento (arraste pra alargar/estreitar) */}
+        {!collapsed && (
+          <div
+            onMouseDown={startDrag}
+            title="Arraste para redimensionar"
+            className="group absolute top-0 right-0 h-full w-1.5 cursor-col-resize z-20 flex justify-center"
+          >
+            <span className={clsx('w-0.5 h-full transition-colors', dragging ? 'bg-lumos-yellow/60' : 'bg-transparent group-hover:bg-lumos-yellow/40')} />
+          </div>
+        )}
       </div>
 
       {/* Botão flutuante pra reabrir quando colapsado — só quando a seção tem

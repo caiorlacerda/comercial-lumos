@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Briefcase, Hammer, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell, Megaphone, Newspaper, BookOpen, Home as HomeIcon } from 'lucide-react';
+import { Briefcase, Video, DollarSign, Menu, Users2, Settings, ShieldCheck, ClipboardList, Sun, Moon, LogOut, ChevronRight, Bell, Megaphone, Newspaper, BookOpen, Home as HomeIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
@@ -84,7 +84,7 @@ export default function MobileTabBar() {
               {activeSection === 'producao' && (
                 <span className="absolute top-0 inset-x-4 h-[2px] bg-lumos-yellow rounded-full" />
               )}
-              <Hammer className="w-5 h-5 mb-0.5" />
+              <Video className="w-5 h-5 mb-0.5" />
               <span className="text-[9px] font-bold uppercase tracking-wider">Produção</span>
             </button>
           )}

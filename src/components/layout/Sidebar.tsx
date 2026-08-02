@@ -7,6 +7,7 @@ import MobileSubNav from '@/components/layout/MobileSubNav';
 import MobileTabBar from '@/components/layout/MobileTabBar';
 import CommandPalette from '@/components/common/CommandPalette';
 import PageTransition from '@/components/layout/PageTransition';
+import { WikiProvider } from '@/context/WikiContext';
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -17,6 +18,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const transitionKey = PRODUCAO_VIEWS.includes(location.pathname) ? '__producao_views__' : location.pathname;
 
   return (
+    <WikiProvider>
     <div className="flex flex-col h-screen overflow-hidden bg-lumos-bg transition-colors duration-300 font-work-sans">
       {/* Header + sub-nav (só mobile) */}
       <MobileHeader />
@@ -56,5 +58,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       {/* Busca global (Cmd+K) */}
       <CommandPalette />
     </div>
+    </WikiProvider>
   );
 }
