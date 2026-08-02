@@ -1,6 +1,20 @@
 import { supabase } from '@/lib/supabase';
 import { NOTIFICATION_EVENTS, NotificationEventDef } from './events';
 
+// Resolve o app_user do usuário logado (o "ator" da ação), pra mostrar o avatar
+// de quem disparou a notificação. Best-effort: se não achar, fica sem ator.
+async function currentActorId(): Promise<string | null> {
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const authId = auth?.user?.id;
+    if (!authId) return null;
+    const { data } = await supabase.from('app_users').select('id').eq('auth_user_id', authId).maybeSingle();
+    return data?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function notify(opts: {
   userIds: string[];
   event: NotificationEventDef;
@@ -8,9 +22,16 @@ export async function notify(opts: {
   body?: string;
   link?: string;
   data?: Record<string, unknown>;
+  /** Quem disparou (default: usuário logado). Passe null pra não ter ator. */
+  actorId?: string | null;
+  /** 'personal' (default) ou 'team' (marco visível pra todo mundo). */
+  scope?: 'personal' | 'team';
 }) {
   const activeUserIds = opts.userIds.filter(Boolean);
   if (!activeUserIds.length) return;
+
+  const actor_id = opts.actorId === undefined ? await currentActorId() : opts.actorId;
+  const scope = opts.scope ?? 'personal';
 
   const rows = activeUserIds.map(user_id => ({
     user_id,
@@ -21,6 +42,8 @@ export async function notify(opts: {
     body: opts.body ?? null,
     link: opts.link ?? null,
     data: opts.data ?? {},
+    actor_id,
+    scope,
   }));
 
   const { error } = await supabase.from('notifications').insert(rows);

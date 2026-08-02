@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
+export type NotificationActor = { id: string; full_name: string | null; avatar_url: string | null };
+
 export type Notification = {
   id: string;
   event_type: string;
@@ -13,6 +15,9 @@ export type Notification = {
   data: Record<string, unknown>;
   read_at: string | null;
   created_at: string;
+  actor_id: string | null;
+  scope: 'personal' | 'team';
+  actor?: NotificationActor | null;
 };
 
 export function useNotifications() {
@@ -38,7 +43,7 @@ export function useNotifications() {
       // 2. Fetch recent notifications
       const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select('*, actor:app_users!actor_id(id, full_name, avatar_url)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(50);
