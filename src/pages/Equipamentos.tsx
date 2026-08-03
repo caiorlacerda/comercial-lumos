@@ -296,7 +296,7 @@ export default function Equipamentos() {
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Categoria</label>
               <Select value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} className={inputCls} placeholder="Selecione a categoria"
-                options={catOptions} />
+                options={catOptions} searchable searchPlaceholder="Filtrar categoria…" />
             </div>
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status</label>
