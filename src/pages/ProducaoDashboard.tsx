@@ -32,6 +32,7 @@ import {
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
 import { TagChip } from '@/components/producao/TaskTags';
+import { taskLabel } from '@/lib/taskStatus';
 
 // DnD Kit imports
 import {
@@ -124,7 +125,7 @@ function DraggableTask({
         <div className="mt-3.5 pt-2 border-t border-lumos-border/40 flex items-center justify-between text-[9px] text-lumos-text-secondary font-bold">
           <span className="truncate max-w-[120px]">👤 {responsibleName}</span>
           <span className="uppercase px-1.5 py-0.5 rounded bg-lumos-border/40 text-[8px]">
-            {task.status === 'em_andamento' ? 'Em andamento' : 'A Fazer'}
+            {taskLabel(task.status)}
           </span>
         </div>
       </div>
@@ -1175,9 +1176,7 @@ export default function ProducaoDashboard() {
                 <div>
                   <span className="block text-[8px] font-bold text-lumos-text-secondary uppercase tracking-widest">Status</span>
                   <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded bg-lumos-border mt-1">
-                    {selectedLocalTask.status === 'concluido' ? 'Concluída' 
-                      : selectedLocalTask.status === 'em_andamento' ? 'Em Andamento' 
-                      : 'A Fazer'}
+                    {taskLabel(selectedLocalTask.status)}
                   </span>
                 </div>
                 <div>

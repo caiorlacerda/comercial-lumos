@@ -11,15 +11,29 @@ import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
 import { supabase } from '@/lib/supabase';
 
+// Pipeline da Lumos, na ordem do fluxo. Cada etapa tem um time dono (exibido
+// no cabeçalho do grupo), pra ficar claro de quem é a bola.
 const STATUS_OPTIONS = [
   { value: 'na_fila', label: 'Na fila' },
-  { value: 'em_progresso', label: 'Em andamento' },
+  { value: 'roteiro', label: 'Roteiro' },
+  { value: 'captacao', label: 'Captação' },
+  { value: 'em_progresso', label: 'Edição' },
   { value: 'revisao_interna', label: 'Revisão interna' },
   { value: 'revisao_cliente', label: 'Com o cliente' },
   { value: 'alteracoes', label: 'Ajustes' },
-  { value: 'concluido', label: 'Concluído' },
+  { value: 'concluido', label: 'Aprovado' },
   { value: 'pausado', label: 'Pausado' },
 ];
+
+// Time responsável por cada etapa (só rótulo, não é permissão).
+export const STAGE_TEAM: Record<string, string> = {
+  roteiro: 'criação',
+  captacao: 'produção',
+  em_progresso: 'edição',
+  revisao_interna: 'produção',
+  revisao_cliente: 'atendimento',
+  alteracoes: 'edição',
+};
 const PRIORITY_OPTIONS = [
   { value: 'baixa', label: 'Baixa' }, { value: 'media', label: 'Média' }, { value: 'alta', label: 'Alta' },
 ];
@@ -165,13 +179,15 @@ export const TASK_STATUS_GROUPS = {
     { value: 'pausado', label: 'Pausado', color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' }
   ],
   ativo: [
-    { value: 'em_progresso', label: 'Em andamento', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+    { value: 'roteiro', label: 'Roteiro', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
+    { value: 'captacao', label: 'Captação', color: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
+    { value: 'em_progresso', label: 'Edição', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
     { value: 'revisao_interna', label: 'Revisão interna', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
     { value: 'revisao_cliente', label: 'Com o cliente', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
     { value: 'alteracoes', label: 'Ajustes', color: 'bg-red-500/10 text-red-400 border-red-500/20' }
   ],
   concluido: [
-    { value: 'concluido', label: 'Concluído', color: 'bg-green-500/10 text-green-400 border-green-500/20' }
+    { value: 'concluido', label: 'Aprovado', color: 'bg-green-500/10 text-green-400 border-green-500/20' }
   ]
 };
 
@@ -180,6 +196,8 @@ export const TASK_STATUS_GROUPS = {
 export const STAGE_THEME: Record<string, { bar: string; text: string }> = {
   na_fila: { bar: 'bg-slate-400', text: 'text-slate-400' },
   pausado: { bar: 'bg-neutral-400', text: 'text-neutral-400' },
+  roteiro: { bar: 'bg-indigo-400', text: 'text-indigo-400' },
+  captacao: { bar: 'bg-sky-400', text: 'text-sky-400' },
   em_progresso: { bar: 'bg-orange-400', text: 'text-orange-400' },
   revisao_interna: { bar: 'bg-purple-400', text: 'text-purple-400' },
   revisao_cliente: { bar: 'bg-amber-400', text: 'text-amber-400' },
@@ -1184,7 +1202,7 @@ export default function Projetos() {
   // Agrupamento por status na ordem do fluxo. Status legados não listados
   // (iniciar, aguard_*) entram no primeiro grupo; 'entregue' conta como concluído.
   // O grupo Concluídas só aparece com o toggle (showDone).
-  const GROUP_ORDER = ['na_fila', 'pausado', 'em_progresso', 'revisao_interna', 'revisao_cliente', 'alteracoes', 'concluido'];
+  const GROUP_ORDER = ['na_fila', 'roteiro', 'captacao', 'em_progresso', 'revisao_interna', 'revisao_cliente', 'alteracoes', 'pausado', 'concluido'];
   const groupKeyOf = (t: any) => isTaskDone(t) ? 'concluido' : (GROUP_ORDER.includes(t.status) ? t.status : 'na_fila');
   const taskGroups = GROUP_ORDER
     .filter(s => showDone || s !== 'concluido')
@@ -2165,9 +2183,9 @@ export default function Projetos() {
                       <p className="text-[11px] text-lumos-text-secondary">{getProjectTasksStats(selectedProject.id).completed} de {getProjectTasksStats(selectedProject.id).total} tarefas</p>
                     </div>
                     <div className="card p-4">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary">Em andamento</p>
-                      <p className="text-xl font-black text-orange-400 mt-0.5">{projectTasks.filter(t => ['em_progresso', 'revisao_interna'].includes(t.status)).length}</p>
-                      <p className="text-[11px] text-lumos-text-secondary">edição + revisão interna</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary">Em produção</p>
+                      <p className="text-xl font-black text-orange-400 mt-0.5">{projectTasks.filter(t => ['roteiro', 'captacao', 'em_progresso', 'revisao_interna'].includes(t.status)).length}</p>
+                      <p className="text-[11px] text-lumos-text-secondary">roteiro → revisão interna</p>
                     </div>
                     <div className="card p-4">
                       <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary">Com o cliente</p>
@@ -2368,6 +2386,9 @@ export default function Projetos() {
                                   <div className="flex items-center gap-2">
                                     <span className={clsx('w-1 h-3.5 rounded-full flex-shrink-0', stageTheme(group.status).bar)} />
                                     <span className={clsx('text-[10px] font-black uppercase tracking-widest', stageTheme(group.status).text)}>{getStatusDetails(group.status).label}</span>
+                                    {STAGE_TEAM[group.status] && (
+                                      <span className="text-[9px] font-bold uppercase tracking-widest text-lumos-text-secondary/60">· {STAGE_TEAM[group.status]}</span>
+                                    )}
                                     <span className="text-[10px] font-bold text-lumos-text-secondary/70">{group.tasks.length}</span>
                                   </div>
                                 </td>
@@ -2576,6 +2597,9 @@ export default function Projetos() {
                           <div className="pt-4 pb-1.5 flex items-center gap-2">
                             <span className={clsx('w-1 h-3.5 rounded-full flex-shrink-0', stageTheme(group.status).bar)} />
                             <span className={clsx('text-[10px] font-black uppercase tracking-widest', stageTheme(group.status).text)}>{getStatusDetails(group.status).label}</span>
+                            {STAGE_TEAM[group.status] && (
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-lumos-text-secondary/60">· {STAGE_TEAM[group.status]}</span>
+                            )}
                             <span className="text-[10px] font-bold text-lumos-text-secondary/70">{group.tasks.length}</span>
                           </div>
                           {group.tasks.map((task) => {
