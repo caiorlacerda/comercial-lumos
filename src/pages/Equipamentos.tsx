@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, ImagePlus, Loader2, MapPin } from 'lucide-react';
+import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, ImagePlus, Loader2, MapPin, Boxes, CalendarClock, Wrench, ListChecks } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -7,6 +7,17 @@ import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 import { clsx } from 'clsx';
+import ReservasTab from '@/components/equipamentos/ReservasTab';
+import ManutencaoTab from '@/components/equipamentos/ManutencaoTab';
+import ListasTab from '@/components/equipamentos/ListasTab';
+
+type Tab = 'inventario' | 'reservas' | 'manutencao' | 'listas';
+const TABS: { key: Tab; label: string; icon: any }[] = [
+  { key: 'inventario', label: 'Inventário', icon: Boxes },
+  { key: 'reservas', label: 'Reservas', icon: CalendarClock },
+  { key: 'manutencao', label: 'Manutenção', icon: Wrench },
+  { key: 'listas', label: 'Listas & Templates', icon: ListChecks },
+];
 
 type Status = 'disponivel' | 'em_uso' | 'manutencao' | 'inativo';
 const STATUS: Record<Status, { label: string; cls: string; dot: string }> = {
@@ -45,8 +56,16 @@ export default function Equipamentos() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  useEffect(() => { fetchEquipment(); }, []);
+  const [tab, setTab] = useState<Tab>('inventario');
+  const [projects, setProjects] = useState<{ id: string; name: string; code: string | null }[]>([]);
+
+  useEffect(() => { fetchEquipment(); fetchProjects(); }, []);
   useRealtimeRefetch(['equipment'], () => fetchEquipment(true));
+
+  async function fetchProjects() {
+    const { data } = await supabase.from('projects').select('id, name, code').order('name');
+    setProjects((data as any) || []);
+  }
 
   async function fetchEquipment(silent = false) {
     if (!silent) setLoading(true);
@@ -120,12 +139,30 @@ export default function Equipamentos() {
 
   return (
     <div className="space-y-6 font-work-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Equipamentos</h1>
-          <p className="text-lumos-text-secondary text-sm">Inventário de equipamentos da Lumos, câmeras, lentes, luzes, áudio e mais.</p>
-        </div>
-        <button onClick={openNew} className="btn-primary h-10 px-6 flex items-center gap-2 self-start">
+      <div>
+        <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Equipamentos</h1>
+        <p className="text-lumos-text-secondary text-sm">Inventário, reservas, manutenção e listas de equipamento por projeto.</p>
+      </div>
+
+      {/* Abas */}
+      <div className="flex gap-1 border-b border-lumos-border overflow-x-auto no-scrollbar">
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={clsx('flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 -mb-px transition-colors',
+              tab === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
+            <t.icon className="w-4 h-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'reservas' && <ReservasTab equipment={items} projects={projects} />}
+      {tab === 'manutencao' && <ManutencaoTab equipment={items} />}
+      {tab === 'listas' && <ListasTab equipment={items} projects={projects} />}
+
+      {tab === 'inventario' && (
+      <>
+      <div className="flex justify-end">
+        <button onClick={openNew} className="btn-primary h-10 px-6 flex items-center gap-2">
           <Plus className="w-4 h-4" /> Novo equipamento
         </button>
       </div>
@@ -206,6 +243,8 @@ export default function Equipamentos() {
             ))}
           </MobileCardList>
         </>
+      )}
+      </>
       )}
 
       {/* Modal criar/editar */}
