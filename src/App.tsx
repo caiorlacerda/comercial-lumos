@@ -404,8 +404,8 @@ function AppContent() {
           <Route path="/aprovar/:token" element={<AprovacaoPublica />} />
           <Route path="/cadastro-fornecedor" element={<CadastroFornecedorPublico />} />
           <Route path="/definir-senha" element={<DefinirSenha />} />
-          <Route path="/revisao/:token" element={<RevisaoPublica />} />          <Route 
-            path="/" 
+          <Route path="/revisao/:token" element={<RevisaoPublica />} />          <Route
+            path="/"
             element={
               <AuthWrapper>
                 <Home />
