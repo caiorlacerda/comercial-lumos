@@ -57,6 +57,7 @@ const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
 const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
 const OrdemDoDiaEditor = lazy(() => import('@/pages/OrdemDoDiaEditor'));
 const Fornecedores = lazy(() => import('@/pages/Fornecedores'));
+const Equipamentos = lazy(() => import('@/pages/Equipamentos'));
 const FornecedorEditor = lazy(() => import('@/pages/FornecedorEditor'));
 const CadastroFornecedorPublico = lazy(() => import('@/pages/CadastroFornecedorPublico'));
 const DefinirSenha = lazy(() => import('@/pages/DefinirSenha'));
@@ -709,6 +710,18 @@ function AppContent() {
               <AuthWrapper>
                 <PermissionGuard permission="ordem_do_dia">
                   <OrdemDoDiaEditor />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
+          {/* PRODUÇÃO — Equipamentos */}
+          <Route
+            path="/producao/equipamentos"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="equipamentos">
+                  <Equipamentos />
                 </PermissionGuard>
               </AuthWrapper>
             }

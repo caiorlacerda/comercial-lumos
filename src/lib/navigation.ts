@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone, Newspaper
+  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone, Newspaper, Package
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -42,7 +42,7 @@ export const NAV_SECTIONS: Section[] = [
   {
     id: 'producao',
     title: 'PRODUÇÃO',
-    visibleWhen: ({ can }) => can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') || can('cronograma_edicao'),
+    visibleWhen: ({ can }) => can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') || can('cronograma_edicao') || can('equipamentos'),
     items: [
       // Calendário, Board, Timeline e Cronograma são "views" acessadas por
       // pills no topo das páginas de produção (ProducaoViewsNav), não itens
@@ -52,6 +52,7 @@ export const NAV_SECTIONS: Section[] = [
       { icon: ClipboardList, label: 'Projetos', path: '/producao', permission: 'ordem_do_dia', end: true },
       { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
+      { icon: Package, label: 'Equipamentos', path: '/producao/equipamentos', permission: 'equipamentos' },
       { icon: FileStack, label: 'Templates de Tarefas', path: '/producao/templates-tarefas', permission: 'admin' },
       { icon: KeyRound, label: 'Acessos & Senhas', path: '/producao/acessos', permission: 'acessos' },
       // Cronograma de Edição no sidebar para todos que têm a permissão

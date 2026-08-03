@@ -28,15 +28,15 @@ function isSessionStale(u?: User | null): boolean {
 export const ROLE_DEFAULTS: Record<string, string[]> = {
   admin: ['*'],
   // Gestão de Produção: produção completa + custos de projeto + RH + reembolso + cofre.
-  producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados'],
+  producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados', 'equipamentos'],
   // Time de Produção: produção do dia a dia + reembolso (todo mundo pede reembolso).
-  time: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  time: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipamentos'],
   // Legado — Atendimento/Editor/Social/Básico foram unificados em 'time' (migração
   // por SQL). Mantidos como fallback pra ninguém ficar sem acesso se algum registro
   // ainda não tiver sido migrado. IMPORTANTE: manter em sincronia com notify.ts.
-  atendimento: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
-  editor: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
-  social_media: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos'],
+  atendimento: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipamentos'],
+  editor: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipamentos'],
+  social_media: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipamentos'],
   basico: ['reembolso'],
 };
 
