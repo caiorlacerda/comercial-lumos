@@ -86,7 +86,9 @@ export default function VideoReviewHub() {
   const openReview = async (p: (typeof projects)[number]) => {
     setOpenProject({ id: p.project.id, name: p.project.name, code: p.project.code });
     setOpenTasks([]);
-    const { data } = await supabase.from('project_tasks').select('id, titulo').eq('project_id', p.project.id);
+    // 'status' incluído: sem ele, vincular tarefa aqui não sincronizava o
+    // status do vídeo (taskStatusToVideo recebia undefined).
+    const { data } = await supabase.from('project_tasks').select('id, titulo, status').eq('project_id', p.project.id);
     setOpenTasks((data as any) || []);
   };
 

@@ -175,7 +175,8 @@ export const TASK_STATUS_GROUPS = {
 };
 
 // Tema visual dos cabeçalhos de etapa na lista agrupada (barra + label coloridos).
-const STAGE_THEME: Record<string, { bar: string; text: string }> = {
+// Exportado: a Visão Geral usa as mesmas cores no pipeline.
+export const STAGE_THEME: Record<string, { bar: string; text: string }> = {
   na_fila: { bar: 'bg-slate-400', text: 'text-slate-400' },
   pausado: { bar: 'bg-neutral-400', text: 'text-neutral-400' },
   em_progresso: { bar: 'bg-orange-400', text: 'text-orange-400' },
@@ -184,7 +185,7 @@ const STAGE_THEME: Record<string, { bar: string; text: string }> = {
   alteracoes: { bar: 'bg-red-400', text: 'text-red-400' },
   concluido: { bar: 'bg-green-500', text: 'text-green-500' },
 };
-const stageTheme = (s: string) => STAGE_THEME[s] || { bar: 'bg-neutral-400', text: 'text-neutral-400' };
+export const stageTheme = (s: string) => STAGE_THEME[s] || { bar: 'bg-neutral-400', text: 'text-neutral-400' };
 
 export const getStatusDetails = (statusVal: string) => {
   for (const group of Object.values(TASK_STATUS_GROUPS)) {
@@ -900,11 +901,17 @@ export default function Projetos() {
         setSelectedClientId(proj.client_id);
         setSelectedProjectId(proj.id);
       }
+      // ?tab= abre direto numa aba do hub (ex.: Visão Geral → Entregas).
+      // Depois do reset do effect de troca de projeto, então usa timeout 0.
+      const tab = searchParams.get('tab');
+      if (tab && ['geral', 'tarefas', 'entregas', 'arquivos'].includes(tab)) {
+        setTimeout(() => setProjTab(tab as any), 0);
+      }
     }
     // Mantém projectId na URL (reflete o projeto aberto → destaque na sidebar e
-    // sobrevive a refresh). Remove só taskId/new, e apenas quando existem, para
-    // não reprocessar em loop.
-    if (searchParams.get('taskId') || searchParams.get('new')) {
+    // sobrevive a refresh). Remove só taskId/new/tab, e apenas quando existem,
+    // para não reprocessar em loop.
+    if (searchParams.get('taskId') || searchParams.get('new') || searchParams.get('tab')) {
       const keep = new URLSearchParams();
       if (pid) keep.set('projectId', pid);
       setSearchParams(keep, { replace: true });
