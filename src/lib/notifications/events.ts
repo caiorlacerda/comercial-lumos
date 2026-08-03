@@ -27,7 +27,7 @@ export const NOTIFICATION_EVENTS = {
   ORCAMENTO_SEM_RESPOSTA_7D: { key: 'orcamento_sem_resposta_7d', category: 'comercial', label: 'Orçamento sem resposta há 7 dias', defaultEnabled: true },
 
   // SISTEMA
-  NOVO_USUARIO_ACESSO: { key: 'novo_usuario_acesso', category: 'sistema', label: 'Novo usuário pediu acesso (admin)', defaultEnabled: true, adminOnly: true, priority: 'high' },
+  NOVO_USUARIO_ACESSO: { key: 'novo_usuario_acesso', category: 'sistema', label: 'Novo usuário concluiu o cadastro (admin)', defaultEnabled: true, adminOnly: true, priority: 'high' },
   PERMISSAO_ALTERADA: { key: 'permissao_alterada', category: 'sistema', label: 'Suas permissões foram alteradas', defaultEnabled: true },
   COMUNICADO: { key: 'comunicado', category: 'sistema', label: 'Comunicados da administração', defaultEnabled: true, priority: 'high' },
 } as const;
