@@ -147,20 +147,20 @@ export default function Reembolso() {
       let attachmentData = null;
 
       if (formData.attachment) {
-        if (!isAuthenticated()) {
-          login();
-          setUploading(false);
-          return;
-        }
-
-        const folderId = await getOrCreatePath(profile.full_name || 'Desconhecido');
+        // Comprovante vai pro Supabase Storage (bucket 'reembolsos'), não mais pro
+        // Google Drive do usuário — antes dependia do login Google com escopo de
+        // Drive, e quem não tinha esse escopo travava com "insufficient
+        // authentication scopes" e não conseguia lançar o gasto.
         const file = formData.attachment;
-        const uploadRes = await uploadToDrive(file, file.name, file.type, folderId);
-        
+        const ext = file.name.split('.').pop() || 'bin';
+        const path = `${profile.id}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('reembolsos').upload(path, file, { contentType: file.type, upsert: false });
+        if (upErr) throw new Error('Não foi possível enviar o comprovante. Tente novamente.');
+        const { data: pub } = supabase.storage.from('reembolsos').getPublicUrl(path);
+
         attachmentData = [{
           name: file.name,
-          drive_file_id: uploadRes.id,
-          url: `https://drive.google.com/file/d/${uploadRes.id}/view`,
+          url: pub.publicUrl,
           uploaded_at: new Date().toISOString()
         }];
       }
