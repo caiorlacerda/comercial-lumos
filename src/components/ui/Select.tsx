@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { clsx } from 'clsx';
 
-export interface SelectOption { value: string; label: string; dotClass?: string; }
+export interface SelectOption { value: string; label: string; dotClass?: string; groupLabel?: string; }
 
 interface Props {
   value: string;
@@ -31,7 +31,8 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
     if (!open) return;
     const el = triggerRef.current; if (!el) return;
     const r = el.getBoundingClientRect();
-    const estH = Math.min(options.length * 30 + 8, 256);
+    const groupCount = new Set(options.map(o => o.groupLabel).filter(Boolean)).size;
+    const estH = Math.min(options.length * 30 + groupCount * 22 + 8, 256);
     const openUp = r.bottom + 4 + estH > window.innerHeight - 8 && r.top - estH - 4 > 8;
     setPos({ top: openUp ? r.top - estH - 4 : r.bottom + 4, left: r.left, width: r.width });
   }, [open, options.length]);
@@ -85,20 +86,28 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
           }}
           className={clsx('z-[300] max-w-[300px] max-h-64 overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1', menuClassName)}
         >
-          {options.map(o => (
-            <button
-              key={o.value} type="button"
-              onClick={e => { e.stopPropagation(); onChange(o.value); setOpen(false); }}
-              className={clsx('w-full flex items-center justify-between gap-2 text-left px-2.5 py-1.5 rounded text-xs font-normal transition-colors',
-                o.value === value ? 'text-lumos-yellow bg-lumos-yellow/10' : 'text-lumos-text-primary hover:bg-lumos-text-secondary/10')}
-            >
-              <span className="truncate flex items-center gap-2">
-                {o.dotClass && <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', o.dotClass)} />}
-                {o.label}
-              </span>
-              {o.value === value && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
-            </button>
-          ))}
+          {options.map((o, i) => {
+            const showHeader = o.groupLabel && o.groupLabel !== options[i - 1]?.groupLabel;
+            return (
+              <div key={o.value}>
+                {showHeader && (
+                  <div className="px-2.5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-lumos-text-secondary/70 select-none">{o.groupLabel}</div>
+                )}
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); onChange(o.value); setOpen(false); }}
+                  className={clsx('w-full flex items-center justify-between gap-2 text-left px-2.5 py-1.5 rounded text-xs font-normal transition-colors',
+                    o.value === value ? 'text-lumos-yellow bg-lumos-yellow/10' : 'text-lumos-text-primary hover:bg-lumos-text-secondary/10')}
+                >
+                  <span className="truncate flex items-center gap-2">
+                    {o.dotClass && <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', o.dotClass)} />}
+                    {o.label}
+                  </span>
+                  {o.value === value && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
+                </button>
+              </div>
+            );
+          })}
         </div>,
         document.body,
       )}

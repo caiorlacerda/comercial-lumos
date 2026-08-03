@@ -405,7 +405,6 @@ function AppContent() {
           <Route path="/cadastro-fornecedor" element={<CadastroFornecedorPublico />} />
           <Route path="/definir-senha" element={<DefinirSenha />} />
           <Route path="/revisao/:token" element={<RevisaoPublica />} />
-
           <Route 
             path="/" 
             element={
