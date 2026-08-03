@@ -220,8 +220,11 @@ secure_password_change = false
 max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
-# Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+# Number of seconds before the email OTP / invite link expires. 3 dias = 259200
+# (link de convite p/ novos usuários). Obs.: o valor que VALE na prod é o do
+# Dashboard do Supabase (Authentication → Email); este arquivo só afeta a prod
+# se rodarem `supabase config push`.
+otp_expiry = 259200
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]
