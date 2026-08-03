@@ -449,12 +449,14 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
                 </a>
 
                 {canManage ? (
-                  <Select value={CATEGORIES.some(c => c.value === doc.tag) ? doc.tag : ''} onChange={v => recategorize(doc, v)}
-                    placeholder={catLabel(doc.tag)} ariaLabel="Mudar categoria" menuClassName="min-w-[160px]"
-                    className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1"
-                    options={CATEGORIES} />
+                  <div className="flex-shrink-0 w-28">
+                    <Select value={CATEGORIES.some(c => c.value === doc.tag) ? doc.tag : ''} onChange={v => recategorize(doc, v)}
+                      placeholder={catLabel(doc.tag)} ariaLabel="Mudar categoria" menuClassName="min-w-[160px]"
+                      className="w-full text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1"
+                      options={CATEGORIES} />
+                  </div>
                 ) : (
-                  <span className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1">
+                  <span className="flex-shrink-0 text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1">
                     {catLabel(doc.tag)}
                   </span>
                 )}

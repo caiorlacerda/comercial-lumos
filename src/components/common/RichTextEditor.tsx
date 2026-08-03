@@ -183,8 +183,10 @@ export default function RichTextEditor({ value, onChange, editable = true, class
     <div className={clsx('border border-lumos-border rounded-lumos bg-lumos-surface overflow-hidden', className)}>
       {editable && (
         <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b border-lumos-border/60 bg-lumos-bg/30">
-          <Select value={headingValue} onChange={setHeading} options={HEADING_OPTS} menuClassName="w-32"
-            className="h-7 text-xs bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5" />
+          <div className="flex-shrink-0 w-32">
+            <Select value={headingValue} onChange={setHeading} options={HEADING_OPTS} menuClassName="w-32"
+              className="w-full h-7 text-xs bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5" />
+          </div>
           <Sep />
           <TBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito (Ctrl+B)"><Bold className="w-4 h-4" /></TBtn>
           <TBtn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico (Ctrl+I)"><Italic className="w-4 h-4" /></TBtn>

@@ -352,10 +352,12 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
 
       {canManage && (
         <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b border-lumos-border/60 bg-lumos-bg/30">
-          <Select value={headingValue} menuClassName="w-32"
-            onChange={v => { if (v === 'p') editor.chain().focus().setParagraph().run(); else editor.chain().focus().setHeading({ level: Number(v) as any }).run(); }}
-            className="h-7 text-xs bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5"
-            options={[{ value: 'p', label: 'Texto' }, { value: '1', label: 'Título 1' }, { value: '2', label: 'Título 2' }, { value: '3', label: 'Título 3' }, { value: '4', label: 'Título 4' }, { value: '5', label: 'Título 5' }]} />
+          <div className="flex-shrink-0 w-32">
+            <Select value={headingValue} menuClassName="w-32"
+              onChange={v => { if (v === 'p') editor.chain().focus().setParagraph().run(); else editor.chain().focus().setHeading({ level: Number(v) as any }).run(); }}
+              className="w-full h-7 text-xs bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5"
+              options={[{ value: 'p', label: 'Texto' }, { value: '1', label: 'Título 1' }, { value: '2', label: 'Título 2' }, { value: '3', label: 'Título 3' }, { value: '4', label: 'Título 4' }, { value: '5', label: 'Título 5' }]} />
+          </div>
           <Sep />
           <TBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito"><Bold className="w-4 h-4" /></TBtn>
           <TBtn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico"><Italic className="w-4 h-4" /></TBtn>
