@@ -40,6 +40,7 @@ const PERM_OPTIONS: { key: string; label: string }[] = [
   { key: 'acessos', label: 'Acessos & Senhas (cofre)' },
   { key: 'reembolso', label: 'Reembolso' },
   { key: 'custos_projeto', label: 'Custos de Projeto' },
+  { key: 'equipamentos', label: 'Equipamentos (inventário, reservas, manutenção)' },
 ];
 type UserStatus = 'ativo' | 'inativo';
 
