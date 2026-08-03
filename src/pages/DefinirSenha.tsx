@@ -3,6 +3,38 @@ import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { KeyRound } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+
+// Avisa os admins que a pessoa concluiu o cadastro. Roda em segundo plano e nunca
+// bloqueia a entrada — nesse ponto a sessão já é a do usuário recém-cadastrado, então
+// o insert de notificação vai no contexto autenticado dele (mesmo padrão dos demais
+// notify() do app). O perfil em app_users já existe (criado no convite).
+async function notifyAdminsNewSignup() {
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const authId = auth?.user?.id;
+    if (!authId) return;
+    const { data: me } = await supabase
+      .from('app_users')
+      .select('id, full_name, job_title')
+      .eq('auth_user_id', authId)
+      .maybeSingle();
+    if (!me) return;
+    const adminIds = (await getAdminUserIds()).filter(id => id !== me.id);
+    if (!adminIds.length) return;
+    await notify({
+      userIds: adminIds,
+      event: NOTIFICATION_EVENTS.NOVO_USUARIO_ACESSO,
+      title: `${me.full_name} entrou na Lumos`,
+      body: me.job_title ? `${me.job_title} · concluiu o cadastro e já tem acesso` : 'Concluiu o cadastro e já tem acesso ao app',
+      link: '/equipe',
+      actorId: me.id,
+    });
+  } catch (err) {
+    console.error('Falha ao notificar admins do novo cadastro:', err);
+  }
+}
 
 export default function DefinirSenha() {
   const [password, setPassword] = useState('');
@@ -66,6 +98,8 @@ export default function DefinirSenha() {
       setLoading(false);
       return;
     }
+    // Notifica os admins em segundo plano (não trava a entrada).
+    void notifyAdminsNewSignup();
     navigate('/');
   };
 
