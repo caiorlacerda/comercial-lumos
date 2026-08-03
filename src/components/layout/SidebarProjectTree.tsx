@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { formatBudgetCode } from '@/utils/formatters';
+import Select from '@/components/ui/Select';
 
 // Cores disponíveis para clientes. A chave é o que fica salvo no banco
 // (client_colors.color); a classe é só apresentação.
@@ -554,12 +555,8 @@ export default function SidebarProjectTree() {
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Segmento</label>
-                <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
-                  className="input-lumos w-full h-10 text-sm cursor-pointer">
-                  <option value="digital">Digital</option>
-                  <option value="filme">Filme</option>
-                  <option value="live">Live</option>
-                </select>
+                <Select value={editForm.category} onChange={v => setEditForm(f => ({ ...f, category: v }))} className="input-lumos w-full h-10 text-sm"
+                  options={[{ value: 'digital', label: 'Digital' }, { value: 'filme', label: 'Filme' }, { value: 'live', label: 'Live' }]} />
               </div>
             </div>
             <div className="flex gap-3 pt-1">

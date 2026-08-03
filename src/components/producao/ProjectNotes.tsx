@@ -7,6 +7,7 @@ import Suggestion from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
 import { mergeAttributes } from '@tiptap/core';
 import { clsx } from 'clsx';
+import Select from '@/components/ui/Select';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -351,10 +352,10 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
 
       {canManage && (
         <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b border-lumos-border/60 bg-lumos-bg/30">
-          <select value={headingValue} onChange={e => { const v = e.target.value; if (v === 'p') editor.chain().focus().setParagraph().run(); else editor.chain().focus().setHeading({ level: Number(v) as any }).run(); }}
-            className="h-7 text-xs font-semibold bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5 outline-none cursor-pointer">
-            <option value="p">Texto</option><option value="1">Título 1</option><option value="2">Título 2</option><option value="3">Título 3</option><option value="4">Título 4</option><option value="5">Título 5</option>
-          </select>
+          <Select value={headingValue} menuClassName="w-32"
+            onChange={v => { if (v === 'p') editor.chain().focus().setParagraph().run(); else editor.chain().focus().setHeading({ level: Number(v) as any }).run(); }}
+            className="h-7 text-xs bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5"
+            options={[{ value: 'p', label: 'Texto' }, { value: '1', label: 'Título 1' }, { value: '2', label: 'Título 2' }, { value: '3', label: 'Título 3' }, { value: '4', label: 'Título 4' }, { value: '5', label: 'Título 5' }]} />
           <Sep />
           <TBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito"><Bold className="w-4 h-4" /></TBtn>
           <TBtn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico"><Italic className="w-4 h-4" /></TBtn>

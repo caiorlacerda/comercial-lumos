@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import {
@@ -439,13 +440,8 @@ export default function FluxoDeCaixa() {
           <p className="text-lumos-text-secondary text-sm">Entradas, saídas e saldo acumulado por mês.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <select
-            className="input-lumos h-10 px-4 text-sm"
-            value={selectedYear}
-            onChange={e => setSelectedYear(Number(e.target.value))}
-          >
-            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <Select className="input-lumos h-10 px-4 text-sm" value={String(selectedYear)} onChange={v => setSelectedYear(Number(v))}
+            options={yearOptions.map(y => ({ value: String(y), label: String(y) }))} />
           <button
             onClick={() => { setFormData(defaultForm); setIsModalOpen(true); }}
             className="btn-primary h-10 px-6 flex items-center gap-2"
@@ -728,67 +724,27 @@ export default function FluxoDeCaixa() {
 
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente *</label>
-            <select
-              required
-              className="input-lumos w-full"
-              value={formData.cliente_id}
-              onChange={e => setFormData({ ...formData, cliente_id: e.target.value })}
-            >
-              <option value="">Selecione um cliente</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <Select className="input-lumos w-full" value={formData.cliente_id} onChange={v => setFormData({ ...formData, cliente_id: v })} placeholder="Selecione um cliente"
+              options={[{ value: '', label: 'Selecione um cliente' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria *</label>
-              <select
-                required
-                className="input-lumos w-full"
-                value={formData.categoria_id}
-                onChange={e => setFormData({ ...formData, categoria_id: e.target.value, tipo_servico_id: '' })}
-              >
-                <option value="">Selecione</option>
-                {categorias.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome}</option>
-                ))}
-              </select>
+              <Select className="input-lumos w-full" value={formData.categoria_id} onChange={v => setFormData({ ...formData, categoria_id: v, tipo_servico_id: '' })} placeholder="Selecione"
+                options={[{ value: '', label: 'Selecione' }, ...categorias.map(c => ({ value: c.id, label: c.nome }))]} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Tipo de Serviço *</label>
-              <select
-                required
-                className="input-lumos w-full"
-                value={formData.tipo_servico_id}
-                onChange={e => setFormData({ ...formData, tipo_servico_id: e.target.value })}
-                disabled={!formData.categoria_id}
-              >
-                <option value="">Selecione</option>
-                {tiposServico
-                  .filter(s => s.categoria_id === formData.categoria_id)
-                  .map(s => (
-                    <option key={s.id} value={s.id}>{s.nome}</option>
-                  ))}
-              </select>
+              <Select className="input-lumos w-full" value={formData.tipo_servico_id} onChange={v => setFormData({ ...formData, tipo_servico_id: v })} disabled={!formData.categoria_id} placeholder="Selecione"
+                options={[{ value: '', label: 'Selecione' }, ...tiposServico.filter(s => s.categoria_id === formData.categoria_id).map(s => ({ value: s.id, label: s.nome }))]} />
             </div>
           </div>
 
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto (Opcional)</label>
-            <select
-              className="input-lumos w-full"
-              value={formData.projeto_financeiro_id}
-              onChange={e => setFormData({ ...formData, projeto_financeiro_id: e.target.value })}
-            >
-              <option value="">Nenhum projeto</option>
-              {projectsList.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.budget?.project_name || p.origem || 'Projeto Sem Nome'}
-                </option>
-              ))}
-            </select>
+            <Select className="input-lumos w-full" value={formData.projeto_financeiro_id} onChange={v => setFormData({ ...formData, projeto_financeiro_id: v })} placeholder="Nenhum projeto"
+              options={[{ value: '', label: 'Nenhum projeto' }, ...projectsList.map(p => ({ value: p.id, label: p.budget?.project_name || p.origem || 'Projeto Sem Nome' }))]} />
           </div>
 
           <div className="space-y-2">

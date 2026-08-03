@@ -24,12 +24,11 @@ interface Manut {
 
 const fmt = (d: string) => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
-export default function ManutencaoTab({ equipment }: { equipment: Equip[] }) {
+export default function ManutencaoTab({ equipment, open, onClose }: { equipment: Equip[]; open: boolean; onClose: () => void }) {
   const toast = useToast();
   const { profile } = useAuth();
   const [rows, setRows] = useState<Manut[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ equipment_id: '', issue: '', notes: '' });
 
@@ -56,7 +55,7 @@ export default function ManutencaoTab({ equipment }: { equipment: Equip[] }) {
     setSaving(false);
     if (error) { toast.error('Não foi possível abrir a manutenção.'); return; }
     toast.success('Manutenção aberta ✓');
-    setOpen(false);
+    onClose();
     setForm({ equipment_id: '', issue: '', notes: '' });
     load();
   };
@@ -74,10 +73,6 @@ export default function ManutencaoTab({ equipment }: { equipment: Equip[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button onClick={() => setOpen(true)} className="btn-primary h-10 px-5 flex items-center gap-2"><Plus className="w-4 h-4" /> Abrir manutenção</button>
-      </div>
-
       {loading ? (
         <div className="card p-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto" /></div>
       ) : rows.length === 0 ? (
@@ -110,7 +105,7 @@ export default function ManutencaoTab({ equipment }: { equipment: Equip[] }) {
         </div>
       )}
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Abrir manutenção" maxWidth="max-w-lg">
+      <Modal isOpen={open} onClose={() => onClose()} title="Abrir manutenção" maxWidth="max-w-lg">
         <div className="space-y-4">
           <div>
             <label className="text-xs font-bold text-lumos-text-secondary uppercase">Equipamento *</label>
@@ -126,7 +121,7 @@ export default function ManutencaoTab({ equipment }: { equipment: Equip[] }) {
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="input-lumos w-full" />
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={() => onClose()} className="btn-secondary flex-1">Cancelar</button>
             <button onClick={createManut} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">{saving && <Loader2 className="w-4 h-4 animate-spin" />} Abrir</button>
           </div>
         </div>

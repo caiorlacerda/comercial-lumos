@@ -27,12 +27,11 @@ interface Reserva {
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) => aStart <= bEnd && aEnd >= bStart;
 
-export default function ReservasTab({ equipment, projects }: { equipment: Equip[]; projects: Proj[] }) {
+export default function ReservasTab({ equipment, projects, open, onClose }: { equipment: Equip[]; projects: Proj[]; open: boolean; onClose: () => void }) {
   const toast = useToast();
   const { profile } = useAuth();
   const [rows, setRows] = useState<Reserva[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ equipment_id: '', project_id: '', start_date: '', end_date: '', notes: '' });
 
@@ -67,7 +66,7 @@ export default function ReservasTab({ equipment, projects }: { equipment: Equip[
     setSaving(false);
     if (error) { toast.error('Não foi possível solicitar.'); return; }
     toast.success('Reserva solicitada ✓');
-    setOpen(false);
+    onClose();
     setForm({ equipment_id: '', project_id: '', start_date: '', end_date: '', notes: '' });
     load();
   };
@@ -86,10 +85,6 @@ export default function ReservasTab({ equipment, projects }: { equipment: Equip[
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button onClick={() => setOpen(true)} className="btn-primary h-10 px-5 flex items-center gap-2"><Plus className="w-4 h-4" /> Solicitar reserva</button>
-      </div>
-
       {loading ? (
         <div className="card p-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto" /></div>
       ) : rows.length === 0 ? (
@@ -127,7 +122,7 @@ export default function ReservasTab({ equipment, projects }: { equipment: Equip[
         </div>
       )}
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Solicitar reserva" maxWidth="max-w-lg">
+      <Modal isOpen={open} onClose={() => onClose()} title="Solicitar reserva" maxWidth="max-w-lg">
         <div className="space-y-4">
           <div>
             <label className="text-xs font-bold text-lumos-text-secondary uppercase">Equipamento *</label>
@@ -160,7 +155,7 @@ export default function ReservasTab({ equipment, projects }: { equipment: Equip[
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="input-lumos w-full" />
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={() => onClose()} className="btn-secondary flex-1">Cancelar</button>
             <button onClick={createReserva} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">{saving && <Loader2 className="w-4 h-4 animate-spin" />} Solicitar</button>
           </div>
         </div>

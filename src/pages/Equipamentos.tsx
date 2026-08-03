@@ -59,6 +59,9 @@ export default function Equipamentos() {
 
   const [tab, setTab] = useState<Tab>('inventario');
   const [projects, setProjects] = useState<{ id: string; name: string; code: string | null }[]>([]);
+  // Abrir o modal de "novo" da aba a partir do botão que fica na barra de abas.
+  const [reservaOpen, setReservaOpen] = useState(false);
+  const [manutOpen, setManutOpen] = useState(false);
 
   useEffect(() => { fetchEquipment(); fetchProjects(); }, []);
   useRealtimeRefetch(['equipment'], () => fetchEquipment(true));
@@ -145,29 +148,30 @@ export default function Equipamentos() {
         <p className="text-lumos-text-secondary text-sm">Inventário, reservas, manutenção e listas de equipamento por projeto.</p>
       </div>
 
-      {/* Abas */}
-      <div className="flex gap-1 border-b border-lumos-border overflow-x-auto no-scrollbar">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={clsx('flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 -mb-px transition-colors',
-              tab === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
-            <t.icon className="w-4 h-4" /> {t.label}
-          </button>
-        ))}
+      {/* Abas + ação da aba (mesma linha, acima da linha de separação) */}
+      <div className="flex items-center justify-between gap-3 border-b border-lumos-border">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={clsx('flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 -mb-px transition-colors',
+                tab === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
+              <t.icon className="w-4 h-4" /> {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-shrink-0 pb-1">
+          {tab === 'inventario' && <button onClick={openNew} className="btn-primary h-9 px-4 flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> Novo equipamento</button>}
+          {tab === 'reservas' && <button onClick={() => setReservaOpen(true)} className="btn-primary h-9 px-4 flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> Solicitar reserva</button>}
+          {tab === 'manutencao' && <button onClick={() => setManutOpen(true)} className="btn-primary h-9 px-4 flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> Abrir manutenção</button>}
+        </div>
       </div>
 
-      {tab === 'reservas' && <ReservasTab equipment={items} projects={projects} />}
-      {tab === 'manutencao' && <ManutencaoTab equipment={items} />}
+      {tab === 'reservas' && <ReservasTab equipment={items} projects={projects} open={reservaOpen} onClose={() => setReservaOpen(false)} />}
+      {tab === 'manutencao' && <ManutencaoTab equipment={items} open={manutOpen} onClose={() => setManutOpen(false)} />}
       {tab === 'listas' && <ListasTab equipment={items} projects={projects} />}
 
       {tab === 'inventario' && (
       <>
-      <div className="flex justify-end">
-        <button onClick={openNew} className="btn-primary h-10 px-6 flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Novo equipamento
-        </button>
-      </div>
-
       {/* Busca + filtros */}
       <div className="flex flex-col md:flex-row gap-3">
         <div className="card p-3 relative flex-1">

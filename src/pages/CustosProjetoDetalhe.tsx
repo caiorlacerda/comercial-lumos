@@ -5,6 +5,7 @@ import { formatBudgetCode } from '@/utils/formatters';
 import { ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
@@ -1443,17 +1444,8 @@ export default function CustosProjetoDetalhe() {
                 <form onSubmit={handleSaveFinance} className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente *</label>
-                    <select
-                      className="input-lumos w-full"
-                      value={financeForm.cliente_id}
-                      onChange={e => setFinanceForm({ ...financeForm, cliente_id: e.target.value })}
-                      required
-                    >
-                      <option value="">Selecione um cliente</option>
-                      {clients.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+                    <Select className="input-lumos w-full" value={financeForm.cliente_id} onChange={v => setFinanceForm({ ...financeForm, cliente_id: v })} placeholder="Selecione um cliente"
+                      options={[{ value: '', label: 'Selecione um cliente' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
                   </div>
 
                   <div className="space-y-2">
@@ -1478,46 +1470,20 @@ export default function CustosProjetoDetalhe() {
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">ICP</label>
-                    <select
-                      className="input-lumos w-full"
-                      value={financeForm.icp}
-                      onChange={e => setFinanceForm({ ...financeForm, icp: e.target.value })}
-                    >
-                      <option value="">Selecione</option>
-                      <option value="icp_1">ICP 1</option>
-                      <option value="icp_2">ICP 2</option>
-                    </select>
+                    <Select className="input-lumos w-full" value={financeForm.icp} onChange={v => setFinanceForm({ ...financeForm, icp: v })} placeholder="Selecione"
+                      options={[{ value: '', label: 'Selecione' }, { value: 'icp_1', label: 'ICP 1' }, { value: 'icp_2', label: 'ICP 2' }]} />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
-                    <select
-                      className="input-lumos w-full"
-                      value={financeForm.categoria_id}
-                      onChange={e => setFinanceForm({ ...financeForm, categoria_id: e.target.value, tipo_servico_id: '' })}
-                    >
-                      <option value="">Selecione</option>
-                      {financeCategorias.map(c => (
-                        <option key={c.id} value={c.id}>{c.nome}</option>
-                      ))}
-                    </select>
+                    <Select className="input-lumos w-full" value={financeForm.categoria_id} onChange={v => setFinanceForm({ ...financeForm, categoria_id: v, tipo_servico_id: '' })} placeholder="Selecione"
+                      options={[{ value: '', label: 'Selecione' }, ...financeCategorias.map(c => ({ value: c.id, label: c.nome }))]} />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Tipo de Serviço</label>
-                    <select
-                      className="input-lumos w-full"
-                      value={financeForm.tipo_servico_id}
-                      onChange={e => setFinanceForm({ ...financeForm, tipo_servico_id: e.target.value })}
-                      disabled={!financeForm.categoria_id}
-                    >
-                      <option value="">Selecione</option>
-                      {financeTiposServico
-                        .filter(s => s.categoria_id === financeForm.categoria_id)
-                        .map(s => (
-                          <option key={s.id} value={s.id}>{s.nome}</option>
-                        ))}
-                    </select>
+                    <Select className="input-lumos w-full" value={financeForm.tipo_servico_id} onChange={v => setFinanceForm({ ...financeForm, tipo_servico_id: v })} disabled={!financeForm.categoria_id} placeholder="Selecione"
+                      options={[{ value: '', label: 'Selecione' }, ...financeTiposServico.filter(s => s.categoria_id === financeForm.categoria_id).map(s => ({ value: s.id, label: s.nome }))]} />
                   </div>
 
                   <div className="space-y-2">
@@ -1532,17 +1498,8 @@ export default function CustosProjetoDetalhe() {
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Status do Título *</label>
-                    <select
-                      className="input-lumos w-full"
-                      value={financeForm.status_titulo}
-                      onChange={e => setFinanceForm({ ...financeForm, status_titulo: e.target.value })}
-                    >
-                      <option value="emitir_nf">Emitir NF</option>
-                      <option value="pedido_nf_feito">Pedido de NF Feito</option>
-                      <option value="esperando_pagamento">Esperando Pagamento</option>
-                      <option value="pagamento_atraso">Pagamento em Atraso</option>
-                      <option value="pagamento_recebido">Pagamento Recebido</option>
-                    </select>
+                    <Select className="input-lumos w-full" value={financeForm.status_titulo} onChange={v => setFinanceForm({ ...financeForm, status_titulo: v })}
+                      options={[{ value: 'emitir_nf', label: 'Emitir NF' }, { value: 'pedido_nf_feito', label: 'Pedido de NF Feito' }, { value: 'esperando_pagamento', label: 'Esperando Pagamento' }, { value: 'pagamento_atraso', label: 'Pagamento em Atraso' }, { value: 'pagamento_recebido', label: 'Pagamento Recebido' }]} />
                   </div>
 
                   {financeForm.status_titulo === 'pagamento_recebido' && (
@@ -1804,32 +1761,13 @@ export default function CustosProjetoDetalhe() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest font-semibold">Fornecedor (Opcional)</label>
-              <select
-                className="input-lumos w-full"
-                value={selectedFornecedorId}
-                onChange={e => handleFornecedorChange(e.target.value)}
-              >
-                <option value="">Nenhum fornecedor</option>
-                {fornecedores.map(f => (
-                  <option key={f.id} value={f.id}>{f.nome}</option>
-                ))}
-              </select>
+              <Select className="input-lumos w-full" value={selectedFornecedorId} onChange={handleFornecedorChange} placeholder="Nenhum fornecedor"
+                options={[{ value: '', label: 'Nenhum fornecedor' }, ...fornecedores.map(f => ({ value: f.id, label: f.nome }))]} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest font-semibold">Serviço do Fornecedor</label>
-              <select
-                className="input-lumos w-full"
-                value={selectedServicoId}
-                disabled={!selectedFornecedorId}
-                onChange={e => handleServicoChange(e.target.value)}
-              >
-                <option value="">Selecione um serviço</option>
-                {services.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.tipo_servico} — {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.valor || 0)}
-                  </option>
-                ))}
-              </select>
+              <Select className="input-lumos w-full" value={selectedServicoId} disabled={!selectedFornecedorId} onChange={handleServicoChange} placeholder="Selecione um serviço"
+                options={[{ value: '', label: 'Selecione um serviço' }, ...services.map(s => ({ value: s.id, label: `${s.tipo_servico} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.valor || 0)}` }))]} />
             </div>
           </div>
 
@@ -1866,18 +1804,8 @@ export default function CustosProjetoDetalhe() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Pagamento em</label>
-              <select
-                className="input-lumos w-full"
-                value={duePreset}
-                onChange={e => applyDuePreset(e.target.value)}
-              >
-                <option value="7">7 dias</option>
-                <option value="15">15 dias</option>
-                <option value="30">30 dias</option>
-                <option value="45">45 dias</option>
-                <option value="60">60 dias</option>
-                <option value="custom">Personalizado</option>
-              </select>
+              <Select className="input-lumos w-full" value={duePreset} onChange={applyDuePreset}
+                options={[{ value: '7', label: '7 dias' }, { value: '15', label: '15 dias' }, { value: '30', label: '30 dias' }, { value: '45', label: '45 dias' }, { value: '60', label: '60 dias' }, { value: 'custom', label: 'Personalizado' }]} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Vencimento</label>
@@ -1928,36 +1856,15 @@ export default function CustosProjetoDetalhe() {
                   </div>
                 </div>
               ) : (
-                <select
-                  className="input-lumos w-full"
-                  value={formData.category}
-                  onChange={e => {
-                    if (e.target.value === '__new__') {
-                      setCreatingCategory(true);
-                    } else {
-                      setFormData({ ...formData, category: e.target.value });
-                    }
-                  }}
-                >
-                  {categories.map(c => (
-                    <option key={c} value={c}>{formatCategoryLabel(c)}</option>
-                  ))}
-                  <option value="__new__">+ Criar nova categoria</option>
-                </select>
+                <Select className="input-lumos w-full" value={formData.category}
+                  onChange={v => { if (v === '__new__') setCreatingCategory(true); else setFormData({ ...formData, category: v }); }}
+                  options={[...categories.map(c => ({ value: c, label: formatCategoryLabel(c) })), { value: '__new__', label: '+ Criar nova categoria' }]} />
               )}
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Responsável</label>
-              <select
-                className="input-lumos w-full"
-                value={formData.responsible_id}
-                onChange={e => setFormData({ ...formData, responsible_id: e.target.value })}
-              >
-                <option value="">Selecione</option>
-                {appUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.full_name}</option>
-                ))}
-              </select>
+              <Select className="input-lumos w-full" value={formData.responsible_id} onChange={v => setFormData({ ...formData, responsible_id: v })} placeholder="Selecione"
+                options={[{ value: '', label: 'Selecione' }, ...appUsers.map(u => ({ value: u.id, label: u.full_name }))]} />
             </div>
           </div>
           <div className="flex gap-3 pt-4 max-lg:sticky max-lg:-mx-6 max-lg:-mb-6 max-lg:bottom-0 max-lg:bg-lumos-surface max-lg:border-t max-lg:p-4 max-lg:pb-[calc(1rem+env(safe-area-inset-bottom))] max-lg:z-30 lg:static lg:pt-4 lg:border-0 lg:p-0">
@@ -2008,16 +1915,8 @@ export default function CustosProjetoDetalhe() {
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
-            <select
-              className="input-lumos w-full"
-              value={editProjectData.client_id}
-              onChange={e => setEditProjectData({ ...editProjectData, client_id: e.target.value })}
-            >
-              <option value="">Sem cliente</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <Select className="input-lumos w-full" value={editProjectData.client_id} onChange={v => setEditProjectData({ ...editProjectData, client_id: v })} placeholder="Sem cliente"
+              options={[{ value: '', label: 'Sem cliente' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">
