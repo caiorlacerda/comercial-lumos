@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
@@ -805,16 +806,8 @@ export default function Reembolso() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
-                      <select
-                        className="input-lumos w-full h-9 text-sm"
-                        value={newProjectData.client_id}
-                        onChange={e => setNewProjectData({ ...newProjectData, client_id: e.target.value })}
-                      >
-                        <option value="">Selecione (opcional)</option>
-                        {clients.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
+                      <Select value={newProjectData.client_id} onChange={v => setNewProjectData({ ...newProjectData, client_id: v })} className="input-lumos w-full h-9 text-sm" placeholder="Selecione (opcional)"
+                        options={[{ value: '', label: 'Selecione (opcional)' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
                     </div>
                     <div className="flex gap-2 pt-2">
                       <button

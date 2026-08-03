@@ -18,7 +18,14 @@ import { useAuth, AppUserProfile, ROLE_DEFAULTS } from '@/hooks/useAuth';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import Modal from '@/components/common/Modal';
+import Select from '@/components/ui/Select';
 import { useToast } from '@/context/ToastContext';
+
+const ROLE_SELECT_OPTS = [
+  { value: 'time', label: 'Time de Produção' },
+  { value: 'producao', label: 'Gestão de Produção' },
+  { value: 'admin', label: 'Admin' },
+];
 
 import { logAudit } from '@/hooks/useAuditLog';
 import Pagination from '@/components/common/Pagination';
@@ -365,25 +372,10 @@ export default function UsersPage() {
           />
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <select 
-            className="input-lumos text-sm h-10 px-4"
-            value={roleFilter}
-            onChange={(e) => { setRoleFilter(e.target.value); setCurrentPage(1); }}
-          >
-            <option value="all">Todos os Cargos</option>
-            <option value="admin">Admin</option>
-            <option value="producao">Gestão de Produção</option>
-            <option value="time">Time de Produção</option>
-          </select>
-          <select 
-            className="input-lumos text-sm h-10 px-4"
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-          >
-            <option value="all">Todos os Status</option>
-            <option value="ativo">Ativos</option>
-            <option value="inativo">Inativos</option>
-          </select>
+          <Select value={roleFilter} onChange={v => { setRoleFilter(v); setCurrentPage(1); }} className="input-lumos text-sm h-10 px-4"
+            options={[{ value: 'all', label: 'Todos os Cargos' }, ...ROLE_SELECT_OPTS]} />
+          <Select value={statusFilter} onChange={v => { setStatusFilter(v); setCurrentPage(1); }} className="input-lumos text-sm h-10 px-4"
+            options={[{ value: 'all', label: 'Todos os Status' }, { value: 'ativo', label: 'Ativos' }, { value: 'inativo', label: 'Inativos' }]} />
         </div>
       </div>
 
@@ -660,15 +652,7 @@ export default function UsersPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Nível de Acesso</label>
-              <select 
-                className="input-lumos w-full"
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
-              >
-                <option value="time">Time de Produção</option>
-                <option value="producao">Gestão de Produção</option>
-                <option value="admin">Admin</option>
-              </select>
+              <Select value={formData.role} onChange={v => setFormData({ ...formData, role: v as UserRole })} className="input-lumos w-full" options={ROLE_SELECT_OPTS} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Cargo</label>
@@ -727,26 +711,12 @@ export default function UsersPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Nível de Acesso</label>
-              <select 
-                className="input-lumos w-full"
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
-              >
-                <option value="time">Time de Produção</option>
-                <option value="producao">Gestão de Produção</option>
-                <option value="admin">Admin</option>
-              </select>
+              <Select value={formData.role} onChange={v => setFormData({ ...formData, role: v as UserRole })} className="input-lumos w-full" options={ROLE_SELECT_OPTS} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Status</label>
-              <select 
-                className="input-lumos w-full"
-                value={formData.status}
-                onChange={(e) => setFormData({...formData, status: e.target.value as UserStatus})}
-              >
-                <option value="ativo">Ativo</option>
-                <option value="inativo">Inativo</option>
-              </select>
+              <Select value={formData.status} onChange={v => setFormData({ ...formData, status: v as UserStatus })} className="input-lumos w-full"
+                options={[{ value: 'ativo', label: 'Ativo' }, { value: 'inativo', label: 'Inativo' }]} />
             </div>
           </div>
           <div className="space-y-2">

@@ -10,6 +10,7 @@ import { clsx } from 'clsx';
 import ReservasTab from '@/components/equipamentos/ReservasTab';
 import ManutencaoTab from '@/components/equipamentos/ManutencaoTab';
 import ListasTab from '@/components/equipamentos/ListasTab';
+import Select from '@/components/ui/Select';
 
 type Tab = 'inventario' | 'reservas' | 'manutencao' | 'listas';
 const TABS: { key: Tab; label: string; icon: any }[] = [
@@ -174,14 +175,10 @@ export default function Equipamentos() {
           <input type="text" placeholder="Buscar por nome, marca, modelo, série…" className="input-lumos pl-9 w-full"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-lumos h-11 md:w-52">
-          <option value="all">Todas as categorias</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input-lumos h-11 md:w-44">
-          <option value="all">Todos os status</option>
-          {STATUS_KEYS.map(s => <option key={s} value={s}>{STATUS[s].label}</option>)}
-        </select>
+        <Select value={catFilter} onChange={setCatFilter} className="input-lumos h-11 md:w-52"
+          options={[{ value: 'all', label: 'Todas as categorias' }, ...categories.map(c => ({ value: c, label: c }))]} />
+        <Select value={statusFilter} onChange={setStatusFilter} className="input-lumos h-11 md:w-44"
+          options={[{ value: 'all', label: 'Todos os status' }, ...STATUS_KEYS.map(s => ({ value: s, label: STATUS[s].label }))]} />
       </div>
 
       {loading ? (
@@ -277,9 +274,8 @@ export default function Equipamentos() {
             </div>
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status</label>
-              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as Status }))} className={inputCls}>
-                {STATUS_KEYS.map(s => <option key={s} value={s}>{STATUS[s].label}</option>)}
-              </select>
+              <Select value={form.status} onChange={v => setForm(f => ({ ...f, status: v as Status }))} className={inputCls}
+                options={STATUS_KEYS.map(s => ({ value: s, label: STATUS[s].label }))} />
             </div>
           </div>
 

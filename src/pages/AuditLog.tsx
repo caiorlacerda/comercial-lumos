@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ShieldAlert, User, FileText, Users, RefreshCw, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { AuditAction } from '@/hooks/useAuditLog';
+import Select from '@/components/ui/Select';
 
 interface LogEntry {
   id: string;
@@ -141,16 +142,8 @@ export default function AuditLog() {
             className="input pl-9 w-full"
           />
         </div>
-        <select
-          value={filterAction}
-          onChange={(e) => setFilterAction(e.target.value as AuditAction | '')}
-          className="input w-56"
-        >
-          <option value="">Todas as ações</option>
-          {Object.entries(ACTION_LABELS).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </select>
+        <Select value={filterAction} onChange={v => setFilterAction(v as AuditAction | '')} className="input w-56"
+          options={[{ value: '', label: 'Todas as ações' }, ...Object.entries(ACTION_LABELS).map(([key, label]) => ({ value: key, label: label as string }))]} />
       </div>
 
       <div className="card overflow-hidden">

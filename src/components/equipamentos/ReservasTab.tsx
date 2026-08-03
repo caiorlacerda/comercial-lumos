@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
+import Select from '@/components/ui/Select';
 import { clsx } from 'clsx';
 
 type RStatus = 'solicitada' | 'aprovada' | 'recusada' | 'devolvida';
@@ -130,17 +131,13 @@ export default function ReservasTab({ equipment, projects }: { equipment: Equip[
         <div className="space-y-4">
           <div>
             <label className="text-xs font-bold text-lumos-text-secondary uppercase">Equipamento *</label>
-            <select value={form.equipment_id} onChange={e => setForm(f => ({ ...f, equipment_id: e.target.value }))} className="input-lumos w-full">
-              <option value="">Selecione…</option>
-              {equipment.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
+            <Select value={form.equipment_id} onChange={v => setForm(f => ({ ...f, equipment_id: v }))} className="input-lumos w-full" placeholder="Selecione…"
+              options={equipment.map(e => ({ value: e.id, label: e.name }))} />
           </div>
           <div>
             <label className="text-xs font-bold text-lumos-text-secondary uppercase">Projeto (opcional)</label>
-            <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} className="input-lumos w-full">
-              <option value="">Sem projeto</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.code ? ` (${p.code})` : ''}</option>)}
-            </select>
+            <Select value={form.project_id} onChange={v => setForm(f => ({ ...f, project_id: v }))} className="input-lumos w-full" placeholder="Sem projeto"
+              options={[{ value: '', label: 'Sem projeto' }, ...projects.map(p => ({ value: p.id, label: `${p.name}${p.code ? ` (${p.code})` : ''}` }))]} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

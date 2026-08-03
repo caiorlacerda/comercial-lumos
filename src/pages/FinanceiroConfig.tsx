@@ -17,6 +17,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
+import Select from '@/components/ui/Select';
 
 interface ConfigFinanceiro {
   id: number;
@@ -383,16 +384,8 @@ export default function FinanceiroConfig() {
 
             {/* Create Service form */}
             <form onSubmit={handleCreateService} className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-              <select 
-                className="input-lumos h-10 text-xs font-bold uppercase tracking-widest sm:col-span-1"
-                value={newServiceCatId}
-                onChange={e => setNewServiceCatId(e.target.value)}
-                required
-              >
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome}</option>
-                ))}
-              </select>
+              <Select value={newServiceCatId} onChange={setNewServiceCatId} className="input-lumos h-10 text-xs font-bold uppercase tracking-widest sm:col-span-1"
+                options={categories.map(c => ({ value: c.id, label: c.nome }))} />
               <input 
                 type="text"
                 placeholder="Ex: Criação de Conteúdo, Comercial..."

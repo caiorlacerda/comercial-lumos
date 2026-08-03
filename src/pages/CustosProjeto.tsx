@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, ChevronUp, ChevronDown, Target, Check, Pencil, Plus, AlertTriangle, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import Modal from '@/components/common/Modal';
 import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
@@ -941,16 +942,8 @@ export default function CustosProjeto() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
-              <select
-                className="input-lumos w-full"
-                value={editProjectData.client_id}
-                onChange={e => setEditProjectData({ ...editProjectData, client_id: e.target.value })}
-              >
-                <option value="">Sem cliente</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <Select value={editProjectData.client_id} onChange={v => setEditProjectData({ ...editProjectData, client_id: v })} className="input-lumos w-full" placeholder="Sem cliente"
+                options={[{ value: '', label: 'Sem cliente' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">
