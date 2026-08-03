@@ -174,6 +174,18 @@ export const TASK_STATUS_GROUPS = {
   ]
 };
 
+// Tema visual dos cabeçalhos de etapa na lista agrupada (barra + label coloridos).
+const STAGE_THEME: Record<string, { bar: string; text: string }> = {
+  na_fila: { bar: 'bg-slate-400', text: 'text-slate-400' },
+  pausado: { bar: 'bg-neutral-400', text: 'text-neutral-400' },
+  em_progresso: { bar: 'bg-orange-400', text: 'text-orange-400' },
+  revisao_interna: { bar: 'bg-purple-400', text: 'text-purple-400' },
+  revisao_cliente: { bar: 'bg-amber-400', text: 'text-amber-400' },
+  alteracoes: { bar: 'bg-red-400', text: 'text-red-400' },
+  concluido: { bar: 'bg-green-500', text: 'text-green-500' },
+};
+const stageTheme = (s: string) => STAGE_THEME[s] || { bar: 'bg-neutral-400', text: 'text-neutral-400' };
+
 export const getStatusDetails = (statusVal: string) => {
   for (const group of Object.values(TASK_STATUS_GROUPS)) {
     const found = group.find(s => s.value === statusVal);
@@ -2210,22 +2222,41 @@ export default function Projetos() {
                 {projTab === 'tarefas' && (
                 <div className="card p-5 md:p-6 space-y-4">
 
-                  {/* Toolbar: busca + filtros + lixeira */}
+                  {/* Toolbar em linha única: busca + chips de filtro (estilo do mockup) */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <div className="relative flex-1 min-w-[200px]">
+                    <div className="relative flex-1 min-w-[170px] max-w-md">
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-lumos-text-secondary pointer-events-none" />
                       <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Buscar tarefa…" className="input-lumos w-full h-9 pl-9 text-xs" />
                     </div>
-                    <Select value={taskStatusFilter} onChange={setTaskStatusFilter} ariaLabel="Filtrar por status" className="input-lumos h-9 text-xs w-40"
-                      options={[{ value: 'all', label: 'Todos os status' }, ...STATUS_OPTIONS]} />
-                    <Select value={taskAssigneeFilter} onChange={setTaskAssigneeFilter} ariaLabel="Filtrar por responsável" className="input-lumos h-9 text-xs w-44" searchable searchPlaceholder="Filtrar pessoa…"
-                      options={[{ value: 'all', label: 'Todos os responsáveis' }, { value: 'none', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name })), ...freelancers.map(f => ({ value: f.id, label: `${f.full_name} (freela)` }))]} />
+                    <div className="w-36 flex-shrink-0">
+                      <Select value={taskStatusFilter} onChange={setTaskStatusFilter} ariaLabel="Filtrar por etapa" menuClassName="min-w-[160px]"
+                        className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
+                          taskStatusFilter !== 'all' ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}
+                        options={[{ value: 'all', label: 'Etapa: todas' }, ...STATUS_OPTIONS]} />
+                    </div>
+                    <div className="w-40 flex-shrink-0">
+                      <Select value={taskAssigneeFilter} onChange={setTaskAssigneeFilter} ariaLabel="Filtrar por responsável" menuClassName="min-w-[190px]" searchable searchPlaceholder="Filtrar pessoa…"
+                        className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
+                          taskAssigneeFilter !== 'all' ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}
+                        options={[{ value: 'all', label: 'Responsável' }, { value: 'none', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name })), ...freelancers.map(f => ({ value: f.id, label: `${f.full_name} (freela)` }))]} />
+                    </div>
+                    {allTags.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <TagPicker
+                          allTags={allTags}
+                          selectedIds={tagFilter}
+                          addLabel={tagFilter.length ? `Tags · ${tagFilter.length}` : 'Tags'}
+                          onToggle={(id) => setTagFilter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+                        />
+                        {tagFilter.length > 0 && <button onClick={() => setTagFilter([])} className="text-[9px] font-bold text-lumos-text-secondary hover:text-red-400 underline">limpar</button>}
+                      </div>
+                    )}
                     <button onClick={() => setOnlyMine(v => !v)}
-                      className={clsx('h-9 px-3 rounded-lumos border text-[11px] font-bold transition-colors', onlyMine ? 'border-lumos-yellow/60 text-lumos-yellow bg-lumos-yellow/10' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                      className={clsx('h-9 px-3 rounded-lumos border text-[11px] font-bold transition-colors flex-shrink-0', onlyMine ? 'border-lumos-yellow/60 text-lumos-yellow bg-lumos-yellow/10' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}>
                       Só minhas
                     </button>
                     {canManage && (
-                      <button onClick={openTrash} className="h-9 px-3 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5" title="Tarefas excluídas (recuperáveis por 30 dias)">
+                      <button onClick={openTrash} className="h-9 px-3 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 ml-auto flex-shrink-0" title="Tarefas excluídas (recuperáveis por 30 dias)">
                         <Trash2 className="w-3.5 h-3.5" /> Lixeira
                         {trashCount > 0 && <span className="text-[9px] font-black bg-red-500/15 text-red-400 rounded-full px-1.5 py-0.5">{trashCount}</span>}
                       </button>
@@ -2241,19 +2272,6 @@ export default function Projetos() {
                   ) : (
                     /* ================= LIST VIEW (Ativas / Finalizadas) ================= */
                     <div className="space-y-4 flex-grow flex flex-col justify-between">
-
-                      {allTags.length > 0 && projectTasks.length > 0 && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Filtrar por tag:</span>
-                          <TagPicker
-                            allTags={allTags}
-                            selectedIds={tagFilter}
-                            addLabel="Filtrar"
-                            onToggle={(id) => setTagFilter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
-                          />
-                          {tagFilter.length > 0 && <button onClick={() => setTagFilter([])} className="text-[9px] font-bold text-lumos-text-secondary hover:text-red-400 underline">limpar</button>}
-                        </div>
-                      )}
 
                       {projectTasks.length === 0 ? (
                         <div className="flex-grow border border-dashed border-lumos-border/50 rounded-lumos flex flex-col justify-center items-center text-center p-8 bg-lumos-bg/10 py-16">
@@ -2306,11 +2324,14 @@ export default function Projetos() {
                             </thead>
                             <tbody className="divide-y divide-lumos-border/20">
                               {taskGroups.map(group => (<React.Fragment key={group.status}>
-                              {/* Cabeçalho do grupo (etapa do fluxo) */}
+                              {/* Cabeçalho do grupo (etapa do fluxo): barra + label coloridos */}
                               <tr className="bg-lumos-bg/40">
-                                <td colSpan={6 + (canManage ? 1 : 0) + (canSeeClientDeadline ? 1 : 0)} className="py-1.5 px-2">
-                                  <span className={clsx('inline-flex items-center border rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider', getStatusDetails(group.status).color)}>{getStatusDetails(group.status).label}</span>
-                                  <span className="text-[9px] font-bold text-lumos-text-secondary ml-2">{group.tasks.length}</span>
+                                <td colSpan={6 + (canManage ? 1 : 0) + (canSeeClientDeadline ? 1 : 0)} className="pt-3 pb-2 px-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={clsx('w-1 h-3.5 rounded-full flex-shrink-0', stageTheme(group.status).bar)} />
+                                    <span className={clsx('text-[10px] font-black uppercase tracking-widest', stageTheme(group.status).text)}>{getStatusDetails(group.status).label}</span>
+                                    <span className="text-[10px] font-bold text-lumos-text-secondary/70">{group.tasks.length}</span>
+                                  </div>
                                 </td>
                               </tr>
                               {group.tasks.map((task) => {
@@ -2506,9 +2527,10 @@ export default function Projetos() {
                         {/* Mobile: cartões de tarefa (a tabela acima fica só no desktop) */}
                         <div className="lg:hidden divide-y divide-lumos-border/40">
                           {taskGroups.map(group => (<React.Fragment key={group.status}>
-                          <div className="pt-3 pb-1 flex items-center gap-2">
-                            <span className={clsx('inline-flex items-center border rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider', getStatusDetails(group.status).color)}>{getStatusDetails(group.status).label}</span>
-                            <span className="text-[9px] font-bold text-lumos-text-secondary">{group.tasks.length}</span>
+                          <div className="pt-4 pb-1.5 flex items-center gap-2">
+                            <span className={clsx('w-1 h-3.5 rounded-full flex-shrink-0', stageTheme(group.status).bar)} />
+                            <span className={clsx('text-[10px] font-black uppercase tracking-widest', stageTheme(group.status).text)}>{getStatusDetails(group.status).label}</span>
+                            <span className="text-[10px] font-bold text-lumos-text-secondary/70">{group.tasks.length}</span>
                           </div>
                           {group.tasks.map((task) => {
                             const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
