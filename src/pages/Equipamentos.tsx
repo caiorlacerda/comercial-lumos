@@ -10,7 +10,8 @@ import { clsx } from 'clsx';
 import ReservasTab from '@/components/equipamentos/ReservasTab';
 import ManutencaoTab from '@/components/equipamentos/ManutencaoTab';
 import ListasTab from '@/components/equipamentos/ListasTab';
-import Select from '@/components/ui/Select';
+import Select, { type SelectOption } from '@/components/ui/Select';
+import Combobox from '@/components/ui/Combobox';
 
 type Tab = 'inventario' | 'reservas' | 'manutencao' | 'listas';
 const TABS: { key: Tab; label: string; icon: any }[] = [
@@ -28,6 +29,19 @@ const STATUS: Record<Status, { label: string; cls: string; dot: string }> = {
   inativo: { label: 'Inativo', cls: 'bg-lumos-text-secondary/15 text-lumos-text-secondary border-lumos-border', dot: 'bg-lumos-text-secondary' },
 };
 const STATUS_KEYS = Object.keys(STATUS) as Status[];
+
+// Taxonomia de categorias por seção (curada). A MARCA cresce sozinha (combobox);
+// a CATEGORIA é fixa aqui — pra adicionar/remover é só mexer nesta lista.
+const CATEGORY_SECTIONS: { section: string; items: string[] }[] = [
+  { section: 'Vídeo', items: ['Câmera', 'Lente', 'Tripé', 'Estabilizador/Gimbal', 'Monitor', 'Mídia/Cartão'] },
+  { section: 'Áudio', items: ['Microfone', 'Lapela', 'Boom', 'Gravador', 'Fone', 'Mixer'] },
+  { section: 'Iluminação', items: ['LED/Painel', 'Fresnel', 'Softbox', 'Refletor', 'Difusor/Rebatedor'] },
+  { section: 'Ferragens & Grip', items: ['Tripé de luz', 'C-Stand', 'Girafa', 'Garra/Clamp', 'Magic Arm', 'Slider/Trilho'] },
+  { section: 'Energia', items: ['Bateria', 'Carregador', 'Extensão', 'Filtro de linha', 'No-break'] },
+  { section: 'Acessórios', items: ['Cabo', 'Adaptador', 'Case/Bag', 'Filtro de lente', 'Outros'] },
+  { section: 'Informática', items: ['Notebook', 'HD/SSD externo', 'Leitor de cartão'] },
+];
+const CATEGORY_OPTIONS: SelectOption[] = CATEGORY_SECTIONS.flatMap(g => g.items.map(it => ({ value: it, label: it, groupLabel: g.section })));
 
 interface Equip {
   id: string; name: string; category: string | null; brand: string | null; model: string | null;
@@ -80,6 +94,14 @@ export default function Equipamentos() {
   }
 
   const categories = useMemo(() => Array.from(new Set(items.map(i => i.category).filter(Boolean))).sort() as string[], [items]);
+  const brands = useMemo(() => Array.from(new Set(items.map(i => i.brand).filter(Boolean))) as string[], [items]);
+  // Se o equipamento tiver uma categoria fora da taxonomia (dado antigo), inclui como opção
+  // avulsa pra não perder o valor ao editar.
+  const catOptions = useMemo<SelectOption[]>(() => (
+    form.category && !CATEGORY_OPTIONS.some(o => o.value === form.category)
+      ? [...CATEGORY_OPTIONS, { value: form.category, label: form.category, groupLabel: 'Outras' }]
+      : CATEGORY_OPTIONS
+  ), [form.category]);
 
   const filtered = items.filter(i => {
     const t = search.toLowerCase();
@@ -273,8 +295,8 @@ export default function Equipamentos() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Categoria</label>
-              <input list="equip-cats" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className={inputCls} placeholder="Ex: Câmera, Lente, Luz, Áudio" />
-              <datalist id="equip-cats">{categories.map(c => <option key={c} value={c} />)}</datalist>
+              <Select value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} className={inputCls} placeholder="Selecione a categoria"
+                options={catOptions} />
             </div>
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status</label>
@@ -286,7 +308,8 @@ export default function Equipamentos() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Marca</label>
-              <input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className={inputCls} />
+              <Combobox value={form.brand} onChange={v => setForm(f => ({ ...f, brand: v }))} options={brands} className={inputCls}
+                placeholder="Ex: Sony, Canon, Godox…" ariaLabel="Marca" emptyLabel="Nenhuma marca ainda. Digite para adicionar." />
             </div>
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Modelo</label>
