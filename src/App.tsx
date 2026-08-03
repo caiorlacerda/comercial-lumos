@@ -640,19 +640,10 @@ function AppContent() {
             <Route path="/producao/board" element={<PermissionGuard permission="ordem_do_dia"><ProducaoBoard /></PermissionGuard>} />
             <Route path="/producao/schedule" element={<PermissionGuard permission="ordem_do_dia"><ProducaoSchedule /></PermissionGuard>} />
             <Route path="/producao/cronograma-edicao" element={<PermissionGuard permission="cronograma_edicao"><CronogramaEdicao /></PermissionGuard>} />
+            {/* Gerenciador de Projetos agora vive DENTRO do layout: as pills de
+                views ficam visíveis também na página do projeto. */}
+            <Route path="/producao/projetos" element={<PermissionGuard permission="ordem_do_dia"><Projetos /></PermissionGuard>} />
           </Route>
-
-          {/* PRODUÇÃO — Gerenciador de Projetos */}
-          <Route
-            path="/producao/projetos"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="ordem_do_dia">
-                  <Projetos />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
 
           {/* PRODUÇÃO — Acessos & Senhas (admin/produção) */}
           <Route
