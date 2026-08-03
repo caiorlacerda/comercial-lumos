@@ -111,6 +111,8 @@ export default function ProducaoOverview() {
   const [teamUsers, setTeamUsers] = useState<{ id: string; full_name: string; avatar_url?: string | null }[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [videoRows, setVideoRows] = useState<{ group_id: string; versao: number; status: string; task_id: string | null }[]>([]);
+  // Tarefas em que o usuário entra como colaborador (aparecem na Minha fila).
+  const [myCollabTaskIds, setMyCollabTaskIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   // Pipeline: incluir concluídas na barra? / etapa expandida (lista inline)
   const [pipeWithDone, setPipeWithDone] = useState(false);
@@ -127,12 +129,12 @@ export default function ProducaoOverview() {
   useEffect(() => { fetchData(); }, []);
 
   // Tempo real: mudanças de outros usuários atualizam a visão sem spinner
-  useRealtimeRefetch(['projects', 'project_tasks', 'task_comments', 'video_versions', 'review_comments'], () => fetchData(true));
+  useRealtimeRefetch(['projects', 'project_tasks', 'task_comments', 'video_versions', 'review_comments', 'task_collaborators'], () => fetchData(true));
 
   async function fetchData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const [projRes, taskRes, usersRes, commentsRes, doneRes, statusActRes, videoRes, clientComRes] = await Promise.all([
+      const [projRes, taskRes, usersRes, commentsRes, doneRes, statusActRes, videoRes, clientComRes, myCollabRes] = await Promise.all([
         supabase.from('projects').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
         supabase
           .from('project_tasks')
@@ -170,6 +172,10 @@ export default function ProducaoOverview() {
           .eq('is_team', false)
           .order('created_at', { ascending: false })
           .limit(5),
+        // Tarefas em que eu sou colaborador (entram na Minha fila).
+        profile?.id
+          ? supabase.from('task_collaborators').select('task_id').eq('user_id', profile.id)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
 
       if (taskRes.error) throw taskRes.error;
@@ -178,6 +184,7 @@ export default function ProducaoOverview() {
       setTasks((taskRes.data as any[]) || []);
       setTeamUsers(usersRes.data || []);
       setVideoRows((videoRes.data as any[]) || []);
+      setMyCollabTaskIds(((myCollabRes.data as any[]) || []).map(r => r.task_id));
 
       // Feed: comentários + concluídas + mudanças de etapa + cliente no vídeo
       const items: ActivityItem[] = [];
@@ -257,10 +264,11 @@ export default function ProducaoOverview() {
     return Array.from(map.entries());
   }, [dueSoon]);
 
-  // Minha fila: minhas tarefas abertas — atrasadas primeiro, depois por prazo.
+  // Minha fila: minhas tarefas abertas (como responsável OU colaborador),
+  // atrasadas primeiro, depois por prazo.
   const myTasks = useMemo(() => {
     if (!profile?.id) return [];
-    const mine = openTasks.filter(t => t.responsavel_id === profile.id);
+    const mine = openTasks.filter(t => t.responsavel_id === profile.id || myCollabTaskIds.includes(t.id));
     const today = todayStr();
     return mine.sort((a, b) => {
       const aLate = a.data_fim && a.data_fim < today ? 0 : 1;
@@ -271,7 +279,7 @@ export default function ProducaoOverview() {
       if (!b.data_fim) return -1;
       return a.data_fim.localeCompare(b.data_fim);
     }).slice(0, 8);
-  }, [openTasks, profile?.id]);
+  }, [openTasks, profile?.id, myCollabTaskIds]);
 
   // Pipeline por etapa (só abertas; concluídas atrás do toggle).
   const stageCounts = useMemo(() => {

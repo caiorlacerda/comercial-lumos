@@ -74,9 +74,12 @@ export default function Home() {
       if (!userId) return;
       try {
         setLoadingTasks(true);
-        const { data, error } = await supabase
-          .from('project_tasks')
-          .select(`
+        // Minhas tarefas = onde sou responsável OU colaborador.
+        const { data: collabRows } = await supabase
+          .from('task_collaborators').select('task_id').eq('user_id', userId);
+        const collabIds = (collabRows || []).map((r: any) => r.task_id);
+
+        const FIELDS = `
             id,
             project_id,
             titulo,
@@ -93,8 +96,15 @@ export default function Home() {
                 name
               )
             )
-          `)
-          .eq('responsavel_id', userId)
+          `;
+        const orFilter = collabIds.length
+          ? `responsavel_id.eq.${userId},id.in.(${collabIds.join(',')})`
+          : `responsavel_id.eq.${userId}`;
+
+        const { data, error } = await supabase
+          .from('project_tasks')
+          .select(FIELDS)
+          .or(orFilter)
           .neq('status', 'concluido');
 
         if (error) throw error;
