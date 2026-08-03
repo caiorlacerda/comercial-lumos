@@ -20,6 +20,8 @@ export const NOTIFICATION_EVENTS = {
   NOVO_ACESSO_DISPONIVEL: { key: 'novo_acesso_disponivel', category: 'producao', label: 'Novo acesso/senha disponível pra você', defaultEnabled: true },
   DEADLINE_ALERT: { key: 'prazo_alerta', category: 'producao', label: 'Alerta de prazo de entrega', defaultEnabled: true },
   COMENTARIOS_CLIENTE_VIDEO: { key: 'comentarios_cliente_video', category: 'producao', label: 'Cliente comentou no seu vídeo (em lote, 30 min após o último)', defaultEnabled: true, priority: 'high' },
+  VIDEO_APROVADO_CLIENTE: { key: 'video_aprovado_cliente', category: 'producao', label: 'Cliente aprovou um vídeo', defaultEnabled: true, priority: 'high' },
+  VIDEO_AJUSTES_CLIENTE: { key: 'video_ajustes_cliente', category: 'producao', label: 'Cliente pediu ajustes num vídeo', defaultEnabled: true, priority: 'high' },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },
