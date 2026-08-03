@@ -756,8 +756,19 @@ export default function Projetos() {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
-  // Lista dividida em duas abas: tarefas ativas (em aberto) e finalizadas.
-  const [activeTab, setActiveTab] = useState<'ativas' | 'finalizadas'>('ativas');
+  // ── Hub do projeto (Fase 1 do redesign): abas + ferramentas da lista ──
+  const [projTab, setProjTab] = useState<'geral' | 'tarefas' | 'entregas' | 'arquivos'>('tarefas');
+  const [taskSearch, setTaskSearch] = useState('');
+  const [taskStatusFilter, setTaskStatusFilter] = useState('all');
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all');
+  const [onlyMine, setOnlyMine] = useState(false);
+  const [showDone, setShowDone] = useState(false); // grupo "Concluídas" visível?
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  // Contadores das abas Entregas/Arquivos (consultas leves ao trocar de projeto).
+  const [entregasCount, setEntregasCount] = useState<number | null>(null);
+  const [docsCount, setDocsCount] = useState<number | null>(null);
+  // Atividade recente do projeto (últimos registros de task_activity).
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   // Lixeira: tarefas com soft delete (recuperáveis por 30 dias).
   const [trashCount, setTrashCount] = useState(0);
   const [showTrash, setShowTrash] = useState(false);
@@ -832,13 +843,28 @@ export default function Projetos() {
     }
     setSelectedTaskId(null);
     setSelTaskIds(new Set());
+    // Reset do hub ao trocar de projeto (aba, busca e filtros voltam ao padrão).
+    setProjTab('tarefas');
+    setTaskSearch('');
+    setTaskStatusFilter('all');
+    setTaskAssigneeFilter('all');
+    setOnlyMine(false);
+    setShowDone(false);
+    setHeaderMenuOpen(false);
     // Verifica se a OS já está no Drive (documento "OS …" registrado no projeto).
     if (selectedProjectId) {
       supabase.from('project_documents').select('url').eq('project_id', selectedProjectId)
         .ilike('name', 'OS %').order('created_at', { ascending: false }).limit(1)
         .then(({ data }) => setOsUrl(data?.[0]?.url || null));
+      // Contadores leves das abas Entregas (vídeos = grupos) e Arquivos.
+      supabase.from('video_versions').select('group_id').eq('project_id', selectedProjectId)
+        .then(({ data }) => setEntregasCount(data ? new Set(data.map((v: any) => v.group_id)).size : null));
+      supabase.from('project_documents').select('id', { count: 'exact', head: true }).eq('project_id', selectedProjectId)
+        .then(({ count }) => setDocsCount(count ?? null));
     } else {
       setOsUrl(null);
+      setEntregasCount(null);
+      setDocsCount(null);
     }
   }, [selectedProjectId]);
 
@@ -1050,8 +1076,16 @@ export default function Projetos() {
         const map: Record<string, string[]> = {};
         (ptt || []).forEach((r: any) => { (map[r.task_id] = map[r.task_id] || []).push(r.tag_id); });
         setTaskTags(map);
+        // Atividade recente do projeto (aba Visão geral) — últimos 8 registros.
+        const { data: act } = await supabase.from('task_activity')
+          .select('*').in('task_id', ids)
+          .order('created_at', { ascending: false }).limit(8);
+        const titleOf: Record<string, string> = {};
+        (data || []).forEach((t: any) => { titleOf[t.id] = t.titulo; });
+        setRecentActivity((act || []).map((a: any) => ({ ...a, taskTitle: titleOf[a.task_id] || '' })));
       } else {
         setTaskTags({});
+        setRecentActivity([]);
       }
     } catch (err: any) {
       console.error('Error fetching tasks:', err);
@@ -1078,23 +1112,36 @@ export default function Projetos() {
 
   const tagById = (id: string) => allTags.find(t => t.id === id);
 
-  // Lista de tarefas exibida (aplica o filtro por tags — tarefa com QUALQUER das tags).
-  // Concluídas descem para o fim (ordenação estável: mantém a ordem das ativas e
-  // entre as concluídas). Não altera o campo `ordem` no banco — é só exibição.
-  const displayedTasks = (tagFilter.length
-    ? projectTasks.filter(t => (taskTags[t.id] || []).some(id => tagFilter.includes(id)))
-    : projectTasks
-  ).slice().sort((a, b) => {
-    const aDone = a.status === 'concluido' || a.status === 'entregue';
-    const bDone = b.status === 'concluido' || b.status === 'entregue';
-    return aDone === bDone ? 0 : aDone ? 1 : -1;
-  });
-
-  // Divisão da lista em duas abas: ativas (em aberto) x finalizadas (concluídas).
+  // Lista de tarefas exibida: busca (sem acento) + filtros de tag (OR), status,
+  // responsável e "só minhas". Não altera nada no banco — é só exibição.
   const isTaskDone = (t: any) => t.status === 'concluido' || t.status === 'entregue';
-  const activeCount = displayedTasks.filter(t => !isTaskDone(t)).length;
-  const doneCount = displayedTasks.filter(t => isTaskDone(t)).length;
-  const activeListTasks = displayedTasks.filter(t => activeTab === 'finalizadas' ? isTaskDone(t) : !isTaskDone(t));
+  const normTxt = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const filteredTasks = projectTasks.filter(t => {
+    if (tagFilter.length && !(taskTags[t.id] || []).some(id => tagFilter.includes(id))) return false;
+    if (taskSearch.trim() && !normTxt(t.titulo).includes(normTxt(taskSearch))) return false;
+    if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
+    if (taskAssigneeFilter === 'none') {
+      if (t.responsavel_id || t.responsavel_freela_id) return false;
+    } else if (taskAssigneeFilter !== 'all' && t.responsavel_id !== taskAssigneeFilter && t.responsavel_freela_id !== taskAssigneeFilter) {
+      return false;
+    }
+    if (onlyMine && t.responsavel_id !== profile?.id) return false;
+    return true;
+  });
+  const activeCount = filteredTasks.filter(t => !isTaskDone(t)).length;
+  const doneCount = filteredTasks.filter(t => isTaskDone(t)).length;
+
+  // Agrupamento por status na ordem do fluxo. Status legados não listados
+  // (iniciar, aguard_*) entram no primeiro grupo; 'entregue' conta como concluído.
+  // O grupo Concluídas só aparece com o toggle (showDone).
+  const GROUP_ORDER = ['na_fila', 'pausado', 'em_progresso', 'revisao_interna', 'revisao_cliente', 'alteracoes', 'concluido'];
+  const groupKeyOf = (t: any) => isTaskDone(t) ? 'concluido' : (GROUP_ORDER.includes(t.status) ? t.status : 'na_fila');
+  const taskGroups = GROUP_ORDER
+    .filter(s => showDone || s !== 'concluido')
+    .map(s => ({ status: s, tasks: filteredTasks.filter(t => groupKeyOf(t) === s) }))
+    .filter(g => g.tasks.length > 0);
+  const visibleTasks = taskGroups.flatMap(g => g.tasks);
+  const hasActiveFilters = !!taskSearch.trim() || taskStatusFilter !== 'all' || taskAssigneeFilter !== 'all' || onlyMine || tagFilter.length > 0;
 
   // ── Lixeira ────────────────────────────────────────────────────────────────
   const openTrash = async () => {
@@ -1517,7 +1564,7 @@ export default function Projetos() {
   };
   const toggleSelAll = () => {
     setSelTaskIds(prev => {
-      const ids = activeListTasks.map(t => t.id);
+      const ids = visibleTasks.map(t => t.id);
       const allSel = ids.length > 0 && ids.every(id => prev.has(id));
       return allSel ? new Set() : new Set(ids);
     });
@@ -1545,6 +1592,32 @@ export default function Projetos() {
     if (selectedProjectId) fetchProjectTasks(selectedProjectId, true);
     setSelTaskIds(new Set());
     toast.success(`${ids.length} tarefa(s) atualizada(s).`);
+  };
+
+  // Lote: atribuir responsável interno (zera o freela, mesma regra do individual).
+  const handleBatchAssign = async (userId: string) => {
+    const ids = Array.from(selTaskIds);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('project_tasks')
+      .update({ responsavel_id: userId || null, responsavel_freela_id: null, updated_at: new Date().toISOString() })
+      .in('id', ids);
+    if (error) { toast.error('Erro ao atribuir as tarefas.'); return; }
+    if (selectedProjectId) fetchProjectTasks(selectedProjectId, true);
+    setSelTaskIds(new Set());
+    toast.success(`${ids.length} tarefa(s) atribuída(s).`);
+  };
+
+  // Lote: mudar o prazo de edição (data_fim).
+  const handleBatchDue = async (date: string) => {
+    const ids = Array.from(selTaskIds);
+    if (ids.length === 0 || !date) return;
+    const { error } = await supabase.from('project_tasks')
+      .update({ data_fim: date, updated_at: new Date().toISOString() })
+      .in('id', ids);
+    if (error) { toast.error('Erro ao mudar o prazo.'); return; }
+    if (selectedProjectId) fetchProjectTasks(selectedProjectId, true);
+    setSelTaskIds(new Set());
+    toast.success(`Prazo atualizado em ${ids.length} tarefa(s).`);
   };
 
   // Trigger Apply template
@@ -1879,38 +1952,26 @@ export default function Projetos() {
             
             {selectedProjectId && selectedProject ? (
               /* ================= SELECTED PROJECT DETAILS & TASKS ================= */
-              <div className="card border border-lumos-border bg-lumos-surface flex flex-col p-6 space-y-6">
-                
-                {/* Project Detail Header */}
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 pb-5 border-b border-lumos-border/50">
-                  <div className="space-y-2">
-                    {/* 1. Cliente */}
-                    <p className="text-xs text-lumos-text-secondary font-medium">
-                      Cliente: <span className="text-lumos-text-primary font-bold">{selectedClient?.name}</span>
-                    </p>
+              <div className="space-y-5">
 
-                    {/* 2. Tags: código + status */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {selectedProject.code && (
-                        <span className="text-[9px] font-black bg-lumos-border/40 text-lumos-text-secondary px-2 py-0.5 rounded tracking-wider uppercase">
-                          Cód: {formatBudgetCode(selectedProject.code)}
-                        </span>
-                      )}
-                      <span className={clsx(
-                        "text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider",
-                        selectedProject.status === 'concluido' ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'
-                      )}>
-                        {selectedProject.status}
-                      </span>
-                    </div>
+                {/* ================= HEADER DO PROJETO (hub em abas) ================= */}
+                <div className="card p-5 md:p-6 pb-0 space-y-3">
+                  {/* Breadcrumb: cliente e código */}
+                  <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
+                    {selectedClient?.name || 'Sem cliente'}{selectedProject.code ? <> · <span className="text-lumos-text-primary">{formatBudgetCode(selectedProject.code)}</span></> : null}
+                  </p>
 
-                    {/* 3. Nome do projeto */}
-                    <h2 className="text-2xl font-black text-lumos-text-primary uppercase tracking-tight">
+                  {/* Nome + chips + ações */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-2xl md:text-[26px] font-black text-lumos-text-primary uppercase tracking-tight leading-tight">
                       {selectedProject.name}
                     </h2>
-
-                    {/* 4. Segmento (dropdown) */}
-                    <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                    <span className={clsx(
+                      "text-[9px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border",
+                      selectedProject.status === 'concluido' ? 'bg-red-500/10 text-red-400 border-red-500/25' : 'bg-green-500/10 text-green-400 border-green-500/25'
+                    )}>
+                      {selectedProject.status === 'concluido' ? 'Encerrado' : 'Ativo'}
+                    </span>
                       {canManage ? (
                         <Select
                           value={selectedProject.category || selectedProject.budget?.category || ''}
@@ -1942,10 +2003,8 @@ export default function Projetos() {
                           {selectedProject.category || selectedProject.budget?.category || 'Sem Segmento'}
                         </span>
                       )}
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap ml-auto">
                     {selectedProject.budget_id && (
                       <button
                         onClick={() => handleDownloadOS(selectedProject.id, selectedProject.budget_id!)}
@@ -1990,40 +2049,87 @@ export default function Projetos() {
                       )
                     )}
 
-                    {canManage && (
-                      <button
-                        onClick={handleApplyTemplateTrigger}
-                        className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
-                      >
-                        <Layers className="w-3.5 h-3.5 text-lumos-yellow" />
-                        Aplicar Template do Segmento
-                      </button>
-                    )}
+                      {/* Menu ⋯ com as ações menos frequentes */}
+                      <div className="relative">
+                        <button onClick={() => setHeaderMenuOpen(o => !o)} className="btn-secondary py-2 px-3 text-xs font-black" title="Mais ações do projeto">⋯</button>
+                        {headerMenuOpen && (<>
+                          <div className="fixed inset-0 z-[60]" onClick={() => setHeaderMenuOpen(false)} />
+                          <div className="absolute right-0 top-full mt-1 w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[61] py-1">
+                            <button onClick={() => { setHeaderMenuOpen(false); navigate(`/producao/board?projectId=${selectedProjectId}`); }} className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5">Ver no Board (Kanban)</button>
+                            <button onClick={() => { setHeaderMenuOpen(false); navigate(`/producao/schedule?projectId=${selectedProjectId}`); }} className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5">Ver na Timeline (Gantt)</button>
+                            {canManage && <div className="h-px bg-lumos-border my-1" />}
+                            {canManage && (
+                              <button onClick={() => { setHeaderMenuOpen(false); handleApplyTemplateTrigger(); }} className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 flex items-center gap-2">
+                                <Layers className="w-3.5 h-3.5 text-lumos-yellow" /> Aplicar template do segmento
+                              </button>
+                            )}
+                            {canManage && (
+                              <button onClick={() => { setHeaderMenuOpen(false); handleToggleProjectStatus(selectedProject.id, selectedProject.status); }} className={clsx("w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2", selectedProject.status === 'ativo' ? 'text-red-400 hover:bg-red-500/10' : 'text-green-500 hover:bg-green-500/10')}>
+                                {selectedProject.status === 'ativo' ? (<><Check className="w-3.5 h-3.5" /> Encerrar projeto</>) : (<><RotateCcw className="w-3.5 h-3.5" /> Reativar projeto</>)}
+                              </button>
+                            )}
+                          </div>
+                        </>)}
+                      </div>
+                    </div>
+                  </div>
 
-                    {canManage && (
-                      <button
-                        onClick={() => handleToggleProjectStatus(selectedProject.id, selectedProject.status)}
-                        className={clsx(
-                          "btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold",
-                          selectedProject.status === 'ativo' ? "hover:border-red-500/40 hover:bg-red-500/10" : "hover:border-green-500/40 hover:bg-green-500/10"
-                        )}
-                      >
-                        {selectedProject.status === 'ativo' ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-red-400" />
-                            Encerrar Projeto
-                          </>
-                        ) : (
-                          <>
-                            <RotateCcw className="w-3.5 h-3.5 text-green-400" />
-                            Reativar Projeto
-                          </>
-                        )}
-                      </button>
+                  {/* Progresso + término */}
+                  <div className="flex items-center gap-3 flex-wrap text-[11px] font-semibold text-lumos-text-secondary">
+                    <div className="w-full max-w-[240px] bg-lumos-border/30 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-lumos-yellow h-full transition-all duration-500" style={{ width: `${getProjectTasksStats(selectedProject.id).pct}%` }} />
+                    </div>
+                    <span>{getProjectTasksStats(selectedProject.id).pct}% · {getProjectTasksStats(selectedProject.id).completed} de {getProjectTasksStats(selectedProject.id).total} concluídas</span>
+                    {selectedProject.data_fim && (
+                      <span className="ml-auto">Término: <b className="text-lumos-text-primary">{new Date(selectedProject.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')}</b></span>
                     )}
+                  </div>
 
+                  {/* Abas do hub */}
+                  <div className="flex gap-1 border-t border-lumos-border/50 -mx-5 md:-mx-6 px-5 md:px-6 overflow-x-auto no-scrollbar">
+                    {([
+                      { key: 'geral' as const, label: 'Visão geral', count: null as number | null },
+                      { key: 'tarefas' as const, label: 'Tarefas', count: activeCount },
+                      { key: 'entregas' as const, label: 'Entregas', count: entregasCount },
+                      { key: 'arquivos' as const, label: 'Arquivos', count: docsCount },
+                    ]).map(t => (
+                      <button key={t.key} onClick={() => setProjTab(t.key)}
+                        className={clsx('px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors',
+                          projTab === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                        {t.label}
+                        {t.count != null && <span className={clsx('text-[10px] font-black rounded-full px-1.5 py-0.5', projTab === t.key ? 'bg-lumos-yellow/15' : 'bg-lumos-text-secondary/15')}>{t.count}</span>}
+                      </button>
+                    ))}
                   </div>
                 </div>
+
+                {/* ================= ABA: VISÃO GERAL ================= */}
+                {projTab === 'geral' && (
+                <div className="space-y-5">
+
+                  {/* Resumo rápido */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="card p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary">Progresso</p>
+                      <p className="text-xl font-black text-lumos-text-primary mt-0.5">{getProjectTasksStats(selectedProject.id).pct}%</p>
+                      <p className="text-[11px] text-lumos-text-secondary">{getProjectTasksStats(selectedProject.id).completed} de {getProjectTasksStats(selectedProject.id).total} tarefas</p>
+                    </div>
+                    <div className="card p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary">Em andamento</p>
+                      <p className="text-xl font-black text-orange-400 mt-0.5">{projectTasks.filter(t => ['em_progresso', 'revisao_interna'].includes(t.status)).length}</p>
+                      <p className="text-[11px] text-lumos-text-secondary">edição + revisão interna</p>
+                    </div>
+                    <div className="card p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary">Com o cliente</p>
+                      <p className="text-xl font-black text-amber-400 mt-0.5">{projectTasks.filter(t => t.status === 'revisao_cliente').length}</p>
+                      <p className="text-[11px] text-lumos-text-secondary">aguardando retorno</p>
+                    </div>
+                    <div className="card p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary">Ajustes</p>
+                      <p className="text-xl font-black text-red-400 mt-0.5">{projectTasks.filter(t => t.status === 'alteracoes').length}</p>
+                      <p className="text-[11px] text-lumos-text-secondary">pedidos de alteração</p>
+                    </div>
+                  </div>
 
                 {/* Macro Timeline Summary */}
                 {(selectedProject.data_inicio || selectedProject.data_fim || selectedProject.descricao) && (
@@ -2054,19 +2160,42 @@ export default function Projetos() {
                   </div>
                 )}
 
-                {/* Progress bar info */}
-                <div className="space-y-2 pb-2">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-lumos-text-secondary">Progresso do Workflow</span>
-                    <span className="text-lumos-text-primary font-bold">
-                      {getProjectTasksStats(selectedProject.id).completed} de {getProjectTasksStats(selectedProject.id).total} concluídas ({getProjectTasksStats(selectedProject.id).pct}%)
-                    </span>
+                {/* Próximos prazos + atividade recente */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="card p-0 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-lumos-border">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-lumos-text-primary">Próximos prazos</h3>
+                    </div>
+                    {(() => {
+                      const ups = projectTasks.filter(t => !isTaskDone(t) && t.data_fim).sort((a, b) => (a.data_fim!).localeCompare(b.data_fim!)).slice(0, 6);
+                      const today = new Date().toISOString().slice(0, 10);
+                      return ups.length === 0 ? (
+                        <p className="px-4 py-6 text-xs text-lumos-text-secondary italic text-center">Nenhuma tarefa aberta com prazo definido.</p>
+                      ) : ups.map(t => (
+                        <button key={t.id} onClick={() => setSelectedTaskId(t.id)} className="w-full flex items-center gap-2.5 px-4 py-2.5 border-t border-lumos-border/40 first:border-t-0 hover:bg-lumos-text-secondary/5 text-left">
+                          <span className={clsx('text-[10px] font-black w-14 flex-shrink-0', t.data_fim! < today ? 'text-red-400' : 'text-lumos-text-secondary')}>{fmtActDate(t.data_fim)}</span>
+                          <span className={clsx('border rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider flex-shrink-0', getStatusDetails(t.status).color)}>{getStatusDetails(t.status).label}</span>
+                          <span className="text-xs font-bold text-lumos-text-primary truncate">{t.titulo}</span>
+                        </button>
+                      ));
+                    })()}
                   </div>
-                  <div className="w-full bg-lumos-border/30 h-2 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-lumos-yellow h-full transition-all duration-500" 
-                      style={{ width: `${getProjectTasksStats(selectedProject.id).pct}%` }}
-                    ></div>
+                  <div className="card p-0 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-lumos-border">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-lumos-text-primary">Atividade recente</h3>
+                    </div>
+                    {recentActivity.length === 0 ? (
+                      <p className="px-4 py-6 text-xs text-lumos-text-secondary italic text-center">Sem atividade registrada ainda.</p>
+                    ) : recentActivity.map((a: any) => (
+                      <div key={a.id} className="flex items-start gap-2 px-4 py-2 border-t border-lumos-border/40 first:border-t-0 text-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-lumos-yellow mt-1.5 flex-shrink-0" />
+                        <span className="text-lumos-text-secondary leading-snug min-w-0">
+                          <b className="text-lumos-text-primary">{a.actor_name || 'Alguém'}</b> {describeActivity(a)}
+                          {a.taskTitle && <> em <b className="text-lumos-text-primary/80">{a.taskTitle}</b></>}
+                        </span>
+                        <span className="text-[10px] text-lumos-text-secondary/70 flex-shrink-0 ml-auto">{new Date(a.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -2074,65 +2203,34 @@ export default function Projetos() {
                 {/* key por projeto: remonta o editor ao trocar de projeto, evitando
                     que o autosave (closure) salve no projeto errado. */}
                 <ProjectNotes key={selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
-
-                {/* ================= TABS FOR TASK VIEWS ================= */}
-                <div className="flex items-center justify-between border-b border-lumos-border/50">
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => { setActiveTab('ativas'); setSelTaskIds(new Set()); }}
-                      className={clsx(
-                        "px-4 py-2 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px flex items-center gap-1.5",
-                        activeTab === 'ativas'
-                          ? "border-lumos-yellow text-lumos-yellow font-black"
-                          : "border-transparent text-lumos-text-secondary hover:text-lumos-text-primary"
-                      )}
-                    >
-                      Ativas
-                      <span className="text-[10px] font-black bg-lumos-text-secondary/15 rounded-full px-1.5 py-0.5">{activeCount}</span>
-                    </button>
-                    <button
-                      onClick={() => { setActiveTab('finalizadas'); setSelTaskIds(new Set()); }}
-                      className={clsx(
-                        "px-4 py-2 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px flex items-center gap-1.5",
-                        activeTab === 'finalizadas'
-                          ? "border-lumos-yellow text-lumos-yellow font-black"
-                          : "border-transparent text-lumos-text-secondary hover:text-lumos-text-primary"
-                      )}
-                    >
-                      Finalizadas
-                      <span className="text-[10px] font-black bg-lumos-text-secondary/15 rounded-full px-1.5 py-0.5">{doneCount}</span>
-                    </button>
-                    <button
-                      onClick={() => navigate(`/producao/board?projectId=${selectedProjectId}`)}
-                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 transition-colors"
-                      title="Abrir este projeto no Board de Produção"
-                    >
-                      Kanban
-                      <ExternalLink className="w-3 h-3 opacity-50" />
-                    </button>
-                    <button
-                      onClick={() => navigate(`/producao/schedule?projectId=${selectedProjectId}`)}
-                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 transition-colors"
-                      title="Abrir este projeto na Timeline"
-                    >
-                      Gantt
-                      <ExternalLink className="w-3 h-3 opacity-50" />
-                    </button>
-                  </div>
-                  {canManage && (
-                    <button
-                      onClick={openTrash}
-                      className="px-3 py-2 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 transition-colors"
-                      title="Tarefas excluídas (recuperáveis por 30 dias)"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Lixeira
-                      {trashCount > 0 && (
-                        <span className="text-[9px] font-black bg-red-500/15 text-red-400 rounded-full px-1.5 py-0.5">{trashCount}</span>
-                      )}
-                    </button>
-                  )}
                 </div>
+                )}
+
+                {/* ================= ABA: TAREFAS ================= */}
+                {projTab === 'tarefas' && (
+                <div className="card p-5 md:p-6 space-y-4">
+
+                  {/* Toolbar: busca + filtros + lixeira */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-lumos-text-secondary pointer-events-none" />
+                      <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Buscar tarefa…" className="input-lumos w-full h-9 pl-9 text-xs" />
+                    </div>
+                    <Select value={taskStatusFilter} onChange={setTaskStatusFilter} ariaLabel="Filtrar por status" className="input-lumos h-9 text-xs w-40"
+                      options={[{ value: 'all', label: 'Todos os status' }, ...STATUS_OPTIONS]} />
+                    <Select value={taskAssigneeFilter} onChange={setTaskAssigneeFilter} ariaLabel="Filtrar por responsável" className="input-lumos h-9 text-xs w-44" searchable searchPlaceholder="Filtrar pessoa…"
+                      options={[{ value: 'all', label: 'Todos os responsáveis' }, { value: 'none', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name })), ...freelancers.map(f => ({ value: f.id, label: `${f.full_name} (freela)` }))]} />
+                    <button onClick={() => setOnlyMine(v => !v)}
+                      className={clsx('h-9 px-3 rounded-lumos border text-[11px] font-bold transition-colors', onlyMine ? 'border-lumos-yellow/60 text-lumos-yellow bg-lumos-yellow/10' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                      Só minhas
+                    </button>
+                    {canManage && (
+                      <button onClick={openTrash} className="h-9 px-3 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5" title="Tarefas excluídas (recuperáveis por 30 dias)">
+                        <Trash2 className="w-3.5 h-3.5" /> Lixeira
+                        {trashCount > 0 && <span className="text-[9px] font-black bg-red-500/15 text-red-400 rounded-full px-1.5 py-0.5">{trashCount}</span>}
+                      </button>
+                    )}
+                  </div>
 
                 {/* Tab Content */}
                 <div className="flex-1 min-h-[300px] flex flex-col">
@@ -2176,12 +2274,12 @@ export default function Projetos() {
                         </div>
                       ) : (
                         <>
-                        {activeListTasks.length === 0 && (
+                        {visibleTasks.length === 0 && (
                           <div className="text-center py-10 text-xs text-lumos-text-secondary/70">
-                            {activeTab === 'finalizadas' ? 'Nenhuma tarefa finalizada ainda.' : 'Tudo em dia por aqui, nenhuma tarefa ativa. 🎉'}
+                            {hasActiveFilters ? 'Nenhuma tarefa bate com a busca e os filtros.' : 'Tudo em dia por aqui, nenhuma tarefa ativa. 🎉'}
                           </div>
                         )}
-                        {activeListTasks.length > 0 && (<>
+                        {visibleTasks.length > 0 && (<>
                         <div className="overflow-x-auto hidden lg:block">
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
@@ -2190,7 +2288,7 @@ export default function Projetos() {
                                   <th className="py-2.5 px-2 w-8 text-center">
                                     <input
                                       type="checkbox"
-                                      checked={displayedTasks.length > 0 && displayedTasks.every(t => selTaskIds.has(t.id))}
+                                      checked={visibleTasks.length > 0 && visibleTasks.every(t => selTaskIds.has(t.id))}
                                       onChange={toggleSelAll}
                                       title="Selecionar todas"
                                       className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-3.5 w-3.5 bg-lumos-bg cursor-pointer"
@@ -2207,7 +2305,15 @@ export default function Projetos() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-lumos-border/20">
-                              {activeListTasks.map((task) => {
+                              {taskGroups.map(group => (<React.Fragment key={group.status}>
+                              {/* Cabeçalho do grupo (etapa do fluxo) */}
+                              <tr className="bg-lumos-bg/40">
+                                <td colSpan={6 + (canManage ? 1 : 0) + (canSeeClientDeadline ? 1 : 0)} className="py-1.5 px-2">
+                                  <span className={clsx('inline-flex items-center border rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider', getStatusDetails(group.status).color)}>{getStatusDetails(group.status).label}</span>
+                                  <span className="text-[9px] font-bold text-lumos-text-secondary ml-2">{group.tasks.length}</span>
+                                </td>
+                              </tr>
+                              {group.tasks.map((task) => {
                                 const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
                                 return (
                                   <tr 
@@ -2392,13 +2498,19 @@ export default function Projetos() {
                                   </tr>
                                 );
                               })}
+                              </React.Fragment>))}
                             </tbody>
                           </table>
                         </div>
 
                         {/* Mobile: cartões de tarefa (a tabela acima fica só no desktop) */}
                         <div className="lg:hidden divide-y divide-lumos-border/40">
-                          {activeListTasks.map((task) => {
+                          {taskGroups.map(group => (<React.Fragment key={group.status}>
+                          <div className="pt-3 pb-1 flex items-center gap-2">
+                            <span className={clsx('inline-flex items-center border rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider', getStatusDetails(group.status).color)}>{getStatusDetails(group.status).label}</span>
+                            <span className="text-[9px] font-bold text-lumos-text-secondary">{group.tasks.length}</span>
+                          </div>
+                          {group.tasks.map((task) => {
                             const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
                             const tags = (taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR'));
                             return (
@@ -2506,8 +2618,16 @@ export default function Projetos() {
                               </div>
                             );
                           })}
+                          </React.Fragment>))}
                         </div>
                         </>)}
+
+                        {/* Toggle do grupo Concluídas */}
+                        {doneCount > 0 && (
+                          <button onClick={() => setShowDone(v => !v)} className="self-start text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary underline underline-offset-2">
+                            {showDone ? 'Ocultar concluídas' : `Mostrar concluídas (${doneCount})`}
+                          </button>
+                        )}
                         </>
                       )}
 
@@ -2519,6 +2639,16 @@ export default function Projetos() {
                               <span className="w-7 h-7 rounded-full bg-lumos-yellow/20 flex items-center justify-center font-black text-lumos-yellow text-xs">{selTaskIds.size}</span>
                               <span className="text-xs font-bold text-lumos-text-primary uppercase tracking-tight">{selTaskIds.size === 1 ? 'tarefa' : 'tarefas'}</span>
                             </div>
+                            <Select value="" onChange={handleBatchStatus} placeholder="Mover status" ariaLabel="Mover status em lote" menuClassName="min-w-[150px]"
+                              className="px-3 py-1.5 rounded-full bg-lumos-text-secondary/10 text-[10px] font-black uppercase text-lumos-text-primary hover:bg-lumos-text-secondary/20"
+                              options={STATUS_OPTIONS} />
+                            <Select value="" onChange={handleBatchAssign} placeholder="Atribuir" ariaLabel="Atribuir responsável em lote" menuClassName="min-w-[170px]" searchable searchPlaceholder="Filtrar pessoa…"
+                              className="px-3 py-1.5 rounded-full bg-lumos-text-secondary/10 text-[10px] font-black uppercase text-lumos-text-primary hover:bg-lumos-text-secondary/20"
+                              options={teamUsers.map(u => ({ value: u.id, label: u.full_name }))} />
+                            <label className="relative px-3 py-1.5 rounded-full bg-lumos-text-secondary/10 text-[10px] font-black uppercase text-lumos-text-primary hover:bg-lumos-text-secondary/20 cursor-pointer" title="Mudar o prazo de edição">
+                              Prazo
+                              <input type="date" onChange={e => { if (e.target.value) handleBatchDue(e.target.value); e.target.value = ''; }} className="absolute inset-0 opacity-0 cursor-pointer" />
+                            </label>
                             <button onClick={() => handleBatchStatus('concluido')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-500/10 text-green-500 font-black text-[10px] uppercase hover:bg-green-500 hover:text-white transition-all active:scale-95">
                               <Check className="w-3.5 h-3.5" /> Concluir
                             </button>
@@ -2556,15 +2686,22 @@ export default function Projetos() {
                   )}
                 </div>
 
-                {/* ============ DOCUMENTOS DO PROJETO (entre lista e revisão) ============ */}
-                <ProjectDocuments
-                  projectId={selectedProject.id}
-                  driveFolderId={selectedProject.drive_folder_id}
-                  canManage={canManage}
-                />
+                </div>
+                )}
 
-                {/* Revisão de vídeo (dropzone 06_ENTREGA/01_REVISAO) */}
-                <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
+                {/* ================= ABA: ENTREGAS (revisão de vídeo) ================= */}
+                {projTab === 'entregas' && (
+                  <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
+                )}
+
+                {/* ================= ABA: ARQUIVOS (documentos) ================= */}
+                {projTab === 'arquivos' && (
+                  <ProjectDocuments
+                    projectId={selectedProject.id}
+                    driveFolderId={selectedProject.drive_folder_id}
+                    canManage={canManage}
+                  />
+                )}
 
               </div>
             ) : selectedClientId && selectedClient ? (

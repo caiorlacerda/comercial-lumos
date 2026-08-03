@@ -91,7 +91,7 @@ export default function CommandPalette() {
     const actions: PaletteItem[] = [];
     if (isAdmin) actions.push({ id: 'act-orc', group: 'Ações', label: 'Novo orçamento', icon: Plus, path: '/orcamentos/novo' });
     if (isAdmin || can('ordem_do_dia')) {
-      actions.push({ id: 'act-proj', group: 'Ações', label: 'Criar projeto', icon: Plus, path: '/producao/projetos' });
+      actions.push({ id: 'act-proj', group: 'Ações', label: 'Criar projeto', icon: Plus, path: '/producao/projetos?new=1' });
       actions.push({ id: 'act-od', group: 'Ações', label: 'Nova Ordem do Dia', icon: Plus, path: '/ordem-do-dia/nova' });
     }
     if (isAdmin || can('fornecedores')) actions.push({ id: 'act-forn', group: 'Ações', label: 'Novo fornecedor', icon: Plus, path: '/producao/fornecedores/nova' });
