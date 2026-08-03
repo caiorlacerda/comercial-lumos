@@ -23,6 +23,7 @@ import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
 import { useToast } from '@/context/ToastContext';
 import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
+import Select from '@/components/ui/Select';
 
 interface CatalogItem {
   id: string;
@@ -364,16 +365,8 @@ export default function Catalog() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-lumos-text-secondary uppercase mb-1">Grupo</label>
-                  <select 
-                    className="input-lumos w-full"
-                    value={formData.item_group}
-                    onChange={(e) => setFormData({...formData, item_group: e.target.value as any})}
-                  >
-                    <option value="equipe">Equipe</option>
-                    <option value="equipamentos">Equipamentos</option>
-                    <option value="edicao">Pós-produção</option>
-                    <option value="producao">Produção</option>
-                  </select>
+                  <Select className="input-lumos w-full" value={formData.item_group || ''} onChange={v => setFormData({ ...formData, item_group: v as any })}
+                    options={[{ value: 'equipe', label: 'Equipe' }, { value: 'equipamentos', label: 'Equipamentos' }, { value: 'edicao', label: 'Pós-produção' }, { value: 'producao', label: 'Produção' }]} />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-lumos-text-secondary uppercase mb-1">Subcategoria</label>
@@ -395,17 +388,8 @@ export default function Catalog() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-lumos-text-secondary uppercase mb-1">Unidade</label>
-                  <select 
-                    className="input-lumos w-full"
-                    value={formData.unit_label}
-                    onChange={(e) => setFormData({...formData, unit_label: e.target.value})}
-                  >
-                    <option value="diaria">diária</option>
-                    <option value="pacote">pacote</option>
-                    <option value="unidade">unidade</option>
-                    <option value="video">vídeo</option>
-                    <option value="hora">hora</option>
-                  </select>
+                  <Select className="input-lumos w-full" value={formData.unit_label || ''} onChange={v => setFormData({ ...formData, unit_label: v })}
+                    options={[{ value: 'diaria', label: 'diária' }, { value: 'pacote', label: 'pacote' }, { value: 'unidade', label: 'unidade' }, { value: 'video', label: 'vídeo' }, { value: 'hora', label: 'hora' }]} />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-bold text-lumos-text-secondary uppercase mb-1">Descrição</label>

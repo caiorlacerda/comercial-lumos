@@ -10,6 +10,7 @@ import { clsx } from 'clsx';
 import ReservasTab from '@/components/equipamentos/ReservasTab';
 import ManutencaoTab from '@/components/equipamentos/ManutencaoTab';
 import ListasTab from '@/components/equipamentos/ListasTab';
+import Select from '@/components/ui/Select';
 
 type Tab = 'inventario' | 'reservas' | 'manutencao' | 'listas';
 const TABS: { key: Tab; label: string; icon: any }[] = [
@@ -58,6 +59,9 @@ export default function Equipamentos() {
 
   const [tab, setTab] = useState<Tab>('inventario');
   const [projects, setProjects] = useState<{ id: string; name: string; code: string | null }[]>([]);
+  // Abrir o modal de "novo" da aba a partir do botão que fica na barra de abas.
+  const [reservaOpen, setReservaOpen] = useState(false);
+  const [manutOpen, setManutOpen] = useState(false);
 
   useEffect(() => { fetchEquipment(); fetchProjects(); }, []);
   useRealtimeRefetch(['equipment'], () => fetchEquipment(true));
@@ -144,29 +148,30 @@ export default function Equipamentos() {
         <p className="text-lumos-text-secondary text-sm">Inventário, reservas, manutenção e listas de equipamento por projeto.</p>
       </div>
 
-      {/* Abas */}
-      <div className="flex gap-1 border-b border-lumos-border overflow-x-auto no-scrollbar">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={clsx('flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 -mb-px transition-colors',
-              tab === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
-            <t.icon className="w-4 h-4" /> {t.label}
-          </button>
-        ))}
+      {/* Abas + ação da aba (mesma linha, acima da linha de separação) */}
+      <div className="flex items-center justify-between gap-3 border-b border-lumos-border">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={clsx('flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 -mb-px transition-colors',
+                tab === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
+              <t.icon className="w-4 h-4" /> {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-shrink-0 pb-1">
+          {tab === 'inventario' && <button onClick={openNew} className="btn-primary h-9 px-4 flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> Novo equipamento</button>}
+          {tab === 'reservas' && <button onClick={() => setReservaOpen(true)} className="btn-primary h-9 px-4 flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> Solicitar reserva</button>}
+          {tab === 'manutencao' && <button onClick={() => setManutOpen(true)} className="btn-primary h-9 px-4 flex items-center gap-2 text-sm"><Plus className="w-4 h-4" /> Abrir manutenção</button>}
+        </div>
       </div>
 
-      {tab === 'reservas' && <ReservasTab equipment={items} projects={projects} />}
-      {tab === 'manutencao' && <ManutencaoTab equipment={items} />}
+      {tab === 'reservas' && <ReservasTab equipment={items} projects={projects} open={reservaOpen} onClose={() => setReservaOpen(false)} />}
+      {tab === 'manutencao' && <ManutencaoTab equipment={items} open={manutOpen} onClose={() => setManutOpen(false)} />}
       {tab === 'listas' && <ListasTab equipment={items} projects={projects} />}
 
       {tab === 'inventario' && (
       <>
-      <div className="flex justify-end">
-        <button onClick={openNew} className="btn-primary h-10 px-6 flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Novo equipamento
-        </button>
-      </div>
-
       {/* Busca + filtros */}
       <div className="flex flex-col md:flex-row gap-3">
         <div className="card p-3 relative flex-1">
@@ -174,14 +179,10 @@ export default function Equipamentos() {
           <input type="text" placeholder="Buscar por nome, marca, modelo, série…" className="input-lumos pl-9 w-full"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-lumos h-11 md:w-52">
-          <option value="all">Todas as categorias</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input-lumos h-11 md:w-44">
-          <option value="all">Todos os status</option>
-          {STATUS_KEYS.map(s => <option key={s} value={s}>{STATUS[s].label}</option>)}
-        </select>
+        <Select value={catFilter} onChange={setCatFilter} className="input-lumos h-11 md:w-52"
+          options={[{ value: 'all', label: 'Todas as categorias' }, ...categories.map(c => ({ value: c, label: c }))]} />
+        <Select value={statusFilter} onChange={setStatusFilter} className="input-lumos h-11 md:w-44"
+          options={[{ value: 'all', label: 'Todos os status' }, ...STATUS_KEYS.map(s => ({ value: s, label: STATUS[s].label }))]} />
       </div>
 
       {loading ? (
@@ -277,9 +278,8 @@ export default function Equipamentos() {
             </div>
             <div>
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Status</label>
-              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as Status }))} className={inputCls}>
-                {STATUS_KEYS.map(s => <option key={s} value={s}>{STATUS[s].label}</option>)}
-              </select>
+              <Select value={form.status} onChange={v => setForm(f => ({ ...f, status: v as Status }))} className={inputCls}
+                options={STATUS_KEYS.map(s => ({ value: s, label: STATUS[s].label }))} />
             </div>
           </div>
 

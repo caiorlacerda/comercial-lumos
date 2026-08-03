@@ -7,6 +7,7 @@ import { clsx } from 'clsx';
 import { addDays, format, startOfWeek, startOfMonth, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
@@ -380,18 +381,10 @@ export default function ProducaoSchedule() {
             className="input-lumos pl-9 w-full h-9 text-xs"
           />
         </div>
-        <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="input-lumos h-9 text-xs w-auto max-w-[220px]">
-          <option value="all">Todos os projetos</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>{p.client?.name ? `${p.client.name} · ` : ''}{p.name}</option>
-          ))}
-        </select>
-        <select value={responsavelFilter} onChange={e => setResponsavelFilter(e.target.value)} className="input-lumos h-9 text-xs w-auto max-w-[180px]">
-          <option value="all">Todos os responsáveis</option>
-          {teamUsers.map(u => (
-            <option key={u.id} value={u.id}>{u.full_name}</option>
-          ))}
-        </select>
+        <Select value={projectFilter} onChange={setProjectFilter} className="input-lumos h-9 text-xs w-auto max-w-[220px]"
+          options={[{ value: 'all', label: 'Todos os projetos' }, ...projects.map(p => ({ value: p.id, label: `${p.client?.name ? `${p.client.name} · ` : ''}${p.name}` }))]} />
+        <Select value={responsavelFilter} onChange={setResponsavelFilter} className="input-lumos h-9 text-xs w-auto max-w-[180px]"
+          options={[{ value: 'all', label: 'Todos os responsáveis' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]} />
         <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-lumos-text-secondary cursor-pointer select-none px-2">
           <input type="checkbox" checked={showConcluded} onChange={e => setShowConcluded(e.target.checked)} className="accent-[#EFC700]" />
           Concluídas

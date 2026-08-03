@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { 
   Users,
@@ -636,65 +637,28 @@ export default function Budgets() {
           </div>
           <div className="flex flex-wrap gap-2">
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-              <select
-                className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="all">Status: Todos</option>
-                <option value="rascunho">Rascunhos</option>
-                <option value="em_negociacao">Em Negociação</option>
-                <option value="aprovado">Aprovados</option>
-                <option value="reprovado">Reprovados</option>
-              </select>
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary z-10 pointer-events-none" />
+              <Select className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
+                value={statusFilter} onChange={v => { setStatusFilter(v); setCurrentPage(1); }}
+                options={[{ value: 'all', label: 'Status: Todos' }, { value: 'rascunho', label: 'Rascunhos' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovados' }, { value: 'reprovado', label: 'Reprovados' }]} />
             </div>
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-              <select 
-                className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
-                value={categoryFilter}
-                onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="all">Categoria: Todas</option>
-                <option value="digital">Digital</option>
-                <option value="filme">Filme</option>
-                <option value="live">Live</option>
-              </select>
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary z-10 pointer-events-none" />
+              <Select className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
+                value={categoryFilter} onChange={v => { setCategoryFilter(v); setCurrentPage(1); }}
+                options={[{ value: 'all', label: 'Categoria: Todas' }, { value: 'digital', label: 'Digital' }, { value: 'filme', label: 'Filme' }, { value: 'live', label: 'Live' }]} />
             </div>
             <div className="relative">
-              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-              <select 
-                className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
-                value={clientFilter}
-                onChange={(e) => { setClientFilter(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="all">Cliente: Todos</option>
-                {allClients.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary z-10 pointer-events-none" />
+              <Select className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
+                value={clientFilter} onChange={v => { setClientFilter(v); setCurrentPage(1); }}
+                options={[{ value: 'all', label: 'Cliente: Todos' }, ...allClients.map(c => ({ value: c.id, label: c.name }))]} />
             </div>
             <div className="relative">
-              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
-              <select 
-                className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
-                value={`${sortField}-${sortOrder}`}
-                onChange={(e) => {
-                  const [field, order] = e.target.value.split('-');
-                  setSortField(field);
-                  setSortOrder(order as 'asc' | 'desc');
-                }}
-              >
-                <option value="code-desc">Código (Decrescente)</option>
-                <option value="code-asc">Código (Crescente)</option>
-                <option value="updated_at-desc">Mais recente</option>
-                <option value="updated_at-asc">Mais antigo</option>
-                <option value="valorFinal-desc">Maior valor</option>
-                <option value="valorFinal-asc">Menor valor</option>
-                <option value="project_name-asc">A → Z (Projeto)</option>
-                <option value="project_name-desc">Z → A (Projeto)</option>
-              </select>
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary z-10 pointer-events-none" />
+              <Select className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
+                value={`${sortField}-${sortOrder}`} onChange={v => { const [field, order] = v.split('-'); setSortField(field); setSortOrder(order as 'asc' | 'desc'); }}
+                options={[{ value: 'code-desc', label: 'Código (Decrescente)' }, { value: 'code-asc', label: 'Código (Crescente)' }, { value: 'updated_at-desc', label: 'Mais recente' }, { value: 'updated_at-asc', label: 'Mais antigo' }, { value: 'valorFinal-desc', label: 'Maior valor' }, { value: 'valorFinal-asc', label: 'Menor valor' }, { value: 'project_name-asc', label: 'A → Z (Projeto)' }, { value: 'project_name-desc', label: 'Z → A (Projeto)' }]} />
             </div>
           </div>
         </div>

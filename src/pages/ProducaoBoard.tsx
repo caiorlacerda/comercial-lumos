@@ -14,6 +14,7 @@ import {
 import { Search, Flag, CalendarDays, Columns3, ExternalLink, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import UserAvatar from '@/components/common/UserAvatar';
@@ -393,38 +394,14 @@ export default function ProducaoBoard() {
           />
         </div>
 
-        <select
-          value={projectFilter}
-          onChange={e => setProjectFilter(e.target.value)}
-          className="input-lumos h-9 text-xs w-auto max-w-[220px]"
-        >
-          <option value="all">Todos os projetos</option>
-          {boardProjects.map(([id, label]) => (
-            <option key={id} value={id}>{label}</option>
-          ))}
-        </select>
+        <Select value={projectFilter} onChange={setProjectFilter} className="input-lumos h-9 text-xs w-auto max-w-[220px]"
+          options={[{ value: 'all', label: 'Todos os projetos' }, ...boardProjects.map(([id, label]) => ({ value: id, label }))]} />
 
-        <select
-          value={responsavelFilter}
-          onChange={e => setResponsavelFilter(e.target.value)}
-          className="input-lumos h-9 text-xs w-auto max-w-[180px]"
-        >
-          <option value="all">Todos os responsáveis</option>
-          {teamUsers.map(u => (
-            <option key={u.id} value={u.id}>{u.full_name}</option>
-          ))}
-        </select>
+        <Select value={responsavelFilter} onChange={setResponsavelFilter} className="input-lumos h-9 text-xs w-auto max-w-[180px]"
+          options={[{ value: 'all', label: 'Todos os responsáveis' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]} />
 
-        <select
-          value={prioridadeFilter}
-          onChange={e => setPrioridadeFilter(e.target.value)}
-          className="input-lumos h-9 text-xs w-auto"
-        >
-          <option value="all">Toda prioridade</option>
-          <option value="alta">Alta</option>
-          <option value="media">Média</option>
-          <option value="baixa">Baixa</option>
-        </select>
+        <Select value={prioridadeFilter} onChange={setPrioridadeFilter} className="input-lumos h-9 text-xs w-auto"
+          options={[{ value: 'all', label: 'Toda prioridade' }, { value: 'alta', label: 'Alta' }, { value: 'media', label: 'Média' }, { value: 'baixa', label: 'Baixa' }]} />
 
         <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-lumos-text-secondary cursor-pointer select-none px-2">
           <input

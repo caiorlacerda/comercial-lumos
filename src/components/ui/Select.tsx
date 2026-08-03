@@ -89,7 +89,7 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
             <button
               key={o.value} type="button"
               onClick={e => { e.stopPropagation(); onChange(o.value); setOpen(false); }}
-              className={clsx('w-full flex items-center justify-between gap-2 text-left px-2.5 py-1.5 rounded text-xs font-semibold transition-colors',
+              className={clsx('w-full flex items-center justify-between gap-2 text-left px-2.5 py-1.5 rounded text-xs font-normal transition-colors',
                 o.value === value ? 'text-lumos-yellow bg-lumos-yellow/10' : 'text-lumos-text-primary hover:bg-lumos-text-secondary/10')}
             >
               <span className="truncate flex items-center gap-2">

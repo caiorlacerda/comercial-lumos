@@ -19,6 +19,7 @@ import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
@@ -389,22 +390,10 @@ export default function ContasPagar() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary" />
             <input type="text" placeholder="Buscar por descrição ou fornecedor..." className="input-lumos pl-10 w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          <select className="input-lumos h-10 px-4 text-sm min-w-[180px]" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-            <option value="all">Todas as Categorias</option>
-            <option value="equipe">Equipe</option>
-            <option value="equipamento">Equipamento</option>
-            <option value="locacao">Locação</option>
-            <option value="software">Software</option>
-            <option value="impostos">Impostos</option>
-          </select>
-          <select className="input-lumos h-10 px-4 text-sm min-w-[200px]" value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
-            <option value="all">Todos os Projetos</option>
-            {projects.map(proj => (
-              <option key={proj.id} value={proj.id}>
-                {proj.code ? `#${proj.code} — ${proj.name}` : proj.name}
-              </option>
-            ))}
-          </select>
+          <Select className="input-lumos h-10 px-4 text-sm min-w-[180px]" value={categoryFilter} onChange={setCategoryFilter}
+            options={[{ value: 'all', label: 'Todas as Categorias' }, { value: 'equipe', label: 'Equipe' }, { value: 'equipamento', label: 'Equipamento' }, { value: 'locacao', label: 'Locação' }, { value: 'software', label: 'Software' }, { value: 'impostos', label: 'Impostos' }]} />
+          <Select className="input-lumos h-10 px-4 text-sm min-w-[200px]" value={projectFilter} onChange={setProjectFilter}
+            options={[{ value: 'all', label: 'Todos os Projetos' }, ...projects.map(proj => ({ value: proj.id, label: proj.code ? `#${proj.code} — ${proj.name}` : proj.name }))]} />
         </div>
         {(searchTerm || categoryFilter !== 'all' || projectFilter !== 'all') && (
           <div className="flex items-center justify-between text-xs text-lumos-text-secondary pt-2 border-t border-lumos-border/30">
@@ -718,20 +707,13 @@ export default function ContasPagar() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
-              <select className="input-lumos w-full" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
-                <option value="equipe">Equipe</option>
-                <option value="equipamento">Equipamento</option>
-                <option value="locacao">Locação</option>
-                <option value="software">Software / SaaS</option>
-                <option value="impostos">Impostos</option>
-              </select>
+              <Select className="input-lumos w-full" value={formData.category} onChange={v => setFormData({ ...formData, category: v })}
+                options={[{ value: 'equipe', label: 'Equipe' }, { value: 'equipamento', label: 'Equipamento' }, { value: 'locacao', label: 'Locação' }, { value: 'software', label: 'Software / SaaS' }, { value: 'impostos', label: 'Impostos' }]} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Responsável</label>
-              <select className="input-lumos w-full" value={formData.responsible_id} onChange={e => setFormData({...formData, responsible_id: e.target.value})}>
-                <option value="">Selecione um responsável</option>
-                {appUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-              </select>
+              <Select className="input-lumos w-full" value={formData.responsible_id} onChange={v => setFormData({ ...formData, responsible_id: v })} placeholder="Selecione um responsável"
+                options={[{ value: '', label: 'Selecione um responsável' }, ...appUsers.map(u => ({ value: u.id, label: u.full_name }))]} />
             </div>
           </div>
           <div className="space-y-2">
@@ -756,18 +738,8 @@ export default function ContasPagar() {
               {formData.isRecurring && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Frequência</label>
-                  <select 
-                    className="input-lumos w-full h-8 text-xs" 
-                    value={formData.frequency} 
-                    onChange={e => setFormData({...formData, frequency: e.target.value})}
-                  >
-                    <option value="semanal">Semanal</option>
-                    <option value="mensal">Mensal</option>
-                    <option value="bimestral">Bimestral (A cada 2 meses)</option>
-                    <option value="trimestral">Trimestral (A cada 3 meses)</option>
-                    <option value="semestral">Semestral (A cada 6 meses)</option>
-                    <option value="anual">Anual</option>
-                  </select>
+                  <Select className="input-lumos w-full h-8 text-xs" value={formData.frequency} onChange={v => setFormData({ ...formData, frequency: v })}
+                    options={[{ value: 'semanal', label: 'Semanal' }, { value: 'mensal', label: 'Mensal' }, { value: 'bimestral', label: 'Bimestral (A cada 2 meses)' }, { value: 'trimestral', label: 'Trimestral (A cada 3 meses)' }, { value: 'semestral', label: 'Semestral (A cada 6 meses)' }, { value: 'anual', label: 'Anual' }]} />
                 </div>
               )}
             </div>

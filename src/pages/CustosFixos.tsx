@@ -18,6 +18,7 @@ import {
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import Modal from '@/components/common/Modal';
+import Select from '@/components/ui/Select';
 import { useToast } from '@/context/ToastContext';
 import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 
@@ -492,41 +493,19 @@ export default function CustosFixos() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria *</label>
-              <select
-                className="input-lumos w-full"
-                value={formData.category}
-                onChange={e => setFormData({ ...formData, category: e.target.value })}
-              >
-                {CATEGORIES.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
+              <Select value={formData.category} onChange={v => setFormData({ ...formData, category: v })} className="input-lumos w-full" options={CATEGORIES} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Forma de Pagamento</label>
-              <select
-                className="input-lumos w-full"
-                value={formData.payment_method}
-                onChange={e => setFormData({ ...formData, payment_method: e.target.value })}
-              >
-                {PAYMENT_METHODS.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
+              <Select value={formData.payment_method} onChange={v => setFormData({ ...formData, payment_method: v })} className="input-lumos w-full" options={PAYMENT_METHODS} />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Pago por</label>
-              <select
-                className="input-lumos w-full"
-                value={formData.paid_by}
-                onChange={e => setFormData({ ...formData, paid_by: e.target.value })}
-              >
-                <option value="Lumos">Lumos</option>
-                <option value="Sócio">Sócio</option>
-              </select>
+              <Select value={formData.paid_by} onChange={v => setFormData({ ...formData, paid_by: v })} className="input-lumos w-full"
+                options={[{ value: 'Lumos', label: 'Lumos' }, { value: 'Sócio', label: 'Sócio' }]} />
             </div>
           </div>
 

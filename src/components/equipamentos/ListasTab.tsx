@@ -3,6 +3,7 @@ import { Plus, Trash2, Save, Download, FileStack, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import Select from '@/components/ui/Select';
 
 interface Equip { id: string; name: string; }
 interface Proj { id: string; name: string; code?: string | null; }
@@ -89,10 +90,8 @@ export default function ListasTab({ equipment, projects }: { equipment: Equip[];
         <div className="flex flex-col sm:flex-row sm:items-end gap-3">
           <div className="flex-1">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase">Projeto</label>
-            <select value={projectId} onChange={e => setProjectId(e.target.value)} className="input-lumos w-full">
-              <option value="">Selecione um projeto…</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.code ? ` (${p.code})` : ''}</option>)}
-            </select>
+            <Select value={projectId} onChange={setProjectId} className="input-lumos w-full" placeholder="Selecione um projeto…"
+              options={projects.map(p => ({ value: p.id, label: `${p.name}${p.code ? ` (${p.code})` : ''}` }))} />
           </div>
           {projectId && items.length > 0 && (
             <button onClick={saveAsTemplate} className="btn-secondary h-11 px-4 flex items-center gap-2 text-sm"><Save className="w-4 h-4" /> Salvar como template</button>
@@ -105,10 +104,8 @@ export default function ListasTab({ equipment, projects }: { equipment: Equip[];
           <div className="card p-4 space-y-3">
             {/* adicionar item */}
             <div className="flex flex-col sm:flex-row gap-2">
-              <select value={addEq} onChange={e => setAddEq(e.target.value)} className="input-lumos flex-1">
-                <option value="">Adicionar equipamento…</option>
-                {equipment.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
+              <Select value={addEq} onChange={setAddEq} className="input-lumos flex-1" placeholder="Adicionar equipamento…"
+                options={equipment.map(e => ({ value: e.id, label: e.name }))} />
               <input type="number" min={1} value={addQty} onChange={e => setAddQty(Number(e.target.value))} className="input-lumos w-20" title="Quantidade" />
               <button onClick={addItem} disabled={busy || !addEq} className="btn-primary h-11 px-4 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Adicionar</button>
             </div>

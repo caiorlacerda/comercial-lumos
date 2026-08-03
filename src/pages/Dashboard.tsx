@@ -26,6 +26,7 @@ import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import { pdf } from '@react-pdf/renderer';
 import Modal from '@/components/common/Modal';
+import Select from '@/components/ui/Select';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
 import { calcFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -437,22 +438,19 @@ export default function Dashboard() {
             Ver todos os orçamentos <MoreVertical className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
           </Link>
           <div className="relative sm:ml-auto">
-            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
-            <select
+            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary z-10 pointer-events-none" />
+            <Select
               className="input-lumos h-9 pl-9 pr-6 text-[9px] font-black uppercase tracking-widest min-w-[150px] w-full sm:w-auto"
               value={`${sortField}-${sortOrder}`}
-              onChange={(e) => {
-                const [field, order] = e.target.value.split('-');
-                setSortField(field);
-                setSortOrder(order as 'asc' | 'desc');
-              }}
-            >
-              <option value="updated_at-desc">Recentes</option>
-              <option value="updated_at-asc">Antigos</option>
-              <option value="valorFinal-desc">Maior valor</option>
-              <option value="valorFinal-asc">Menor valor</option>
-              <option value="project_name-asc">A → Z</option>
-            </select>
+              onChange={(v) => { const [field, order] = v.split('-'); setSortField(field); setSortOrder(order as 'asc' | 'desc'); }}
+              options={[
+                { value: 'updated_at-desc', label: 'Recentes' },
+                { value: 'updated_at-asc', label: 'Antigos' },
+                { value: 'valorFinal-desc', label: 'Maior valor' },
+                { value: 'valorFinal-asc', label: 'Menor valor' },
+                { value: 'project_name-asc', label: 'A → Z' },
+              ]}
+            />
           </div>
         </div>
 

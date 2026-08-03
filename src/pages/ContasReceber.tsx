@@ -20,6 +20,7 @@ import {
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { formatBudgetCode } from '@/utils/formatters';
 import { Link } from 'react-router-dom';
@@ -844,11 +845,8 @@ export default function ContasReceber() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Forma</label>
-              <select className="input-lumos w-full" value={paymentData.payment_method} onChange={e => setPaymentData({...paymentData, payment_method: e.target.value})}>
-                <option value="pix">PIX</option>
-                <option value="boleto">Boleto</option>
-                <option value="transferencia">Transferência</option>
-              </select>
+              <Select value={paymentData.payment_method} onChange={v => setPaymentData({ ...paymentData, payment_method: v })} className="input-lumos w-full"
+                options={[{ value: 'pix', label: 'PIX' }, { value: 'boleto', label: 'Boleto' }, { value: 'transferencia', label: 'Transferência' }]} />
             </div>
           </div>
           <div className="pt-4 flex gap-3">
@@ -866,10 +864,8 @@ export default function ContasReceber() {
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cliente</label>
-            <select required className="input-lumos w-full" value={newReceivableData.client_id} onChange={e => setNewReceivableData({...newReceivableData, client_id: e.target.value})}>
-              <option value="">Selecione um cliente</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <Select value={newReceivableData.client_id} onChange={v => setNewReceivableData({ ...newReceivableData, client_id: v })} className="input-lumos w-full" placeholder="Selecione um cliente"
+              options={[{ value: '', label: 'Selecione um cliente' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -916,10 +912,8 @@ export default function ContasReceber() {
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Cliente</label>
-              <select className="input-lumos w-full h-10 text-sm cursor-pointer" value={editData.client_id} onChange={e => setEditData({ ...editData, client_id: e.target.value })}>
-                <option value="">Sem cliente</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <Select value={editData.client_id} onChange={v => setEditData({ ...editData, client_id: v })} className="input-lumos w-full h-10 text-sm" placeholder="Sem cliente"
+                options={[{ value: '', label: 'Sem cliente' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

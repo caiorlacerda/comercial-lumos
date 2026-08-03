@@ -19,6 +19,7 @@ import {
 import { formatCurrency } from '@/utils/financials';
 import { clsx } from 'clsx';
 import Modal from '@/components/common/Modal';
+import Select from '@/components/ui/Select';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import { useToast } from '@/context/ToastContext';
 
@@ -326,10 +327,8 @@ export default function Templates() {
             </div>
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-lumos-text-secondary" />
-              <select className="input-lumos min-w-[200px]" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
-                <option value="all">Todas as Categorias</option>
-                {budgetCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
+              <Select className="input-lumos min-w-[200px]" value={selectedCategory} onChange={setSelectedCategory}
+                options={[{ value: 'all', label: 'Todas as Categorias' }, ...budgetCategories.map(cat => ({ value: cat, label: cat }))]} />
             </div>
           </div>
 
@@ -487,15 +486,9 @@ export default function Templates() {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-widest">Categoria Base</label>
-              <select 
-                className="input-lumos w-full uppercase text-[11px] font-bold"
-                value={editingBriefing?.category}
-                onChange={e => setEditingBriefing({...editingBriefing!, category: e.target.value as any})}
-              >
-                <option value="digital">Digital</option>
-                <option value="filme">Filme</option>
-                <option value="live">Live</option>
-              </select>
+              <Select className="input-lumos w-full uppercase text-[11px]" value={editingBriefing?.category || ''}
+                onChange={v => setEditingBriefing({ ...editingBriefing!, category: v as any })}
+                options={[{ value: 'digital', label: 'Digital' }, { value: 'filme', label: 'Filme' }, { value: 'live', label: 'Live' }]} />
             </div>
           </div>
           <div className="space-y-2">

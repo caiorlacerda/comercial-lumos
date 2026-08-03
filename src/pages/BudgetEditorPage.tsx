@@ -1667,18 +1667,13 @@ export default function BudgetEditorPage() {
                             />
                           </div>
                           <div className="w-24 flex-shrink-0">
-                            <select
+                            <Select
                               disabled={isReadOnly}
-                              className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary focus:ring-0 cursor-pointer disabled:cursor-default disabled:opacity-70"
+                              className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary disabled:opacity-70"
                               value={item.unit_label}
-                              onChange={(e) => updateItem(item.id, { unit_label: e.target.value })}
-                            >
-                              <option value="diaria">diária</option>
-                              <option value="hora">hora</option>
-                              <option value="video">vídeo</option>
-                              <option value="unidade">unidade</option>
-                              <option value="pacote">pacote</option>
-                            </select>
+                              onChange={(v) => updateItem(item.id, { unit_label: v })}
+                              options={[{ value: 'diaria', label: 'diária' }, { value: 'hora', label: 'hora' }, { value: 'video', label: 'vídeo' }, { value: 'unidade', label: 'unidade' }, { value: 'pacote', label: 'pacote' }]}
+                            />
                           </div>
                           <div className="w-32 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary">
                             {formatCurrency(item.unit_cost * item.quantity)}
@@ -1797,22 +1792,18 @@ export default function BudgetEditorPage() {
 
                 <div>
                   <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-2 block">Status Proposta</label>
-                  <select 
+                  <Select
                     disabled={isReadOnly}
                     className={clsx(
                       "input-lumos w-full font-black uppercase text-[10px] disabled:opacity-70",
-                      budget?.status === 'aprovado' ? 'text-green-600' : 
-                      budget?.status === 'em_negociacao' ? 'text-lumos-yellow text-glow' : 
+                      budget?.status === 'aprovado' ? 'text-green-600' :
+                      budget?.status === 'em_negociacao' ? 'text-lumos-yellow text-glow' :
                       budget?.status === 'reprovado' ? 'text-red-600' : 'text-gray-400'
                     )}
                     value={budget?.status || 'rascunho'}
-                    onChange={(e) => updateBudget({ status: e.target.value as any })}
-                  >
-                    <option value="rascunho">Rascunho</option>
-                    <option value="em_negociacao">Em Negociação</option>
-                    <option value="aprovado">Aprovado</option>
-                    <option value="reprovado">Reprovado</option>
-                  </select>
+                    onChange={(v) => updateBudget({ status: v as any })}
+                    options={[{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovado' }, { value: 'reprovado', label: 'Reprovado' }]}
+                  />
                 </div>
               </div>
 

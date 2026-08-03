@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import {
@@ -365,104 +366,50 @@ export default function FinanceiroRelatorios() {
           {/* Cliente */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Cliente</label>
-            <select
-              className="input-lumos w-full h-9 text-xs"
-              value={selectedClient}
-              onChange={e => setSelectedClient(e.target.value)}
-            >
-              <option value="">Todos</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </select>
+            <Select className="input-lumos w-full h-9 text-xs" value={selectedClient} onChange={setSelectedClient}
+              options={[{ value: '', label: 'Todos' }, ...clients.map(c => ({ value: c.id, label: c.nome }))]} />
           </div>
 
           {/* Categoria */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Categoria</label>
-            <select
-              className="input-lumos w-full h-9 text-xs"
-              value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
-            >
-              <option value="">Todas</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </select>
+            <Select className="input-lumos w-full h-9 text-xs" value={selectedCategory} onChange={setSelectedCategory}
+              options={[{ value: '', label: 'Todas' }, ...categories.map(c => ({ value: c.id, label: c.nome }))]} />
           </div>
 
           {/* Tipo de Serviço */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Tipo Serviço</label>
-            <select
-              className="input-lumos w-full h-9 text-xs"
-              value={selectedService}
-              onChange={e => setSelectedService(e.target.value)}
-            >
-              <option value="">Todos</option>
-              {filteredServiceOptions.map(s => (
-                <option key={s.id} value={s.id}>{s.nome}</option>
-              ))}
-            </select>
+            <Select className="input-lumos w-full h-9 text-xs" value={selectedService} onChange={setSelectedService}
+              options={[{ value: '', label: 'Todos' }, ...filteredServiceOptions.map(s => ({ value: s.id, label: s.nome }))]} />
           </div>
 
           {/* ICP */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">ICP</label>
-            <select
-              className="input-lumos w-full h-9 text-xs"
-              value={selectedICP}
-              onChange={e => setSelectedICP(e.target.value)}
-            >
-              <option value="">Todos</option>
-              <option value="icp_1">ICP 1 (Principal)</option>
-              <option value="icp_2">ICP 2 (Secundário)</option>
-            </select>
+            <Select className="input-lumos w-full h-9 text-xs" value={selectedICP} onChange={setSelectedICP}
+              options={[{ value: '', label: 'Todos' }, { value: 'icp_1', label: 'ICP 1 (Principal)' }, { value: 'icp_2', label: 'ICP 2 (Secundário)' }]} />
           </div>
 
           {/* Status NF */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Status NF</label>
-            <select
-              className="input-lumos w-full h-9 text-xs"
-              value={selectedStatusNF}
-              onChange={e => setSelectedStatusNF(e.target.value)}
-            >
-              <option value="">Todos</option>
-              <option value="emitir_nf">A Emitir NF</option>
-              <option value="pedido_nf_feito">Pedido NF Feito</option>
-            </select>
+            <Select className="input-lumos w-full h-9 text-xs" value={selectedStatusNF} onChange={setSelectedStatusNF}
+              options={[{ value: '', label: 'Todos' }, { value: 'emitir_nf', label: 'A Emitir NF' }, { value: 'pedido_nf_feito', label: 'Pedido NF Feito' }]} />
           </div>
 
           {/* Status Pagamento */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Status Pagamento</label>
-            <select
-              className="input-lumos w-full h-9 text-xs"
-              value={selectedStatusPayment}
-              onChange={e => setSelectedStatusPayment(e.target.value)}
-            >
-              <option value="">Todos</option>
-              <option value="esperando">Aguardando Pgto</option>
-              <option value="atraso">Pagamento em Atraso</option>
-              <option value="recebido">Pago/Recebido</option>
-            </select>
+            <Select className="input-lumos w-full h-9 text-xs" value={selectedStatusPayment} onChange={setSelectedStatusPayment}
+              options={[{ value: '', label: 'Todos' }, { value: 'esperando', label: 'Aguardando Pgto' }, { value: 'atraso', label: 'Pagamento em Atraso' }, { value: 'recebido', label: 'Pago/Recebido' }]} />
           </div>
 
           {/* Período / Ano */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Ano Vencimento</label>
-            <select
-              className="input-lumos w-full h-9 text-xs"
-              value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
-            >
-              <option value="">Todos</option>
-              {yearOptions.map(yr => (
-                <option key={yr} value={yr}>{yr}</option>
-              ))}
-            </select>
+            <Select className="input-lumos w-full h-9 text-xs" value={selectedYear} onChange={setSelectedYear}
+              options={[{ value: '', label: 'Todos' }, ...yearOptions.map(yr => ({ value: String(yr), label: String(yr) }))]} />
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
 import { useAuth } from '@/hooks/useAuth';
@@ -448,16 +449,10 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
                 </a>
 
                 {canManage ? (
-                  <select
-                    value={CATEGORIES.some(c => c.value === doc.tag) ? doc.tag : ''}
-                    onChange={e => recategorize(doc, e.target.value)}
-                    onClick={e => e.stopPropagation()}
-                    title="Mudar categoria (move o arquivo no Drive)"
-                    className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1 cursor-pointer focus:outline-none"
-                  >
-                    {!CATEGORIES.some(c => c.value === doc.tag) && <option value="" disabled>{catLabel(doc.tag)}</option>}
-                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
+                  <Select value={CATEGORIES.some(c => c.value === doc.tag) ? doc.tag : ''} onChange={v => recategorize(doc, v)}
+                    placeholder={catLabel(doc.tag)} ariaLabel="Mudar categoria" menuClassName="min-w-[160px]"
+                    className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1"
+                    options={CATEGORIES} />
                 ) : (
                   <span className="text-[10px] font-black uppercase tracking-wide bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow border border-lumos-yellow/20 rounded px-1.5 py-1">
                     {catLabel(doc.tag)}
@@ -494,9 +489,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
-            <select className="input-lumos w-full" value={createTag} onChange={e => setCreateTag(e.target.value)}>
-              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
+            <Select className="input-lumos w-full" value={createTag} onChange={setCreateTag} options={CATEGORIES} />
           </div>
           <p className="text-[11px] text-lumos-text-secondary">Cria o arquivo na subpasta {catFolderName(createTag)} do projeto no Drive e abre numa nova aba.</p>
           <div className="flex gap-3 pt-1">
@@ -524,9 +517,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Categoria</label>
-              <select className="input-lumos w-full" value={linkTag} onChange={e => setLinkTag(e.target.value)}>
-                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
+              <Select className="input-lumos w-full" value={linkTag} onChange={setLinkTag} options={CATEGORIES} />
             </div>
           </div>
           <div className="flex gap-3 pt-1">

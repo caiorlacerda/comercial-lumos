@@ -10,6 +10,12 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, Quote, Minus, Undo2, Redo2, Link2, Link2Off, FileText,
 } from 'lucide-react';
+import Select from '@/components/ui/Select';
+
+const HEADING_OPTS = [
+  { value: 'p', label: 'Texto' }, { value: '1', label: 'Título 1' }, { value: '2', label: 'Título 2' },
+  { value: '3', label: 'Título 3' }, { value: '4', label: 'Título 4' }, { value: '5', label: 'Título 5' },
+];
 
 export interface MentionPage { id: string; title: string }
 
@@ -177,15 +183,8 @@ export default function RichTextEditor({ value, onChange, editable = true, class
     <div className={clsx('border border-lumos-border rounded-lumos bg-lumos-surface overflow-hidden', className)}>
       {editable && (
         <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b border-lumos-border/60 bg-lumos-bg/30">
-          <select value={headingValue} onChange={e => setHeading(e.target.value)}
-            className="h-7 text-xs font-semibold bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5 outline-none cursor-pointer">
-            <option value="p">Texto</option>
-            <option value="1">Título 1</option>
-            <option value="2">Título 2</option>
-            <option value="3">Título 3</option>
-            <option value="4">Título 4</option>
-            <option value="5">Título 5</option>
-          </select>
+          <Select value={headingValue} onChange={setHeading} options={HEADING_OPTS} menuClassName="w-32"
+            className="h-7 text-xs bg-transparent text-lumos-text-primary border border-lumos-border rounded-md px-1.5" />
           <Sep />
           <TBtn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito (Ctrl+B)"><Bold className="w-4 h-4" /></TBtn>
           <TBtn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico (Ctrl+I)"><Italic className="w-4 h-4" /></TBtn>
