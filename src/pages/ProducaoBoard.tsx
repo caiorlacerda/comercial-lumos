@@ -206,7 +206,9 @@ export default function ProducaoBoard() {
   // Filtros (?projectId= permite chegar já filtrado, ex.: vindo da tab do projeto)
   const [searchTerm, setSearchTerm] = useState('');
   const [projectFilter, setProjectFilter] = useState<string>(() => searchParams.get('projectId') || 'all');
-  const [responsavelFilter, setResponsavelFilter] = useState<string>('all');
+  // ?resp= permite chegar já filtrado por pessoa (ex.: Carga por Pessoa da
+  // Visão Geral); 'none' = tarefas sem responsável.
+  const [responsavelFilter, setResponsavelFilter] = useState<string>(() => searchParams.get('resp') || 'all');
   const [prioridadeFilter, setPrioridadeFilter] = useState<string>('all');
   const [showConcluded, setShowConcluded] = useState(true);
 
@@ -279,7 +281,8 @@ export default function ProducaoBoard() {
     const term = searchTerm.trim().toLowerCase();
     return tasks.filter(t => {
       if (projectFilter !== 'all' && t.project_id !== projectFilter) return false;
-      if (responsavelFilter !== 'all' && t.responsavel_id !== responsavelFilter) return false;
+      if (responsavelFilter === 'none') { if (t.responsavel_id) return false; }
+      else if (responsavelFilter !== 'all' && t.responsavel_id !== responsavelFilter) return false;
       if (prioridadeFilter !== 'all' && t.prioridade !== prioridadeFilter) return false;
       if (term) {
         const haystack = `${t.titulo} ${t.project?.name || ''} ${t.project?.client?.name || ''}`.toLowerCase();
@@ -398,7 +401,7 @@ export default function ProducaoBoard() {
           options={[{ value: 'all', label: 'Todos os projetos' }, ...boardProjects.map(([id, label]) => ({ value: id, label }))]} />
 
         <Select value={responsavelFilter} onChange={setResponsavelFilter} className="input-lumos h-9 text-xs w-auto max-w-[180px]"
-          options={[{ value: 'all', label: 'Todos os responsáveis' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]} />
+          options={[{ value: 'all', label: 'Todos os responsáveis' }, { value: 'none', label: 'Sem responsável' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]} />
 
         <Select value={prioridadeFilter} onChange={setPrioridadeFilter} className="input-lumos h-9 text-xs w-auto"
           options={[{ value: 'all', label: 'Toda prioridade' }, { value: 'alta', label: 'Alta' }, { value: 'media', label: 'Média' }, { value: 'baixa', label: 'Baixa' }]} />
