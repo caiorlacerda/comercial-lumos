@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import {
   Play, Pause, Maximize, Download, Pencil, MoveUpRight,
   Square, Eraser, Send, Clock, Check, Sun, Moon, Volume2, VolumeX, Info, X,
-  MoreVertical, Trash2, AlertTriangle,
+  MoreVertical, Trash2, AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +25,7 @@ interface ReviewData {
     id: string; versao: number; file_name: string; status: string; project_name: string;
     width: number | null; height: number | null; duration_ms: number | null;
     size_bytes: number | null; mime_type: string | null; created_at: string;
+    client_decision: string | null; client_decided_by: string | null; client_decided_at: string | null;
   };
   comments: Comment[];
 }
@@ -105,6 +106,23 @@ export default function RevisaoPublica() {
     localStorage.setItem(`rev_name_${token}`, nameInput.trim());
     setViewerId(vid as string);
     setViewerName(nameInput.trim());
+  };
+
+  // --- Decisão do cliente (aprovar / pedir ajustes) ---
+  const [deciding, setDeciding] = useState(false);
+  const [askChanges, setAskChanges] = useState(false);
+  const decision = data?.video.client_decision ?? null;
+
+  const decide = async (kind: 'aprovado' | 'ajustes') => {
+    if (!viewerId || deciding) return;
+    setDeciding(true);
+    const { data: res, error: err } = await supabase.rpc('review_decide', {
+      p_token: token, p_viewer_id: viewerId, p_decision: kind,
+    });
+    setDeciding(false);
+    if (err || !(res as any)?.ok) { setError('Não foi possível registrar. Tente novamente.'); return; }
+    setAskChanges(false);
+    await load();
   };
 
   // --- Player ---
@@ -477,6 +495,54 @@ export default function RevisaoPublica() {
 
         {/* Comentários */}
         <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:h-full lg:min-h-0', isFs && 'hidden')}>
+
+          {/* Decisão do cliente: aprovar ou pedir ajustes */}
+          {viewerId && (
+            <div className="px-3 py-3 border-b border-lumos-border">
+              {decision === 'aprovado' ? (
+                <div className="rounded-lumos border border-green-500/40 bg-green-500/10 px-3 py-2.5 text-[12px] font-bold text-green-500 flex items-start gap-2">
+                  <Check className="w-4 h-4 flex-shrink-0 mt-px" />
+                  <span>Vídeo aprovado por {data.video.client_decided_by}. A equipe da Lumos já foi avisada.</span>
+                </div>
+              ) : decision === 'ajustes' ? (
+                <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500 flex items-start gap-2">
+                  <RotateCcw className="w-4 h-4 flex-shrink-0 mt-px" />
+                  <div className="min-w-0">
+                    <p>Ajustes solicitados por {data.video.client_decided_by}.</p>
+                    <button onClick={() => decide('aprovado')} disabled={deciding}
+                      className="mt-1 text-[11px] font-bold underline underline-offset-2 hover:text-green-500 disabled:opacity-60">
+                      Mudou de ideia? Aprovar assim mesmo
+                    </button>
+                  </div>
+                </div>
+              ) : askChanges ? (
+                <div className="rounded-lumos border border-lumos-border px-3 py-2.5">
+                  <p className="text-[12px] font-bold text-lumos-text-primary">Comente no vídeo o que precisa mudar e confirme.</p>
+                  <p className="text-[11px] text-lumos-text-secondary mt-0.5">A equipe recebe seus comentários junto com o pedido.</p>
+                  <div className="flex gap-2 mt-2.5">
+                    <button onClick={() => setAskChanges(false)}
+                      className="flex-1 h-8 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
+                    <button onClick={() => decide('ajustes')} disabled={deciding}
+                      className="flex-1 h-8 rounded-lumos bg-amber-500 text-black text-[11px] font-black hover:brightness-95 disabled:opacity-60">
+                      {deciding ? 'Enviando…' : 'Confirmar ajustes'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => decide('aprovado')} disabled={deciding}
+                    className="flex-1 h-10 rounded-lumos bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
+                    <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : 'Aprovar vídeo'}
+                  </button>
+                  <button onClick={() => setAskChanges(true)} disabled={deciding}
+                    className="flex-1 h-10 rounded-lumos border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
+                    <RotateCcw className="w-4 h-4" /> Pedir ajustes
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between">
             <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários</span>
             <span className="text-[10px] font-bold text-lumos-text-secondary/70">{data.comments.length}</span>

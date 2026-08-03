@@ -1,5 +1,5 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, ChevronUp, ChevronRight, Pencil, Layers, Scissors, SlidersHorizontal, X, Upload, Play, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -28,54 +28,26 @@ interface VideoVersion {
   uploaded_by: string | null;
   uploaded_at: string | null;
   fps: number | null;
+  thumb_url: string | null;
+  client_decision: string | null;
+  client_decided_by: string | null;
+  client_decided_at: string | null;
 }
 
 interface Group { id: string; versions: VideoVersion[]; current: VideoVersion; count: number; }
 
-type SortKey = 'versao' | 'file_name' | 'status' | 'task' | 'duration' | 'resolution' | 'format' | 'fps' | 'size' | 'uploader' | 'date' | 'comments';
-const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
-  { key: 'versao', label: 'Versão' },
-  { key: 'file_name', label: 'Nome' },
-  { key: 'status', label: 'Status' },
-  { key: 'task', label: 'Tarefa' },
-  { key: 'duration', label: 'Duração', align: 'right' },
-  { key: 'resolution', label: 'Resolução', align: 'right' },
-  { key: 'format', label: 'Formato' },
-  { key: 'fps', label: 'FPS', align: 'right' },
-  { key: 'size', label: 'Tamanho', align: 'right' },
-  { key: 'uploader', label: 'Enviado por' },
-  { key: 'date', label: 'Data' },
-  { key: 'comments', label: 'Coment.', align: 'right' },
-];
-const FIXED: SortKey[] = ['versao', 'file_name', 'status', 'task'];
-const OPTIONAL = COLUMNS.filter(c => !FIXED.includes(c.key)).map(c => c.key);
-
-const fmtDur = (ms: number | null) => { if (!ms) return '—'; const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-const fmtSize = (b: number | null) => b ? `${(b / 1048576).toFixed(1)} MB` : '—';
+const fmtDur = (ms: number | null) => { if (!ms) return null; const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fmtSize = (b: number | null) => b ? `${(b / 1048576).toFixed(1)} MB` : null;
 const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
 const vLabel = (n: number) => `v${String(n).padStart(2, '0')}`;
-
-
 const driveFileUrl = (id: string) => `https://drive.google.com/file/d/${id}/view`;
-
-function IconBtn({ title, onClick, active, disabled, className, children }: { title: string; onClick?: () => void; active?: boolean; disabled?: boolean; className?: string; children: React.ReactNode }) {
-  return (
-    <button type="button" title={title} disabled={disabled} onClick={onClick}
-      className={clsx('p-1.5 rounded-lumos border transition-colors disabled:opacity-40',
-        active ? 'text-lumos-yellow border-lumos-yellow/40 bg-lumos-yellow/10' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary',
-        className)}>
-      {children}
-    </button>
-  );
-}
+const normTxt = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 interface Props { projectId: string; tasks: { id: string; titulo: string; status?: string }[]; }
 
 export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const { isAdmin, profile, can } = useAuth();
   const toast = useToast();
-  // Produção, editores e atendimento gerenciam a revisão de vídeo (todos têm
-  // 'ordem_do_dia'). Editores têm autonomia para comentar/subir/organizar vídeos.
   const canManage = isAdmin || can('ordem_do_dia');
 
   const [versions, setVersions] = useState<VideoVersion[]>([]);
@@ -85,14 +57,10 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [renaming, setRenaming] = useState<{ id: string; value: string; orig: string } | null>(null);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [stackMenuFor, setStackMenuFor] = useState<string | null>(null);
-  const [unstackMenuFor, setUnstackMenuFor] = useState<string | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [showCols, setShowCols] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
   const [uploadName, setUploadName] = useState('');
@@ -102,17 +70,11 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [visibleCols, setVisibleCols] = useState<Set<SortKey>>(() => {
-    try { const s = JSON.parse(localStorage.getItem('rev_cols_v1') || 'null'); if (Array.isArray(s)) return new Set(s); } catch { /* ignore */ }
-    return new Set(OPTIONAL);
-  });
-  useEffect(() => { localStorage.setItem('rev_cols_v1', JSON.stringify([...visibleCols])); }, [visibleCols]);
+  // Filtros da grade
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const toggleSort = (key: SortKey) => setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
   const toggleGroupOpen = (id: string) => setOpenGroups(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleCol = (k: SortKey) => setVisibleCols(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
-
-  const shownColumns = COLUMNS.filter(c => FIXED.includes(c.key) || visibleCols.has(c.key));
 
   const uploadFolderUrl = driveFolders.upload || driveFolders.root
     ? `https://drive.google.com/drive/folders/${driveFolders.upload || driveFolders.root}`
@@ -128,7 +90,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       const groupIds = [...new Set(vs.map(v => v.group_id).filter(Boolean))] as string[];
       const [linkRes, cmtRes] = await Promise.all([
         groupIds.length ? supabase.from('review_links').select('*').in('group_id', groupIds).eq('active', true) : Promise.resolve({ data: [] as any[] }),
-        versionIds.length ? supabase.from('review_comments').select('video_version_id').in('video_version_id', versionIds) : Promise.resolve({ data: [] as any[] }),
+        versionIds.length ? supabase.from('review_comments').select('video_version_id, is_team').in('video_version_id', versionIds) : Promise.resolve({ data: [] as any[] }),
       ]);
       const lmap: Record<string, any> = {};
       (linkRes.data || []).forEach((l: any) => { if (l.group_id) lmap[l.group_id] = l; });
@@ -207,8 +169,6 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     finally { setScanning(false); }
   };
 
-  // Upload pela plataforma: abre a sessão resumável e manda os bytes direto pro
-  // Google (com progresso). Ao terminar, dispara o scan p/ detectar na revisão.
   const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mpg|mpeg|wmv|mts|m2ts)$/i;
   const uploadFile = async (file: File) => {
     if (!file) return;
@@ -242,7 +202,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     }
   };
 
-  const startRename = (v: VideoVersion) => setRenaming({ id: v.id, value: v.file_name, orig: v.file_name });
+  const startRename = (v: VideoVersion) => { setMenuFor(null); setRenaming({ id: v.id, value: v.file_name, orig: v.file_name }); };
   const saveRename = async () => {
     const r = renaming; setRenaming(null);
     if (!r) return;
@@ -269,49 +229,50 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [projectId, fetchVersions]);
 
-  // --- Agrupamento: 1 linha por vídeo (grupo); versão atual = maior versão ---
+  // Fecha os menus flutuantes ao clicar fora / rolar
+  useEffect(() => {
+    if (!menuFor && !stackMenuFor) return;
+    const close = () => { setMenuFor(null); setStackMenuFor(null); };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [menuFor, stackMenuFor]);
+
+  // --- Agrupamento: 1 card por vídeo (grupo); versão atual = maior versão ---
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, VideoVersion[]>();
     for (const v of versions) { const k = v.group_id || v.id; if (!map.has(k)) map.set(k, []); map.get(k)!.push(v); }
     return [...map.entries()].map(([id, vs]) => {
       const sorted = [...vs].sort((a, b) => b.versao - a.versao);
       return { id, versions: sorted, current: sorted[0], count: sorted.length };
-    });
+    }).sort((a, b) =>
+      new Date(b.current.uploaded_at || b.current.created_at).getTime() -
+      new Date(a.current.uploaded_at || a.current.created_at).getTime()
+    );
   }, [versions]);
 
-  const sortedGroups = useMemo(() => {
-    const val = (g: Group): string | number => {
-      const v = g.current;
-      switch (sort.key) {
-        case 'versao': return v.versao;
-        case 'file_name': return (v.file_name || '').toLowerCase();
-        case 'status': return v.status;
-        case 'task': return (tasks.find(t => t.id === v.task_id)?.titulo || '').toLowerCase();
-        case 'duration': return v.duration_ms || 0;
-        case 'resolution': return (v.height || 0) * 100000 + (v.width || 0);
-        case 'format': return (v.mime_type || '').toLowerCase();
-        case 'fps': return v.fps || 0;
-        case 'size': return v.size_bytes || 0;
-        case 'uploader': return (v.uploaded_by || '').toLowerCase();
-        case 'date': return new Date(v.uploaded_at || v.created_at).getTime();
-        case 'comments': return counts[v.id] || 0;
-      }
-    };
-    return [...groups].sort((a, b) => { const x = val(a), y = val(b); const c = x < y ? -1 : x > y ? 1 : 0; return sort.dir === 'asc' ? c : -c; });
-  }, [groups, sort, counts]);
+  const shownGroups = useMemo(() => groups.filter(g => {
+    if (statusFilter !== 'all' && g.current.status !== statusFilter) return false;
+    if (search.trim()) {
+      const t = tasks.find(x => x.id === g.current.task_id)?.titulo || '';
+      if (!normTxt(g.current.file_name).includes(normTxt(search)) && !normTxt(t).includes(normTxt(search))) return false;
+    }
+    return true;
+  }), [groups, statusFilter, search, tasks]);
 
-  // Vínculo POR VÍDEO (grupo de versões), não por projeto. Antes isso gravava o
-  // mesmo task_id em todos os vídeos do projeto, o que não bate com o fluxo real
-  // (uma tarefa de entrega para cada vídeo).
+  const statusCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    groups.forEach(g => { c[g.current.status] = (c[g.current.status] || 0) + 1; });
+    return c;
+  }, [groups]);
+
   const linkTask = async (g: Group, taskId: string) => {
     const value = taskId || null;
-    const groupId = g.id; // o id do grupo É o group_id
+    const groupId = g.id;
     setVersions(prev => prev.map(v => (v.group_id === groupId ? { ...v, task_id: value } : v)));
     const { error } = await supabase.from('video_versions').update({ task_id: value }).eq('group_id', groupId);
     if (error) { toast.error('Não foi possível vincular a tarefa.'); fetchVersions(); return; }
 
-    // A TAREFA é a fonte da verdade: ao vincular, o VÍDEO passa a seguir o status
-    // dela (e não o contrário).
     if (value) {
       const t = tasks.find(x => x.id === value);
       const next = t?.status ? taskStatusToVideo(t.status, g.current.status) : null;
@@ -329,7 +290,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
 
   const transition = async (v: VideoVersion, next: ReviewStatus) => {
     try {
-      setBusy(v.id);
+      setBusy(v.id); setMenuFor(null);
       const { error } = await supabase.from('video_versions').update({ status: next, updated_at: new Date().toISOString() }).eq('id', v.id);
       if (error) throw error;
       if (v.task_id) await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[next] }).eq('id', v.task_id);
@@ -339,163 +300,241 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     finally { setBusy(null); }
   };
 
-  // Empilha o grupo `source` como versões novas de `target` (a mais nova vira a atual)
   const stackInto = async (source: Group, target: Group) => {
-    setStackMenuFor(null); setBusy(source.current.id);
+    setStackMenuFor(null); setMenuFor(null); setBusy(source.current.id);
     try {
       let n = target.current.versao;
       const ordered = [...source.versions].sort((a, b) => new Date(a.uploaded_at || a.created_at).getTime() - new Date(b.uploaded_at || b.created_at).getTime());
       for (const v of ordered) { n++; await supabase.from('video_versions').update({ group_id: target.id, versao: n }).eq('id', v.id); }
-      await supabase.from('review_links').delete().eq('group_id', source.id); // links órfãos do grupo esvaziado
+      // Mantém o link do grupo de destino; o do grupo esvaziado deixa de existir.
+      await supabase.from('review_links').delete().eq('group_id', source.id);
       toast.success('Vídeos agrupados ✓');
       await fetchVersions();
     } catch { toast.error('Não foi possível agrupar.'); }
     finally { setBusy(null); }
   };
-  // Tira uma versão do stack e a torna um vídeo próprio (v01, grupo novo)
+
   const unstack = async (v: VideoVersion) => {
-    setUnstackMenuFor(null);
-    setBusy(v.id);
+    setMenuFor(null); setBusy(v.id);
     const { error } = await supabase.from('video_versions').update({ group_id: crypto.randomUUID(), versao: 1 }).eq('id', v.id);
     if (error) toast.error('Não foi possível desagrupar.'); else { toast.success('Desagrupado ✓'); await fetchVersions(); }
     setBusy(null);
   };
 
-  const renderCell = (g: Group, key: SortKey) => {
+  // ── Card de um vídeo ──────────────────────────────────────────────────────
+  const VideoCard = ({ g }: { g: Group }) => {
     const v = g.current;
-    switch (key) {
-      case 'versao':
-        return (
-          <button type="button" onClick={() => g.count > 1 && toggleGroupOpen(g.id)}
-            className={clsx('flex items-center gap-1.5', g.count > 1 && 'hover:text-lumos-yellow')} title={g.count > 1 ? 'Ver versões' : undefined}>
-            <span className="text-xs font-black text-lumos-text-primary">{vLabel(v.versao)}</span>
-            {g.count > 1 && <span className="text-[9px] font-black text-lumos-text-secondary bg-lumos-text-secondary/15 rounded-full px-1.5 py-0.5">{g.count}</span>}
-            {g.count > 1 && <ChevronRight className={clsx('w-3 h-3 transition-transform', openGroups.has(g.id) && 'rotate-90')} />}
-          </button>
-        );
-      case 'file_name':
-        return renaming?.id === v.id ? (
-          <input autoFocus value={renaming.value}
-            onChange={e => setRenaming(r => r && { ...r, value: e.target.value })}
-            onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(null); }}
-            onBlur={saveRename}
-            className="input-lumos h-7 text-xs w-full min-w-[160px]" />
-        ) : (
-          <div className="flex items-center gap-1.5 group/name max-w-[280px]">
-            <button type="button" onClick={() => openReview(g)} title="Abrir revisão interna (comentar no vídeo)"
-              className="text-xs font-bold text-lumos-text-primary hover:text-lumos-yellow transition-colors truncate text-left">
-              {v.file_name}
-            </button>
-            <a href={v.drive_web_link || driveFileUrl(v.drive_file_id)} target="_blank" rel="noopener noreferrer" title="Abrir arquivo no Google Drive"
-              className="text-lumos-text-secondary/50 hover:text-lumos-yellow flex-shrink-0"><ExternalLink className="w-3 h-3" /></a>
-            {canManage && <button type="button" title="Renomear" onClick={() => startRename(v)} className="opacity-0 group-hover/name:opacity-100 text-lumos-text-secondary hover:text-lumos-yellow flex-shrink-0"><Pencil className="w-3 h-3" /></button>}
-          </div>
-        );
-      case 'status':
-        return <span className={clsx('inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', STATUS_UI[v.status].color)}>{STATUS_UI[v.status].label}</span>;
-      case 'task': {
-        // Vínculo por VÍDEO. O gatilho do banco já tenta casar pelo nome do arquivo
-        // no upload; aqui dá para corrigir/definir na mão.
-        const linked = tasks.find(t => t.id === v.task_id);
-        if (!canManage) {
-          return linked
-            ? <span className="text-[11px] font-semibold text-lumos-text-secondary truncate max-w-[160px] inline-block align-middle">{linked.titulo}</span>
-            : <span className="text-[10px] font-bold text-red-500/80">sem tarefa</span>;
-        }
-        return (
-          <div onClick={e => e.stopPropagation()} className="flex items-center gap-1">
-            {!v.task_id && <span className="text-[9px] font-black uppercase text-red-500/80 whitespace-nowrap">sem tarefa</span>}
-            <Select
-              value={v.task_id || ''}
-              onChange={val => linkTask(g, val)}
-              align="left"
-              className={clsx('input-lumos h-7 text-[11px] py-0 min-w-[140px] max-w-[190px]', !v.task_id && 'border-red-500/40')}
-              options={[{ value: '', label: 'Nenhuma' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]}
-            />
-          </div>
-        );
-      }
-      case 'duration': return <span className="text-[11px] font-mono font-bold text-lumos-text-secondary">{fmtDur(v.duration_ms)}</span>;
-      case 'resolution': return <span className="text-[11px] font-mono text-lumos-text-secondary">{v.width ? `${v.width}×${v.height}` : '—'}</span>;
-      case 'format': return <span className="text-[11px] font-bold text-lumos-text-secondary">{(v.mime_type || '').split('/')[1]?.toUpperCase() || '—'}</span>;
-      case 'fps': return <span className="text-[11px] font-mono text-lumos-text-secondary">{v.fps ? v.fps : '—'}</span>;
-      case 'size': return <span className="text-[11px] font-mono text-lumos-text-secondary">{fmtSize(v.size_bytes)}</span>;
-      case 'uploader': return <span className="text-[11px] font-semibold text-lumos-text-secondary truncate">{v.uploaded_by || '—'}</span>;
-      case 'date': return <span className="text-[11px] font-mono text-lumos-text-secondary">{fmtDate(v.uploaded_at || v.created_at)}</span>;
-      case 'comments': return (counts[v.id] || 0) > 0 ? <span className="inline-flex items-center gap-1 text-[11px] font-bold text-lumos-text-primary"><MessageSquare className="w-3 h-3" />{counts[v.id]}</span> : <span className="text-[11px] text-lumos-text-secondary">—</span>;
-    }
-  };
+    const link = linksByGroup[g.id];
+    const isBusy = busy === v.id;
+    const linked = tasks.find(t => t.id === v.task_id);
+    const meta = [fmtDur(v.duration_ms), v.width ? `${v.width}×${v.height}` : null, v.fps ? String(v.fps) : null, fmtSize(v.size_bytes)].filter(Boolean).join(' · ');
+    const totalComments = g.versions.reduce((acc, x) => acc + (counts[x.id] || 0), 0);
 
-  const ActionsCell = ({ g }: { g: Group }) => {
-    const v = g.current; const link = linksByGroup[g.id]; const isBusy = busy === v.id;
     return (
-      <div className="flex items-center gap-1 justify-end">
-        <IconBtn title="Revisar e comentar (interno)" onClick={() => openReview(g)} className="!text-lumos-yellow !border-lumos-yellow/40"><Play className="w-3.5 h-3.5" /></IconBtn>
-        {canManage && <span className="w-px h-5 bg-lumos-border mx-0.5" />}
-        {canManage && v.status === 'EM_REVISAO_INTERNA' && (<>
-          <IconBtn title="Aprovar (interno)" disabled={isBusy} onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} className="!text-lumos-yellow"><Check className="w-3.5 h-3.5" /></IconBtn>
-          <IconBtn title="Pedir alteração" disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_INTERNAS')} className="!text-red-400"><RotateCcw className="w-3.5 h-3.5" /></IconBtn>
-        </>)}
-        {canManage && v.status === 'EM_REVISAO_CLIENTE' && (<>
-          <IconBtn title="Cliente aprovou" disabled={isBusy} onClick={() => transition(v, 'APROVADO')} className="!text-green-500"><CircleCheckBig className="w-3.5 h-3.5" /></IconBtn>
-          <IconBtn title="Pedir alteração" disabled={isBusy} onClick={() => transition(v, 'ALTERACOES_CLIENTE')} className="!text-red-400"><RotateCcw className="w-3.5 h-3.5" /></IconBtn>
-        </>)}
-        {v.status === 'APROVADO' && (v.approved_file_id
-          ? <a href={driveFileUrl(v.approved_file_id)} target="_blank" rel="noopener noreferrer" title="Abrir vFINAL aprovado" className="p-1.5 rounded-lumos border border-green-500/30 text-green-500 hover:bg-green-500/10"><CircleCheckBig className="w-3.5 h-3.5" /></a>
-          : <span className="text-[10px] font-bold text-lumos-text-secondary flex items-center gap-1 px-1"><Clock className="w-3 h-3 animate-pulse" /> vFINAL…</span>)}
+      <div className={clsx('border rounded-lumos overflow-hidden bg-lumos-surface transition-colors flex flex-col',
+        selected.has(g.id) ? 'border-lumos-yellow/60' : 'border-lumos-border hover:border-lumos-yellow/30')}>
+        {/* Thumb */}
+        <button type="button" onClick={() => openReview(g)} disabled={isBusy}
+          className="relative aspect-[16/10] bg-lumos-bg/70 flex items-center justify-center group/thumb overflow-hidden">
+          {v.thumb_url
+            ? <img src={v.thumb_url} alt="" className="w-full h-full object-cover" />
+            : <Film className="w-8 h-8 text-lumos-text-secondary/25" />}
+          <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/25 transition-colors flex items-center justify-center">
+            <span className="w-10 h-10 rounded-full bg-lumos-yellow/90 text-black flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+              <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
+            </span>
+          </span>
+          <span className="absolute top-2 left-2 flex items-center gap-1">
+            <span className="text-[9px] font-black bg-black/60 text-white px-2 py-0.5 rounded-full tracking-wider">{vLabel(v.versao)}</span>
+            {g.count > 1 && (
+              <span onClick={e => { e.stopPropagation(); toggleGroupOpen(g.id); }}
+                className="text-[9px] font-black bg-black/60 text-white px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-black/80" title="Ver versões">
+                {g.count} versões
+              </span>
+            )}
+          </span>
+          <span className={clsx('absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border backdrop-blur-sm', STATUS_UI[v.status].color)}>
+            {STATUS_UI[v.status].label}
+          </span>
+          {canManage && (
+            <span onClick={e => { e.stopPropagation(); toggleSelect(g.id); }}
+              className="absolute bottom-2 left-2 w-5 h-5 rounded bg-black/50 flex items-center justify-center">
+              <input type="checkbox" className="accent-lumos-yellow cursor-pointer pointer-events-none" checked={selected.has(g.id)} readOnly />
+            </span>
+          )}
+          {totalComments > 0 && (
+            <span className="absolute bottom-2 right-2 text-[9px] font-black bg-black/60 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
+              <MessageSquare className="w-2.5 h-2.5" /> {totalComments}
+            </span>
+          )}
+        </button>
 
-        {canManage && <span className="w-px h-5 bg-lumos-border mx-0.5" />}
+        {/* Corpo */}
+        <div className="p-3 flex-1 flex flex-col">
+          {renaming?.id === v.id ? (
+            <input autoFocus value={renaming.value}
+              onChange={e => setRenaming(r => r && { ...r, value: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(null); }}
+              onBlur={saveRename}
+              className="input-lumos h-7 text-xs w-full" />
+          ) : (
+            <p className="text-[13px] font-bold text-lumos-text-primary truncate" title={v.file_name}>{v.file_name}</p>
+          )}
+          <p className="text-[10.5px] text-lumos-text-secondary truncate mt-0.5">
+            {meta}{meta && (v.uploaded_by || v.uploaded_at) ? ' · ' : ''}{v.uploaded_by || ''}{v.uploaded_by ? ', ' : ''}{fmtDate(v.uploaded_at || v.created_at)}
+          </p>
 
-        {canManage && (link ? (<>
-          <IconBtn title="Copiar link do cliente" onClick={() => copyLink(link.token)}><Copy className="w-3.5 h-3.5" /></IconBtn>
-          <a href={`/revisao/${link.token}`} target="_blank" rel="noopener noreferrer" title="Abrir link do cliente" className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary"><ExternalLink className="w-3.5 h-3.5" /></a>
-          <IconBtn title="Marca d'água" active={link.watermark} onClick={() => toggleLinkFlag(g.id, 'watermark')}><Droplet className="w-3.5 h-3.5" /></IconBtn>
-          <IconBtn title="Permitir download" active={link.allow_download} onClick={() => toggleLinkFlag(g.id, 'allow_download')}><DownloadCloud className="w-3.5 h-3.5" /></IconBtn>
-        </>) : (
-          <IconBtn title="Gerar link do cliente" disabled={isBusy} onClick={() => generateLink(g)} className="!text-lumos-yellow !border-lumos-yellow/40"><Link2 className="w-3.5 h-3.5" /></IconBtn>
-        ))}
+          {/* Tarefa vinculada */}
+          <div className="mt-2 min-h-[26px]">
+            {canManage ? (
+              <div className="flex items-center gap-1.5">
+                <Select
+                  value={v.task_id || ''}
+                  onChange={val => linkTask(g, val)}
+                  searchable searchPlaceholder="Buscar tarefa…"
+                  placeholder="⚠ Sem tarefa"
+                  menuClassName="min-w-[220px]"
+                  className={clsx('w-full h-7 px-2 rounded text-[10.5px] font-bold border bg-transparent',
+                    v.task_id ? 'border-lumos-border text-lumos-text-secondary hover:border-lumos-yellow/40' : 'border-red-500/40 text-red-400')}
+                  options={[{ value: '', label: 'Sem tarefa' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]}
+                />
+              </div>
+            ) : (
+              <p className="text-[10.5px] text-lumos-text-secondary truncate">
+                {linked ? <>Tarefa: <span className="text-lumos-text-primary font-bold">{linked.titulo}</span></> : <span className="text-red-400 font-bold">Sem tarefa</span>}
+              </p>
+            )}
+          </div>
 
-        {canManage && groups.length > 1 && (
-          <div className="relative">
-            <IconBtn title="Agrupar como versão de outro vídeo" onClick={() => { setUnstackMenuFor(null); setStackMenuFor(stackMenuFor === g.id ? null : g.id); }}><Layers className="w-3.5 h-3.5" /></IconBtn>
-            {stackMenuFor === g.id && (
-              <div className="absolute right-0 top-9 z-30 w-56 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
-                <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Empilhar como versão de:</p>
-                {groups.filter(o => o.id !== g.id).map(o => (
-                  <button key={o.id} type="button" onClick={() => stackInto(g, o)}
-                    className="w-full text-left px-2 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded truncate">
-                    {o.current.file_name}
-                  </button>
-                ))}
+          {/* Decisão do cliente (quando houver) */}
+          {v.client_decision && (
+            <p className={clsx('text-[10.5px] font-bold mt-2 flex items-center gap-1.5',
+              v.client_decision === 'aprovado' ? 'text-green-500' : 'text-red-400')}>
+              <UserCheck className="w-3 h-3 flex-shrink-0" />
+              {v.client_decision === 'aprovado' ? 'Aprovado por' : 'Ajustes pedidos por'} {v.client_decided_by} · {fmtDate(v.client_decided_at)}
+            </p>
+          )}
+
+          {/* Ações: 2 visíveis + menu */}
+          <div className="flex items-center gap-1.5 mt-3">
+            {v.status === 'APROVADO' && v.approved_file_id ? (
+              <a href={driveFileUrl(v.approved_file_id)} target="_blank" rel="noopener noreferrer"
+                className="flex-1 h-8 rounded-lumos bg-green-500/15 border border-green-500/40 text-green-500 text-[11px] font-black flex items-center justify-center gap-1.5 hover:bg-green-500/25">
+                <DownloadCloud className="w-3.5 h-3.5" /> vFINAL
+              </a>
+            ) : v.status === 'APROVADO' ? (
+              <span className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-secondary text-[11px] font-bold flex items-center justify-center gap-1.5">
+                <Clock className="w-3 h-3 animate-pulse" /> vFINAL…
+              </span>
+            ) : (
+              <button type="button" onClick={() => openReview(g)} disabled={isBusy}
+                className="flex-1 h-8 rounded-lumos bg-lumos-yellow/15 border border-lumos-yellow/40 text-lumos-yellow text-[11px] font-black flex items-center justify-center gap-1.5 hover:bg-lumos-yellow/25 disabled:opacity-50">
+                <Play className="w-3.5 h-3.5" /> Revisar
+              </button>
+            )}
+
+            {canManage && v.status === 'EM_REVISAO_INTERNA' ? (
+              <button type="button" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} disabled={isBusy}
+                className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50"
+                title="Marca como pronto pro cliente ver">
+                <Send className="w-3.5 h-3.5" /> Enviar ao cliente
+              </button>
+            ) : canManage && link ? (
+              <button type="button" onClick={() => copyLink(link.token)}
+                className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50">
+                <Copy className="w-3.5 h-3.5" /> Copiar link
+              </button>
+            ) : canManage ? (
+              <button type="button" onClick={() => generateLink(g)} disabled={isBusy}
+                className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50">
+                <Link2 className="w-3.5 h-3.5" /> Link cliente
+              </button>
+            ) : null}
+
+            {canManage && (
+              <div className="relative flex-shrink-0">
+                <button type="button" onClick={() => { setStackMenuFor(null); setMenuFor(menuFor === g.id ? null : g.id); }}
+                  className="w-8 h-8 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 flex items-center justify-center" title="Mais ações">
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+                {menuFor === g.id && (<>
+                  <div className="fixed inset-0 z-[60]" onClick={() => setMenuFor(null)} />
+                  <div className="absolute right-0 bottom-full mb-1 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                    {/* Transições */}
+                    {v.status === 'EM_REVISAO_INTERNA' && (
+                      <MenuItem icon={RotateCcw} label="Pedir alteração (interna)" danger onClick={() => transition(v, 'ALTERACOES_INTERNAS')} />
+                    )}
+                    {v.status === 'EM_REVISAO_CLIENTE' && (<>
+                      <MenuItem icon={CircleCheckBig} label="Marcar: cliente aprovou" onClick={() => transition(v, 'APROVADO')} />
+                      <MenuItem icon={RotateCcw} label="Marcar: cliente pediu ajustes" danger onClick={() => transition(v, 'ALTERACOES_CLIENTE')} />
+                    </>)}
+                    {(v.status === 'ALTERACOES_INTERNAS' || v.status === 'ALTERACOES_CLIENTE') && (<>
+                      <MenuItem icon={Play} label="Voltar pra revisão interna" onClick={() => transition(v, 'EM_REVISAO_INTERNA')} />
+                      <MenuItem icon={Send} label="Enviar ao cliente" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} />
+                    </>)}
+                    {v.status === 'APROVADO' && (
+                      <MenuItem icon={RotateCcw} label="Reabrir (revisão interna)" onClick={() => transition(v, 'EM_REVISAO_INTERNA')} />
+                    )}
+                    <div className="h-px bg-lumos-border my-1" />
+
+                    {/* Link do cliente */}
+                    {link && (<>
+                      <MenuItem icon={ExternalLink} label="Abrir link do cliente" onClick={() => { setMenuFor(null); window.open(`/revisao/${link.token}`, '_blank'); }} />
+                      <MenuItem icon={Droplet} label={link.watermark ? 'Marca d’água: ligada' : 'Marca d’água: desligada'} active={link.watermark} onClick={() => toggleLinkFlag(g.id, 'watermark')} />
+                      <MenuItem icon={DownloadCloud} label={link.allow_download ? 'Download: liberado' : 'Download: bloqueado'} active={link.allow_download} onClick={() => toggleLinkFlag(g.id, 'allow_download')} />
+                      <div className="h-px bg-lumos-border my-1" />
+                    </>)}
+
+                    {/* Arquivo */}
+                    <MenuItem icon={ExternalLink} label="Abrir no Google Drive" onClick={() => { setMenuFor(null); window.open(v.drive_web_link || driveFileUrl(v.drive_file_id), '_blank'); }} />
+                    <MenuItem icon={Pencil} label="Renomear" onClick={() => startRename(v)} />
+                    {g.count > 1 && <MenuItem icon={Scissors} label="Separar esta versão" onClick={() => unstack(v)} />}
+                    {groups.length > 1 && (
+                      <MenuItem icon={Layers} label="Agrupar como versão de…" onClick={() => { setMenuFor(null); setStackMenuFor(g.id); }} />
+                    )}
+                    <div className="h-px bg-lumos-border my-1" />
+                    <MenuItem icon={Trash2} label="Excluir vídeo" danger onClick={() => { setMenuFor(null); setSelected(new Set([g.id])); setConfirmingDelete(true); }} />
+                  </div>
+                </>)}
+
+                {stackMenuFor === g.id && (<>
+                  <div className="fixed inset-0 z-[60]" onClick={() => setStackMenuFor(null)} />
+                  <div className="absolute right-0 bottom-full mb-1 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Empilhar como versão de:</p>
+                    {groups.filter(o => o.id !== g.id).map(o => (
+                      <button key={o.id} type="button" onClick={() => stackInto(g, o)}
+                        className="w-full text-left px-2 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded truncate">
+                        {o.current.file_name}
+                      </button>
+                    ))}
+                  </div>
+                </>)}
               </div>
             )}
           </div>
-        )}
 
-        {canManage && g.count > 1 && (
-          <div className="relative">
-            <IconBtn title="Desagrupar versões deste vídeo" onClick={() => { setStackMenuFor(null); setUnstackMenuFor(unstackMenuFor === g.id ? null : g.id); }}><Scissors className="w-3.5 h-3.5" /></IconBtn>
-            {unstackMenuFor === g.id && (
-              <div className="absolute right-0 top-9 z-30 w-64 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
-                <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Separar versão (vira vídeo próprio):</p>
-                {g.versions.map(v => (
-                  <button key={v.id} type="button" onClick={() => unstack(v)}
-                    className="w-full text-left px-2 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded flex items-center gap-2">
-                    <span className="font-black text-lumos-text-secondary flex-shrink-0">{vLabel(v.versao)}</span>
-                    <span className="truncate">{v.file_name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          {/* Versões (expandido) */}
+          {openGroups.has(g.id) && g.count > 1 && (
+            <div className="mt-3 pt-2 border-t border-dashed border-lumos-border space-y-1">
+              {g.versions.map(ver => (
+                <div key={ver.id} className="flex items-center gap-2 text-[10.5px]">
+                  <span className="font-black text-lumos-text-primary w-8 flex-shrink-0">{vLabel(ver.versao)}</span>
+                  <a href={ver.drive_web_link || driveFileUrl(ver.drive_file_id)} target="_blank" rel="noopener noreferrer"
+                    className="text-lumos-text-secondary hover:text-lumos-yellow truncate flex-1">{ver.file_name}</a>
+                  {(counts[ver.id] || 0) > 0 && <span className="text-lumos-text-secondary flex items-center gap-0.5 flex-shrink-0"><MessageSquare className="w-2.5 h-2.5" />{counts[ver.id]}</span>}
+                  <span className="text-lumos-text-secondary/70 flex-shrink-0">{fmtDate(ver.uploaded_at || ver.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
 
   return (
     <>
-    <div className="card p-6 mt-6 relative"
+    <div className="card p-5 md:p-6 relative"
       onDragOver={e => { if (canManage && !uploading && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(true); } }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFileDragging(false); }}
       onDrop={e => { if (canManage && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(false); const f = e.dataTransfer.files?.[0]; if (f) uploadFile(f); } }}
@@ -510,41 +549,11 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest flex items-center gap-2">
-          <Film className="w-4 h-4 text-lumos-yellow" /> Revisão de Vídeo
+          <Film className="w-4 h-4 text-lumos-yellow" /> Entregas de vídeo
+          {groups.length > 0 && <span className="text-lumos-text-secondary font-bold normal-case tracking-normal">· {groups.length} vídeo{groups.length > 1 ? 's' : ''}</span>}
         </h3>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {versions.length > 0 && (
-            <div className="relative">
-              <button type="button" onClick={() => setShowCols(s => !s)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-all">
-                <SlidersHorizontal className="w-3.5 h-3.5" /> Colunas
-              </button>
-              {showCols && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setShowCols(false)} />
-                  <div className="absolute right-0 top-10 z-30 w-56 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-1 pb-1.5">Colunas visíveis</p>
-                    {COLUMNS.filter(c => FIXED.includes(c.key)).map(c => (
-                      <div key={c.key} className="flex items-center justify-between px-1 py-1 opacity-60">
-                        <span className="text-[11px] font-bold text-lumos-text-primary">{c.label}</span>
-                        <span className="text-[8px] font-black uppercase text-lumos-text-secondary">fixo</span>
-                      </div>
-                    ))}
-                    <div className="h-px bg-lumos-border my-1" />
-                    {COLUMNS.filter(c => OPTIONAL.includes(c.key)).map(c => (
-                      <button key={c.key} type="button" onClick={() => toggleCol(c.key)} className="w-full flex items-center justify-between px-1 py-1 rounded hover:bg-lumos-text-secondary/10">
-                        <span className="text-[11px] font-bold text-lumos-text-primary">{c.label}</span>
-                        <span className={clsx('w-8 h-4 rounded-full relative transition-colors', visibleCols.has(c.key) ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
-                          <span className={clsx('absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all', visibleCols.has(c.key) ? 'left-4' : 'left-0.5')} />
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
           <button type="button" onClick={scanNow} disabled={scanning}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-text-secondary/40 transition-all disabled:opacity-60"
             title="Procura vídeos novos no Drive agora">
@@ -554,7 +563,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             <a href={uploadFolderUrl} target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lumos text-[11px] font-bold border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-all"
               title="Abre a pasta 06_ENTREGA/01_REVISAO no Google Drive">
-              <FolderUp className="w-3.5 h-3.5" /> Abrir no Drive
+              <FolderUp className="w-3.5 h-3.5" /> Drive
             </a>
           )}
           {canManage && (
@@ -565,8 +574,26 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             </button>
           )}
         </div>
-
       </div>
+
+      {/* Busca + filtro por etapa */}
+      {groups.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <div className="relative flex-1 min-w-[170px] max-w-xs">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-lumos-text-secondary pointer-events-none" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar vídeo ou tarefa…" className="input-lumos w-full h-9 pl-9 text-xs" />
+          </div>
+          <div className="w-44 flex-shrink-0">
+            <Select value={statusFilter} onChange={setStatusFilter} ariaLabel="Filtrar por etapa" menuClassName="min-w-[190px]"
+              className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
+                statusFilter !== 'all' ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}
+              options={[{ value: 'all', label: 'Todas as etapas' },
+                ...(Object.keys(STATUS_UI) as ReviewStatus[])
+                  .filter(s => (statusCounts[s] || 0) > 0)
+                  .map(s => ({ value: s, label: `${STATUS_UI[s].label} · ${statusCounts[s]}` }))]} />
+          </div>
+        </div>
+      )}
 
       {uploading && (
         <div className="mb-4 p-3 rounded-lumos border border-lumos-yellow/30 bg-lumos-yellow/5">
@@ -587,7 +614,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             {confirmingDelete ? (
               <>
                 <span className="text-[11px] font-bold text-red-400 hidden sm:inline">Excluir e mandar pra lixeira do Drive?</span>
-                <button onClick={() => setConfirmingDelete(false)} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
+                <button onClick={() => { setConfirmingDelete(false); setSelected(new Set()); }} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
                 <button onClick={deleteSelected} disabled={deleting} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos bg-red-500 text-white hover:brightness-110 disabled:opacity-60 flex items-center gap-1">
                   {deleting ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Confirmar
                 </button>
@@ -611,78 +638,11 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             O editor sobe o corte em <b>06_ENTREGA/01_REVISAO</b> (qualquer nome) e ele aparece aqui — clique em <b>Verificar agora</b> pra trazer na hora.
           </p>
         </div>
+      ) : shownGroups.length === 0 ? (
+        <p className="text-center py-8 text-xs text-lumos-text-secondary italic">Nenhum vídeo com essa busca/filtro.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr className="border-b border-lumos-border">
-                {canManage && (
-                  <th className="w-8 py-2 px-2">
-                    <input type="checkbox" className="accent-lumos-yellow cursor-pointer"
-                      checked={sortedGroups.length > 0 && selected.size === sortedGroups.length}
-                      onChange={e => { setConfirmingDelete(false); setSelected(e.target.checked ? new Set(sortedGroups.map(g => g.id)) : new Set()); }} />
-                  </th>
-                )}
-                {shownColumns.map(col => (
-                  <th key={col.key} onClick={() => toggleSort(col.key)}
-                    className={clsx('py-2 px-2 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 cursor-pointer select-none whitespace-nowrap hover:text-lumos-text-primary transition-colors', col.align === 'right' && 'text-right')}>
-                    <span className={clsx('inline-flex items-center gap-1', col.align === 'right' && 'flex-row-reverse')}>
-                      {col.label}
-                      {sort.key === col.key && (sort.dir === 'asc' ? <ChevronUp className="w-3 h-3 text-lumos-yellow" /> : <ChevronDown className="w-3 h-3 text-lumos-yellow" />)}
-                    </span>
-                  </th>
-                ))}
-                <th className="py-2 px-2 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 text-right whitespace-nowrap">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedGroups.map(g => (
-                <Fragment key={g.id}>
-                  <tr
-                    draggable={canManage && renaming?.id !== g.current.id}
-                    onDragStart={e => { setDragId(g.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', g.id); } catch { /* noop */ } }}
-                    onDragEnd={() => { setDragId(null); setDragOverId(null); }}
-                    onDragOver={e => { if (dragId && dragId !== g.id) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverId !== g.id) setDragOverId(g.id); } }}
-                    onDrop={e => { e.preventDefault(); const src = dragId; setDragId(null); setDragOverId(null); if (src && src !== g.id) { const s = groups.find(x => x.id === src); if (s) stackInto(s, g); } }}
-                    className={clsx('border-b border-lumos-border/40 transition-colors', canManage && renaming?.id !== g.current.id && 'cursor-grab active:cursor-grabbing',
-                      selected.has(g.id) ? 'bg-lumos-yellow/[0.06]' : dragOverId === g.id ? 'bg-lumos-yellow/10 ring-1 ring-inset ring-lumos-yellow/50' : dragId === g.id ? 'opacity-40' : 'hover:bg-lumos-text-secondary/[0.03]')}>
-                    {canManage && (
-                      <td className="w-8 py-2.5 px-2" onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" className="accent-lumos-yellow cursor-pointer" checked={selected.has(g.id)} onChange={() => toggleSelect(g.id)} />
-                      </td>
-                    )}
-                    {shownColumns.map(col => (
-                      <td key={col.key} className={clsx('py-2.5 px-2 align-middle whitespace-nowrap', col.align === 'right' && 'text-right')}>
-                        {renderCell(g, col.key)}
-                      </td>
-                    ))}
-                    <td className="py-2.5 px-2"><ActionsCell g={g} /></td>
-                  </tr>
-
-                  {openGroups.has(g.id) && g.count > 1 && (
-                    <tr className="border-b border-lumos-border/40 bg-lumos-bg/30">
-                      <td colSpan={shownColumns.length + (canManage ? 2 : 1)} className="px-3 py-2">
-                        <div className="pl-4 space-y-1.5">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Versões deste vídeo</p>
-                          {g.versions.map(v => (
-                            <div key={v.id} className="flex items-center gap-3 text-[11px]">
-                              <span className="font-black text-lumos-text-primary w-9 flex-shrink-0">{vLabel(v.versao)}</span>
-                              <a href={v.drive_web_link || driveFileUrl(v.drive_file_id)} target="_blank" rel="noopener noreferrer" className="text-lumos-text-primary hover:text-lumos-yellow truncate max-w-[240px]">{v.file_name}</a>
-                              <span className="text-lumos-text-secondary whitespace-nowrap">{v.uploaded_by || '—'} · {fmtDate(v.uploaded_at || v.created_at)}</span>
-                              {(counts[v.id] || 0) > 0 && <span className="inline-flex items-center gap-1 text-lumos-text-secondary"><MessageSquare className="w-3 h-3" />{counts[v.id]}</span>}
-                              {canManage && g.count > 1 && (
-                                <button type="button" onClick={() => unstack(v)} className="ml-auto text-[10px] font-bold text-lumos-text-secondary hover:text-red-400 flex items-center gap-1 flex-shrink-0"><X className="w-3 h-3" /> Desagrupar</button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {shownGroups.map(g => <VideoCard key={g.id} g={g} />)}
         </div>
       )}
     </div>
@@ -697,5 +657,17 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       />
     )}
     </>
+  );
+}
+
+// Item do menu ⋯ do card
+function MenuItem({ icon: Icon, label, onClick, danger, active }: { icon: any; label: string; onClick: () => void; danger?: boolean; active?: boolean }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={clsx('w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-left transition-colors',
+        danger ? 'text-red-400 hover:bg-red-500/10' : active ? 'text-lumos-yellow hover:bg-lumos-yellow/10' : 'text-lumos-text-primary hover:bg-lumos-text-secondary/10')}>
+      <Icon className="w-3.5 h-3.5 flex-shrink-0" /> {label}
+      {active && <Check className="w-3 h-3 ml-auto" />}
+    </button>
   );
 }
