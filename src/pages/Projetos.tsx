@@ -8,6 +8,7 @@ import ProjectNotes from '@/components/producao/ProjectNotes';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
+import TaskCollaborators from '@/components/producao/TaskCollaborators';
 import { supabase } from '@/lib/supabase';
 
 const STATUS_OPTIONS = [
@@ -766,6 +767,8 @@ export default function Projetos() {
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [taskTags, setTaskTags] = useState<Record<string, string[]>>({}); // taskId -> tagIds
+  // Colaboradores por tarefa (além do responsável): taskId -> userIds
+  const [taskCollabs, setTaskCollabs] = useState<Record<string, string[]>>({});
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -969,7 +972,7 @@ export default function Projetos() {
   // Colaboração em tempo real: mudanças feitas por outros usuários aparecem
   // aqui sem reload (refetch silencioso — sem spinner).
   useRealtimeRefetch(
-    ['projects', 'project_tasks', 'task_comments', 'project_task_tags', 'task_tags', 'task_activity'],
+    ['projects', 'project_tasks', 'task_comments', 'project_task_tags', 'task_tags', 'task_activity', 'task_collaborators'],
     () => {
       fetchData(true);
       if (selectedProjectId) fetchProjectTasks(selectedProjectId, true);
@@ -1095,6 +1098,12 @@ export default function Projetos() {
         const map: Record<string, string[]> = {};
         (ptt || []).forEach((r: any) => { (map[r.task_id] = map[r.task_id] || []).push(r.tag_id); });
         setTaskTags(map);
+
+        // Colaboradores das tarefas do projeto
+        const { data: tc } = await supabase.from('task_collaborators').select('task_id, user_id').in('task_id', ids);
+        const cmap: Record<string, string[]> = {};
+        (tc || []).forEach((r: any) => { (cmap[r.task_id] = cmap[r.task_id] || []).push(r.user_id); });
+        setTaskCollabs(cmap);
         // Atividade recente do projeto (aba Visão geral) — últimos 8 registros.
         const { data: act } = await supabase.from('task_activity')
           .select('*').in('task_id', ids)
@@ -1104,6 +1113,7 @@ export default function Projetos() {
         setRecentActivity((act || []).map((a: any) => ({ ...a, taskTitle: titleOf[a.task_id] || '' })));
       } else {
         setTaskTags({});
+        setTaskCollabs({});
         setRecentActivity([]);
       }
     } catch (err: any) {
@@ -1131,6 +1141,25 @@ export default function Projetos() {
 
   const tagById = (id: string) => allTags.find(t => t.id === id);
 
+  // ── Colaboradores da tarefa (além do responsável) ──────────────────────────
+  const addCollaborator = async (taskId: string, userId: string) => {
+    setTaskCollabs(prev => ({ ...prev, [taskId]: [...(prev[taskId] || []), userId] }));
+    const { error } = await supabase.from('task_collaborators').insert({ task_id: taskId, user_id: userId, added_by: profile?.id ?? null });
+    if (error) {
+      setTaskCollabs(prev => ({ ...prev, [taskId]: (prev[taskId] || []).filter(id => id !== userId) }));
+      toast.error('Não foi possível adicionar a pessoa na tarefa.');
+    }
+  };
+
+  const removeCollaborator = async (taskId: string, userId: string) => {
+    setTaskCollabs(prev => ({ ...prev, [taskId]: (prev[taskId] || []).filter(id => id !== userId) }));
+    const { error } = await supabase.from('task_collaborators').delete().eq('task_id', taskId).eq('user_id', userId);
+    if (error) {
+      setTaskCollabs(prev => ({ ...prev, [taskId]: [...(prev[taskId] || []), userId] }));
+      toast.error('Não foi possível tirar a pessoa da tarefa.');
+    }
+  };
+
   // Lista de tarefas exibida: busca (sem acento) + filtros de tag (OR), status,
   // responsável e "só minhas". Não altera nada no banco — é só exibição.
   const isTaskDone = (t: any) => t.status === 'concluido' || t.status === 'entregue';
@@ -1139,12 +1168,14 @@ export default function Projetos() {
     if (tagFilter.length && !(taskTags[t.id] || []).some(id => tagFilter.includes(id))) return false;
     if (taskSearch.trim() && !normTxt(t.titulo).includes(normTxt(taskSearch))) return false;
     if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
+    // Filtros de pessoa consideram também os colaboradores da tarefa.
+    const collabs = taskCollabs[t.id] || [];
     if (taskAssigneeFilter === 'none') {
-      if (t.responsavel_id || t.responsavel_freela_id) return false;
-    } else if (taskAssigneeFilter !== 'all' && t.responsavel_id !== taskAssigneeFilter && t.responsavel_freela_id !== taskAssigneeFilter) {
+      if (t.responsavel_id || t.responsavel_freela_id || collabs.length) return false;
+    } else if (taskAssigneeFilter !== 'all' && t.responsavel_id !== taskAssigneeFilter && t.responsavel_freela_id !== taskAssigneeFilter && !collabs.includes(taskAssigneeFilter)) {
       return false;
     }
-    if (onlyMine && t.responsavel_id !== profile?.id) return false;
+    if (onlyMine && t.responsavel_id !== profile?.id && !(profile?.id && collabs.includes(profile.id))) return false;
     return true;
   });
   const activeCount = filteredTasks.filter(t => !isTaskDone(t)).length;
@@ -2467,7 +2498,7 @@ export default function Projetos() {
                                       />
                                     </td>
 
-                                    {/* Responsável — busca por nome com foto + status */}
+                                    {/* Responsável (dono) + colaboradores */}
                                     <td className="py-2 px-2">
                                       <div className="flex items-center gap-1.5 min-w-[140px] border border-transparent hover:border-lumos-border/30 rounded px-1">
                                         <AssigneePicker
@@ -2478,6 +2509,14 @@ export default function Projetos() {
                                           users={teamUsers as any}
                                           freelancers={freelancers as PickableUser[]}
                                           onQuickAddFreela={quickAddFreela}
+                                        />
+                                        <TaskCollaborators
+                                          value={taskCollabs[task.id] || []}
+                                          onAdd={(uid) => addCollaborator(task.id, uid)}
+                                          onRemove={(uid) => removeCollaborator(task.id, uid)}
+                                          users={teamUsers as any}
+                                          ownerId={task.responsavel_id}
+                                          canManage={canManage}
                                         />
                                       </div>
                                     </td>
@@ -2614,15 +2653,25 @@ export default function Projetos() {
                                   />
                                 </div>
                                 <div className="flex items-center justify-between gap-3 mt-2 pl-[30px]">
-                                  <AssigneePicker
-                                    value={assigneeOf(task)}
-                                    disabled={!canManage}
-                                    onChange={(v) => setAssignee(task.id, v)}
-                                    className="text-[11px] font-medium text-lumos-text-primary"
-                                    users={teamUsers as any}
-                                    freelancers={freelancers as PickableUser[]}
-                                    onQuickAddFreela={quickAddFreela}
-                                  />
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <AssigneePicker
+                                      value={assigneeOf(task)}
+                                      disabled={!canManage}
+                                      onChange={(v) => setAssignee(task.id, v)}
+                                      className="text-[11px] font-medium text-lumos-text-primary"
+                                      users={teamUsers as any}
+                                      freelancers={freelancers as PickableUser[]}
+                                      onQuickAddFreela={quickAddFreela}
+                                    />
+                                    <TaskCollaborators
+                                      value={taskCollabs[task.id] || []}
+                                      onAdd={(uid) => addCollaborator(task.id, uid)}
+                                      onRemove={(uid) => removeCollaborator(task.id, uid)}
+                                      users={teamUsers as any}
+                                      ownerId={task.responsavel_id}
+                                      canManage={canManage}
+                                    />
+                                  </div>
                                   <input
                                     type="date"
                                     value={task.data_fim || ''}
@@ -3028,6 +3077,23 @@ export default function Projetos() {
                     />
                   </div>
 
+                </div>
+
+                {/* Quem mais está na tarefa (colaboradores) */}
+                <div className="space-y-1.5">
+                  <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">
+                    Também na tarefa
+                    <span className="normal-case tracking-normal font-bold text-lumos-text-secondary/60 ml-1.5">além do responsável</span>
+                  </span>
+                  <TaskCollaborators
+                    value={taskCollabs[selectedTask.id] || []}
+                    onAdd={(uid) => addCollaborator(selectedTask.id, uid)}
+                    onRemove={(uid) => removeCollaborator(selectedTask.id, uid)}
+                    users={teamUsers as any}
+                    ownerId={selectedTask.responsavel_id}
+                    canManage={canManage}
+                    variant="full"
+                  />
                 </div>
 
                 {/* Tags */}
