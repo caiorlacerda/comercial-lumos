@@ -22,6 +22,9 @@ export const NOTIFICATION_EVENTS = {
   COMENTARIOS_CLIENTE_VIDEO: { key: 'comentarios_cliente_video', category: 'producao', label: 'Cliente comentou no seu vídeo (em lote, 30 min após o último)', defaultEnabled: true, priority: 'high' },
   VIDEO_APROVADO_CLIENTE: { key: 'video_aprovado_cliente', category: 'producao', label: 'Cliente aprovou um vídeo', defaultEnabled: true, priority: 'high' },
   VIDEO_AJUSTES_CLIENTE: { key: 'video_ajustes_cliente', category: 'producao', label: 'Cliente pediu ajustes num vídeo', defaultEnabled: true, priority: 'high' },
+  VIDEO_NOVO: { key: 'video_novo', category: 'producao', label: 'Vídeo novo (ou nova versão) entrou na revisão', defaultEnabled: true },
+  TAREFA_MUDOU_ETAPA: { key: 'tarefa_mudou_etapa', category: 'producao', label: 'Uma tarefa sua mudou de etapa', defaultEnabled: true },
+  CLIENTE_ABRIU_LINK: { key: 'cliente_abriu_link', category: 'producao', label: 'Cliente abriu o link de revisão', defaultEnabled: true },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },

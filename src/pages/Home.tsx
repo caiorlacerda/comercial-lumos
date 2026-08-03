@@ -206,11 +206,13 @@ export default function Home() {
     const map: Record<string, { label: string; class: string }> = {
       'na_fila': { label: 'Na fila', class: 'bg-lumos-text-secondary/15 text-lumos-text-secondary' },
       'pausado': { label: 'Pausado', class: 'bg-lumos-text-secondary/15 text-lumos-text-secondary' },
-      'em_progresso': { label: 'Em andamento', class: 'bg-orange-500/15 text-orange-400' },
+      'roteiro': { label: 'Roteiro', class: 'bg-indigo-500/15 text-indigo-400' },
+      'captacao': { label: 'Captação', class: 'bg-sky-500/15 text-sky-400' },
+      'em_progresso': { label: 'Edição', class: 'bg-orange-500/15 text-orange-400' },
       'revisao_interna': { label: 'Revisão interna', class: 'bg-purple-500/15 text-purple-400' },
       'revisao_cliente': { label: 'Com o cliente', class: 'bg-amber-500/15 text-amber-400' },
       'alteracoes': { label: 'Ajustes', class: 'bg-red-500/15 text-red-400' },
-      'concluido': { label: 'Concluído', class: 'bg-green-500/15 text-green-400' },
+      'concluido': { label: 'Aprovado', class: 'bg-green-500/15 text-green-400' },
     };
     const details = map[status] || { label: status, class: 'bg-lumos-text-secondary/15 text-lumos-text-secondary' };
     return (

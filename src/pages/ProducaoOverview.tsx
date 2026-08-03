@@ -45,7 +45,7 @@ interface ActivityItem {
 const CONCLUDED_STATUSES = new Set([...TASK_STATUS_GROUPS.concluido.map(s => s.value), 'entregue']);
 
 // Etapas abertas na ordem do fluxo (mesma régua do hub de projetos).
-const OPEN_STAGES = ['na_fila', 'pausado', 'em_progresso', 'revisao_interna', 'revisao_cliente', 'alteracoes'];
+const OPEN_STAGES = ['na_fila', 'roteiro', 'captacao', 'em_progresso', 'revisao_interna', 'revisao_cliente', 'alteracoes', 'pausado'];
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 const plusDaysStr = (n: number) => {
