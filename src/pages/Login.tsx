@@ -11,6 +11,13 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeoutMessage, setTimeoutMessage] = useState(false);
+  // "Esqueci minha senha": form embutido no card. A resposta é sempre a mesma
+  // (genérica), independente do e-mail existir — quem decide o que enviar é a
+  // edge function forgot-password (redefinição ou reenvio de convite).
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSending, setForgotSending] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useTheme();
@@ -38,6 +45,17 @@ export default function Login() {
     } else {
       navigate('/');
     }
+  };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim() || forgotSending) return;
+    setForgotSending(true);
+    // Best-effort: mesmo se a função falhar, mostramos a mensagem genérica
+    // (não dá pra saber daqui se o e-mail existe, e é assim que deve ser).
+    await supabase.functions.invoke('forgot-password', { body: { email: forgotEmail.trim() } }).catch(() => {});
+    setForgotSending(false);
+    setForgotSent(true);
   };
 
   return (
@@ -115,7 +133,43 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-[10px] font-bold text-lumos-text-secondary uppercase tracking-tighter opacity-50">
+          {/* Esqueci minha senha */}
+          <div className="mt-5">
+            {!forgotOpen ? (
+              <button
+                type="button"
+                onClick={() => { setForgotOpen(true); setForgotEmail(email); setForgotSent(false); }}
+                className="w-full text-center text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-yellow transition-colors underline underline-offset-4"
+              >
+                Esqueci minha senha
+              </button>
+            ) : forgotSent ? (
+              <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lumos text-green-500 text-xs font-bold animate-in fade-in slide-in-from-top-2">
+                Se este e-mail estiver cadastrado, o link chega em instantes. Olhe também a caixa de spam. Se o seu convite estava pendente, vai chegar um convite novo.
+              </div>
+            ) : (
+              <form onSubmit={handleForgot} className="p-4 bg-lumos-bg/40 border border-lumos-border rounded-lumos space-y-3 animate-in fade-in slide-in-from-top-2">
+                <p className="text-[11px] font-bold text-lumos-text-primary">Digite seu e-mail e enviamos um link pra criar uma senha nova.</p>
+                <input
+                  type="email"
+                  required
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="input-lumos w-full h-10 text-sm"
+                  placeholder="seu@email.com"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setForgotOpen(false)} className="btn-secondary flex-1 h-9 text-xs">Cancelar</button>
+                  <button type="submit" disabled={forgotSending} className="btn-primary flex-1 h-9 text-xs font-black flex items-center justify-center gap-2">
+                    {forgotSending ? <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : 'Enviar link'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          <p className="mt-6 text-center text-[10px] font-bold text-lumos-text-secondary uppercase tracking-tighter opacity-50">
             Acesso restrito a administradores Produtora Lumos.
           </p>
         </div>
