@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck } from 'lucide-react';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -73,6 +73,11 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   // Filtros da grade
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  // Grade (cards) ou lista (linhas compactas) — preferência persiste por navegador.
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    try { return (localStorage.getItem('lumos_entregas_view') as 'grid' | 'list') || 'grid'; } catch { return 'grid'; }
+  });
+  useEffect(() => { try { localStorage.setItem('lumos_entregas_view', viewMode); } catch { /* ignore */ } }, [viewMode]);
 
   const toggleGroupOpen = (id: string) => setOpenGroups(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -321,10 +326,116 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     setBusy(null);
   };
 
-  // ── Card de um vídeo ──────────────────────────────────────────────────────
-  const VideoCard = ({ g }: { g: Group }) => {
+  // ── Ações de um vídeo: 2 botões visíveis + menu ⋯ (compartilhado grade/lista) ──
+  const RowActions = ({ g, compact }: { g: Group; compact?: boolean }) => {
     const v = g.current;
     const link = linksByGroup[g.id];
+    const isBusy = busy === v.id;
+    const h = compact ? 'h-7' : 'h-8';
+    const iconSz = compact ? 'w-3 h-3' : 'w-3.5 h-3.5';
+    return (
+      <div className={clsx('flex items-center gap-1.5', compact && 'flex-shrink-0')}>
+        {v.status === 'APROVADO' && v.approved_file_id ? (
+          <a href={driveFileUrl(v.approved_file_id)} target="_blank" rel="noopener noreferrer"
+            className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos bg-green-500/15 border border-green-500/40 text-green-500 text-[11px] font-black flex items-center justify-center gap-1.5 hover:bg-green-500/25 whitespace-nowrap')}>
+            <DownloadCloud className={iconSz} /> vFINAL
+          </a>
+        ) : v.status === 'APROVADO' ? (
+          <span className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-secondary text-[11px] font-bold flex items-center justify-center gap-1.5 whitespace-nowrap')}>
+            <Clock className="w-3 h-3 animate-pulse" /> {compact ? '…' : 'vFINAL…'}
+          </span>
+        ) : (
+          <button type="button" onClick={() => openReview(g)} disabled={isBusy}
+            className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos bg-lumos-yellow/15 border border-lumos-yellow/40 text-lumos-yellow text-[11px] font-black flex items-center justify-center gap-1.5 hover:bg-lumos-yellow/25 disabled:opacity-50 whitespace-nowrap')}>
+            <Play className={iconSz} /> Revisar
+          </button>
+        )}
+
+        {canManage && v.status === 'EM_REVISAO_INTERNA' ? (
+          <button type="button" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} disabled={isBusy}
+            className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50 whitespace-nowrap')}
+            title="Marca como pronto pro cliente ver">
+            <Send className={iconSz} /> {compact ? '' : 'Enviar ao cliente'}
+          </button>
+        ) : canManage && link ? (
+          <button type="button" onClick={() => copyLink(link.token)}
+            className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 whitespace-nowrap')}>
+            <Copy className={iconSz} /> {compact ? '' : 'Copiar link'}
+          </button>
+        ) : canManage ? (
+          <button type="button" onClick={() => generateLink(g)} disabled={isBusy}
+            className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50 whitespace-nowrap')}>
+            <Link2 className={iconSz} /> {compact ? '' : 'Link cliente'}
+          </button>
+        ) : null}
+
+        {canManage && (
+          <div className="relative flex-shrink-0">
+            <button type="button" onClick={() => { setStackMenuFor(null); setMenuFor(menuFor === g.id ? null : g.id); }}
+              className={clsx(h, 'w-8 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 flex items-center justify-center')} title="Mais ações">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {menuFor === g.id && (<>
+              <div className="fixed inset-0 z-[60]" onClick={() => setMenuFor(null)} />
+              <div className={clsx('absolute right-0 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 max-h-[70vh] overflow-y-auto custom-scrollbar', compact ? 'top-full mt-1' : 'bottom-full mb-1')}>
+                {/* Transições */}
+                {v.status === 'EM_REVISAO_INTERNA' && (
+                  <MenuItem icon={RotateCcw} label="Pedir alteração (interna)" danger onClick={() => transition(v, 'ALTERACOES_INTERNAS')} />
+                )}
+                {v.status === 'EM_REVISAO_CLIENTE' && (<>
+                  <MenuItem icon={CircleCheckBig} label="Marcar: cliente aprovou" onClick={() => transition(v, 'APROVADO')} />
+                  <MenuItem icon={RotateCcw} label="Marcar: cliente pediu ajustes" danger onClick={() => transition(v, 'ALTERACOES_CLIENTE')} />
+                </>)}
+                {(v.status === 'ALTERACOES_INTERNAS' || v.status === 'ALTERACOES_CLIENTE') && (<>
+                  <MenuItem icon={Play} label="Voltar pra revisão interna" onClick={() => transition(v, 'EM_REVISAO_INTERNA')} />
+                  <MenuItem icon={Send} label="Enviar ao cliente" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} />
+                </>)}
+                {v.status === 'APROVADO' && (
+                  <MenuItem icon={RotateCcw} label="Reabrir (revisão interna)" onClick={() => transition(v, 'EM_REVISAO_INTERNA')} />
+                )}
+                <div className="h-px bg-lumos-border my-1" />
+
+                {/* Link do cliente */}
+                {link && (<>
+                  <MenuItem icon={ExternalLink} label="Abrir link do cliente" onClick={() => { setMenuFor(null); window.open(`/revisao/${link.token}`, '_blank'); }} />
+                  <MenuItem icon={Droplet} label={link.watermark ? 'Marca d’água: ligada' : 'Marca d’água: desligada'} active={link.watermark} onClick={() => toggleLinkFlag(g.id, 'watermark')} />
+                  <MenuItem icon={DownloadCloud} label={link.allow_download ? 'Download: liberado' : 'Download: bloqueado'} active={link.allow_download} onClick={() => toggleLinkFlag(g.id, 'allow_download')} />
+                  <div className="h-px bg-lumos-border my-1" />
+                </>)}
+
+                {/* Arquivo */}
+                <MenuItem icon={ExternalLink} label="Abrir no Google Drive" onClick={() => { setMenuFor(null); window.open(v.drive_web_link || driveFileUrl(v.drive_file_id), '_blank'); }} />
+                <MenuItem icon={Pencil} label="Renomear" onClick={() => startRename(v)} />
+                {g.count > 1 && <MenuItem icon={Scissors} label="Separar esta versão" onClick={() => unstack(v)} />}
+                {groups.length > 1 && (
+                  <MenuItem icon={Layers} label="Agrupar como versão de…" onClick={() => { setMenuFor(null); setStackMenuFor(g.id); }} />
+                )}
+                <div className="h-px bg-lumos-border my-1" />
+                <MenuItem icon={Trash2} label="Excluir vídeo" danger onClick={() => { setMenuFor(null); setSelected(new Set([g.id])); setConfirmingDelete(true); }} />
+              </div>
+            </>)}
+
+            {stackMenuFor === g.id && (<>
+              <div className="fixed inset-0 z-[60]" onClick={() => setStackMenuFor(null)} />
+              <div className={clsx('absolute right-0 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1', compact ? 'top-full mt-1' : 'bottom-full mb-1')}>
+                <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Empilhar como versão de:</p>
+                {groups.filter(o => o.id !== g.id).map(o => (
+                  <button key={o.id} type="button" onClick={() => stackInto(g, o)}
+                    className="w-full text-left px-2 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded truncate">
+                    {o.current.file_name}
+                  </button>
+                ))}
+              </div>
+            </>)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Card de um vídeo (grade) ─────────────────────────────────────────────
+  const VideoCard = ({ g }: { g: Group }) => {
+    const v = g.current;
     const isBusy = busy === v.id;
     const linked = tasks.find(t => t.id === v.task_id);
     const meta = [fmtDur(v.duration_ms), v.width ? `${v.width}×${v.height}` : null, v.fps ? String(v.fps) : null, fmtSize(v.size_bytes)].filter(Boolean).join(' · ');
@@ -416,101 +527,8 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           )}
 
           {/* Ações: 2 visíveis + menu */}
-          <div className="flex items-center gap-1.5 mt-3">
-            {v.status === 'APROVADO' && v.approved_file_id ? (
-              <a href={driveFileUrl(v.approved_file_id)} target="_blank" rel="noopener noreferrer"
-                className="flex-1 h-8 rounded-lumos bg-green-500/15 border border-green-500/40 text-green-500 text-[11px] font-black flex items-center justify-center gap-1.5 hover:bg-green-500/25">
-                <DownloadCloud className="w-3.5 h-3.5" /> vFINAL
-              </a>
-            ) : v.status === 'APROVADO' ? (
-              <span className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-secondary text-[11px] font-bold flex items-center justify-center gap-1.5">
-                <Clock className="w-3 h-3 animate-pulse" /> vFINAL…
-              </span>
-            ) : (
-              <button type="button" onClick={() => openReview(g)} disabled={isBusy}
-                className="flex-1 h-8 rounded-lumos bg-lumos-yellow/15 border border-lumos-yellow/40 text-lumos-yellow text-[11px] font-black flex items-center justify-center gap-1.5 hover:bg-lumos-yellow/25 disabled:opacity-50">
-                <Play className="w-3.5 h-3.5" /> Revisar
-              </button>
-            )}
-
-            {canManage && v.status === 'EM_REVISAO_INTERNA' ? (
-              <button type="button" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} disabled={isBusy}
-                className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50"
-                title="Marca como pronto pro cliente ver">
-                <Send className="w-3.5 h-3.5" /> Enviar ao cliente
-              </button>
-            ) : canManage && link ? (
-              <button type="button" onClick={() => copyLink(link.token)}
-                className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50">
-                <Copy className="w-3.5 h-3.5" /> Copiar link
-              </button>
-            ) : canManage ? (
-              <button type="button" onClick={() => generateLink(g)} disabled={isBusy}
-                className="flex-1 h-8 rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50">
-                <Link2 className="w-3.5 h-3.5" /> Link cliente
-              </button>
-            ) : null}
-
-            {canManage && (
-              <div className="relative flex-shrink-0">
-                <button type="button" onClick={() => { setStackMenuFor(null); setMenuFor(menuFor === g.id ? null : g.id); }}
-                  className="w-8 h-8 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 flex items-center justify-center" title="Mais ações">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
-                {menuFor === g.id && (<>
-                  <div className="fixed inset-0 z-[60]" onClick={() => setMenuFor(null)} />
-                  <div className="absolute right-0 bottom-full mb-1 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                    {/* Transições */}
-                    {v.status === 'EM_REVISAO_INTERNA' && (
-                      <MenuItem icon={RotateCcw} label="Pedir alteração (interna)" danger onClick={() => transition(v, 'ALTERACOES_INTERNAS')} />
-                    )}
-                    {v.status === 'EM_REVISAO_CLIENTE' && (<>
-                      <MenuItem icon={CircleCheckBig} label="Marcar: cliente aprovou" onClick={() => transition(v, 'APROVADO')} />
-                      <MenuItem icon={RotateCcw} label="Marcar: cliente pediu ajustes" danger onClick={() => transition(v, 'ALTERACOES_CLIENTE')} />
-                    </>)}
-                    {(v.status === 'ALTERACOES_INTERNAS' || v.status === 'ALTERACOES_CLIENTE') && (<>
-                      <MenuItem icon={Play} label="Voltar pra revisão interna" onClick={() => transition(v, 'EM_REVISAO_INTERNA')} />
-                      <MenuItem icon={Send} label="Enviar ao cliente" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} />
-                    </>)}
-                    {v.status === 'APROVADO' && (
-                      <MenuItem icon={RotateCcw} label="Reabrir (revisão interna)" onClick={() => transition(v, 'EM_REVISAO_INTERNA')} />
-                    )}
-                    <div className="h-px bg-lumos-border my-1" />
-
-                    {/* Link do cliente */}
-                    {link && (<>
-                      <MenuItem icon={ExternalLink} label="Abrir link do cliente" onClick={() => { setMenuFor(null); window.open(`/revisao/${link.token}`, '_blank'); }} />
-                      <MenuItem icon={Droplet} label={link.watermark ? 'Marca d’água: ligada' : 'Marca d’água: desligada'} active={link.watermark} onClick={() => toggleLinkFlag(g.id, 'watermark')} />
-                      <MenuItem icon={DownloadCloud} label={link.allow_download ? 'Download: liberado' : 'Download: bloqueado'} active={link.allow_download} onClick={() => toggleLinkFlag(g.id, 'allow_download')} />
-                      <div className="h-px bg-lumos-border my-1" />
-                    </>)}
-
-                    {/* Arquivo */}
-                    <MenuItem icon={ExternalLink} label="Abrir no Google Drive" onClick={() => { setMenuFor(null); window.open(v.drive_web_link || driveFileUrl(v.drive_file_id), '_blank'); }} />
-                    <MenuItem icon={Pencil} label="Renomear" onClick={() => startRename(v)} />
-                    {g.count > 1 && <MenuItem icon={Scissors} label="Separar esta versão" onClick={() => unstack(v)} />}
-                    {groups.length > 1 && (
-                      <MenuItem icon={Layers} label="Agrupar como versão de…" onClick={() => { setMenuFor(null); setStackMenuFor(g.id); }} />
-                    )}
-                    <div className="h-px bg-lumos-border my-1" />
-                    <MenuItem icon={Trash2} label="Excluir vídeo" danger onClick={() => { setMenuFor(null); setSelected(new Set([g.id])); setConfirmingDelete(true); }} />
-                  </div>
-                </>)}
-
-                {stackMenuFor === g.id && (<>
-                  <div className="fixed inset-0 z-[60]" onClick={() => setStackMenuFor(null)} />
-                  <div className="absolute right-0 bottom-full mb-1 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Empilhar como versão de:</p>
-                    {groups.filter(o => o.id !== g.id).map(o => (
-                      <button key={o.id} type="button" onClick={() => stackInto(g, o)}
-                        className="w-full text-left px-2 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded truncate">
-                        {o.current.file_name}
-                      </button>
-                    ))}
-                  </div>
-                </>)}
-              </div>
-            )}
+          <div className="mt-3">
+            <RowActions g={g} />
           </div>
 
           {/* Versões (expandido) */}
@@ -528,6 +546,108 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
             </div>
           )}
         </div>
+      </div>
+    );
+  };
+
+  // ── Linha de um vídeo (lista) — mesma informação do card, mais densa ─────
+  const VideoRow = ({ g }: { g: Group }) => {
+    const v = g.current;
+    const linked = tasks.find(t => t.id === v.task_id);
+    const meta = [fmtDur(v.duration_ms), v.width ? `${v.width}×${v.height}` : null, fmtSize(v.size_bytes)].filter(Boolean).join(' · ');
+    const totalComments = g.versions.reduce((acc, x) => acc + (counts[x.id] || 0), 0);
+
+    return (
+      <div className="border-b border-lumos-border/60 last:border-b-0">
+      <div className={clsx('flex items-center gap-3 px-3 py-2.5 transition-colors',
+        selected.has(g.id) ? 'bg-lumos-yellow/[0.06]' : 'hover:bg-lumos-text-secondary/[0.03]')}>
+        {canManage && (
+          <input type="checkbox" className="accent-lumos-yellow cursor-pointer flex-shrink-0" checked={selected.has(g.id)} onChange={() => toggleSelect(g.id)} />
+        )}
+
+        {/* Thumb pequena */}
+        <button type="button" onClick={() => openReview(g)}
+          className="relative w-16 h-10 rounded bg-lumos-bg/70 flex items-center justify-center overflow-hidden flex-shrink-0 group/thumb">
+          {v.thumb_url ? <img src={v.thumb_url} alt="" className="w-full h-full object-cover" /> : <Film className="w-4 h-4 text-lumos-text-secondary/25" />}
+          <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/30 transition-colors flex items-center justify-center">
+            <Play className="w-3 h-3 text-white opacity-0 group-hover/thumb:opacity-100" fill="currentColor" />
+          </span>
+        </button>
+
+        {/* Nome + meta */}
+        <div className="min-w-0 flex-1 max-w-[260px]">
+          {renaming?.id === v.id ? (
+            <input autoFocus value={renaming.value}
+              onChange={e => setRenaming(r => r && { ...r, value: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(null); }}
+              onBlur={saveRename}
+              className="input-lumos h-7 text-xs w-full" onClick={e => e.stopPropagation()} />
+          ) : (
+            <p className="text-[12.5px] font-bold text-lumos-text-primary truncate" title={v.file_name}>{v.file_name}</p>
+          )}
+          <p className="text-[10px] text-lumos-text-secondary truncate">{meta || '—'}</p>
+        </div>
+
+        {/* Versão + comentários */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 w-20">
+          <span className="text-[9px] font-black bg-lumos-text-secondary/10 text-lumos-text-secondary px-1.5 py-0.5 rounded-full">{vLabel(v.versao)}</span>
+          {g.count > 1 && (
+            <button type="button" onClick={() => toggleGroupOpen(g.id)} className="text-[9px] font-black text-lumos-text-secondary hover:text-lumos-yellow" title="Ver versões">×{g.count}</button>
+          )}
+          {totalComments > 0 && (
+            <span className="text-[9px] font-bold text-lumos-text-secondary flex items-center gap-0.5"><MessageSquare className="w-2.5 h-2.5" />{totalComments}</span>
+          )}
+        </div>
+
+        {/* Status */}
+        <span className={clsx('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 w-[132px] text-center', STATUS_UI[v.status].color)}>
+          {STATUS_UI[v.status].label}
+        </span>
+
+        {/* Tarefa */}
+        <div className="w-40 flex-shrink-0">
+          {canManage ? (
+            <Select
+              value={v.task_id || ''}
+              onChange={val => linkTask(g, val)}
+              searchable searchPlaceholder="Buscar tarefa…"
+              placeholder="⚠ Sem tarefa"
+              menuClassName="min-w-[220px]"
+              className={clsx('w-full h-7 px-2 rounded text-[10.5px] font-bold border bg-transparent',
+                v.task_id ? 'border-lumos-border text-lumos-text-secondary hover:border-lumos-yellow/40' : 'border-red-500/40 text-red-400')}
+              options={[{ value: '', label: 'Sem tarefa' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]}
+            />
+          ) : (
+            <p className="text-[10.5px] text-lumos-text-secondary truncate">
+              {linked ? linked.titulo : <span className="text-red-400 font-bold">Sem tarefa</span>}
+            </p>
+          )}
+        </div>
+
+        {/* Decisão do cliente */}
+        <div className="w-8 flex-shrink-0 flex justify-center" title={v.client_decision ? `${v.client_decision === 'aprovado' ? 'Aprovado' : 'Ajustes pedidos'} por ${v.client_decided_by} · ${fmtDate(v.client_decided_at)}` : undefined}>
+          {v.client_decision && (
+            <UserCheck className={clsx('w-3.5 h-3.5', v.client_decision === 'aprovado' ? 'text-green-500' : 'text-red-400')} />
+          )}
+        </div>
+
+        <RowActions g={g} compact />
+      </div>
+
+      {/* Versões (expandido) */}
+      {openGroups.has(g.id) && g.count > 1 && (
+        <div className="px-4 pb-2.5 pl-[52px] space-y-1 bg-lumos-bg/20">
+          {g.versions.map(ver => (
+            <div key={ver.id} className="flex items-center gap-2 text-[10.5px]">
+              <span className="font-black text-lumos-text-primary w-8 flex-shrink-0">{vLabel(ver.versao)}</span>
+              <a href={ver.drive_web_link || driveFileUrl(ver.drive_file_id)} target="_blank" rel="noopener noreferrer"
+                className="text-lumos-text-secondary hover:text-lumos-yellow truncate flex-1 max-w-xs">{ver.file_name}</a>
+              {(counts[ver.id] || 0) > 0 && <span className="text-lumos-text-secondary flex items-center gap-0.5 flex-shrink-0"><MessageSquare className="w-2.5 h-2.5" />{counts[ver.id]}</span>}
+              <span className="text-lumos-text-secondary/70 flex-shrink-0">{fmtDate(ver.uploaded_at || ver.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
       </div>
     );
   };
@@ -592,6 +712,17 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                   .filter(s => (statusCounts[s] || 0) > 0)
                   .map(s => ({ value: s, label: `${STATUS_UI[s].label} · ${statusCounts[s]}` }))]} />
           </div>
+          {/* Grade / Lista */}
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lumos border border-lumos-border bg-lumos-surface flex-shrink-0 ml-auto">
+            <button type="button" onClick={() => setViewMode('grid')} title="Ver em grade"
+              className={clsx('h-8 w-8 rounded flex items-center justify-center transition-colors', viewMode === 'grid' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => setViewMode('list')} title="Ver em lista"
+              className={clsx('h-8 w-8 rounded flex items-center justify-center transition-colors', viewMode === 'list' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+              <List className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -640,9 +771,13 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         </div>
       ) : shownGroups.length === 0 ? (
         <p className="text-center py-8 text-xs text-lumos-text-secondary italic">Nenhum vídeo com essa busca/filtro.</p>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {shownGroups.map(g => <VideoCard key={g.id} g={g} />)}
+        </div>
+      ) : (
+        <div className="border border-lumos-border rounded-lumos overflow-hidden">
+          {shownGroups.map(g => <VideoRow key={g.id} g={g} />)}
         </div>
       )}
     </div>
