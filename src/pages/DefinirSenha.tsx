@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { KeyRound } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
@@ -45,6 +45,9 @@ export default function DefinirSenha() {
   const [hasSession, setHasSession] = useState(false);
   const navigate = useNavigate();
   const { theme } = useTheme();
+  // Mesmo componente atende dois fluxos: /definir-senha (primeiro acesso via
+  // convite) e /redefinir-senha (recuperação via "Esqueci minha senha").
+  const isReset = useLocation().pathname === '/redefinir-senha';
 
   // Ao chegar pelo link do convite, o Supabase estabelece a sessão a partir da
   // URL. Aguardamos essa sessão antes de permitir definir a senha.
@@ -98,8 +101,9 @@ export default function DefinirSenha() {
       setLoading(false);
       return;
     }
-    // Notifica os admins em segundo plano (não trava a entrada).
-    void notifyAdminsNewSignup();
+    // Notifica os admins em segundo plano (não trava a entrada). Só no primeiro
+    // acesso — redefinição de senha não é "fulano entrou na Lumos".
+    if (!isReset) void notifyAdminsNewSignup();
     navigate('/');
   };
 
@@ -119,10 +123,10 @@ export default function DefinirSenha() {
 
           <h2 className="text-2xl font-black mb-2 flex items-center gap-3 text-lumos-text-primary tracking-tight">
             <KeyRound className="w-6 h-6 text-lumos-yellow" />
-            Definir senha
+            {isReset ? 'Redefinir senha' : 'Definir senha'}
           </h2>
           <p className="text-lumos-text-secondary text-sm mb-8">
-            Bem-vindo(a) à Lumos! Crie sua senha de acesso à plataforma.
+            {isReset ? 'Crie uma senha nova pra sua conta. A antiga deixa de valer.' : 'Bem-vindo(a) à Lumos! Crie sua senha de acesso à plataforma.'}
           </p>
 
           {checkingSession ? (
@@ -131,7 +135,9 @@ export default function DefinirSenha() {
             </div>
           ) : !hasSession ? (
             <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lumos text-red-500 text-sm font-medium">
-              Este link de convite é inválido ou expirou. Peça a um administrador para reenviar o convite.
+              {isReset
+                ? 'Este link é inválido ou expirou. Volte à tela de login e peça um novo em "Esqueci minha senha".'
+                : 'Este link de convite é inválido ou expirou. Peça a um administrador para reenviar o convite.'}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
