@@ -27,7 +27,7 @@ import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
-import { notify, getAllActiveUserIds } from '@/lib/notifications/notify';
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
@@ -117,10 +117,12 @@ export default function ContasReceber() {
       const { error } = await supabase.from('receivables').update(patch).eq('id', r.id);
       if (error) throw error;
       if (newStatus === 'recebido') {
-        const everyone = await getAllActiveUserIds();
+        // Financeiro é sensível: só quem já acessa a página (financeiro_admin,
+        // hoje só os admins) recebe. Nada de scope 'team' aqui — não é um
+        // marco pra comemorar com o time todo, é dado financeiro do cliente.
+        const admins = await getAdminUserIds();
         await notify({
-          userIds: everyone,
-          scope: 'team',
+          userIds: admins,
           event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
           title: 'Pagamento recebido',
           body: `${brl(Number(r.total_amount || 0))} recebido de "${r.client?.name || 'Cliente'}" para: ${r.description}.`,
@@ -218,10 +220,12 @@ export default function ContasReceber() {
       if (error) throw error;
 
       if (newStatus === 'recebido') {
-        const everyone = await getAllActiveUserIds();
+        // Financeiro é sensível: só quem já acessa a página (financeiro_admin,
+        // hoje só os admins) recebe. Nada de scope 'team' aqui — não é um
+        // marco pra comemorar com o time todo, é dado financeiro do cliente.
+        const admins = await getAdminUserIds();
         await notify({
-          userIds: everyone,
-          scope: 'team',
+          userIds: admins,
           event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
           title: 'Pagamento recebido',
           body: `Valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(paymentData.amount)} recebido de "${selectedReceivable.client?.name || 'Cliente'}" para: ${selectedReceivable.description}.`,
@@ -283,12 +287,12 @@ export default function ContasReceber() {
 
       await Promise.all(updates);
 
-      // Trigger notifications for payments received
-      const everyone = await getAllActiveUserIds();
+      // Trigger notifications for payments received — só financeiro_admin
+      // (hoje só os admins), não é marco pra comemorar com o time todo.
+      const admins = await getAdminUserIds();
       for (const item of toReceive) {
         await notify({
-          userIds: everyone,
-          scope: 'team',
+          userIds: admins,
           event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
           title: 'Pagamento recebido (Lote)',
           body: `Valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.total_amount)} recebido de "${item.client?.name || 'Cliente'}" para: ${item.description}.`,
