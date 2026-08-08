@@ -62,6 +62,7 @@ const FornecedorEditor = lazy(() => import('@/pages/FornecedorEditor'));
 const CadastroFornecedorPublico = lazy(() => import('@/pages/CadastroFornecedorPublico'));
 const DefinirSenha = lazy(() => import('@/pages/DefinirSenha'));
 const RevisaoPublica = lazy(() => import('@/pages/RevisaoPublica'));
+const PortalCliente = lazy(() => import('@/pages/PortalCliente'));
 
 
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
@@ -406,6 +407,7 @@ function AppContent() {
           <Route path="/definir-senha" element={<DefinirSenha />} />
           <Route path="/redefinir-senha" element={<DefinirSenha />} />
           <Route path="/revisao/:token" element={<RevisaoPublica />} />
+          <Route path="/portal/:token" element={<PortalCliente />} />
           <Route
             path="/"
             element={

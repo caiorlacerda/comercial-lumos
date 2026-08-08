@@ -33,6 +33,9 @@ const CATEGORIES: { value: string; label: string; folder: string }[] = [
   { value: 'geral', label: 'Geral', folder: '00_GERAL' },
   { value: 'roteiro', label: 'Roteiro', folder: '01_ROTEIRO' },
   { value: 'producao', label: 'Produção', folder: '02_PRODUCAO' },
+  // Visível no Portal do Cliente (card "Arquivos") — usar pra pastas de fotos
+  // e materiais entregues. Arquivo físico vai pra 06_ENTREGA no Drive.
+  { value: 'entrega', label: 'Entrega (portal)', folder: '06_ENTREGA' },
 ];
 const catLabel = (v: string) => CATEGORIES.find(c => c.value === v)?.label || v;
 const catFolderName = (v: string) => CATEGORIES.find(c => c.value === v)?.folder;
