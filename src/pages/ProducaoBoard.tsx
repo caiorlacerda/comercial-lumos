@@ -240,6 +240,7 @@ export default function ProducaoBoard() {
             id, project_id, titulo, status, prioridade, data_fim, responsavel_id, ordem,
             project:projects!inner ( id, name, status, client_id, client:clients ( id, name ) )
           `)
+          .is('deleted_at', null)
           .eq('project.status', 'ativo'),
         supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo').order('full_name'),
       ]);

@@ -120,6 +120,7 @@ export default function ProducaoSchedule() {
         supabase
           .from('project_tasks')
           .select('id, project_id, titulo, status, prioridade, data_inicio, data_fim, responsavel_id, project:projects!inner(status)')
+          .is('deleted_at', null)
           .eq('project.status', 'ativo'),
         supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
       ]);

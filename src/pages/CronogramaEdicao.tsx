@@ -141,6 +141,7 @@ export default function CronogramaEdicao() {
       if (taskIds.length) {
         const { data } = await supabase.from('project_tasks')
           .select('id, titulo, status, prioridade, data_fim, responsavel_id, project_id, project:projects(name, code, client:clients(name))')
+          .is('deleted_at', null)
           .in('id', taskIds);
         taskData = (data as any as Task[]) || [];
       }

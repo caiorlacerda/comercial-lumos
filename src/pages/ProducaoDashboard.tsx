@@ -369,6 +369,7 @@ export default function ProducaoDashboard() {
             name
           )
         `)
+        .is('deleted_at', null)
         .not('data_fim', 'is', null)
         .gte('data_fim', start.toISOString().split('T')[0])
         .lte('data_fim', end.toISOString().split('T')[0]);
@@ -392,6 +393,7 @@ export default function ProducaoDashboard() {
             name
           )
         `)
+        .is('deleted_at', null)
         .is('data_fim', null)
         .neq('status', 'concluido');
 
