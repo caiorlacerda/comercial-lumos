@@ -42,6 +42,11 @@
 @layer base {
   :root {
     color-scheme: light;
+    /* Sinalizador de "o CSS chegou". O main.tsx confere isso na abertura: se
+       não estiver presente, a folha de estilo não carregou (deploy novo com
+       índice velho em cache) e o app se recupera sozinho em vez de aparecer
+       todo desmontado pro usuário. */
+    --lumos-css-ok: 1;
   }
 
   body {
