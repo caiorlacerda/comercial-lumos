@@ -88,7 +88,7 @@ export default function VideoReviewHub() {
     setOpenTasks([]);
     // 'status' incluído: sem ele, vincular tarefa aqui não sincronizava o
     // status do vídeo (taskStatusToVideo recebia undefined).
-    const { data } = await supabase.from('project_tasks').select('id, titulo, status').eq('project_id', p.project.id);
+    const { data } = await supabase.from('project_tasks').select('id, titulo, status').eq('project_id', p.project.id).is('deleted_at', null);
     setOpenTasks((data as any) || []);
   };
 

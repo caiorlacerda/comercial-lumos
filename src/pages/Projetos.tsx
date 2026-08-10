@@ -915,8 +915,12 @@ export default function Projetos() {
     if (proj) {
       const tid = searchParams.get('taskId');
       if (proj.id === selectedProjectId) {
-        // Projeto já aberto: abre a tarefa direto (o efeito de tasks não re-dispara)
-        if (tid) setSelectedTaskId(tid);
+        // Projeto já aberto: abre a tarefa direto (o efeito de tasks não re-dispara).
+        // Se ela não está mais na lista (foi pra lixeira), avisa em vez de não fazer nada.
+        if (tid) {
+          if (projectTasks.some(t => t.id === tid)) setSelectedTaskId(tid);
+          else toast.error('Essa tarefa foi excluída — ela está na lixeira do projeto.');
+        }
       } else {
         pendingTaskIdRef.current = tid;
         setSelectedClientId(proj.client_id);
@@ -939,14 +943,24 @@ export default function Projetos() {
     }
   }, [projects, searchParams]);
 
-  // Quando as tarefas do projeto deep-linkado chegam, abre a tarefa pendente
+  // Quando as tarefas do projeto deep-linkado chegam, abre a tarefa pendente.
+  // Se o carregamento terminou e ela não veio (foi pra lixeira, ou o link é
+  // velho), avisa — antes a página só ficava parada no projeto sem explicação.
+  const pendingArmedRef = useRef(false);
   useEffect(() => {
+    if (tasksLoading) { pendingArmedRef.current = true; return; }
     const tid = pendingTaskIdRef.current;
-    if (tid && projectTasks.some(t => t.id === tid)) {
+    if (!tid) return;
+    if (projectTasks.some(t => t.id === tid)) {
       pendingTaskIdRef.current = null;
+      pendingArmedRef.current = false;
       setSelectedTaskId(tid);
+    } else if (pendingArmedRef.current) {
+      pendingTaskIdRef.current = null;
+      pendingArmedRef.current = false;
+      toast.error('Essa tarefa foi excluída — ela está na lixeira do projeto.');
     }
-  }, [projectTasks]);
+  }, [projectTasks, tasksLoading]);
 
   // "+ Novo projeto" da sidebar (?new=1) → abre o modal de criação direto
   useEffect(() => {

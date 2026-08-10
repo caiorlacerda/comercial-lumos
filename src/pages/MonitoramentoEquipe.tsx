@@ -89,7 +89,7 @@ export default function MonitoramentoEquipe() {
     if (!silent) setLoading(true);
     const [u, t, h] = await Promise.all([
       supabase.from('app_users').select('id, full_name, email, role, status, avatar_url, tour_seen, last_seen').eq('status', 'ativo').order('full_name'),
-      supabase.from('project_tasks').select('id, titulo, status, prioridade, data_fim, responsavel_id, project_id, updated_at, project:projects(name, code)'),
+      supabase.from('project_tasks').select('id, titulo, status, prioridade, data_fim, responsavel_id, project_id, updated_at, project:projects(name, code)').is('deleted_at', null),
       supabase.from('team_members').select('app_user_id, cpf, whatsapp, birth_date'),
     ]);
     setUsers((u.data as AppUser[]) || []);

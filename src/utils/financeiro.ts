@@ -158,7 +158,8 @@ export async function syncBudgetApprovalFlow(budgetId: string, optionalTotalAmou
     const { count, error: errCount } = await supabase
       .from('project_tasks')
       .select('*', { count: 'exact', head: true })
-      .eq('project_id', projectId);
+      .eq('project_id', projectId)
+      .is('deleted_at', null);   // tarefa na lixeira não conta como "projeto já tem tarefas"
 
     if (errCount) {
       console.warn('[syncBudgetApprovalFlow] Erro ao verificar contagem de tarefas:', errCount.message);

@@ -150,6 +150,7 @@ export default function ProducaoOverview() {
         supabase
           .from('project_tasks')
           .select('id, titulo, status, updated_at, project_id, responsavel:app_users!responsavel_id(id, full_name, avatar_url)')
+          .is('deleted_at', null)
           .in('status', ['entregue', 'concluido'])
           .order('updated_at', { ascending: false })
           .limit(5),
