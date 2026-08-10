@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,6 +8,9 @@ import { useToast } from '@/context/ToastContext';
 import InternalReviewModal from './InternalReviewModal';
 import Select from '@/components/ui/Select';
 import { type ReviewStatus, STATUS_UI, STATUS_TO_TASK, taskStatusToVideo } from '@/lib/reviewStatus';
+import { captureVideoThumb } from '@/lib/videoThumb';
+
+const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 
 interface VideoVersion {
   id: string;
@@ -61,6 +65,21 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const [renaming, setRenaming] = useState<{ id: string; value: string; orig: string } | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [stackMenuFor, setStackMenuFor] = useState<string | null>(null);
+  // Posição dos menus flutuantes. Eles vão num PORTAL com position:fixed, porque
+  // a lista/o card têm overflow-hidden (pros cantos arredondados) e cortavam o
+  // dropdown no fim da seção.
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+
+  // Depois que o menu monta, mede a altura REAL e encaixa na tela. Estimar a
+  // altura não funciona (o menu muda de tamanho conforme a etapa do vídeo), e
+  // era isso que fazia o dropdown vazar pro rodapé.
+  const fitMenu = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8) {
+      el.style.top = `${Math.max(8, window.innerHeight - 8 - r.height)}px`;
+    }
+  }, []);
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
   const [uploadName, setUploadName] = useState('');
@@ -162,6 +181,77 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     finally { setDeleting(false); }
   };
 
+  // ── Ações em LOTE (sobre os vídeos selecionados) ─────────────────────────
+  const selectedGroups = () => groups.filter(g => selected.has(g.id));
+
+  // Move a etapa de todos os selecionados (e espelha nas tarefas vinculadas).
+  const batchTransition = async (next: ReviewStatus) => {
+    const gs = selectedGroups();
+    if (!gs.length) return;
+    setBusy('batch');
+    try {
+      const versionIds = gs.map(g => g.current.id);
+      const { error } = await supabase.from('video_versions')
+        .update({ status: next, updated_at: new Date().toISOString() }).in('id', versionIds);
+      if (error) throw error;
+      const taskIds = gs.map(g => g.current.task_id).filter(Boolean) as string[];
+      if (taskIds.length) {
+        await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[next] }).in('id', taskIds);
+      }
+      toast.success(`${gs.length} vídeo(s) em ${STATUS_UI[next].label} ✓`);
+      setSelected(new Set());
+      await fetchVersions();
+    } catch { toast.error('Não foi possível mudar a etapa.'); }
+    finally { setBusy(null); }
+  };
+
+  // Vincula a MESMA tarefa a todos os selecionados (ou desvincula com '').
+  const batchLinkTask = async (taskId: string) => {
+    const gs = selectedGroups();
+    if (!gs.length) return;
+    setBusy('batch');
+    try {
+      const { error } = await supabase.from('video_versions')
+        .update({ task_id: taskId || null }).in('group_id', gs.map(g => g.id));
+      if (error) throw error;
+      toast.success(taskId ? `Tarefa vinculada em ${gs.length} vídeo(s) ✓` : `Tarefa removida de ${gs.length} vídeo(s).`);
+      setSelected(new Set());
+      await fetchVersions();
+    } catch { toast.error('Não foi possível vincular a tarefa.'); }
+    finally { setBusy(null); }
+  };
+
+  // Garante link do cliente em todos os selecionados que ainda não têm.
+  const batchGenerateLinks = async () => {
+    const gs = selectedGroups().filter(g => !linksByGroup[g.id]);
+    if (!gs.length) { toast.info('Todos os selecionados já têm link.'); return; }
+    setBusy('batch');
+    try {
+      const { error } = await supabase.from('review_links').insert(
+        gs.map(g => ({ video_version_id: g.current.id, group_id: g.id, created_by: profile?.id }))
+      );
+      if (error) throw error;
+      toast.success(`${gs.length} link(s) do cliente gerado(s) ✓`);
+      await fetchVersions();
+    } catch { toast.error('Não foi possível gerar os links.'); }
+    finally { setBusy(null); }
+  };
+
+  // Liga/desliga marca d'água ou download nos links dos selecionados.
+  const batchLinkFlag = async (field: 'watermark' | 'allow_download', value: boolean) => {
+    const ids = selectedGroups().map(g => linksByGroup[g.id]?.id).filter(Boolean) as string[];
+    if (!ids.length) { toast.error('Os selecionados ainda não têm link do cliente.'); return; }
+    setBusy('batch');
+    try {
+      const { error } = await supabase.from('review_links').update({ [field]: value }).in('id', ids);
+      if (error) throw error;
+      const nome = field === 'watermark' ? 'Marca d’água' : 'Download';
+      toast.success(`${nome} ${value ? 'ligada' : 'desligada'} em ${ids.length} link(s) ✓`);
+      await fetchVersions();
+    } catch { toast.error('Não foi possível salvar.'); }
+    finally { setBusy(null); }
+  };
+
   const scanNow = async () => {
     setScanning(true);
     try {
@@ -234,13 +324,20 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [projectId, fetchVersions]);
 
-  // Fecha os menus flutuantes ao clicar fora / rolar
+  // Fecha os menus flutuantes com Esc, ao rolar a página ou redimensionar (são
+  // position:fixed, então descolariam do botão).
   useEffect(() => {
     if (!menuFor && !stackMenuFor) return;
     const close = () => { setMenuFor(null); setStackMenuFor(null); };
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', onEsc);
-    return () => document.removeEventListener('keydown', onEsc);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('keydown', onEsc);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
   }, [menuFor, stackMenuFor]);
 
   // --- Agrupamento: 1 card por vídeo (grupo); versão atual = maior versão ---
@@ -270,6 +367,54 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     groups.forEach(g => { c[g.current.status] = (c[g.current.status] || 0) + 1; });
     return c;
   }, [groups]);
+
+  // ── Thumbnails automáticas ────────────────────────────────────────────────
+  // O Drive não gera thumbnail pra arquivo da service account, então capturamos
+  // um frame no navegador (mesma função da revisão interna) e salvamos. Antes
+  // isso só acontecia quando alguém ABRIA o vídeo — num projeto com 39 vídeos,
+  // quase todos ficavam sem imagem. Agora roda em fila (1 por vez) pros vídeos
+  // que estão na tela e ainda não têm thumb, e o resultado fica salvo.
+  const thumbTriedRef = useRef<Set<string>>(new Set());
+  const [thumbRunning, setThumbRunning] = useState(0);
+
+  useEffect(() => {
+    if (!canManage || loading) return;
+    let alive = true;
+
+    (async () => {
+      const alvo = shownGroups
+        .filter(g => !g.current.thumb_url && !thumbTriedRef.current.has(g.current.id))
+        .slice(0, 12);   // teto por rodada: não sai baixando 39 vídeos de uma vez
+      if (!alvo.length) return;
+      setThumbRunning(alvo.length);
+
+      for (const g of alvo) {
+        if (!alive) break;
+        thumbTriedRef.current.add(g.current.id);
+        try {
+          // Precisa de um token pra tocar o vídeo (mesma regra do player).
+          let token = linksByGroup[g.id]?.token;
+          if (!token) {
+            const { data } = await supabase.from('review_links')
+              .insert([{ video_version_id: g.current.id, group_id: g.id, created_by: profile?.id }])
+              .select('id, token, watermark, allow_download').single();
+            if (data) { token = (data as any).token; setLinksByGroup(prev => ({ ...prev, [g.id]: data as any })); }
+          }
+          if (!token) continue;
+          const thumb = await captureVideoThumb(`${STREAM_BASE}?token=${encodeURIComponent(token)}`);
+          if (!alive) break;
+          if (thumb) {
+            await supabase.from('video_versions').update({ thumb_url: thumb }).eq('id', g.current.id);
+            setVersions(prev => prev.map(v => v.id === g.current.id ? { ...v, thumb_url: thumb } : v));
+          }
+        } catch { /* segue pro próximo: thumb é enfeite, não pode travar a tela */ }
+        finally { if (alive) setThumbRunning(n => Math.max(0, n - 1)); }
+      }
+      if (alive) setThumbRunning(0);
+    })();
+
+    return () => { alive = false; };
+  }, [shownGroups, loading, canManage]);
 
   const linkTask = async (g: Group, taskId: string) => {
     const value = taskId || null;
@@ -370,14 +515,27 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         ) : null}
 
         {canManage && (
-          <div className="relative flex-shrink-0">
-            <button type="button" onClick={() => { setStackMenuFor(null); setMenuFor(menuFor === g.id ? null : g.id); }}
+          <div className="flex-shrink-0">
+            <button type="button"
+              onClick={e => {
+                setStackMenuFor(null);
+                if (menuFor === g.id) { setMenuFor(null); return; }
+                // Posiciona o menu (fixed) abaixo ou acima do botão, conforme o espaço.
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                const estH = 360;
+                setMenuPos({
+                  top: r.bottom + 4 + estH > window.innerHeight - 8 && r.top - estH - 4 > 8 ? r.top - estH - 4 : r.bottom + 4,
+                  right: Math.max(8, window.innerWidth - r.right),
+                });
+                setMenuFor(g.id);
+              }}
               className={clsx(h, 'w-8 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 flex items-center justify-center')} title="Mais ações">
               <MoreHorizontal className="w-4 h-4" />
             </button>
-            {menuFor === g.id && (<>
-              <div className="fixed inset-0 z-[60]" onClick={() => setMenuFor(null)} />
-              <div className={clsx('absolute right-0 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 max-h-[70vh] overflow-y-auto custom-scrollbar', compact ? 'top-full mt-1' : 'bottom-full mb-1')}>
+            {menuFor === g.id && menuPos && createPortal(<>
+              <div className="fixed inset-0 z-[300]" onClick={() => setMenuFor(null)} />
+              <div ref={fitMenu} style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
+                className="z-[301] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 {/* Transições */}
                 {v.status === 'EM_REVISAO_INTERNA' && (
                   <MenuItem icon={RotateCcw} label="Pedir alteração (interna)" danger onClick={() => transition(v, 'ALTERACOES_INTERNAS')} />
@@ -413,11 +571,12 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                 <div className="h-px bg-lumos-border my-1" />
                 <MenuItem icon={Trash2} label="Excluir vídeo" danger onClick={() => { setMenuFor(null); setSelected(new Set([g.id])); setConfirmingDelete(true); }} />
               </div>
-            </>)}
+            </>, document.body)}
 
-            {stackMenuFor === g.id && (<>
-              <div className="fixed inset-0 z-[60]" onClick={() => setStackMenuFor(null)} />
-              <div className={clsx('absolute right-0 z-[61] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1', compact ? 'top-full mt-1' : 'bottom-full mb-1')}>
+            {stackMenuFor === g.id && menuPos && createPortal(<>
+              <div className="fixed inset-0 z-[300]" onClick={() => setStackMenuFor(null)} />
+              <div ref={fitMenu} style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
+                className="z-[301] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-2 py-1.5">Empilhar como versão de:</p>
                 {groups.filter(o => o.id !== g.id).map(o => (
                   <button key={o.id} type="button" onClick={() => stackInto(g, o)}
@@ -426,7 +585,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                   </button>
                 ))}
               </div>
-            </>)}
+            </>, document.body)}
           </div>
         )}
       </div>
@@ -712,6 +871,25 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                   .filter(s => (statusCounts[s] || 0) > 0)
                   .map(s => ({ value: s, label: `${STATUS_UI[s].label} · ${statusCounts[s]}` }))]} />
           </div>
+
+          {/* Selecionar todos os visíveis (base pra ação em lote) */}
+          {canManage && shownGroups.length > 0 && (
+            <label className="flex items-center gap-2 h-9 px-3 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary cursor-pointer flex-shrink-0">
+              <input type="checkbox" className="accent-lumos-yellow cursor-pointer"
+                checked={selected.size > 0 && shownGroups.every(g => selected.has(g.id))}
+                onChange={e => {
+                  setConfirmingDelete(false);
+                  setSelected(e.target.checked ? new Set(shownGroups.map(g => g.id)) : new Set());
+                }} />
+              Selecionar {statusFilter !== 'all' || search.trim() ? 'filtrados' : 'todos'}
+            </label>
+          )}
+
+          {thumbRunning > 0 && (
+            <span className="flex items-center gap-1.5 text-[10.5px] font-bold text-lumos-text-secondary flex-shrink-0" title="Gerando as miniaturas dos vídeos que ainda não tinham">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow" /> gerando miniaturas…
+            </span>
+          )}
           {/* Grade / Lista */}
           <div className="flex items-center gap-0.5 p-0.5 rounded-lumos border border-lumos-border bg-lumos-surface flex-shrink-0 ml-auto">
             <button type="button" onClick={() => setViewMode('grid')} title="Ver em grade"
@@ -739,22 +917,70 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       )}
 
       {canManage && selected.size > 0 && (
-        <div className="mb-3 flex items-center justify-between gap-3 p-2.5 rounded-lumos border border-red-500/30 bg-red-500/5">
-          <span className="text-[11px] font-bold text-lumos-text-primary">{selected.size} vídeo(s) selecionado(s)</span>
-          <div className="flex items-center gap-2">
+        <div className="mb-3 p-2.5 rounded-lumos border border-lumos-yellow/40 bg-lumos-yellow/[0.06]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-black text-lumos-text-primary bg-lumos-yellow/20 rounded-full px-2.5 py-1">
+              {selected.size} selecionado{selected.size > 1 ? 's' : ''}
+            </span>
+
             {confirmingDelete ? (
               <>
-                <span className="text-[11px] font-bold text-red-400 hidden sm:inline">Excluir e mandar pra lixeira do Drive?</span>
-                <button onClick={() => { setConfirmingDelete(false); setSelected(new Set()); }} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
-                <button onClick={deleteSelected} disabled={deleting} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos bg-red-500 text-white hover:brightness-110 disabled:opacity-60 flex items-center gap-1">
+                <span className="text-[11px] font-bold text-red-400">Excluir e mandar pra lixeira do Drive?</span>
+                <button onClick={() => setConfirmingDelete(false)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
+                <button onClick={deleteSelected} disabled={deleting} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lumos bg-red-500 text-white hover:brightness-110 disabled:opacity-60 flex items-center gap-1">
                   {deleting ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Confirmar
                 </button>
               </>
-            ) : (
-              <button onClick={() => setConfirmingDelete(true)} className="text-[11px] font-bold px-2.5 py-1 rounded-lumos border border-red-500/40 text-red-400 hover:bg-red-500/10 flex items-center gap-1">
+            ) : (<>
+              {/* Etapa */}
+              <div className="w-40 flex-shrink-0">
+                <Select value="" onChange={v => batchTransition(v as ReviewStatus)} placeholder="Mover etapa" ariaLabel="Mover etapa em lote" menuClassName="min-w-[200px]"
+                  className="w-full h-8 px-2.5 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-primary hover:border-lumos-yellow/50"
+                  options={[
+                    { value: 'EM_REVISAO_INTERNA', label: 'Revisão interna' },
+                    { value: 'EM_REVISAO_CLIENTE', label: 'Enviar ao cliente' },
+                    { value: 'APROVADO', label: 'Cliente aprovou' },
+                    { value: 'ALTERACOES_CLIENTE', label: 'Cliente pediu ajustes' },
+                    { value: 'ALTERACOES_INTERNAS', label: 'Alteração interna' },
+                  ]} />
+              </div>
+
+              {/* Tarefa */}
+              <div className="w-44 flex-shrink-0">
+                <Select value="" onChange={batchLinkTask} placeholder="Vincular tarefa" ariaLabel="Vincular tarefa em lote"
+                  searchable searchPlaceholder="Buscar tarefa…" menuClassName="min-w-[240px]"
+                  className="w-full h-8 px-2.5 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-primary hover:border-lumos-yellow/50"
+                  options={[{ value: '', label: 'Sem tarefa' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]} />
+              </div>
+
+              {/* Link do cliente */}
+              <div className="w-40 flex-shrink-0">
+                <Select value="" placeholder="Link do cliente" ariaLabel="Ações de link em lote" menuClassName="min-w-[210px]"
+                  onChange={v => {
+                    if (v === 'gerar') batchGenerateLinks();
+                    else if (v === 'wm_on') batchLinkFlag('watermark', true);
+                    else if (v === 'wm_off') batchLinkFlag('watermark', false);
+                    else if (v === 'dl_on') batchLinkFlag('allow_download', true);
+                    else if (v === 'dl_off') batchLinkFlag('allow_download', false);
+                  }}
+                  className="w-full h-8 px-2.5 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-primary hover:border-lumos-yellow/50"
+                  options={[
+                    { value: 'gerar', label: 'Gerar links que faltam' },
+                    { value: 'wm_on', label: 'Marca d’água: ligar' },
+                    { value: 'wm_off', label: 'Marca d’água: desligar' },
+                    { value: 'dl_on', label: 'Download: liberar' },
+                    { value: 'dl_off', label: 'Download: bloquear' },
+                  ]} />
+              </div>
+
+              <button onClick={() => setConfirmingDelete(true)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lumos border border-red-500/40 text-red-400 hover:bg-red-500/10 flex items-center gap-1 flex-shrink-0">
                 <Trash2 className="w-3.5 h-3.5" /> Excluir
               </button>
-            )}
+              <button onClick={() => setSelected(new Set())} className="text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary ml-auto flex-shrink-0">
+                limpar seleção
+              </button>
+              {busy === 'batch' && <Loader2 className="w-4 h-4 animate-spin text-lumos-yellow flex-shrink-0" />}
+            </>)}
           </div>
         </div>
       )}
