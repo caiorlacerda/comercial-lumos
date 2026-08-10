@@ -7,10 +7,24 @@ import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import Select from '@/components/ui/Select';
 
+interface Blocks {
+  kpis: boolean; status_bar: boolean; etapas: boolean; atividade: boolean; arquivos: boolean;
+}
 interface Portal {
   id: string; token: string; active: boolean; show_financeiro: boolean;
-  contact_user_id: string | null; last_opened_at: string | null; opened_count: number;
+  contact_user_id: string | null; contact_user_ids: string[]; blocks: Blocks;
+  last_opened_at: string | null; opened_count: number;
 }
+
+// O que o cliente vê no Dashboard — cada item liga/desliga por projeto.
+const BLOCOS: { key: keyof Blocks; label: string; desc: string }[] = [
+  { key: 'kpis', label: 'Números do topo', desc: 'progresso, com você, aprovadas e entrega final' },
+  { key: 'status_bar', label: 'Barra por status', desc: 'quantas entregas em cada situação' },
+  { key: 'etapas', label: 'Etapas do projeto', desc: 'roteiro → captação → edição → revisão' },
+  { key: 'atividade', label: 'Atividade', desc: 'histórico do que foi entregue e aprovado' },
+  { key: 'arquivos', label: 'Arquivos', desc: 'documentos marcados como "Entrega (portal)"' },
+];
+const BLOCKS_PADRAO: Blocks = { kpis: true, status_bar: true, etapas: true, atividade: true, arquivos: true };
 
 interface Props {
   projectId: string;
@@ -45,7 +59,7 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
   const create = async () => {
     setBusy(true);
     const { data, error } = await supabase.from('project_portals')
-      .insert([{ project_id: projectId, created_by: profile?.id, contact_user_id: profile?.id }])
+      .insert([{ project_id: projectId, created_by: profile?.id, contact_user_ids: profile?.id ? [profile.id] : [] }])
       .select('*').single();
     setBusy(false);
     if (error || !data) { toast.error('Não foi possível criar o portal.'); return; }
@@ -118,27 +132,66 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
               </p>
             </div>
 
-            {/* Financeiro */}
-            <label className="flex items-center justify-between gap-3 border border-lumos-border rounded-lumos px-3.5 py-3 cursor-pointer">
-              <span>
-                <span className="block text-xs font-bold text-lumos-text-primary">Mostrar resumo financeiro</span>
-                <span className="block text-[10.5px] text-lumos-text-secondary">Sem valores: só "em dia" ou "pendente" + próximo vencimento.</span>
-              </span>
-              <button type="button" onClick={() => patch({ show_financeiro: !portal.show_financeiro }, portal.show_financeiro ? 'Financeiro oculto.' : 'Financeiro visível no portal.')}
-                className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', portal.show_financeiro ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
-                <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.show_financeiro ? 'left-5' : 'left-0.5')} />
-              </button>
-            </label>
-
-            {/* Contato */}
+            {/* O que o cliente vê no Dashboard */}
             <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Contato do atendimento (card no portal)</label>
-              <div className="mt-1.5">
-                <Select value={portal.contact_user_id || ''} onChange={v => patch({ contact_user_id: v || null }, 'Contato atualizado.')}
-                  searchable searchPlaceholder="Filtrar pessoa…" placeholder="Sem card de atendimento"
-                  className="input-lumos w-full h-10 text-xs"
-                  options={[{ value: '', label: 'Sem card de atendimento' }, ...teamUsers.map(u => ({ value: u.id, label: u.full_name }))]} />
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">O que o cliente vê no Dashboard</label>
+              <div className="mt-1.5 border border-lumos-border rounded-lumos divide-y divide-lumos-border/60">
+                {BLOCOS.map(b => {
+                  const blocks = { ...BLOCKS_PADRAO, ...(portal.blocks || {}) };
+                  const on = blocks[b.key];
+                  return (
+                    <div key={b.key} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                      <span className="min-w-0">
+                        <span className="block text-xs font-bold text-lumos-text-primary">{b.label}</span>
+                        <span className="block text-[10.5px] text-lumos-text-secondary">{b.desc}</span>
+                      </span>
+                      <button type="button"
+                        onClick={() => patch({ blocks: { ...blocks, [b.key]: !on } }, on ? `"${b.label}" oculto pro cliente.` : `"${b.label}" visível pro cliente.`)}
+                        className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', on ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                        <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', on ? 'left-5' : 'left-0.5')} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {/* Financeiro mora aqui junto, é só mais um bloco do dashboard */}
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-lumos-text-primary">Resumo financeiro</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary">Sem valores: só "em dia" ou "pendente" + próximo vencimento.</span>
+                  </span>
+                  <button type="button" onClick={() => patch({ show_financeiro: !portal.show_financeiro }, portal.show_financeiro ? 'Financeiro oculto.' : 'Financeiro visível no portal.')}
+                    className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', portal.show_financeiro ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                    <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.show_financeiro ? 'left-5' : 'left-0.5')} />
+                  </button>
+                </div>
               </div>
+            </div>
+
+            {/* Contatos da aba Atendimento */}
+            <div>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Atendimento (quem o cliente pode chamar)</label>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {teamUsers.map(u => {
+                  const sel = (portal.contact_user_ids || []).includes(u.id);
+                  return (
+                    <button key={u.id} type="button"
+                      onClick={() => {
+                        const atuais = portal.contact_user_ids || [];
+                        const novos = sel ? atuais.filter(id => id !== u.id) : [...atuais, u.id];
+                        patch({ contact_user_ids: novos }, sel ? `${u.full_name.split(' ')[0]} saiu do atendimento.` : `${u.full_name.split(' ')[0]} entrou no atendimento.`);
+                      }}
+                      className={clsx('text-[11px] font-bold px-3 py-1.5 rounded-full border transition-colors',
+                        sel ? 'bg-lumos-yellow/15 border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}>
+                      {sel && '✓ '}{u.full_name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10.5px] text-lumos-text-secondary mt-1.5">
+                {(portal.contact_user_ids || []).length === 0
+                  ? 'Sem ninguém selecionado, a aba Atendimento fica vazia.'
+                  : `${portal.contact_user_ids.length} pessoa(s) na aba Atendimento do cliente.`}
+              </p>
             </div>
 
             {/* Revogar */}
