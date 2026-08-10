@@ -263,7 +263,7 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
       setLoading(true);
       const [u, tasks, docs, vids, proj] = await Promise.all([
         supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
-        supabase.from('project_tasks').select('id, titulo').eq('project_id', projectId).order('ordem'),
+        supabase.from('project_tasks').select('id, titulo').eq('project_id', projectId).is('deleted_at', null).order('ordem'),
         supabase.from('project_documents').select('id, name, url').eq('project_id', projectId),
         supabase.from('video_versions').select('id, file_name, versao, drive_web_link').eq('project_id', projectId).order('versao', { ascending: false }),
         supabase.from('projects').select('notes').eq('id', projectId).single(),

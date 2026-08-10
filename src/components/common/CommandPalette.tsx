@@ -140,7 +140,7 @@ export default function CommandPalette() {
             ? supabase.from('projects').select('id, name, client:clients(name)').ilike('name', like).eq('status', 'ativo').limit(5)
             : Promise.resolve({ data: [] as any[] }),
           canProd
-            ? supabase.from('project_tasks').select('id, titulo, project_id, project:projects!inner(name, status)').ilike('titulo', like).eq('project.status', 'ativo').limit(5)
+            ? supabase.from('project_tasks').select('id, titulo, project_id, project:projects!inner(name, status)').ilike('titulo', like).is('deleted_at', null).eq('project.status', 'ativo').limit(5)
             : Promise.resolve({ data: [] as any[] }),
           isAdmin
             ? supabase.from('clients').select('id, name').ilike('name', like).limit(5)

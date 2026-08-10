@@ -105,6 +105,7 @@ export default function Home() {
           .from('project_tasks')
           .select(FIELDS)
           .or(orFilter)
+          .is('deleted_at', null)          // não mostra tarefa que foi pra lixeira
           .neq('status', 'concluido');
 
         if (error) throw error;
