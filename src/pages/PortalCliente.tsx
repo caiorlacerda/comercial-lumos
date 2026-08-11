@@ -117,26 +117,32 @@ export default function PortalCliente() {
 
   const dlUrl = (e: Entrega) => `${STREAM_BASE}?token=${encodeURIComponent(e.review_token!)}&download=1`;
 
-  // "Baixar tudo": o navegador BLOQUEIA vários downloads automáticos (o
-  // primeiro passa, o resto é barrado sem avisar). Então: disparamos em
-  // sequência com folga e deixamos a lista aberta com um botão por arquivo —
-  // clique do usuário nunca é bloqueado, então sempre há um caminho que funciona.
-  const baixarTudo = async () => {
+  // Por que iframe e não <a download>: o arquivo vem de outro domínio (a função
+  // que serve o vídeo), e nesse caso o navegador IGNORA o atributo "download" e
+  // trata o clique como navegação. Só virava download porque a resposta manda
+  // "attachment" — mas cada navegação nova cancelava a anterior, então de 5
+  // arquivos chegava 1 só. Um iframe escondido por arquivo resolve: cada
+  // download corre por conta própria e a página nem se mexe.
+  const dispararDownload = (e: Entrega) => {
+    const f = document.createElement('iframe');
+    f.style.display = 'none';
+    f.src = dlUrl(e);
+    document.body.appendChild(f);
+    // O download já foi entregue ao navegador; o iframe só ocupa espaço depois.
+    setTimeout(() => f.remove(), 120000);
+  };
+
+  // Nada de esperar entre um arquivo e outro: o navegador só considera um
+  // download "pedido pela pessoa" enquanto o clique ainda está valendo, e
+  // qualquer pausa derruba isso — aí o primeiro passa e o resto é descartado
+  // calado. Disparando tudo dentro do mesmo clique, o navegador pergunta uma
+  // vez só ("baixar vários arquivos?") e libera a leva inteira.
+  const baixarTudo = () => {
     if (!derived?.baixaveis.length || baixando) return;
     const lista = derived.baixaveis;
-    setBaixando({ feito: 0, total: lista.length });
-    for (let i = 0; i < lista.length; i++) {
-      const a = document.createElement('a');
-      a.href = dlUrl(lista[i]);
-      a.download = lista[i].file_name;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setBaixando({ feito: i + 1, total: lista.length });
-      await new Promise(r => setTimeout(r, 1500));
-    }
-    setTimeout(() => setBaixando(null), 2000);
+    lista.forEach(dispararDownload);
+    setBaixando({ feito: lista.length, total: lista.length });
+    setTimeout(() => setBaixando(null), 4000);
   };
 
   const irPara = (a: Aba, f?: 'todas' | 'voce') => {
@@ -407,14 +413,14 @@ export default function PortalCliente() {
                       {baixaveis.length} arquivo{baixaveis.length > 1 ? 's' : ''} disponíve{baixaveis.length > 1 ? 'is' : 'l'} para download
                     </p>
                     <p className="text-[11px] text-lumos-text-secondary mt-0.5">
-                      Ao baixar todos de uma vez, o navegador costuma pedir permissão para vários downloads, é só clicar em <b className="text-lumos-text-primary">Permitir</b>. Se preferir, baixe um por um na lista abaixo.
+                      Ao baixar todos de uma vez, o navegador pergunta se pode salvar vários arquivos, é só clicar em <b className="text-lumos-text-primary">Permitir</b>. Se vier só um, clique no ícone de download na barra de endereço e libere, ou baixe um por um na lista abaixo.
                     </p>
                   </div>
                   <button onClick={baixarTudo} disabled={!!baixando}
                     className="bg-lumos-yellow text-black text-[11px] font-black rounded-lumos px-4 h-9 flex items-center gap-2 disabled:opacity-60 flex-shrink-0">
                     {baixando
-                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> baixando {baixando.feito}/{baixando.total}</>
-                      : <><DownloadCloud className="w-3.5 h-3.5" /> Baixar todos automaticamente</>}
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {baixando.total} downloads iniciados</>
+                      : <><DownloadCloud className="w-3.5 h-3.5" /> Baixar todos de uma vez</>}
                   </button>
                 </div>
 
@@ -423,10 +429,10 @@ export default function PortalCliente() {
                     <div key={e.file_name + i} className="flex items-center gap-3 px-3 py-2">
                       <span className="text-[10px] font-black text-lumos-text-secondary w-6 tabular-nums flex-shrink-0">{i + 1}</span>
                       <span className="text-[11.5px] font-bold truncate flex-1" title={e.file_name}>{semExt(e.file_name)}</span>
-                      <a href={dlUrl(e)} download={e.file_name}
+                      <button type="button" onClick={() => dispararDownload(e)}
                         className="text-[10px] font-black uppercase tracking-wide px-2.5 py-1.5 rounded border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/50 flex items-center gap-1.5 flex-shrink-0">
                         <DownloadCloud className="w-3 h-3" /> Baixar
-                      </a>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -466,10 +472,10 @@ export default function PortalCliente() {
                             {e.cs === 'voce' ? 'Revisar e aprovar' : 'Assistir'}
                           </a>
                           {e.allow_download && (
-                            <a href={`${STREAM_BASE}?token=${encodeURIComponent(e.review_token)}&download=1`} download={e.file_name}
+                            <button type="button" onClick={() => dispararDownload(e)}
                               title="Baixar" className="w-7 h-7 rounded border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/50 grid place-items-center flex-shrink-0">
                               <DownloadCloud className="w-3 h-3" />
-                            </a>
+                            </button>
                           )}
                         </div>
                       )}
