@@ -9,6 +9,7 @@ import Select from '@/components/ui/Select';
 
 interface Blocks {
   kpis: boolean; status_bar: boolean; etapas: boolean; atividade: boolean; arquivos: boolean;
+  cronograma: boolean;
 }
 interface Portal {
   id: string; token: string; active: boolean; show_financeiro: boolean;
@@ -24,7 +25,7 @@ const BLOCOS: { key: keyof Blocks; label: string; desc: string }[] = [
   { key: 'atividade', label: 'Atividade', desc: 'histórico do que foi entregue e aprovado' },
   { key: 'arquivos', label: 'Arquivos', desc: 'documentos marcados como "Entrega (portal)"' },
 ];
-const BLOCKS_PADRAO: Blocks = { kpis: true, status_bar: true, etapas: true, atividade: true, arquivos: true };
+const BLOCKS_PADRAO: Blocks = { kpis: true, status_bar: true, etapas: true, atividade: true, arquivos: true, cronograma: true };
 
 interface Props {
   projectId: string;
@@ -165,6 +166,35 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Abas do portal */}
+            <div>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Abas do portal</label>
+              <div className="mt-1.5 border border-lumos-border rounded-lumos">
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-lumos-text-primary">Cronograma</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary">
+                      Etapa por etapa com as datas das tarefas. Sem título de tarefa e sem responsável.
+                    </span>
+                  </span>
+                  {(() => {
+                    const blocks = { ...BLOCKS_PADRAO, ...(portal.blocks || {}) };
+                    const on = blocks.cronograma;
+                    return (
+                      <button type="button"
+                        onClick={() => patch({ blocks: { ...blocks, cronograma: !on } }, on ? 'Aba Cronograma oculta pro cliente.' : 'Aba Cronograma visível pro cliente.')}
+                        className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', on ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                        <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', on ? 'left-5' : 'left-0.5')} />
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+              <p className="text-[10.5px] text-lumos-text-secondary mt-1.5">
+                Dashboard, Entregas e Atendimento estão sempre visíveis.
+              </p>
             </div>
 
             {/* Contatos da aba Atendimento */}

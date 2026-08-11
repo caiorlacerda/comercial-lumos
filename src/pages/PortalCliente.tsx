@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Film, Play, Check, LayoutDashboard, Clapperboard, Headset, Sun, Moon,
-  CircleCheckBig, RotateCcw, FolderOpen, DownloadCloud, Mail, Loader2,
+  CircleCheckBig, RotateCcw, FolderOpen, DownloadCloud, Mail, Loader2, CalendarRange,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -18,11 +18,18 @@ interface Entrega {
 }
 interface Blocks {
   kpis: boolean; status_bar: boolean; etapas: boolean; atividade: boolean; arquivos: boolean;
+  cronograma: boolean;
+}
+// Uma linha por etapa: quantos itens estão ali e a janela de datas do trabalho.
+interface FaseRaw {
+  etapa: string; n: number;
+  inicio: string | null; fim: string | null; prazo_cliente: string | null;
 }
 interface PortalData {
   portal: { show_financeiro: boolean; blocks: Blocks };
-  project: { name: string; code: string | null; status: string; data_fim: string | null };
+  project: { name: string; code: string | null; status: string; data_inicio: string | null; data_fim: string | null };
   stages: Record<string, number>;
+  cronograma: FaseRaw[];
   entregas: Entrega[];
   arquivos: { name: string; url: string; kind: string }[];
   financeiro: { em_dia: boolean; proximo_vencimento: string | null } | null;
@@ -61,7 +68,14 @@ const MARCOS = [
   { key: 'revisao', label: 'Sua revisão', stages: ['revisao_interna', 'revisao_cliente', 'alteracoes'] },
 ];
 
-type Aba = 'dashboard' | 'entregas' | 'atendimento';
+type Aba = 'dashboard' | 'entregas' | 'cronograma' | 'atendimento';
+
+const hoje = () => new Date().toISOString().slice(0, 10);
+// Datas vêm como 'AAAA-MM-DD', então comparar como texto já ordena certo.
+const menor = (xs: (string | null)[]) => xs.filter(Boolean).sort()[0] || null;
+const maior = (xs: (string | null)[]) => xs.filter(Boolean).sort().slice(-1)[0] || null;
+const diasAte = (d: string) =>
+  Math.round((new Date(d + 'T12:00:00').getTime() - new Date(hoje() + 'T12:00:00').getTime()) / 86400000);
 
 export default function PortalCliente() {
   const { token = '' } = useParams();
@@ -85,7 +99,7 @@ export default function PortalCliente() {
   useEffect(() => { load(); }, [load]);
 
   const seg = SEG[ptheme];
-  const blocks: Blocks = data?.portal.blocks || { kpis: true, status_bar: true, etapas: true, atividade: true, arquivos: true };
+  const blocks: Blocks = { kpis: true, status_bar: true, etapas: true, atividade: true, arquivos: true, cronograma: true, ...(data?.portal.blocks || {}) };
 
   const derived = useMemo(() => {
     if (!data) return null;
@@ -104,7 +118,30 @@ export default function PortalCliente() {
     const ultimaOk = list.filter(e => e.cs === 'ok' && e.client_decided_at)
       .sort((a, b) => (b.client_decided_at || '').localeCompare(a.client_decided_at || ''))[0];
     const baixaveis = list.filter(e => e.allow_download && e.review_token);
-    return { list, nOk, nVoce, nProd, nAj, total, pct, currentIdx, projDone, ultimaOk, baixaveis };
+
+    // Cronograma: junta as etapas do banco nos marcos que o cliente entende.
+    const cron = data.cronograma || [];
+    const juntar = (keys: string[]) => {
+      const rows = cron.filter(c => keys.includes(c.etapa));
+      return {
+        n: rows.reduce((a, r) => a + r.n, 0),
+        inicio: menor(rows.map(r => r.inicio)),
+        fim: maior(rows.map(r => r.fim)),
+        prazo: menor(rows.map(r => r.prazo_cliente)),
+      };
+    };
+    const fases = [...MARCOS, { key: 'final', label: 'Entrega final', stages: [] as string[] }]
+      .map((m, i) => ({
+        ...m,
+        ...(m.key === 'final'
+          ? { n: 0, inicio: null, fim: data.project.data_fim, prazo: data.project.data_fim }
+          : juntar(m.stages)),
+        done: projDone || i < currentIdx,
+        now: !projDone && i === currentIdx,
+      }));
+    const temCronograma = fases.some(f => f.inicio || f.fim || f.prazo || f.n > 0);
+
+    return { list, nOk, nVoce, nProd, nAj, total, pct, currentIdx, projDone, ultimaOk, baixaveis, fases, temCronograma };
   }, [data]);
 
   const shown = useMemo(() => {
@@ -170,14 +207,22 @@ export default function PortalCliente() {
     );
   }
 
-  const { nOk, nVoce, nProd, nAj, total, pct, currentIdx, projDone, ultimaOk, baixaveis } = derived;
+  const { nOk, nVoce, nProd, nAj, total, pct, currentIdx, projDone, ultimaOk, baixaveis, fases, temCronograma } = derived;
   const naLumos = nProd + nAj;
 
   const ABAS: { key: Aba; label: string; icon: any; badge?: number }[] = [
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { key: 'entregas', label: 'Entregas', icon: Clapperboard, badge: nVoce || undefined },
+    ...(blocks.cronograma ? [{ key: 'cronograma' as Aba, label: 'Cronograma', icon: CalendarRange }] : []),
     { key: 'atendimento', label: 'Atendimento', icon: Headset },
   ];
+
+  // Régua do prazo: onde estamos entre o começo e a entrega final.
+  const pi = data.project.data_inicio, pf = data.project.data_fim;
+  const faltam = pf ? diasAte(pf) : null;
+  const decorrido = pi && pf && pf > pi
+    ? Math.min(100, Math.max(0, Math.round(((diasAte(pi) * -1) / ((diasAte(pf) - diasAte(pi)) || 1)) * 100)))
+    : null;
 
   return (
     <div className={clsx(themeClass, 'min-h-screen bg-lumos-bg text-lumos-text-primary font-work-sans transition-colors')}>
@@ -202,10 +247,11 @@ export default function PortalCliente() {
             </button>
           </div>
 
-          <nav className="flex gap-1">
+          {/* Com 4 abas o menu não cabe no celular, então ele rola de lado. */}
+          <nav className="flex gap-1 overflow-x-auto no-scrollbar -mx-5 px-5">
             {ABAS.map(t => (
               <button key={t.key} onClick={() => irPara(t.key)}
-                className={clsx('px-4 py-2.5 text-[12px] font-black uppercase tracking-wider border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap',
+                className={clsx('px-3 sm:px-4 py-2.5 text-[12px] font-black uppercase tracking-wider border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap flex-shrink-0',
                   aba === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
                 <t.icon className="w-3.5 h-3.5" /> {t.label}
                 {t.badge ? <span className="bg-lumos-yellow text-black text-[9.5px] font-black rounded-full px-1.5 py-0.5">{t.badge}</span> : null}
@@ -486,6 +532,110 @@ export default function PortalCliente() {
             )}
           </div>
         )}
+
+        {/* ══════════════ CRONOGRAMA ══════════════ */}
+        {aba === 'cronograma' && (<>
+          {/* Régua do prazo inteiro */}
+          <div className="card p-4">
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <p className="text-[9.5px] font-black uppercase tracking-widest text-lumos-text-secondary">Prazo do projeto</p>
+              {projDone
+                ? <span className="ml-auto text-[11px] font-bold text-green-500">projeto concluído ✓</span>
+                : faltam !== null && (
+                  <span className={clsx('ml-auto text-[11px] font-bold', faltam < 0 ? 'text-red-400' : 'text-lumos-text-primary')}>
+                    {faltam < 0 ? `${Math.abs(faltam)} dias além do previsto`
+                      : faltam === 0 ? 'a entrega final é hoje'
+                      : `faltam ${faltam} dias`}
+                  </span>
+                )}
+            </div>
+
+            {decorrido !== null ? (
+              <>
+                <div className="mt-3 h-2 rounded-full bg-lumos-text-secondary/15 overflow-hidden">
+                  <div className="h-full rounded-full bg-lumos-yellow" style={{ width: `${projDone ? 100 : decorrido}%` }} />
+                </div>
+                <div className="flex justify-between mt-1.5 text-[10.5px] text-lumos-text-secondary tabular-nums">
+                  <span>início <b className="text-lumos-text-primary">{fmtDay(pi)}</b></span>
+                  <span>entrega final <b className="text-lumos-text-primary">{fmtDay(pf)}</b></span>
+                </div>
+              </>
+            ) : (
+              <p className="text-[11px] text-lumos-text-secondary mt-2">
+                {pf ? <>entrega final prevista para <b className="text-lumos-text-primary">{fmtDay(pf)}</b>.</> : 'as datas ainda estão sendo combinadas com a gente.'}
+              </p>
+            )}
+          </div>
+
+          {/* Etapas, uma embaixo da outra, com a janela de datas de cada uma */}
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3 border-b border-lumos-border">
+              <p className="text-[9.5px] font-black uppercase tracking-widest text-lumos-text-secondary">Etapa por etapa</p>
+            </div>
+
+            {!temCronograma ? (
+              <p className="text-center text-xs text-lumos-text-secondary italic py-10">
+                O cronograma aparece aqui assim que as datas forem combinadas.
+              </p>
+            ) : (
+              <div className="p-4">
+                {fases.map((f, i) => {
+                  const janela = f.inicio && f.fim && f.inicio !== f.fim
+                    ? `${fmtDay(f.inicio)} a ${fmtDay(f.fim)}`
+                    : fmtDay(f.fim) || fmtDay(f.inicio);
+                  // Só promete data que ainda dá pra cumprir. Se a previsão já
+                  // passou, o cliente vê um aviso calmo no lugar da data velha.
+                  const prazoOk = f.prazo ? diasAte(f.prazo) >= 0 : false;
+                  const venceu = !f.done && f.n > 0 && !!(f.prazo || f.fim) && diasAte((f.prazo || f.fim) as string) < 0;
+                  return (
+                    <div key={f.key} className="flex gap-3.5">
+                      {/* trilho */}
+                      <div className="flex flex-col items-center flex-shrink-0">
+                        <div className={clsx('w-[22px] h-[22px] rounded-full grid place-items-center text-[10px] font-black border-[3px]',
+                          f.done ? 'bg-lumos-yellow border-lumos-yellow text-black'
+                            : f.now ? 'bg-lumos-surface border-lumos-yellow text-lumos-yellow'
+                            : 'bg-lumos-surface border-lumos-text-secondary/20 text-lumos-text-secondary')}>
+                          {f.done ? <Check className="w-3 h-3" /> : i + 1}
+                        </div>
+                        {i < fases.length - 1 && (
+                          <span className={clsx('w-[3px] flex-1 min-h-[26px]', f.done ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/15')} />
+                        )}
+                      </div>
+
+                      {/* conteúdo */}
+                      <div className={clsx('min-w-0 flex-1', i < fases.length - 1 && 'pb-4')}>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <p className={clsx('text-[12.5px] font-black', f.done || f.now ? 'text-lumos-text-primary' : 'text-lumos-text-secondary')}>{f.label}</p>
+                          {f.now && <span className="text-[9px] font-black uppercase tracking-wide bg-lumos-yellow text-black rounded-full px-2 py-0.5">agora</span>}
+                          {f.done && <span className="text-[10px] font-bold text-green-500">concluída</span>}
+                          {janela && <span className="ml-auto text-[11px] font-bold tabular-nums text-lumos-text-primary">{janela}</span>}
+                        </div>
+
+                        <p className="text-[10.5px] text-lumos-text-secondary mt-0.5">
+                          {f.key === 'final'
+                            ? (projDone ? 'entregue' : pf ? 'data prevista para o fechamento do projeto' : 'data a combinar')
+                            : f.n > 0
+                              ? <>{f.n} {f.n === 1 ? 'item' : 'itens'} nesta etapa{prazoOk ? <> · previsão de chegar até <b className="text-lumos-text-primary">{fmtDay(f.prazo)}</b></> : ''}</>
+                              : f.done ? 'nada pendente por aqui' : 'ainda não começou'}
+                        </p>
+
+                        {venceu && (
+                          <p className="text-[10.5px] font-bold text-amber-500 mt-0.5">
+                            estamos confirmando a nova data desta etapa, a gente te avisa
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <p className="text-[10.5px] text-lumos-text-secondary text-center">
+            As datas são a previsão de trabalho da Lumos e podem mudar conforme as aprovações. Qualquer dúvida, chama a gente na aba Atendimento.
+          </p>
+        </>)}
 
         {/* ══════════════ ATENDIMENTO ══════════════ */}
         {aba === 'atendimento' && (
