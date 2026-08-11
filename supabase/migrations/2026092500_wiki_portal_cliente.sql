@@ -1,23 +1,62 @@
 -- WIKI — Portal do cliente: guia do time + guia do cliente
 --
--- Cria (ou reaproveita) o espaço "Portal do cliente" e grava duas páginas:
---   1. Guia do time    — como operar o portal aqui dentro.
---   2. Guia do cliente — o texto pronto pra mandar pra quem contrata a gente.
+-- Grava três páginas na wiki:
+--   Portal do cliente (guarda-chuva)
+--     ├── Guia do time    — como operar o portal aqui dentro.
+--     └── Guia do cliente — o texto pronto pra mandar pra quem contrata a gente.
 --
--- Rodar de novo é seguro: se as páginas já existem, o conteúdo é atualizado
--- no lugar em vez de duplicar.
+-- ATENÇÃO, isto já mordeu uma vez: a wiki do app usa UM espaço só. O
+-- WikiContext pega `spaces[0]` e carrega apenas as páginas dele, e não existe
+-- seletor de espaço na tela. Criar um espaço novo faz a página sumir do app
+-- mesmo estando no banco. Então tudo entra no primeiro espaço, e a hierarquia
+-- fica por parent_id, que a árvore da esquerda sabe desenhar.
+--
+-- Rodar de novo é seguro: se as páginas já existem, o conteúdo é atualizado no
+-- lugar em vez de duplicar. Se a versão anterior deste arquivo tiver criado o
+-- espaço solto "Portal do cliente", as páginas são trazidas de volta e o espaço
+-- vazio é removido no fim.
 
 DO $migration$
 DECLARE
   v_space uuid;
+  v_old   uuid;
+  v_pai   uuid;
+  v_pg    uuid;
+  v_ordem int;
   v_html  text;
 BEGIN
 
-  SELECT id INTO v_space FROM public.wiki_spaces WHERE name = 'Portal do cliente' LIMIT 1;
+  -- O espaço que o app realmente mostra.
+  SELECT id INTO v_space FROM public.wiki_spaces ORDER BY ordem, created_at LIMIT 1;
   IF v_space IS NULL THEN
     INSERT INTO public.wiki_spaces (name, icon, ordem)
-    VALUES ('Portal do cliente', '🤝', 50)
+    VALUES ('Onboarding', '👋', 0)
     RETURNING id INTO v_space;
+  END IF;
+
+  -- Espaço solto criado pela versão anterior, se houver.
+  SELECT id INTO v_old FROM public.wiki_spaces
+  WHERE name = 'Portal do cliente' AND id <> v_space LIMIT 1;
+
+  -- Página guarda-chuva, com as duas outras penduradas nela.
+  SELECT id INTO v_pai FROM public.wiki_pages
+  WHERE space_id = v_space AND parent_id IS NULL AND title = 'Portal do cliente'
+  ORDER BY created_at LIMIT 1;
+
+  IF v_pai IS NULL THEN
+    SELECT COALESCE(MAX(ordem), 0) + 1 INTO v_ordem
+    FROM public.wiki_pages WHERE space_id = v_space AND parent_id IS NULL;
+
+    INSERT INTO public.wiki_pages (space_id, parent_id, title, content, icon, ordem)
+    VALUES (v_space, NULL, 'Portal do cliente',
+      '<p>O portal é a página que a gente entrega pro cliente acompanhar o projeto dele: entregas, aprovações, cronograma e com quem falar. Um link por projeto, sem login.</p>'
+      '<p>Aqui dentro tem dois guias:</p>'
+      '<ul>'
+      '<li><strong>Guia do time</strong>, como operar o portal aqui dentro do app.</li>'
+      '<li><strong>Guia do cliente</strong>, o texto pronto pra mandar junto com o link.</li>'
+      '</ul>',
+      '🤝', v_ordem)
+    RETURNING id INTO v_pai;
   END IF;
 
   -- ═══════════════════════════════════════════════════════════════════════
@@ -113,13 +152,18 @@ BEGIN
 <p>Dá. No modal, clique em <strong>Revogar link</strong>: o endereço antigo para de funcionar na hora. Gerar de novo cria um link diferente, o antigo não volta.</p>
 $html$;
 
-  IF EXISTS (SELECT 1 FROM public.wiki_pages WHERE space_id = v_space AND title = 'Guia do time') THEN
-    UPDATE public.wiki_pages
-    SET content = v_html, icon = '🛠️', ordem = 1, updated_at = now()
-    WHERE space_id = v_space AND title = 'Guia do time';
+  SELECT id INTO v_pg FROM public.wiki_pages
+  WHERE title = 'Guia do time' AND (space_id = v_space OR space_id = v_old)
+  ORDER BY created_at LIMIT 1;
+
+  IF v_pg IS NULL THEN
+    INSERT INTO public.wiki_pages (space_id, parent_id, title, content, icon, ordem)
+    VALUES (v_space, v_pai, 'Guia do time', v_html, '🛠️', 1);
   ELSE
-    INSERT INTO public.wiki_pages (space_id, title, content, icon, ordem)
-    VALUES (v_space, 'Guia do time', v_html, '🛠️', 1);
+    UPDATE public.wiki_pages
+    SET space_id = v_space, parent_id = v_pai, content = v_html,
+        icon = '🛠️', ordem = 1, updated_at = now()
+    WHERE id = v_pg;
   END IF;
 
   -- ═══════════════════════════════════════════════════════════════════════
@@ -172,13 +216,24 @@ $html$;
 <p>O portal mostra os vídeos a partir do momento em que eles são enviados pra sua aprovação. Se você está esperando um material que ainda não apareceu, provavelmente ele ainda está em produção com a nossa equipe. Qualquer dúvida sobre prazo, a aba Cronograma mostra a previsão de cada etapa, e a gente responde rápido no Atendimento.</p>
 $html$;
 
-  IF EXISTS (SELECT 1 FROM public.wiki_pages WHERE space_id = v_space AND title = 'Guia do cliente') THEN
-    UPDATE public.wiki_pages
-    SET content = v_html, icon = '👋', ordem = 2, updated_at = now()
-    WHERE space_id = v_space AND title = 'Guia do cliente';
+  SELECT id INTO v_pg FROM public.wiki_pages
+  WHERE title = 'Guia do cliente' AND (space_id = v_space OR space_id = v_old)
+  ORDER BY created_at LIMIT 1;
+
+  IF v_pg IS NULL THEN
+    INSERT INTO public.wiki_pages (space_id, parent_id, title, content, icon, ordem)
+    VALUES (v_space, v_pai, 'Guia do cliente', v_html, '👋', 2);
   ELSE
-    INSERT INTO public.wiki_pages (space_id, title, content, icon, ordem)
-    VALUES (v_space, 'Guia do cliente', v_html, '👋', 2);
+    UPDATE public.wiki_pages
+    SET space_id = v_space, parent_id = v_pai, content = v_html,
+        icon = '👋', ordem = 2, updated_at = now()
+    WHERE id = v_pg;
+  END IF;
+
+  -- Limpa o espaço solto da primeira versão, agora que ele ficou vazio.
+  IF v_old IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.wiki_pages WHERE space_id = v_old) THEN
+    DELETE FROM public.wiki_spaces WHERE id = v_old;
   END IF;
 
 END $migration$;
