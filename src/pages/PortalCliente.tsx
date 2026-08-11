@@ -71,6 +71,7 @@ export default function PortalCliente() {
   const [aba, setAba] = useState<Aba>('dashboard');
   const [filter, setFilter] = useState<'todas' | 'voce' | 'ok'>('todas');
   const [baixando, setBaixando] = useState<{ feito: number; total: number } | null>(null);
+  const [painelDl, setPainelDl] = useState(false);
   // Tema local do portal: nasce escuro (marca Lumos), o cliente pode alternar.
   const [ptheme, setPtheme] = useState<'dark' | 'light'>('dark');
   const themeClass = ptheme === 'dark' ? 'dark' : 'theme-light';
@@ -114,24 +115,28 @@ export default function PortalCliente() {
       .sort((a, b) => order[a.cs] - order[b.cs] || (b.entregue_em || '').localeCompare(a.entregue_em || ''));
   }, [derived, filter]);
 
-  // "Baixar tudo": dispara os downloads um a um (o navegador bloqueia vários
-  // simultâneos). Só entra o que a equipe liberou pra download.
+  const dlUrl = (e: Entrega) => `${STREAM_BASE}?token=${encodeURIComponent(e.review_token!)}&download=1`;
+
+  // "Baixar tudo": o navegador BLOQUEIA vários downloads automáticos (o
+  // primeiro passa, o resto é barrado sem avisar). Então: disparamos em
+  // sequência com folga e deixamos a lista aberta com um botão por arquivo —
+  // clique do usuário nunca é bloqueado, então sempre há um caminho que funciona.
   const baixarTudo = async () => {
     if (!derived?.baixaveis.length || baixando) return;
     const lista = derived.baixaveis;
     setBaixando({ feito: 0, total: lista.length });
     for (let i = 0; i < lista.length; i++) {
-      const e = lista[i];
       const a = document.createElement('a');
-      a.href = `${STREAM_BASE}?token=${encodeURIComponent(e.review_token!)}&download=1`;
-      a.download = e.file_name;
+      a.href = dlUrl(lista[i]);
+      a.download = lista[i].file_name;
+      a.rel = 'noopener';
       document.body.appendChild(a);
       a.click();
       a.remove();
       setBaixando({ feito: i + 1, total: lista.length });
-      await new Promise(r => setTimeout(r, 1200));   // respiro entre downloads
+      await new Promise(r => setTimeout(r, 1500));
     }
-    setTimeout(() => setBaixando(null), 1500);
+    setTimeout(() => setBaixando(null), 2000);
   };
 
   const irPara = (a: Aba, f?: 'todas' | 'voce') => {
@@ -269,7 +274,8 @@ export default function PortalCliente() {
                 </span>
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold bg-lumos-text-secondary/10 border border-lumos-border rounded-full px-3 py-1">
                   <span className="w-2.5 h-2.5 rounded-sm" style={{ background: seg.lumos }} /> Na Lumos · {naLumos}
-                  {nAj > 0 && <span className="text-lumos-text-secondary font-semibold">({nProd} em produção, {nAj} em ajustes)</span>}
+                  {nProd > 0 && nAj > 0 && <span className="text-lumos-text-secondary font-semibold">({nProd} em produção, {nAj} em ajustes)</span>}
+                  {nProd === 0 && nAj > 0 && <span className="text-lumos-text-secondary font-semibold">(em ajustes)</span>}
                 </span>
                 <span className="inline-flex items-center gap-2 text-[11px] font-bold bg-lumos-text-secondary/10 border border-lumos-border rounded-full px-3 py-1">
                   <span className="w-2.5 h-2.5 rounded-sm" style={{ background: seg.voce }} /> Com você · {nVoce}
@@ -376,11 +382,10 @@ export default function PortalCliente() {
               <span className="text-[11px] text-lumos-text-secondary tabular-nums">{total} itens</span>
               <div className="ml-auto flex gap-1.5 flex-wrap items-center">
                 {baixaveis.length > 0 && (
-                  <button onClick={baixarTudo} disabled={!!baixando}
-                    className="text-[10px] font-black uppercase tracking-wide px-3 py-1.5 rounded-full border border-lumos-yellow/50 text-lumos-yellow hover:bg-lumos-yellow/10 flex items-center gap-1.5 disabled:opacity-60">
-                    {baixando
-                      ? <><Loader2 className="w-3 h-3 animate-spin" /> baixando {baixando.feito}/{baixando.total}</>
-                      : <><DownloadCloud className="w-3 h-3" /> Baixar tudo · {baixaveis.length}</>}
+                  <button onClick={() => setPainelDl(v => !v)}
+                    className={clsx('text-[10px] font-black uppercase tracking-wide px-3 py-1.5 rounded-full border flex items-center gap-1.5',
+                      painelDl ? 'bg-lumos-yellow border-lumos-yellow text-black' : 'border-lumos-yellow/50 text-lumos-yellow hover:bg-lumos-yellow/10')}>
+                    <DownloadCloud className="w-3 h-3" /> Baixar tudo · {baixaveis.length}
                   </button>
                 )}
                 {([['todas', 'Todas'], ['voce', `Com você · ${nVoce}`], ['ok', `Aprovadas · ${nOk}`]] as const).map(([k, l]) => (
@@ -392,6 +397,41 @@ export default function PortalCliente() {
                 ))}
               </div>
             </div>
+
+            {/* Painel de download em lote */}
+            {painelDl && baixaveis.length > 0 && (
+              <div className="border-b border-lumos-border bg-lumos-bg/40 p-4">
+                <div className="flex items-start gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-bold text-lumos-text-primary">
+                      {baixaveis.length} arquivo{baixaveis.length > 1 ? 's' : ''} disponíve{baixaveis.length > 1 ? 'is' : 'l'} para download
+                    </p>
+                    <p className="text-[11px] text-lumos-text-secondary mt-0.5">
+                      Ao baixar todos de uma vez, o navegador costuma pedir permissão para vários downloads, é só clicar em <b className="text-lumos-text-primary">Permitir</b>. Se preferir, baixe um por um na lista abaixo.
+                    </p>
+                  </div>
+                  <button onClick={baixarTudo} disabled={!!baixando}
+                    className="bg-lumos-yellow text-black text-[11px] font-black rounded-lumos px-4 h-9 flex items-center gap-2 disabled:opacity-60 flex-shrink-0">
+                    {baixando
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> baixando {baixando.feito}/{baixando.total}</>
+                      : <><DownloadCloud className="w-3.5 h-3.5" /> Baixar todos automaticamente</>}
+                  </button>
+                </div>
+
+                <div className="mt-3 border border-lumos-border rounded-lumos divide-y divide-lumos-border/60 max-h-64 overflow-y-auto custom-scrollbar">
+                  {baixaveis.map((e, i) => (
+                    <div key={e.file_name + i} className="flex items-center gap-3 px-3 py-2">
+                      <span className="text-[10px] font-black text-lumos-text-secondary w-6 tabular-nums flex-shrink-0">{i + 1}</span>
+                      <span className="text-[11.5px] font-bold truncate flex-1" title={e.file_name}>{semExt(e.file_name)}</span>
+                      <a href={dlUrl(e)} download={e.file_name}
+                        className="text-[10px] font-black uppercase tracking-wide px-2.5 py-1.5 rounded border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/50 flex items-center gap-1.5 flex-shrink-0">
+                        <DownloadCloud className="w-3 h-3" /> Baixar
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {shown.length === 0 ? (
               <p className="text-center text-xs text-lumos-text-secondary italic py-10">
