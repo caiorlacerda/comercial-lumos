@@ -1735,27 +1735,32 @@ export default function BudgetEditorPage() {
             </h3>
             
             <div className="space-y-4 text-xs font-semibold">
+              {/* De onde vem o preço: custo direto + a margem pedida. */}
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-lumos-text-secondary uppercase">Custo Direto (Itens)</span>
                   <span className="text-lumos-text-primary">{formatCurrency(financials?.totalCusto || 0)}</span>
                 </div>
-                <div className="flex justify-between text-lumos-text-secondary">
+                <div className="flex justify-between font-black text-sm text-lumos-text-primary">
                   <span className="uppercase">Margem ({Math.round((version?.margin_pct || 0) * 100)}%)</span>
                   <span>+{formatCurrency(financials?.margem || 0)}</span>
                 </div>
               </div>
-              
-              <div className="h-px bg-lumos-border my-4" />
-              
-              <div className="flex justify-between font-black text-sm text-lumos-text-primary">
-                <span className="uppercase">Subtotal (Custo + Margem)</span>
-                <span>{formatCurrency(financials?.subtotal || 0)}</span>
-              </div>
 
-              <div className="flex justify-between text-lumos-text-secondary mt-2">
-                <span className="uppercase">Imposto NF ({Math.round((version?.nf_pct || 0) * 100)}%)</span>
-                <span>+{formatCurrency(financials?.nf || 0)}</span>
+              <div className="h-px bg-lumos-border my-4" />
+
+              {/* Pra onde a margem vai. O imposto sai DAQUI, não do cliente. */}
+              <div className="space-y-2 pl-3 border-l-2 border-lumos-border">
+                <div className="flex justify-between text-lumos-text-secondary">
+                  <span className="uppercase">Imposto NF ({Math.round((version?.nf_pct || 0) * 100)}%)</span>
+                  <span>−{formatCurrency(financials?.nf || 0)}</span>
+                </div>
+                <div className="flex justify-between text-lumos-text-primary">
+                  <span className="uppercase">Sobra pra Lumos</span>
+                  <span className={clsx('font-black', (financials?.lucro || 0) < 0 && 'text-red-500')}>
+                    {formatCurrency(financials?.lucro || 0)}
+                  </span>
+                </div>
               </div>
 
               <div className="h-px bg-lumos-border my-4" />
@@ -1763,7 +1768,7 @@ export default function BudgetEditorPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Margem / Markup</label>
+                    <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Margem (% do total)</label>
                     <div className="flex items-center gap-2">
                       <input 
                         disabled={isReadOnly}
@@ -1815,10 +1820,20 @@ export default function BudgetEditorPage() {
                 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className="text-lumos-text-secondary">Lucro Líquido</span>
-                    <span className="text-lumos-text-primary">{formatCurrency(financials?.lucro || 0)}</span>
+                    <span className="text-lumos-text-secondary">Margem (total − custo)</span>
+                    <span className="text-lumos-text-primary">{formatCurrency(financials?.margem || 0)}</span>
                   </div>
-                  
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                    <span className="text-lumos-text-secondary">Sobra depois do imposto</span>
+                    <span className={clsx((financials?.lucro || 0) < 0 ? 'text-red-500' : 'text-lumos-text-primary')}>
+                      {formatCurrency(financials?.lucro || 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                    <span className="text-lumos-text-secondary">Markup</span>
+                    <span className="text-lumos-text-secondary">{(financials?.markup || 0).toFixed(2)}×&nbsp;o custo</span>
+                  </div>
+
                   <div className={clsx(
                     "p-3 rounded-lumos flex items-center justify-between font-black uppercase text-[10px] border",
                     (financials?.margemReal || 0) < 30 

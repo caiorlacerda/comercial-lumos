@@ -45,13 +45,22 @@ export interface VersionFinancials {
   custoEdicao: number;
   custoProducao: number;
   totalCusto: number;
+  /** O que sobra do preço depois do custo direto: valorFinal - totalCusto. */
   margem: number;
-  subtotal: number;
+  /** Imposto da nota. Sai de DENTRO da margem, não é somado ao preço. */
   nf: number;
-  valorFinal: number;
+  /** Margem já sem o imposto — o que de fato fica com a Lumos. */
   lucro: number;
+  /** O que o cliente paga. */
+  valorFinal: number;
+  /** margem / valorFinal, em %. Com desconto zero, bate com o margin_pct pedido. */
   margemReal: number;
+  /** Quantas vezes o custo, só como referência de mercado. */
+  markup: number;
 }
+
+/** Margem 100% seria preço infinito. Trava num teto que ainda deixa negociar. */
+const MARGEM_MAX = 0.95;
 
 export function calcFinancials(items: BudgetItem[], version: BudgetVersion): VersionFinancials {
   const sum = (group: string) =>
@@ -65,32 +74,29 @@ export function calcFinancials(items: BudgetItem[], version: BudgetVersion): Ver
   const custoProducao = sum('producao');
   const totalCusto = custoEquipe + custoEquipamentos + custoEdicao + custoProducao;
 
-  // 1. Margem (custo * pct)
-  const marginPct = Number(version?.margin_pct || 0);
-  const margem = totalCusto * marginPct;
+  // A margem é MARGEM, não markup: é a fatia do preço que não é custo direto.
+  // Então o preço nasce do custo dividido pelo que sobra, e não do custo
+  // multiplicado pela margem — com 40% pedidos, 40% do preço é margem.
+  const marginPct = Math.min(Math.max(Number(version?.margin_pct || 0), 0), MARGEM_MAX);
+  const base = totalCusto > 0 ? totalCusto / (1 - marginPct) : 0;
 
-  // 2. Subtotal (custo + margem)
-  const subtotal = totalCusto + margem;
+  // Desconto entra depois, e come a margem: o custo direto não muda.
+  const valorFinal = Math.max(base - Number(version?.discount_value || 0), 0);
 
-  // 3. NF (subtotal * pct)
+  const margem = valorFinal - totalCusto;
+
+  // O imposto é uma fatia da NOTA, não um acréscimo por cima dela — 18% de
+  // imposto significa 18% do que o cliente paga, e esse dinheiro sai da margem.
   const nfPct = Number(version?.nf_pct || 0);
-  const nf = subtotal * nfPct;
+  const nf = valorFinal * nfPct;
 
-  // 4. Final Value
-  // Note: user said valorFinal = subtotal + nf. We also have a discount_value to consider if it still exists.
-  // The request says "valorFinal = subtotal + nf". I will include discount_value if it's there, 
-  // but the prompt example didn't show it. I'll subtract it at the very end.
-  const baseFinal = subtotal + nf;
-  const valorFinal = baseFinal - Number(version?.discount_value || 0);
-
-  // 5. Lucro líquido & Margem Real
-  const lucro = valorFinal - totalCusto;
+  const lucro = margem - nf;
   const margemReal = valorFinal > 0 ? (margem / valorFinal) * 100 : 0;
+  const markup = totalCusto > 0 ? valorFinal / totalCusto : 0;
 
   return {
     custoEquipe, custoEquipamentos, custoEdicao, custoProducao,
-    totalCusto, margem, subtotal, nf,
-    valorFinal, lucro, margemReal
+    totalCusto, margem, nf, lucro, valorFinal, margemReal, markup,
   };
 }
 

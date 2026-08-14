@@ -8,6 +8,7 @@ export const NOTIFICATION_EVENTS = {
   REEMBOLSO_PENDENTE_APROVACAO: { key: 'reembolso_pendente_aprovacao', category: 'financeiro', label: 'Reembolso aguardando sua aprovação', defaultEnabled: true, priority: 'high' },
   PAGAMENTO_RECEBIDO: { key: 'pagamento_recebido', category: 'financeiro', label: 'Pagamento recebido', defaultEnabled: true },
   CUSTO_PROJETO_ESTOUROU: { key: 'custo_projeto_estourou', category: 'financeiro', label: 'Custo de projeto ultrapassou 90% do orçado', defaultEnabled: true, priority: 'high' },
+  PROJETO_FINANCEIRO_ENCERRADO: { key: 'projeto_financeiro_encerrado', category: 'financeiro', label: 'Projeto encerrado no financeiro (e o que falta receber)', defaultEnabled: true, priority: 'high' },
 
   // PRODUÇÃO
   OS_ATRIBUIDA: { key: 'os_atribuida', category: 'producao', label: 'Nova OS atribuída a você', defaultEnabled: true },
