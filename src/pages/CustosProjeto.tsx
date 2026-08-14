@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, ChevronUp, ChevronDown, Target, Check, Pencil, Plus, AlertTriangle, Users } from 'lucide-react';
+import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, ChevronUp, ChevronDown, Target, Check, Pencil, Plus, AlertTriangle, Users, SlidersHorizontal, Archive, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
@@ -10,6 +10,9 @@ import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/hooks/useAuth';
 import { formatBudgetCode } from '@/utils/formatters';
+import { useViewPrefs } from '@/hooks/useViewPrefs';
+import { notify, getAdminUserIds } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -27,6 +30,69 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
   );
 };
 
+const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+const fmtDia = (d?: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+
+const badgeMargem = (p: any) => {
+  if (!(p.totalProductionValue > 0)) return 'bg-lumos-text-secondary/15 text-lumos-text-secondary border border-lumos-border';
+  if (p.marginPercent >= 30) return 'bg-green-500/10 text-green-500 border border-green-500/20';
+  if (p.marginPercent >= 15) return 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20';
+  return 'bg-red-500/10 text-red-500 border border-red-500/20';
+};
+
+const TITULO_LABEL: Record<string, string> = {
+  emitir_nf: 'Emitir NF',
+  pedido_nf_feito: 'NF pedida',
+  esperando_pagamento: 'Aguardando',
+  pagamento_atraso: 'Em atraso',
+  pagamento_recebido: 'Recebido',
+};
+
+/**
+ * Catálogo das colunas da lista (só ADM). Cada pessoa liga e desliga o que
+ * quer ver; a ordem aqui é a ordem na tabela, independente da ordem em que
+ * foram marcadas.
+ */
+type Coluna = { key: string; label: string; sort: string; render: (p: any) => React.ReactNode };
+
+const COLUNAS: Coluna[] = [
+  { key: 'vendido', label: 'Vendido', sort: 'totalProductionValue',
+    render: p => <span className="text-lumos-text-primary">{fmtBRL(p.totalProductionValue)}</span> },
+  { key: 'custos', label: 'Custos', sort: 'totalCosts',
+    render: p => <span className="text-lumos-text-primary">{fmtBRL(p.totalCosts)}</span> },
+  { key: 'saldo', label: 'Saldo Prod.', sort: 'saldoProducao',
+    render: p => <span className={p.saldoProducao >= 0 ? 'text-green-500' : 'text-red-500'}>{fmtBRL(p.saldoProducao)}</span> },
+  { key: 'lucro', label: 'Lucro Líq.', sort: 'margin',
+    render: p => <span className={p.margin >= 0 ? 'text-green-500' : 'text-red-500'}>{fmtBRL(p.margin)}</span> },
+  { key: 'margem', label: 'Margem', sort: 'marginPercent',
+    render: p => (
+      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black', badgeMargem(p))}>
+        {p.totalProductionValue > 0 ? `${p.marginPercent.toFixed(1)}%` : 'S/ Proposta'}
+      </span>
+    ) },
+  { key: 'teto', label: 'Teto de custos', sort: 'tetoCustos',
+    render: p => <span className="text-lumos-text-primary">{fmtBRL(p.tetoCustos)}</span> },
+  { key: 'consumo', label: 'Consumo do teto', sort: 'consumoTetoPct',
+    render: p => (
+      <span className={clsx(p.consumoTetoPct > 100 ? 'text-red-500' : p.consumoTetoPct > 85 ? 'text-yellow-500' : 'text-lumos-text-primary')}>
+        {p.tetoCustos > 0 ? `${p.consumoTetoPct.toFixed(0)}%` : '—'}
+      </span>
+    ) },
+  { key: 'titulo', label: 'Status do título', sort: 'status_titulo',
+    render: p => (
+      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black',
+        p.status_titulo === 'pagamento_recebido' ? 'bg-green-500/10 text-green-500'
+          : p.status_titulo === 'pagamento_atraso' ? 'bg-red-500/10 text-red-500'
+          : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
+        {TITULO_LABEL[p.status_titulo] || '—'}
+      </span>
+    ) },
+  { key: 'recebimento', label: 'Recebimento', sort: 'data_recebimento_negociada',
+    render: p => <span className={clsx(p.vencido ? 'text-red-500' : 'text-lumos-text-primary')}>{fmtDia(p.data_recebimento_negociada)}</span> },
+];
+
+const COLUNAS_PADRAO = ['vendido', 'custos', 'saldo', 'lucro', 'margem'];
+
 export default function CustosProjeto() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -43,8 +109,8 @@ export default function CustosProjeto() {
   // Ordenação por coluna clicável (mesmo padrão de Contas a Pagar/Orçamentos):
   // clicar no título alterna crescente/decrescente. O dropdown do modo grade
   // alimenta o mesmo estado.
-  type SortKey = 'recente' | 'code' | 'name' | 'totalProductionValue' | 'totalCosts' | 'saldoProducao' | 'margin' | 'marginPercent' | 'tetoCustos';
-  const NUMERIC_SORT_KEYS = new Set<SortKey>(['totalProductionValue', 'totalCosts', 'saldoProducao', 'margin', 'marginPercent', 'tetoCustos']);
+  type SortKey = 'recente' | 'code' | 'name' | 'totalProductionValue' | 'totalCosts' | 'saldoProducao' | 'margin' | 'marginPercent' | 'tetoCustos' | 'consumoTetoPct' | 'status_titulo' | 'data_recebimento_negociada';
+  const NUMERIC_SORT_KEYS = new Set<SortKey>(['totalProductionValue', 'totalCosts', 'saldoProducao', 'margin', 'marginPercent', 'tetoCustos', 'consumoTetoPct']);
   // Padrão: por número do projeto (código), mais recente no topo. Antes era por
   // data de criação, que não bate com a ordem dos números e parecia aleatório.
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'code', direction: 'desc' });
@@ -69,6 +135,23 @@ export default function CustosProjeto() {
       ? <ChevronUp className="w-3 h-3 text-amber-600 dark:text-lumos-yellow" />
       : <ChevronDown className="w-3 h-3 text-amber-600 dark:text-lumos-yellow" />;
   };
+  const [aba, setAba] = useState<'ativos' | 'encerrados'>('ativos');
+  const [colunasAbertas, setColunasAbertas] = useState(false);
+  const [encerrando, setEncerrando] = useState<any | null>(null);
+  const [encerrandoBusy, setEncerrandoBusy] = useState(false);
+  // Cada ADM escolhe as colunas que quer, e a escolha segue ele em qualquer
+  // computador (fica no banco, não no navegador).
+  const { prefs: viewPrefs, salvar: salvarPrefs } = useViewPrefs<{ colunas: string[] }>(
+    'custos_projeto', { colunas: COLUNAS_PADRAO }
+  );
+  const colunasVisiveis = COLUNAS.filter(c => (viewPrefs.colunas || COLUNAS_PADRAO).includes(c.key));
+  const toggleColuna = (key: string) => {
+    const atuais = viewPrefs.colunas || COLUNAS_PADRAO;
+    const novas = atuais.includes(key) ? atuais.filter((k: string) => k !== key) : [...atuais, key];
+    if (!novas.length) return; // pelo menos uma coluna tem que sobrar
+    salvarPrefs({ colunas: COLUNAS.filter(c => novas.includes(c.key)).map(c => c.key) });
+  };
+
   const [groupByClient, setGroupByClient] = useState(false);
   const [view, setView] = useState<ViewMode>(() => {
     try { return (localStorage.getItem('lumos_custos_view') as ViewMode) || 'list'; } catch { return 'list'; }
@@ -169,22 +252,21 @@ export default function CustosProjeto() {
           ? (costByProject.get(p.project_id) ?? 0)
           : Number(p.custos_total || 0);
 
+        // Mesma régua do orçamento (utils/financials.ts): a margem é fatia do
+        // preço, não acréscimo sobre o custo, e o imposto sai de dentro dela.
+
         // TETO DE CUSTOS (Custo Direto do Orçamento)
         const tetoCustos = p.proposta_id
           ? estimatedCost
-          : Number(p.valor_vendido || 0) * (1 - effectiveNfPct) / (1 + 0.40);
+          : Number(p.valor_vendido || 0) * (1 - 0.40);
 
-        // Subtotal (Custo + Margem)
-        const subtotalOrçado = estimatedCost * (1 + marginPct);
-
-        // Faturamento Bruto (Venda) — valor contratado, reconstruído com a alíquota
-        // do orçamento (não muda com a alíquota efetiva).
+        // Faturamento Bruto (Venda) — o valor contratado.
         const totalProductionValue = p.proposta_id
-          ? (subtotalOrçado * (1 + budgetNfPct) - discountValue)
+          ? Math.max(estimatedCost / (1 - Math.min(marginPct, 0.95)) - discountValue, 0)
           : Number(p.valor_vendido || 0);
 
-        // Faturamento Líquido (Receita sem imposto) = Bruto ÷ (1 + alíquota efetiva).
-        const faturamentoLiquido = totalProductionValue / (1 + effectiveNfPct);
+        // Faturamento Líquido (Receita sem imposto): o imposto é fatia da nota.
+        const faturamentoLiquido = totalProductionValue * (1 - effectiveNfPct);
 
         // Lucro Líquido Real (com imposto deduzido)
         const margin = faturamentoLiquido - totalCosts;
@@ -212,6 +294,8 @@ export default function CustosProjeto() {
           status_titulo: p.status_titulo,
           icp: p.icp,
           vencido: p.vencido,
+          encerrado_em: p.encerrado_em || null,
+          data_recebimento_negociada: p.data_recebimento_negociada || null,
           pendente_preenchimento: p.pendente_preenchimento,
           tetoCustos,
           saldoProducao,
@@ -315,6 +399,60 @@ export default function CustosProjeto() {
     }
   };
 
+  // Encerrar: abre o modal já com o levantamento do que ainda falta entrar.
+  const abrirEncerrar = async (p: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (p.encerrado_em) { setEncerrando({ ...p, reabrindo: true }); return; }
+    setEncerrando({ ...p, carregando: true });
+    let aReceber = 0, parcelas: any[] = [];
+    if (p.budget_id) {
+      const { data } = await supabase
+        .from('receivables')
+        .select('description, total_amount, received_amount, due_date, status')
+        .eq('budget_id', p.budget_id)
+        .not('status', 'in', '("recebido","cancelado")');
+      parcelas = data || [];
+      aReceber = parcelas.reduce((s, r) => s + (Number(r.total_amount || 0) - Number(r.received_amount || 0)), 0);
+    }
+    setEncerrando({ ...p, carregando: false, aReceber, parcelas });
+  };
+
+  const confirmarEncerrar = async () => {
+    if (!encerrando) return;
+    setEncerrandoBusy(true);
+    const reabrindo = !!encerrando.reabrindo;
+    const { error } = await supabase
+      .from('projetos_financeiro')
+      .update(reabrindo
+        ? { encerrado_em: null, encerrado_por: null }
+        : { encerrado_em: new Date().toISOString(), encerrado_por: profile?.id || null })
+      .eq('id', encerrando.id);
+    setEncerrandoBusy(false);
+    if (error) { toast.error('Não foi possível salvar.'); return; }
+
+    if (!reabrindo) {
+      // Avisa os ADMs do que ficou pendente, senão o projeto some da lista e
+      // o dinheiro que falta some junto.
+      const faltando = Number(encerrando.aReceber || 0);
+      const admins = await getAdminUserIds();
+      await notify({
+        userIds: admins,
+        event: NOTIFICATION_EVENTS.PROJETO_FINANCEIRO_ENCERRADO,
+        title: faltando > 0 ? 'Projeto encerrado com valor a receber' : 'Projeto encerrado, tudo recebido ✓',
+        body: faltando > 0
+          ? `${encerrando.name}: ainda faltam ${fmtBRL(faltando)} do cliente.`
+          : `${encerrando.name}: não sobrou nada a receber.`,
+        link: `/financeiro/custos-projeto/${encerrando.project_id}`,
+        data: { project_id: encerrando.project_id, a_receber: faltando },
+      });
+    }
+
+    toast.success(reabrindo ? 'Projeto reaberto.' : 'Projeto encerrado.');
+    setEncerrando(null);
+    setAba(reabrindo ? 'ativos' : 'encerrados');
+    fetchProjects(true);
+  };
+
   const filtered = projects.filter(p => {
     const term = searchTerm.toLowerCase();
     const matchSearch =
@@ -324,8 +462,12 @@ export default function CustosProjeto() {
       (p.code && p.code.toLowerCase().includes(term)) ||
       (p.code && formatBudgetCode(p.code).toLowerCase().includes(term));
     const matchClient = !clientFilter || p.client_id === clientFilter;
-    return matchSearch && matchClient;
+    const matchAba = aba === 'encerrados' ? !!p.encerrado_em : !p.encerrado_em;
+    return matchSearch && matchClient && matchAba;
   });
+
+  const nEncerrados = projects.filter(p => p.encerrado_em).length;
+  const nAtivos = projects.length - nEncerrados;
 
   const sortedProjects = React.useMemo(() => {
     const list = [...filtered];
@@ -348,8 +490,14 @@ export default function CustosProjeto() {
       if (key === 'name') {
         return (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }) * dir;
       }
+      // Colunas de texto e data (status do título, recebimento) vão por texto;
+      // como as datas são AAAA-MM-DD, comparar como texto já ordena certo.
+      const av = a[key], bv = b[key];
+      if (typeof av === 'string' || typeof bv === 'string') {
+        return String(av || '').localeCompare(String(bv || ''), 'pt-BR') * dir;
+      }
       // Colunas numéricas (vendido, custos, saldo de produção, lucro, margem, teto).
-      return ((Number(a[key]) || 0) - (Number(b[key]) || 0)) * dir;
+      return ((Number(av) || 0) - (Number(bv) || 0)) * dir;
     });
   }, [filtered, sortConfig]);
 
@@ -568,7 +716,6 @@ export default function CustosProjeto() {
     );
   };
 
-  const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
   const renderProjectList = (items: any[]) => (
     <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden shadow-sm">
@@ -585,21 +732,11 @@ export default function CustosProjeto() {
               </th>
               {isAdmin ? (
                 <>
-                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('totalProductionValue')}>
-                    <div className="flex items-center justify-end gap-1">Vendido <SortIcon column="totalProductionValue" /></div>
-                  </th>
-                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('totalCosts')}>
-                    <div className="flex items-center justify-end gap-1">Custos <SortIcon column="totalCosts" /></div>
-                  </th>
-                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('saldoProducao')}>
-                    <div className="flex items-center justify-end gap-1">Saldo Prod. <SortIcon column="saldoProducao" /></div>
-                  </th>
-                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('margin')}>
-                    <div className="flex items-center justify-end gap-1">Lucro Líq. <SortIcon column="margin" /></div>
-                  </th>
-                  <th className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort('marginPercent')}>
-                    <div className="flex items-center justify-end gap-1">Margem <SortIcon column="marginPercent" /></div>
-                  </th>
+                  {colunasVisiveis.map(c => (
+                    <th key={c.key} className="group/th px-4 py-3 text-right cursor-pointer select-none hover:text-lumos-text-primary transition-colors" onClick={() => handleSort(c.sort as SortKey)}>
+                      <div className="flex items-center justify-end gap-1">{c.label} <SortIcon column={c.sort as SortKey} /></div>
+                    </th>
+                  ))}
                 </>
               ) : (
                 <>
@@ -672,22 +809,12 @@ export default function CustosProjeto() {
                   </td>
                   {isAdmin ? (
                     <>
-                      <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalProductionValue)}</td>
-                      <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalCosts)}</td>
-                      <td
-                        className={clsx('px-4 py-3 text-right text-xs font-black whitespace-nowrap', p.saldoProducao >= 0 ? 'text-green-500' : 'text-red-500')}
-                        title={p.tetoCustos > 0 ? `Teto ${fmtBRL(p.tetoCustos)} · consumo ${p.consumoTetoPct.toFixed(1)}%` : undefined}
-                      >
-                        {fmtBRL(p.saldoProducao)}
-                      </td>
-                      <td className={clsx('px-4 py-3 text-right text-xs font-black whitespace-nowrap', p.margin >= 0 ? 'text-green-500' : 'text-red-500')}>{fmtBRL(p.margin)}</td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {p.totalProductionValue > 0 ? (
-                          <span className={clsx('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black', marginBadgeClass)}>{p.marginPercent.toFixed(1)}%</span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-lumos-text-secondary/15 text-lumos-text-secondary border border-lumos-border">S/ Proposta</span>
-                        )}
-                      </td>
+                      {colunasVisiveis.map(c => (
+                        <td key={c.key} className="px-4 py-3 text-right text-xs font-black whitespace-nowrap"
+                          title={c.key === 'saldo' && p.tetoCustos > 0 ? `Teto ${fmtBRL(p.tetoCustos)} · consumo ${p.consumoTetoPct.toFixed(1)}%` : undefined}>
+                          {c.render(p)}
+                        </td>
+                      ))}
                     </>
                   ) : (
                     <>
@@ -695,8 +822,19 @@ export default function CustosProjeto() {
                       <td className="px-4 py-3 text-right text-xs font-black text-lumos-text-primary whitespace-nowrap">{fmtBRL(p.totalCosts)}</td>
                     </>
                   )}
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
                     {isAdmin ? (
+                      <>
+                      <button
+                        onClick={e => abrirEncerrar(p, e)}
+                        className={clsx('p-1.5 rounded-full transition-all',
+                          p.encerrado_em
+                            ? 'text-green-500 hover:bg-green-500/10'
+                            : 'text-lumos-text-secondary hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 hover:text-amber-600 dark:hover:text-lumos-yellow')}
+                        title={p.encerrado_em ? 'Reabrir projeto' : 'Encerrar projeto'}
+                      >
+                        {p.encerrado_em ? <RotateCcw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                      </button>
                       <button
                         onClick={e => openEditModal(p, e)}
                         className="p-1.5 rounded-full hover:bg-amber-500/10 dark:hover:bg-lumos-yellow/10 text-lumos-text-secondary hover:text-amber-600 dark:hover:text-lumos-yellow transition-all"
@@ -704,6 +842,7 @@ export default function CustosProjeto() {
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
+                      </>
                     ) : (
                       <ChevronRight className="w-4 h-4 text-lumos-text-secondary inline group-hover:translate-x-0.5 transition-transform" />
                     )}
@@ -729,6 +868,45 @@ export default function CustosProjeto() {
           <p className="text-lumos-text-secondary text-sm">Acompanhamento de custos e rentabilidade dos projetos Lumos.</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Escolha de colunas: vale só pra quem está logado */}
+          {isAdmin && view === 'list' && (
+            <div className="relative">
+              <button type="button" onClick={() => setColunasAbertas(o => !o)}
+                className={clsx('h-10 px-3 rounded-lumos border text-xs font-bold flex items-center gap-2 transition-colors',
+                  colunasAbertas ? 'border-amber-600 dark:border-lumos-yellow text-amber-600 dark:text-lumos-yellow'
+                    : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                <SlidersHorizontal className="w-4 h-4" /> Colunas
+              </button>
+              {colunasAbertas && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setColunasAbertas(false)} />
+                  <div className="absolute right-0 mt-2 w-64 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-40 overflow-hidden">
+                    <p className="px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary border-b border-lumos-border">
+                      Colunas da lista
+                    </p>
+                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                      {COLUNAS.map(c => {
+                        const on = (viewPrefs.colunas || COLUNAS_PADRAO).includes(c.key);
+                        return (
+                          <button key={c.key} type="button" onClick={() => toggleColuna(c.key)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5">
+                            <span className={clsx('w-4 h-4 rounded border flex items-center justify-center flex-shrink-0',
+                              on ? 'bg-amber-600 dark:bg-lumos-yellow border-amber-600 dark:border-lumos-yellow text-white dark:text-black' : 'border-lumos-border')}>
+                              {on && <Check className="w-3 h-3" />}
+                            </span>
+                            {c.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="px-3 py-2 text-[10px] text-lumos-text-secondary border-t border-lumos-border">
+                      Só vale pra você, cada pessoa tem a sua.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <ViewToggle value={view} onChange={changeView} />
           {isAdmin && (
             <button
@@ -740,6 +918,21 @@ export default function CustosProjeto() {
           )}
         </div>
       </div>
+
+      {/* Abas: projeto encerrado sai da lista principal, mas não some do sistema */}
+      {isAdmin && (
+        <div className="flex gap-1 border-b border-lumos-border -mb-2">
+          {([['ativos', 'Em andamento', nAtivos], ['encerrados', 'Encerrados', nEncerrados]] as const).map(([key, label, n]) => (
+            <button key={key} type="button" onClick={() => setAba(key)}
+              className={clsx('px-4 py-2.5 text-[11px] font-black uppercase tracking-wider border-b-2 flex items-center gap-2 transition-colors',
+                aba === key ? 'border-amber-600 dark:border-lumos-yellow text-amber-600 dark:text-lumos-yellow'
+                  : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
+              {label}
+              <span className="text-[9.5px] font-black bg-lumos-text-secondary/15 rounded-full px-1.5 py-0.5 tabular-nums">{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* BARRA DE CONTROLES */}
       <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-5 space-y-4 shadow-xl">
@@ -916,6 +1109,7 @@ export default function CustosProjeto() {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           title={editingProjectId ? 'Editar Projeto' : 'Novo Projeto'}
+
         >
           <form onSubmit={saveProject} className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
@@ -962,6 +1156,64 @@ export default function CustosProjeto() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Encerrar / reabrir projeto no financeiro */}
+      {encerrando && (
+        <Modal
+          isOpen
+          onClose={() => setEncerrando(null)}
+          title={encerrando.reabrindo ? 'Reabrir projeto' : 'Encerrar projeto'}
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-lumos-text-primary font-bold">{encerrando.name}</p>
+
+            {encerrando.reabrindo ? (
+              <p className="text-xs text-lumos-text-secondary">
+                O projeto volta pra lista de em andamento. Nada do histórico é perdido nesse caminho.
+              </p>
+            ) : encerrando.carregando ? (
+              <p className="text-xs text-lumos-text-secondary">Conferindo o que falta receber…</p>
+            ) : (
+              <>
+                <div className={clsx('rounded-lumos border p-4',
+                  encerrando.aReceber > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5')}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Ainda falta receber</p>
+                  <p className={clsx('text-2xl font-black mt-1 tabular-nums', encerrando.aReceber > 0 ? 'text-red-500' : 'text-green-500')}>
+                    {encerrando.aReceber > 0 ? fmtBRL(encerrando.aReceber) : 'Nada, tudo recebido ✓'}
+                  </p>
+                  {encerrando.parcelas?.length > 0 && (
+                    <ul className="mt-3 space-y-1.5 border-t border-lumos-border pt-3">
+                      {encerrando.parcelas.map((r: any, i: number) => (
+                        <li key={i} className="flex justify-between gap-3 text-[11px]">
+                          <span className="text-lumos-text-secondary truncate">{r.description}</span>
+                          <span className="font-bold tabular-nums flex-shrink-0">
+                            {fmtBRL(Number(r.total_amount || 0) - Number(r.received_amount || 0))}
+                            <span className="text-lumos-text-secondary font-normal"> · {fmtDia(r.due_date)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <p className="text-xs text-lumos-text-secondary">
+                  O projeto sai da lista de em andamento e vai pra aba Encerrados. Os custos e o histórico continuam lá,
+                  e os administradores recebem um aviso com o que ficou pendente.
+                  {!encerrando.budget_id && ' Este projeto não tem proposta ligada, então não deu pra conferir as parcelas.'}
+                </p>
+              </>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setEncerrando(null)} className="btn-secondary flex-1">Cancelar</button>
+              <button type="button" onClick={confirmarEncerrar} disabled={encerrandoBusy || encerrando.carregando}
+                className="btn-primary flex-1 h-10 disabled:opacity-60">
+                {encerrandoBusy ? 'Salvando…' : encerrando.reabrindo ? 'Reabrir' : 'Encerrar projeto'}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
