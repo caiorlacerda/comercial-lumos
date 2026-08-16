@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import {
   ArrowLeft,
@@ -141,6 +141,9 @@ const AddButton = ({ onClick, label }: { onClick: () => void; label: string }) =
 // ─────────────────────────────────────────────
 export default function OrdemDoDiaEditor() {
   const { id } = useParams();
+  // Vinda da aba do projeto: a ordem nasce já vinculada a ele.
+  const [searchParams] = useSearchParams();
+  const projectIdVinculo = searchParams.get('projectId');
   const isNew = !id || id === 'nova';
   const navigate = useNavigate();
   const goBack = useGoBack('/ordem-do-dia');
@@ -250,7 +253,7 @@ export default function OrdemDoDiaEditor() {
       if (isNew) {
         const { data, error } = await supabase
           .from('ordens_do_dia')
-          .insert([{ ...payload, created_by: profile?.id || null }])
+          .insert([{ ...payload, project_id: projectIdVinculo || null, created_by: profile?.id || null }])
           .select('id')
           .single();
         if (error) throw error;

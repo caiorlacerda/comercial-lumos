@@ -6,6 +6,11 @@ import TaskVideoReview from '@/components/producao/TaskVideoReview';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
 import PortalModal from '@/components/producao/PortalModal';
+import ProjectStatusPipeline from '@/components/producao/ProjectStatusPipeline';
+import ProjectBriefing from '@/components/producao/ProjectBriefing';
+import ProjectDiarias from '@/components/producao/ProjectDiarias';
+import ProjectOrdens from '@/components/producao/ProjectOrdens';
+import ProjectEquipe from '@/components/producao/ProjectEquipe';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
@@ -792,7 +797,9 @@ export default function Projetos() {
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
   // ── Hub do projeto (Fase 1 do redesign): abas + ferramentas da lista ──
-  const [projTab, setProjTab] = useState<'geral' | 'tarefas' | 'entregas' | 'arquivos'>('tarefas');
+  const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'arquivos'>('status');
+  // Status do orçamento ligado ao projeto — alimenta as etapas automáticas do pipeline.
+  const [projBudgetStatus, setProjBudgetStatus] = useState<string | null>(null);
   const [taskSearch, setTaskSearch] = useState('');
   const [taskStatusFilter, setTaskStatusFilter] = useState('all');
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all');
@@ -880,7 +887,7 @@ export default function Projetos() {
     setSelectedTaskId(null);
     setSelTaskIds(new Set());
     // Reset do hub ao trocar de projeto (aba, busca e filtros voltam ao padrão).
-    setProjTab('tarefas');
+    setProjTab('status');
     setTaskSearch('');
     setTaskStatusFilter('all');
     setTaskAssigneeFilter('all');
@@ -892,6 +899,15 @@ export default function Projetos() {
       supabase.from('project_documents').select('url').eq('project_id', selectedProjectId)
         .ilike('name', 'OS %').order('created_at', { ascending: false }).limit(1)
         .then(({ data }) => setOsUrl(data?.[0]?.url || null));
+      // Status do orçamento do projeto (alimenta o pipeline da aba Status).
+      setProjBudgetStatus(null);
+      {
+        const proj = projects.find(pr => pr.id === selectedProjectId);
+        if (proj?.budget_id) {
+          supabase.from('budgets').select('status').eq('id', proj.budget_id).maybeSingle()
+            .then(({ data }) => setProjBudgetStatus((data as any)?.status ?? null));
+        }
+      }
       // Contadores leves das abas Entregas (vídeos = grupos) e Arquivos.
       supabase.from('video_versions').select('group_id').eq('project_id', selectedProjectId)
         .then(({ data }) => setEntregasCount(data ? new Set(data.map((v: any) => v.group_id)).size : null));
@@ -931,7 +947,7 @@ export default function Projetos() {
       // ?tab= abre direto numa aba do hub (ex.: Visão Geral → Entregas).
       // Depois do reset do effect de troca de projeto, então usa timeout 0.
       const tab = searchParams.get('tab');
-      if (tab && ['geral', 'tarefas', 'entregas', 'arquivos'].includes(tab)) {
+      if (tab && ['status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'arquivos'].includes(tab)) {
         setTimeout(() => setProjTab(tab as any), 0);
       }
     }
@@ -2175,9 +2191,14 @@ export default function Projetos() {
                   {/* Abas do hub */}
                   <div className="flex gap-1 border-t border-lumos-border/50 -mx-5 md:-mx-6 px-5 md:px-6 overflow-x-auto no-scrollbar">
                     {([
-                      { key: 'geral' as const, label: 'Visão geral', count: null as number | null },
+                      { key: 'status' as const, label: 'Status', count: null as number | null },
+                      { key: 'briefing' as const, label: 'Briefing', count: null as number | null },
                       { key: 'tarefas' as const, label: 'Tarefas', count: activeCount },
                       { key: 'entregas' as const, label: 'Entregas', count: entregasCount },
+                      { key: 'diarias' as const, label: 'Diárias', count: null as number | null },
+                      { key: 'ordemdia' as const, label: 'Ordem do dia', count: null as number | null },
+                      { key: 'equipe' as const, label: 'Equipe', count: null as number | null },
+                      { key: 'geral' as const, label: 'Resumo', count: null as number | null },
                       { key: 'arquivos' as const, label: 'Arquivos', count: docsCount },
                     ]).map(t => (
                       <button key={t.key} onClick={() => setProjTab(t.key)}
@@ -2190,7 +2211,36 @@ export default function Projetos() {
                   </div>
                 </div>
 
-                {/* ================= ABA: VISÃO GERAL ================= */}
+                {/* ================= ABA: STATUS (pipeline do ciclo) ================= */}
+                {projTab === 'status' && (
+                <ProjectStatusPipeline key={'st' + selectedProject.id}
+                  projectId={selectedProject.id}
+                  projectStatus={selectedProject.status}
+                  budgetStatus={projBudgetStatus}
+                  canManage={canManage} />
+                )}
+
+                {/* ================= ABA: BRIEFING ================= */}
+                {projTab === 'briefing' && (
+                <ProjectBriefing key={'br' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: DIÁRIAS ================= */}
+                {projTab === 'diarias' && (
+                <ProjectDiarias key={'di' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: ORDEM DO DIA ================= */}
+                {projTab === 'ordemdia' && (
+                <ProjectOrdens key={'od' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: EQUIPE ================= */}
+                {projTab === 'equipe' && (
+                <ProjectEquipe key={'eq' + selectedProject.id} projectId={selectedProject.id} />
+                )}
+
+                {/* ================= ABA: RESUMO (antiga Visão geral) ================= */}
                 {projTab === 'geral' && (
                 <div className="space-y-5">
 
