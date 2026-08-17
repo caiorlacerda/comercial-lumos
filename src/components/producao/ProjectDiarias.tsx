@@ -15,9 +15,14 @@ import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 
 interface Diaria {
   id: string; nome: string; data: string | null; duracao_horas: number;
+  hora_inicio: string | null; hora_fim: string | null;
   local: string | null; descricao: string | null; ordem: number;
   google_event_id?: string | null;
 }
+
+// "08:00" → minutos, pra derivar a duração quando há início e fim.
+const min = (h?: string | null) => { if (!h) return null; const [a, b] = h.split(':').map(Number); return a * 60 + b; };
+const fmtHora = (h?: string | null) => h ? h.slice(0, 5) : null;
 
 interface Props { projectId: string; canManage: boolean }
 
@@ -57,24 +62,34 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const salvar = async () => {
     if (!editando?.nome?.trim()) { toast.error('Dê um nome pra diária.'); return; }
     setSalvando(true);
+    const mi = min(editando.hora_inicio), mf = min(editando.hora_fim);
+    if (mi != null && mf != null && mf <= mi) { toast.error('O horário final precisa ser depois do início.'); return; }
     const payload = {
       project_id: projectId,
       nome: editando.nome.trim(),
       data: editando.data || null,
-      duracao_horas: Number(editando.duracao_horas) || 10,
+      hora_inicio: editando.hora_inicio || null,
+      hora_fim: editando.hora_fim || null,
+      // com início e fim, a duração sai da conta; senão vale o que digitaram
+      duracao_horas: (mi != null && mf != null) ? Math.round(((mf - mi) / 60) * 10) / 10 : (Number(editando.duracao_horas) || 10),
       local: editando.local?.trim() || null,
       descricao: editando.descricao?.trim() || null,
     };
     let diariaId = editando.id || null;
-    if (editando.id) {
-      const { error } = await supabase.from('project_diarias').update(payload).eq('id', editando.id);
-      if (error) { setSalvando(false); toast.error('Não foi possível salvar a diária.'); return; }
-    } else {
-      const { data, error } = await supabase.from('project_diarias')
-        .insert([{ ...payload, created_by: profile?.id || null }]).select('id').single();
-      if (error || !data) { setSalvando(false); toast.error('Não foi possível salvar a diária.'); return; }
-      diariaId = data.id;
+    // Se a migration dos horários ainda não rodou, salva sem eles em vez de quebrar.
+    const gravar = async (pl: Record<string, unknown>) => editando.id
+      ? { r: await supabase.from('project_diarias').update(pl).eq('id', editando.id), id: editando.id }
+      : (() => null)() ?? { r: await supabase.from('project_diarias').insert([{ ...pl, created_by: profile?.id || null }]).select('id').single(), id: null };
+    let res = await gravar(payload);
+    let err = (res.r as any).error;
+    if (err && /hora_inicio|hora_fim/.test(String(err.message))) {
+      const { hora_inicio: _a, hora_fim: _b, ...semHoras } = payload as any;
+      res = await gravar(semHoras);
+      err = (res.r as any).error;
+      if (!err) toast.error('Diária salva sem horário: falta rodar a migração dos horários no banco.');
     }
+    if (err) { setSalvando(false); toast.error('Não foi possível salvar a diária.'); return; }
+    diariaId = editando.id || (res.r as any).data?.id || null;
     setSalvando(false);
     setEditando(null);
     setClima({});
@@ -181,7 +196,9 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                   </p>
                   <p className="flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
-                    {Number(d.duracao_horas).toLocaleString('pt-BR')} horas
+                    {d.hora_inicio && d.hora_fim
+                      ? <>{fmtHora(d.hora_inicio)} → {fmtHora(d.hora_fim)} · {Number(d.duracao_horas).toLocaleString('pt-BR')}h</>
+                      : <>{Number(d.duracao_horas).toLocaleString('pt-BR')} horas</>}
                   </p>
                   {d.local && (
                     <p className="flex items-center gap-2 min-w-0">
@@ -223,12 +240,20 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                 <input type="date" className="input-lumos w-full h-10 mt-1 text-sm"
                   value={editando.data || ''} onChange={e => setEditando(s => ({ ...s, data: e.target.value }))} />
               </div>
-              <div>
-                <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Duração (horas)</label>
-                <input type="number" min={1} max={24} step={0.5} className="input-lumos w-full h-10 mt-1 text-sm"
-                  value={editando.duracao_horas ?? 10} onChange={e => setEditando(s => ({ ...s, duracao_horas: Number(e.target.value) }))} />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Início</label>
+                  <input type="time" className="input-lumos w-full h-10 mt-1 text-sm"
+                    value={editando.hora_inicio || ''} onChange={e => setEditando(s => ({ ...s, hora_inicio: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Fim</label>
+                  <input type="time" className="input-lumos w-full h-10 mt-1 text-sm"
+                    value={editando.hora_fim || ''} onChange={e => setEditando(s => ({ ...s, hora_fim: e.target.value }))} />
+                </div>
               </div>
             </div>
+            <p className="text-[10px] text-lumos-text-secondary -mt-1">Com horário, o evento entra no Google Calendar como compromisso com hora; sem, vira evento de dia inteiro.</p>
             <div>
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Local</label>
               <input className="input-lumos w-full h-10 mt-1 text-sm" placeholder="Ex.: Praia da Reserva, Rio de Janeiro"

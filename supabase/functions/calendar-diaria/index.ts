@@ -69,15 +69,20 @@ serve(async (req) => {
     if (body.action !== 'upsert' || !body.diaria_id) return json({ error: 'action upsert + diaria_id' }, 400)
 
     const { data: d } = await db.from('project_diarias')
-      .select('id, nome, data, duracao_horas, local, descricao, google_event_id, project_id')
+      .select('*')
       .eq('id', body.diaria_id).maybeSingle()
     if (!d) return json({ error: 'diária não encontrada' }, 404)
     if (!d.data) return json({ ok: true, skipped: 'sem data, nada a agendar' })
 
     const { data: proj } = await db.from('projects').select('name, code').eq('id', d.project_id).maybeSingle()
 
-    // Evento de dia inteiro: end é exclusivo, então +1 dia.
-    const fim = new Date(new Date(d.data + 'T12:00:00').getTime() + 86400000).toISOString().slice(0, 10)
+    // Com horário vira compromisso com hora; sem, evento de dia inteiro
+    // (end de dia inteiro é exclusivo, por isso o +1 dia).
+    const TZ = 'America/Sao_Paulo'
+    const hIni = (d.hora_inicio as string | null)?.slice(0, 5) ?? null
+    const hFim = (d.hora_fim as string | null)?.slice(0, 5) ?? null
+    const comHora = !!(hIni && hFim)
+    const fimDia = new Date(new Date(d.data + 'T12:00:00').getTime() + 86400000).toISOString().slice(0, 10)
     const evento = {
       summary: `🎬 ${d.nome}${proj?.name ? ` — ${proj.name}` : ''}`,
       description:
@@ -86,8 +91,8 @@ serve(async (req) => {
         (d.descricao ? `\n${d.descricao}\n` : '') +
         `\nCriado pelo app Lumos (aba Diárias do projeto).`,
       ...(d.local ? { location: d.local } : {}),
-      start: { date: d.data },
-      end: { date: fim },
+      start: comHora ? { dateTime: `${d.data}T${hIni}:00`, timeZone: TZ } : { date: d.data },
+      end: comHora ? { dateTime: `${d.data}T${hFim}:00`, timeZone: TZ } : { date: fimDia },
     }
 
     let eventId = d.google_event_id as string | null

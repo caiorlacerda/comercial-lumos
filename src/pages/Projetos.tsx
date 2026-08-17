@@ -798,6 +798,8 @@ export default function Projetos() {
   const [tasksLoading, setTasksLoading] = useState(false);
   // ── Hub do projeto (Fase 1 do redesign): abas + ferramentas da lista ──
   const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'arquivos'>('status');
+  // Sub-abas do Briefing: o briefing em si, o Resumo (antiga visão geral) e os Arquivos.
+  const [briefingSub, setBriefingSub] = useState<'geral' | 'resumo' | 'arquivos'>('geral');
   // Status do orçamento ligado ao projeto — alimenta as etapas automáticas do pipeline.
   const [projBudgetStatus, setProjBudgetStatus] = useState<string | null>(null);
   const [taskSearch, setTaskSearch] = useState('');
@@ -888,6 +890,7 @@ export default function Projetos() {
     setSelTaskIds(new Set());
     // Reset do hub ao trocar de projeto (aba, busca e filtros voltam ao padrão).
     setProjTab('status');
+    setBriefingSub('geral');
     setTaskSearch('');
     setTaskStatusFilter('all');
     setTaskAssigneeFilter('all');
@@ -948,7 +951,12 @@ export default function Projetos() {
       // Depois do reset do effect de troca de projeto, então usa timeout 0.
       const tab = searchParams.get('tab');
       if (tab && ['status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'arquivos'].includes(tab)) {
-        setTimeout(() => setProjTab(tab as any), 0);
+        // 'geral' e 'arquivos' viraram sub-abas do Briefing; links antigos seguem valendo.
+        const mapa: Record<string, ['briefing', 'resumo' | 'arquivos']> = { geral: ['briefing', 'resumo'], arquivos: ['briefing', 'arquivos'] };
+        setTimeout(() => {
+          if (mapa[tab]) { setProjTab('briefing'); setBriefingSub(mapa[tab][1]); }
+          else setProjTab(tab as any);
+        }, 0);
       }
     }
     // Mantém projectId na URL (reflete o projeto aberto → destaque na sidebar e
@@ -2198,8 +2206,6 @@ export default function Projetos() {
                       { key: 'diarias' as const, label: 'Diárias', count: null as number | null },
                       { key: 'ordemdia' as const, label: 'Ordem do dia', count: null as number | null },
                       { key: 'equipe' as const, label: 'Equipe', count: null as number | null },
-                      { key: 'geral' as const, label: 'Resumo', count: null as number | null },
-                      { key: 'arquivos' as const, label: 'Arquivos', count: docsCount },
                     ]).map(t => (
                       <button key={t.key} onClick={() => setProjTab(t.key)}
                         className={clsx('px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors',
@@ -2220,9 +2226,25 @@ export default function Projetos() {
                   canManage={canManage} />
                 )}
 
-                {/* ================= ABA: BRIEFING ================= */}
+                {/* ================= ABA: BRIEFING (sub-abas: Geral | Resumo | Arquivos) ================= */}
                 {projTab === 'briefing' && (
-                <ProjectBriefing key={'br' + selectedProject.id} projectId={selectedProject.id} driveFolderId={selectedProject.drive_folder_id} canManage={canManage} />
+                <div className="space-y-3">
+                  <div className="flex gap-1 border-b border-lumos-border">
+                    {([['geral', 'Briefing'], ['resumo', 'Resumo'], ['arquivos', 'Arquivos']] as const).map(([key, label]) => (
+                      <button key={key} type="button" onClick={() => setBriefingSub(key)}
+                        className={clsx('px-3.5 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 transition-colors',
+                          briefingSub === key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {briefingSub === 'geral' && (
+                    <ProjectBriefing key={'br' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                  )}
+                  {briefingSub === 'arquivos' && (
+                    <ProjectDocuments projectId={selectedProject.id} driveFolderId={selectedProject.drive_folder_id} canManage={canManage} />
+                  )}
+                </div>
                 )}
 
                 {/* ================= ABA: DIÁRIAS ================= */}
@@ -2240,8 +2262,8 @@ export default function Projetos() {
                 <ProjectEquipe key={'eq' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
                 )}
 
-                {/* ================= ABA: RESUMO (antiga Visão geral) ================= */}
-                {projTab === 'geral' && (
+                {/* ================= SUB-ABA: RESUMO (antiga Visão geral, dentro do Briefing) ================= */}
+                {projTab === 'briefing' && briefingSub === 'resumo' && (
                 <div className="space-y-5">
 
                   {/* Resumo rápido */}
@@ -2865,14 +2887,7 @@ export default function Projetos() {
                   <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
                 )}
 
-                {/* ================= ABA: ARQUIVOS (documentos) ================= */}
-                {projTab === 'arquivos' && (
-                  <ProjectDocuments
-                    projectId={selectedProject.id}
-                    driveFolderId={selectedProject.drive_folder_id}
-                    canManage={canManage}
-                  />
-                )}
+
 
               </div>
             ) : selectedClientId && selectedClient ? (
