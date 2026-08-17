@@ -144,7 +144,18 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
     }
     if (!diaria) { setSalvando(false); toast.error('Escolha de qual diária vai nascer a ordem do dia.'); return; }
 
-    // 2) Cria a OD herdando data, hora e locação da diária.
+    // 2) A escala da diária vira a equipe da OD (melhor esforço).
+    let equipeOd: { nome: string; funcao: string }[] = [];
+    try {
+      const eq = await supabase.from('diaria_members')
+        .select('funcao, user:app_users(full_name), freela:fornecedores(nome)')
+        .eq('diaria_id', diaria.id);
+      equipeOd = (((eq.data as any[]) || [])
+        .map(m => ({ nome: m.freela?.nome || m.user?.full_name || '', funcao: m.funcao || '' }))
+        .filter(m => m.nome));
+    } catch { /* tabela da escala pode não existir ainda */ }
+
+    // 3) Cria a OD herdando data, hora, locação e equipe da diária.
     const base: Record<string, unknown> = {
       codigo: `${projectCode || 'OD'}-D${ordens.length + 1}`,
       titulo: nome.trim(),
@@ -155,6 +166,7 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
       ...(diaria.local ? { locacao: { nome: diaria.local, endereco: '', observacoes: '' } } : {}),
       hora_inicio: diaria.hora_inicio || null,
       roteiros: roteiros.filter(r => roteirosSel.has(r.id)).map(r => ({ id: r.id, name: r.name, url: r.url })),
+      ...(equipeOd.length > 0 ? { equipe: equipeOd } : {}),
     };
     // Migrations pendentes: tenta sem os campos que o banco ainda não conhece.
     let { data: novo, error } = await supabase.from('ordens_do_dia').insert([base]).select('id').single();
@@ -162,8 +174,8 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
       const { diaria_id: _d, ...semDiaria } = base;
       ({ data: novo, error } = await supabase.from('ordens_do_dia').insert([semDiaria]).select('id').single());
     }
-    if (error && /hora_inicio|roteiros/.test(String(error.message))) {
-      const { hora_inicio: _a, roteiros: _b, diaria_id: _d, ...semNovos } = base;
+    if (error && /hora_inicio|roteiros|equipe/.test(String(error.message))) {
+      const { hora_inicio: _a, roteiros: _b, diaria_id: _d, equipe: _e, ...semNovos } = base;
       ({ data: novo, error } = await supabase.from('ordens_do_dia').insert([semNovos]).select('id').single());
     }
     setSalvando(false);
