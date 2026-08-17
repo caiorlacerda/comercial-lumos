@@ -50,6 +50,7 @@ const ProducaoOverview = lazy(() => import('@/pages/ProducaoOverview'));
 const ProducaoDashboard = lazy(() => import('@/pages/ProducaoDashboard'));
 const ProducaoBoard = lazy(() => import('@/pages/ProducaoBoard'));
 const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
+const Agenda = lazy(() => import('@/pages/Agenda'));
 const Projetos = lazy(() => import('@/pages/Projetos'));
 const TemplatesTarefas = lazy(() => import('@/pages/TemplatesTarefas'));
 const Acessos = lazy(() => import('@/pages/Acessos'));
@@ -644,6 +645,7 @@ function AppContent() {
             <Route path="/producao/board" element={<PermissionGuard permission="ordem_do_dia"><ProducaoBoard /></PermissionGuard>} />
             <Route path="/producao/schedule" element={<PermissionGuard permission="ordem_do_dia"><ProducaoSchedule /></PermissionGuard>} />
             <Route path="/producao/cronograma-edicao" element={<PermissionGuard permission="cronograma_edicao"><CronogramaEdicao /></PermissionGuard>} />
+            <Route path="/producao/agenda" element={<Agenda />} />
             {/* Gerenciador de Projetos agora vive DENTRO do layout: as pills de
                 views ficam visíveis também na página do projeto. */}
             <Route path="/producao/projetos" element={<PermissionGuard permission="ordem_do_dia"><Projetos /></PermissionGuard>} />
