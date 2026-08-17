@@ -70,7 +70,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     // Escala de cada diária (tabela pode não existir antes da migration).
     if (lista.length > 0) {
       const eq = await supabase.from('diaria_members')
-        .select('id, diaria_id, funcao, user:app_users(id, full_name), freela:fornecedores(id, nome)')
+        .select('id, diaria_id, funcao, user:app_users!user_id(id, full_name), freela:fornecedores(id, nome)')
         .in('diaria_id', lista.map(d => d.id));
       if (eq.error) setEscalaIndisponivel(true);
       else {

@@ -148,7 +148,7 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
     let equipeOd: { nome: string; funcao: string }[] = [];
     try {
       const eq = await supabase.from('diaria_members')
-        .select('funcao, user:app_users(full_name), freela:fornecedores(nome)')
+        .select('funcao, user:app_users!user_id(full_name), freela:fornecedores(nome)')
         .eq('diaria_id', diaria.id);
       equipeOd = (((eq.data as any[]) || [])
         .map(m => ({ nome: m.freela?.nome || m.user?.full_name || '', funcao: m.funcao || '' }))
