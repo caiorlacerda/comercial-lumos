@@ -231,6 +231,7 @@ interface Task {
   ordem: number;
   data_inicio: string | null;
   data_fim: string | null;
+  hora_entrega: string | null;
   data_entrega_cliente: string | null;
   responsavel_id: string | null;
   responsavel_freela_id: string | null;
@@ -2630,13 +2631,23 @@ export default function Projetos() {
 
                                     {/* Date Picker End (Prazo de edição) */}
                                     <td className="py-2 px-2">
-                                      <input
-                                        type="date"
-                                        value={task.data_fim || ''}
-                                        disabled={!canManage}
-                                        onChange={(e) => handleUpdateTask(task.id, { data_fim: e.target.value || null })}
-                                        className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-lumos-text-primary px-1.5 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
-                                      />
+                                      <span className="flex items-center gap-0.5">
+                                        <input
+                                          type="date"
+                                          value={task.data_fim || ''}
+                                          disabled={!canManage}
+                                          onChange={(e) => handleUpdateTask(task.id, { data_fim: e.target.value || null })}
+                                          className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-lumos-text-primary px-1.5 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
+                                        />
+                                        <input
+                                          type="time"
+                                          value={task.hora_entrega ? String(task.hora_entrega).slice(0, 5) : ''}
+                                          disabled={!canManage}
+                                          title="Até que horas precisa ser entregue"
+                                          onChange={(e) => handleUpdateTask(task.id, { hora_entrega: e.target.value || null })}
+                                          className="bg-transparent border border-transparent hover:border-lumos-border/30 rounded text-[10px] font-bold text-lumos-text-secondary px-1 py-0.5 outline-none cursor-pointer focus:border-lumos-yellow w-[62px] flex-shrink-0"
+                                        />
+                                      </span>
                                     </td>
 
                                     {/* Entrega ao cliente (só admin/produção/atendimento) */}
@@ -2789,6 +2800,14 @@ export default function Projetos() {
                                     onChange={(e) => handleUpdateTask(task.id, { data_fim: e.target.value || null })}
                                     className="bg-transparent border border-lumos-border/40 rounded text-[11px] font-bold text-lumos-text-primary px-2 py-1 outline-none cursor-pointer focus:border-lumos-yellow"
                                     title="Prazo de edição"
+                                  />
+                                  <input
+                                    type="time"
+                                    value={task.hora_entrega ? String(task.hora_entrega).slice(0, 5) : ''}
+                                    disabled={!canManage}
+                                    title="Até que horas precisa ser entregue"
+                                    onChange={(e) => handleUpdateTask(task.id, { hora_entrega: e.target.value || null })}
+                                    className="bg-transparent border border-lumos-border/40 rounded text-[11px] font-bold text-lumos-text-secondary px-1.5 py-1 outline-none cursor-pointer focus:border-lumos-yellow"
                                   />
                                 </div>
                                 {canSeeClientDeadline && (
@@ -3171,13 +3190,23 @@ export default function Projetos() {
                   {/* Prazo */}
                   <div className="space-y-1">
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prazo</span>
-                    <input
-                      type="date"
-                      value={selectedTask.data_fim || ''}
-                      disabled={!canManage}
-                      onChange={(e) => handleUpdateTask(selectedTask.id, { data_fim: e.target.value || null })}
-                      className="bg-transparent border border-lumos-border/40 rounded text-[10px] font-bold text-lumos-text-primary px-2.5 py-1.5 outline-none cursor-pointer focus:border-lumos-yellow w-full"
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={selectedTask.data_fim || ''}
+                        disabled={!canManage}
+                        onChange={(e) => handleUpdateTask(selectedTask.id, { data_fim: e.target.value || null })}
+                        className="bg-transparent border border-lumos-border/40 rounded text-[10px] font-bold text-lumos-text-primary px-2.5 py-1.5 outline-none cursor-pointer focus:border-lumos-yellow flex-1 min-w-0"
+                      />
+                      <input
+                        type="time"
+                        value={selectedTask.hora_entrega ? String(selectedTask.hora_entrega).slice(0, 5) : ''}
+                        disabled={!canManage}
+                        title="Até que horas precisa ser entregue"
+                        onChange={(e) => handleUpdateTask(selectedTask.id, { hora_entrega: e.target.value || null })}
+                        className="bg-transparent border border-lumos-border/40 rounded text-[10px] font-bold text-lumos-text-primary px-2 py-1.5 outline-none cursor-pointer focus:border-lumos-yellow w-[82px] flex-shrink-0"
+                      />
+                    </div>
                   </div>
 
                 </div>

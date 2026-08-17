@@ -141,7 +141,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     if (error || !data) { toast.error('Erro ao gerar link.'); return; }
     setLinksByGroup(prev => ({ ...prev, [g.id]: data as any }));
     await navigator.clipboard.writeText(publicUrl(data.token)).catch(() => {});
-    toast.success('Link do cliente gerado e copiado ✓');
+    toast.success('Link de revisão gerado e copiado ✓');
   };
   const copyLink = async (tk: string) => { await navigator.clipboard.writeText(publicUrl(tk)).catch(() => {}); toast.success('Link copiado ✓'); };
   const toggleLinkFlag = async (groupId: string, field: 'watermark' | 'allow_download') => {
@@ -575,21 +575,16 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           </button>
         )}
 
-        {canManage && v.status === 'EM_REVISAO_INTERNA' ? (
-          <button type="button" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} disabled={isBusy}
-            className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50 whitespace-nowrap')}
-            title="Marca como pronto pro cliente ver">
-            <Send className={iconSz} /> {compact ? '' : 'Enviar ao cliente'}
-          </button>
-        ) : canManage && link ? (
+        {canManage && link ? (
           <button type="button" onClick={() => copyLink(link.token)}
+            title="Copia o link de revisão — não muda o status do vídeo"
             className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 whitespace-nowrap')}>
             <Copy className={iconSz} /> {compact ? '' : 'Copiar link'}
           </button>
         ) : canManage ? (
           <button type="button" onClick={() => generateLink(g)} disabled={isBusy}
             className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50 whitespace-nowrap')}>
-            <Link2 className={iconSz} /> {compact ? '' : 'Link cliente'}
+            <Link2 className={iconSz} /> {compact ? '' : 'Gerar link'}
           </button>
         ) : null}
 
@@ -616,9 +611,10 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
               <div ref={fitMenu} style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
                 className="z-[301] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 {/* Transições */}
-                {v.status === 'EM_REVISAO_INTERNA' && (
+                {v.status === 'EM_REVISAO_INTERNA' && (<>
+                  <MenuItem icon={Send} label="Aprovado internamente: enviar ao cliente" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} />
                   <MenuItem icon={RotateCcw} label="Pedir alteração (interna)" danger onClick={() => transition(v, 'ALTERACOES_INTERNAS')} />
-                )}
+                </>)}
                 {v.status === 'EM_REVISAO_CLIENTE' && (<>
                   <MenuItem icon={CircleCheckBig} label="Marcar: cliente aprovou" onClick={() => transition(v, 'APROVADO')} />
                   <MenuItem icon={RotateCcw} label="Marcar: cliente pediu ajustes" danger onClick={() => transition(v, 'ALTERACOES_CLIENTE')} />

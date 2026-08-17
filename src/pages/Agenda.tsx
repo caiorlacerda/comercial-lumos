@@ -70,10 +70,19 @@ export default function Agenda() {
   const mudarGran = (g: typeof gran) => { setGran(g); try { localStorage.setItem('lumos_agenda_gran', g); } catch { /* ignora */ } };
 
   const load = useCallback(async () => {
-    const [tarefasQ, diariasQ, ordensQ, collabsQ] = await Promise.all([
-      supabase.from('project_tasks')
+    // hora_entrega pode ainda não existir no banco (migration pendente) — cai
+    // pro select sem a coluna em vez de deixar a Agenda vazia.
+    const buscarTarefas = async () => {
+      const q = await supabase.from('project_tasks')
+        .select('id, titulo, status, data_fim, hora_entrega, data_entrega_cliente, responsavel_id, project_id, projects(name)')
+        .is('deleted_at', null);
+      if (!q.error) return q;
+      return supabase.from('project_tasks')
         .select('id, titulo, status, data_fim, data_entrega_cliente, responsavel_id, project_id, projects(name)')
-        .is('deleted_at', null),
+        .is('deleted_at', null);
+    };
+    const [tarefasQ, diariasQ, ordensQ, collabsQ] = await Promise.all([
+      buscarTarefas(),
       supabase.from('project_diarias')
         .select('id, nome, data, hora_inicio, project_id, projects(name)'),
       supabase.from('ordens_do_dia')
@@ -91,6 +100,7 @@ export default function Agenda() {
       const aberta = ABERTAS.includes(t.status);
       if (t.data_fim) lista.push({
         id: `tarefa:${t.id}`, tipo: 'tarefa', titulo: t.titulo, data: t.data_fim,
+        hora: t.hora_entrega ? String(t.hora_entrega).slice(0, 5) : null,
         projeto: t.projects?.name || null, projectId: t.project_id, respId: t.responsavel_id,
         link: `/producao/projetos?projectId=${t.project_id}&taskId=${t.id}`,
         atrasado: aberta && t.data_fim < hoje,
