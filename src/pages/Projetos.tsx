@@ -2254,7 +2254,7 @@ export default function Projetos() {
 
                 {/* ================= ABA: ORDEM DO DIA ================= */}
                 {projTab === 'ordemdia' && (
-                <ProjectOrdens key={'od' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                <ProjectOrdens key={'od' + selectedProject.id} projectId={selectedProject.id} projectName={selectedProject.name} projectCode={selectedProject.code} canManage={canManage} />
                 )}
 
                 {/* ================= ABA: EQUIPE ================= */}

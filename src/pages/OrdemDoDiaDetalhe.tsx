@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { geocode, previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
+import { notify, getUserIdsWithPermission } from '@/lib/notifications/notify';
+import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import type { AtividadePlano, MembroEquipe, Talento } from '@/types/ordemDoDia';
 
 /**
@@ -43,6 +45,7 @@ interface OD {
   objetos: ItemSimples[];
   figurino: ItemSimples[];
   equipamentos: ItemSimples[];
+  roteiros: { id: string; name: string; url: string }[];
   project_id: string | null;
 }
 
@@ -486,6 +489,7 @@ export default function OrdemDoDiaDetalhe() {
       objetos: o.objetos || [],
       figurino: o.figurino || [],
       equipamentos: o.equipamentos || [],
+      roteiros: Array.isArray(o.roteiros) ? o.roteiros : [],
       aprovacao: o.aprovacao || 'rascunho',
     });
     setLoading(false);
@@ -522,7 +526,7 @@ export default function OrdemDoDiaDetalhe() {
     salvandoRef.current = false;
     if (error) {
       setOd(prev);
-      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio/.test(String(error.message))
+      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros/.test(String(error.message))
         ? 'Falta rodar a migração da Ordem do Dia 2.0 no banco.'
         : 'Não foi possível salvar.');
     } else if (!silencioso) toast.success('Salvo ✓');
@@ -600,7 +604,20 @@ export default function OrdemDoDiaDetalhe() {
         {/* Status de aprovação, igual referência */}
         <div className="ml-auto flex items-center gap-2">
           <button type="button" disabled={!canManage}
-            onClick={() => void patch({ aprovacao: od.aprovacao === 'aprovada' ? 'rascunho' : 'aprovada' })}
+            onClick={() => {
+              const aprovando = od.aprovacao !== 'aprovada';
+              void patch({ aprovacao: aprovando ? 'aprovada' : 'rascunho' });
+              // O time só é avisado quando a OD é APROVADA — rascunho não pinga ninguém.
+              if (aprovando) {
+                getUserIdsWithPermission('ordem_do_dia').then(ids => notify({
+                  userIds: ids,
+                  event: NOTIFICATION_EVENTS.ORDEM_DIA_PUBLICADA,
+                  title: 'Ordem do Dia aprovada 🎬',
+                  body: `"${od.titulo}" está aprovada${od.data_producao ? ` pra ${fmtDataLonga(od.data_producao).toLowerCase()}` : ''}.`,
+                  link: `/ordem-do-dia/${od.id}`,
+                })).catch(() => {});
+              }
+            }}
             className={clsx('text-[11px] font-black rounded-full px-3.5 h-8 flex items-center gap-1.5 border transition-colors',
               od.aprovacao === 'aprovada'
                 ? 'bg-green-600/15 border-green-600/50 text-green-500'
@@ -897,14 +914,29 @@ export default function OrdemDoDiaDetalhe() {
             </div>
           ) : (
             <div className="card divide-y divide-lumos-border/60 overflow-hidden">
-              {roteiros.map(r => (
-                <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-lumos-text-primary/5 transition-colors">
-                  <ScrollText className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
-                  <span className="text-[13px] font-bold text-lumos-text-primary truncate flex-1">{r.name}</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
-                </a>
-              ))}
+              {roteiros.map(r => {
+                const nesta = od.roteiros.some(x => x.id === r.id);
+                return (
+                  <div key={r.id} className="flex items-center gap-3 px-4 py-3 hover:bg-lumos-text-primary/5 transition-colors">
+                    <ScrollText className={clsx('w-4 h-4 flex-shrink-0', nesta ? 'text-lumos-yellow' : 'text-lumos-text-secondary')} />
+                    <a href={r.url} target="_blank" rel="noopener noreferrer"
+                      className="text-[13px] font-bold text-lumos-text-primary truncate flex-1 hover:text-lumos-yellow flex items-center gap-1.5">
+                      {r.name} <ExternalLink className="w-3 h-3 text-lumos-text-secondary flex-shrink-0" />
+                    </a>
+                    {canManage && (
+                      <button type="button"
+                        onClick={() => void patch({ roteiros: nesta ? od.roteiros.filter(x => x.id !== r.id) : [...od.roteiros, r] }, true)}
+                        className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', nesta ? 'bg-green-600' : 'bg-lumos-text-secondary/30')}
+                        title={nesta ? 'Nesta diária' : 'Fora desta diária'}>
+                        <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', nesta ? 'left-5' : 'left-0.5')} />
+                      </button>
+                    )}
+                    <span className={clsx('text-[9px] font-black uppercase flex-shrink-0', nesta ? 'text-green-500' : 'text-lumos-text-secondary/60')}>
+                      {nesta ? 'Nesta diária' : '—'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

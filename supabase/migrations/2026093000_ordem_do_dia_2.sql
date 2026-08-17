@@ -14,7 +14,8 @@ ALTER TABLE public.ordens_do_dia
   ADD COLUMN IF NOT EXISTS locacoes     jsonb NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS objetos      jsonb NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS figurino     jsonb NOT NULL DEFAULT '[]'::jsonb,
-  ADD COLUMN IF NOT EXISTS equipamentos jsonb NOT NULL DEFAULT '[]'::jsonb;
+  ADD COLUMN IF NOT EXISTS equipamentos jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS roteiros     jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 ALTER TABLE public.ordens_do_dia DROP CONSTRAINT IF EXISTS ordens_aprovacao_check;
 ALTER TABLE public.ordens_do_dia ADD CONSTRAINT ordens_aprovacao_check
