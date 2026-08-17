@@ -31,7 +31,7 @@ const brData = (iso: string) => {
 
 function emailHtml(r: {
   fornecedor: string; descricao: string; projeto: string | null;
-  valor: number | null; pagar_em: string; link: string;
+  valor: number | null; pagar_em: string; link: string; reenvio: boolean;
 }) {
   const valorTxt = r.valor != null ? ` no valor de <strong>${brl(r.valor)}</strong>` : '';
   const linhaDado = (rotulo: string, valor: string) => `
@@ -47,7 +47,7 @@ function emailHtml(r: {
     <div style="border: 1px solid #e5e5e5; border-top: 0; border-radius: 0 0 12px 12px; padding: 28px; background: #ffffff;">
       <p style="font-size: 15px;">Olá, <strong>${r.fornecedor}</strong>!</p>
       <p style="font-size: 14px; line-height: 1.6;">
-        O pagamento do seu job <strong>${r.descricao}</strong>${r.projeto ? ` (projeto ${r.projeto})` : ''}${valorTxt}
+        ${r.reenvio ? 'Passando pra lembrar da sua nota fiscal: o' : 'O'} pagamento do seu job <strong>${r.descricao}</strong>${r.projeto ? ` (projeto ${r.projeto})` : ''}${valorTxt}
         está previsto para <strong>${brData(r.pagar_em)}</strong>.
       </p>
       <p style="font-size: 14px; line-height: 1.6;">
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
   // vale também pra reenviar uma cobrança que já teve e-mail.
   const base = admin
     .from('nota_requests')
-    .select('id, descricao, valor, pagar_em, token, cost_id, fornecedor:fornecedores(nome, email), projeto:projects(name)');
+    .select('id, descricao, valor, pagar_em, token, cost_id, status, fornecedor:fornecedores(nome, email), projeto:projects(name)');
   const query = body.id
     ? base.eq('id', body.id).in('status', ['agendada', 'email_enviado'])
     : base.eq('status', 'agendada').lte('enviar_em', hoje);
@@ -155,13 +155,16 @@ Deno.serve(async (req) => {
     }
 
     const link = `${APP_URL}/nota/${r.token}`;
+    // Reenvio sai como "Lembrete:" (assunto novo = conversa nova no Gmail,
+    // senão ele esconde o botão atrás dos três pontinhos de conteúdo repetido).
+    const reenvio = (r as any).status === 'email_enviado';
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
       body: JSON.stringify({
         from: FROM,
         to: [forn.email],
-        subject: `Nota fiscal do job ${r.descricao}`,
+        subject: `${reenvio ? 'Lembrete: nota' : 'Nota'} fiscal do job ${r.descricao}`,
         html: emailHtml({
           fornecedor: forn.nome,
           descricao: r.descricao,
@@ -169,6 +172,7 @@ Deno.serve(async (req) => {
           valor: r.valor,
           pagar_em: r.pagar_em,
           link,
+          reenvio,
         }),
       }),
     });
