@@ -111,17 +111,26 @@ Deno.serve(async (req) => {
 
   const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 
-  let query = admin
+  // Cron diário: só as agendadas que venceram. "Enviar agora" (com id):
+  // vale também pra reenviar uma cobrança que já teve e-mail.
+  const base = admin
     .from('nota_requests')
-    .select('id, descricao, valor, pagar_em, token, cost_id, fornecedor:fornecedores(nome, email), projeto:projects(name)')
-    .eq('status', 'agendada');
-  query = body.id ? query.eq('id', body.id) : query.lte('enviar_em', hoje);
+    .select('id, descricao, valor, pagar_em, token, cost_id, fornecedor:fornecedores(nome, email), projeto:projects(name)');
+  const query = body.id
+    ? base.eq('id', body.id).in('status', ['agendada', 'email_enviado'])
+    : base.eq('status', 'agendada').lte('enviar_em', hoje);
 
   const { data: pendentes, error } = await query;
   if (error) {
     return new Response(JSON.stringify({ ok: false, error: error.message }), {
       status: 500, headers: { ...cors, 'Content-Type': 'application/json' },
     });
+  }
+  if (body.id && (!pendentes || pendentes.length === 0)) {
+    return new Response(JSON.stringify({
+      ok: false,
+      resultados: [{ id: body.id, ok: false, motivo: 'cobrança não encontrada ou já concluída' }],
+    }), { headers: { ...cors, 'Content-Type': 'application/json' } });
   }
 
   const resultados: { id: string; ok: boolean; motivo?: string }[] = [];
