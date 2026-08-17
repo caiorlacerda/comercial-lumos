@@ -133,6 +133,26 @@ export default function Login() {
             </button>
           </form>
 
+          {/* Entrada do robô de testes — SÓ em dev (import.meta.env.DEV) e só se
+              .env.local tiver VITE_TEST_EMAIL/VITE_TEST_PASSWORD. Nunca aparece
+              em produção nem em preview: o build da Vercel não é DEV e não tem
+              essas variáveis. Serve pra IA testar logada sem tocar em senha. */}
+          {import.meta.env.DEV && import.meta.env.VITE_TEST_EMAIL && import.meta.env.VITE_TEST_PASSWORD && (
+            <button
+              type="button"
+              onClick={async () => {
+                const { error } = await supabase.auth.signInWithPassword({
+                  email: import.meta.env.VITE_TEST_EMAIL as string,
+                  password: import.meta.env.VITE_TEST_PASSWORD as string,
+                });
+                if (error) setError('Robô de testes: ' + error.message);
+              }}
+              className="mt-3 w-full h-10 text-xs font-black uppercase tracking-widest border border-dashed border-lumos-yellow/50 text-lumos-yellow rounded-lumos hover:bg-lumos-yellow/10"
+            >
+              🤖 Entrar como robô de testes
+            </button>
+          )}
+
           {/* Esqueci minha senha */}
           <div className="mt-5">
             {!forgotOpen ? (
