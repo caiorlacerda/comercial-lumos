@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Check, ChevronRight, Link2, Loader2, Plus, ScrollText } from 'lucide-react';
+import { CalendarDays, Check, ChevronRight, Link2, Loader2, Plus, ScrollText, Video } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,13 +9,17 @@ import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 
 /**
- * Ordens do Dia do projeto. Criar abre o modal do benchmark (data e hora,
- * nome pré-preenchido, primeira locação, roteiros da diária) e, ao criar,
- * cai direto na página nova da OD. Também dá pra adotar ordens antigas
- * soltas.
+ * Ordens do Dia do projeto. A OD nasce sempre de uma DIÁRIA: o modal pede
+ * qual diária vai virar ordem do dia (data, hora e locação vêm dela) e, se o
+ * projeto ainda não tem diária, o próprio modal cria uma na hora, com os
+ * mesmos campos da aba Diárias. Também dá pra adotar ordens antigas soltas.
  */
 
-interface Ordem { id: string; codigo: string; titulo: string; data_producao: string | null }
+interface Ordem { id: string; codigo: string; titulo: string; data_producao: string | null; diaria_id?: string | null }
+interface Diaria {
+  id: string; nome: string; data: string | null;
+  hora_inicio: string | null; hora_fim: string | null; local: string | null;
+}
 
 interface Props {
   projectId: string;
@@ -29,6 +33,10 @@ const hojeLocal = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const fmtDia = (d: string | null) =>
+  d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }) : 'sem data';
+const fmtHora = (h: string | null) => (h ? h.slice(0, 5) : null);
+
 export default function ProjectOrdens({ projectId, projectName, projectCode, canManage }: Props) {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -40,58 +48,122 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
 
   // modal de criação
   const [criando, setCriando] = useState(false);
-  const [data, setData] = useState(hojeLocal());
-  const [hora, setHora] = useState('08:00');
+  const [diarias, setDiarias] = useState<Diaria[]>([]);
+  const [diariaSel, setDiariaSel] = useState<string>(''); // id da diária ou 'nova'
   const [nome, setNome] = useState('');
-  const [locais, setLocais] = useState<string[]>([]);
-  const [locacaoSel, setLocacaoSel] = useState('');
   const [roteiros, setRoteiros] = useState<{ id: string; name: string; url: string }[]>([]);
   const [roteirosSel, setRoteirosSel] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
+  // form da diária nova (mesmos campos da aba Diárias)
+  const [dNome, setDNome] = useState('');
+  const [dData, setDData] = useState(hojeLocal());
+  const [dInicio, setDInicio] = useState('08:00');
+  const [dFim, setDFim] = useState('18:00');
+  const [dLocal, setDLocal] = useState('');
 
   const load = useCallback(async () => {
-    const [minhas, semDono] = await Promise.all([
-      supabase.from('ordens_do_dia').select('id, codigo, titulo, data_producao')
-        .eq('project_id', projectId).order('data_producao', { ascending: false }),
-      supabase.from('ordens_do_dia').select('id, codigo, titulo, data_producao')
-        .is('project_id', null).order('created_at', { ascending: false }).limit(50),
-    ]);
+    // diaria_id pode não existir ainda (migration pendente): tenta com e sem.
+    let minhas = await supabase.from('ordens_do_dia').select('id, codigo, titulo, data_producao, diaria_id')
+      .eq('project_id', projectId).order('data_producao', { ascending: false });
+    if (minhas.error) {
+      minhas = await supabase.from('ordens_do_dia').select('id, codigo, titulo, data_producao')
+        .eq('project_id', projectId).order('data_producao', { ascending: false }) as any;
+    }
+    const semDono = await supabase.from('ordens_do_dia').select('id, codigo, titulo, data_producao')
+      .is('project_id', null).order('created_at', { ascending: false }).limit(50);
     setOrdens((minhas.data as Ordem[]) || []);
     setSoltas((semDono.data as Ordem[]) || []);
     setLoading(false);
   }, [projectId]);
   useEffect(() => { load(); }, [load]);
 
+  const nomePadrao = (d?: Diaria | null) =>
+    `Ordem do Dia - ${projectName || 'Projeto'} - ${d?.nome || `Diária ${ordens.length + 1}`}`;
+
   const abrirCriacao = async () => {
-    setNome(`Ordem do Dia - ${projectName || 'Projeto'} - Diária ${ordens.length + 1}`);
-    setData(hojeLocal()); setHora('08:00'); setLocacaoSel(''); setRoteirosSel(new Set());
+    setRoteirosSel(new Set());
+    setDNome(`Diária ${ordens.length + 1}`); setDData(hojeLocal()); setDInicio('08:00'); setDFim('18:00'); setDLocal('');
     setCriando(true);
-    // Locais das diárias do projeto + roteiros dos arquivos, pra escolher no modal.
     const [dias, docs] = await Promise.all([
-      supabase.from('project_diarias').select('local').eq('project_id', projectId),
+      supabase.from('project_diarias').select('id, nome, data, hora_inicio, hora_fim, local')
+        .eq('project_id', projectId).order('data', { ascending: true, nullsFirst: false }).order('ordem'),
       supabase.from('project_roteiros').select('id, nome, url').eq('project_id', projectId).order('ordem').order('created_at'),
     ]);
-    setLocais([...new Set((dias.data || []).map(d => (d as any).local).filter(Boolean))] as string[]);
+    const lista = ((dias.data as any[]) || []) as Diaria[];
+    setDiarias(lista);
+    // pré-seleciona a primeira diária ainda sem OD; sem diária nenhuma, cai no form de criar
+    const usadas = new Set(ordens.map(o => o.diaria_id).filter(Boolean));
+    const livre = lista.find(d => !usadas.has(d.id));
+    setDiariaSel(lista.length === 0 ? 'nova' : (livre?.id || lista[0]?.id || 'nova'));
+    setNome(nomePadrao(lista.length === 0 ? null : (livre || lista[0])));
     setRoteiros(((docs.data as any[]) || []).map(d => ({ id: d.id, name: d.nome, url: d.url })));
   };
+
+  const escolherDiaria = (id: string) => {
+    setDiariaSel(id);
+    setNome(nomePadrao(id === 'nova' ? null : diarias.find(d => d.id === id)));
+  };
+
+  const diariaAtual = diariaSel !== 'nova' ? diarias.find(d => d.id === diariaSel) : null;
+  const odDaDiaria = diariaAtual ? ordens.find(o => o.diaria_id === diariaAtual.id) : null;
 
   const criar = async () => {
     if (!nome.trim()) { toast.error('Dê um nome pra ordem do dia.'); return; }
     setSalvando(true);
+
+    // 1) Garante a diária: escolhida na lista ou criada aqui mesmo.
+    let diaria: Diaria | null = diariaAtual || null;
+    if (diariaSel === 'nova') {
+      if (!dNome.trim() || !dData) {
+        setSalvando(false);
+        toast.error('Dê um nome e uma data pra diária.');
+        return;
+      }
+      const mi = dInicio ? Number(dInicio.slice(0, 2)) * 60 + Number(dInicio.slice(3, 5)) : null;
+      const mf = dFim ? Number(dFim.slice(0, 2)) * 60 + Number(dFim.slice(3, 5)) : null;
+      if (mi != null && mf != null && mf <= mi) { setSalvando(false); toast.error('O horário final precisa ser depois do início.'); return; }
+      const payload: Record<string, unknown> = {
+        project_id: projectId,
+        nome: dNome.trim(),
+        data: dData,
+        hora_inicio: dInicio || null,
+        hora_fim: dFim || null,
+        duracao_horas: (mi != null && mf != null) ? Math.round(((mf - mi) / 60) * 10) / 10 : 10,
+        local: dLocal.trim() || null,
+        created_by: profile?.id || null,
+      };
+      let ins = await supabase.from('project_diarias').insert([payload]).select('id').single();
+      if (ins.error && /hora_inicio|hora_fim/.test(String(ins.error.message))) {
+        const { hora_inicio: _a, hora_fim: _b, ...semHoras } = payload;
+        ins = await supabase.from('project_diarias').insert([semHoras]).select('id').single();
+      }
+      if (ins.error || !ins.data) { setSalvando(false); toast.error('Não foi possível criar a diária.'); return; }
+      diaria = { id: ins.data.id, nome: dNome.trim(), data: dData, hora_inicio: dInicio || null, hora_fim: dFim || null, local: dLocal.trim() || null };
+      // Google Calendar em melhor esforço, igual à aba Diárias.
+      supabase.functions.invoke('calendar-diaria', { body: { action: 'upsert', diaria_id: diaria.id } }).catch(() => null);
+    }
+    if (!diaria) { setSalvando(false); toast.error('Escolha de qual diária vai nascer a ordem do dia.'); return; }
+
+    // 2) Cria a OD herdando data, hora e locação da diária.
     const base: Record<string, unknown> = {
       codigo: `${projectCode || 'OD'}-D${ordens.length + 1}`,
       titulo: nome.trim(),
-      data_producao: data || null,
+      data_producao: diaria.data || null,
       project_id: projectId,
+      diaria_id: diaria.id,
       created_by: profile?.id || null,
-      ...(locacaoSel ? { locacao: { nome: locacaoSel, endereco: '', observacoes: '' } } : {}),
-      hora_inicio: hora || null,
+      ...(diaria.local ? { locacao: { nome: diaria.local, endereco: '', observacoes: '' } } : {}),
+      hora_inicio: diaria.hora_inicio || null,
       roteiros: roteiros.filter(r => roteirosSel.has(r.id)).map(r => ({ id: r.id, name: r.name, url: r.url })),
     };
-    // Se a migration da OD 2.0 ainda não rodou, cria sem os campos novos.
+    // Migrations pendentes: tenta sem os campos que o banco ainda não conhece.
     let { data: novo, error } = await supabase.from('ordens_do_dia').insert([base]).select('id').single();
+    if (error && /diaria_id/.test(String(error.message))) {
+      const { diaria_id: _d, ...semDiaria } = base;
+      ({ data: novo, error } = await supabase.from('ordens_do_dia').insert([semDiaria]).select('id').single());
+    }
     if (error && /hora_inicio|roteiros/.test(String(error.message))) {
-      const { hora_inicio: _a, roteiros: _b, ...semNovos } = base;
+      const { hora_inicio: _a, roteiros: _b, diaria_id: _d, ...semNovos } = base;
       ({ data: novo, error } = await supabase.from('ordens_do_dia').insert([semNovos]).select('id').single());
     }
     setSalvando(false);
@@ -108,9 +180,6 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
     toast.success('Ordem do dia vinculada ao projeto ✓');
     load();
   };
-
-  const fmt = (d: string | null) =>
-    d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }) : 'sem data';
 
   if (loading) return <div className="card p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>;
 
@@ -143,7 +212,7 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
           <CalendarDays className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" />
           <p className="text-sm font-bold text-lumos-text-primary">Nenhuma ordem do dia neste projeto.</p>
           <p className="text-xs text-lumos-text-secondary mt-1 max-w-md mx-auto">
-            Crie uma nova, já vinculada, ou adote uma ordem antiga pelo seletor acima.
+            Crie uma nova a partir de uma diária, ou adote uma ordem antiga pelo seletor acima.
           </p>
         </div>
       ) : (
@@ -153,7 +222,7 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
               className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-lumos-text-primary/5 transition-colors group">
               <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase flex-shrink-0">{o.codigo}</span>
               <span className="text-[13px] font-bold truncate flex-1 text-lumos-text-primary">{o.titulo}</span>
-              <span className="text-[11px] text-lumos-text-secondary flex-shrink-0">{fmt(o.data_producao)}</span>
+              <span className="text-[11px] text-lumos-text-secondary flex-shrink-0">{fmtDia(o.data_producao)}</span>
               <ChevronRight className="w-4 h-4 text-lumos-text-secondary group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
             </button>
           ))}
@@ -166,33 +235,100 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
         </p>
       )}
 
-      {/* Modal de criação, no formato do benchmark */}
+      {/* Modal de criação: a OD nasce de uma diária */}
       {criando && (
         <Modal isOpen onClose={() => setCriando(false)} title="Nova Ordem do Dia" maxWidth="max-w-md">
           <div className="space-y-3">
             <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Data e hora do início</label>
-              <div className="grid grid-cols-[1fr_110px] gap-2 mt-1">
-                <input type="date" value={data} onChange={e => setData(e.target.value)} className="input-lumos h-10 text-sm" />
-                <input type="time" value={hora} onChange={e => setHora(e.target.value)} className="input-lumos h-10 text-sm" />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Nome</label>
-              <input value={nome} onChange={e => setNome(e.target.value)} className="input-lumos w-full h-10 mt-1 text-sm" />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Primeira locação</label>
-              {locais.length > 0 ? (
-                <Select value={locacaoSel} onChange={v => setLocacaoSel(v)} className="input-lumos w-full h-10 mt-1 text-sm"
-                  options={[{ value: '', label: 'Selecione uma locação' }, ...locais.map(l => ({ value: l, label: l }))]} />
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">De qual diária?</label>
+              {diarias.length === 0 ? (
+                <p className="text-[11px] text-lumos-text-secondary mt-1">
+                  Este projeto ainda não tem diária, então ela nasce aqui junto com a ordem do dia.
+                </p>
               ) : (
-                <input value={locacaoSel} onChange={e => setLocacaoSel(e.target.value)}
-                  placeholder="Ex.: Praia da Reserva, Rio de Janeiro" className="input-lumos w-full h-10 mt-1 text-sm" />
+                <div className="mt-1 border border-lumos-border rounded-lumos divide-y divide-lumos-border/60 max-h-44 overflow-y-auto custom-scrollbar">
+                  {diarias.map(d => {
+                    const sel = diariaSel === d.id;
+                    const jaTemOd = ordens.some(o => o.diaria_id === d.id);
+                    return (
+                      <button key={d.id} type="button" onClick={() => escolherDiaria(d.id)}
+                        className={clsx('w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors',
+                          sel ? 'bg-lumos-yellow/10' : 'hover:bg-lumos-text-primary/5')}>
+                        <span className={clsx('w-4 h-4 rounded-full border-2 grid place-items-center flex-shrink-0',
+                          sel ? 'border-lumos-yellow' : 'border-lumos-text-secondary/40')}>
+                          {sel && <span className="w-2 h-2 rounded-full bg-lumos-yellow" />}
+                        </span>
+                        <Video className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
+                        <span className="min-w-0 flex-1">
+                          <span className="text-xs font-bold text-lumos-text-primary block truncate">{d.nome}</span>
+                          <span className="text-[10px] text-lumos-text-secondary block truncate">
+                            {fmtDia(d.data)}{fmtHora(d.hora_inicio) ? ` · ${fmtHora(d.hora_inicio)}` : ''}{d.local ? ` · ${d.local}` : ''}
+                          </span>
+                        </span>
+                        {jaTemOd && (
+                          <span className="text-[9px] font-black uppercase text-lumos-text-secondary bg-lumos-text-secondary/10 border border-lumos-border rounded px-1.5 py-0.5 flex-shrink-0">
+                            já tem OD
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  <button type="button" onClick={() => escolherDiaria('nova')}
+                    className={clsx('w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors',
+                      diariaSel === 'nova' ? 'bg-lumos-yellow/10' : 'hover:bg-lumos-text-primary/5')}>
+                    <span className={clsx('w-4 h-4 rounded-full border-2 grid place-items-center flex-shrink-0',
+                      diariaSel === 'nova' ? 'border-lumos-yellow' : 'border-lumos-text-secondary/40')}>
+                      {diariaSel === 'nova' && <span className="w-2 h-2 rounded-full bg-lumos-yellow" />}
+                    </span>
+                    <Plus className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
+                    <span className="text-xs font-bold text-lumos-text-primary">Criar diária nova…</span>
+                  </button>
+                </div>
               )}
-              {locais.length > 0 && <p className="text-[10px] text-lumos-text-secondary mt-1">Vindas das diárias do projeto. Dá pra adicionar outras depois, na aba Locações.</p>}
+            </div>
+
+            {diariaSel === 'nova' ? (
+              <div className="border border-lumos-border rounded-lumos p-3 space-y-2.5 bg-lumos-bg/40">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Nome da diária</label>
+                    <input value={dNome} onChange={e => setDNome(e.target.value)} className="input-lumos w-full h-9 mt-1 text-sm" placeholder="Ex.: Diária 1" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Data</label>
+                    <input type="date" value={dData} onChange={e => setDData(e.target.value)} className="input-lumos w-full h-9 mt-1 text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Início</label>
+                      <input type="time" value={dInicio} onChange={e => setDInicio(e.target.value)} className="input-lumos w-full h-9 mt-1 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Fim</label>
+                      <input type="time" value={dFim} onChange={e => setDFim(e.target.value)} className="input-lumos w-full h-9 mt-1 text-sm" />
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Local</label>
+                    <input value={dLocal} onChange={e => setDLocal(e.target.value)} className="input-lumos w-full h-9 mt-1 text-sm" placeholder="Ex.: Estúdio Lumos, São Paulo" />
+                  </div>
+                </div>
+                <p className="text-[10px] text-lumos-text-secondary">
+                  A diária entra na aba Diárias e no Google Calendar, e a ordem do dia herda data, hora e locação.
+                </p>
+              </div>
+            ) : diariaAtual && (
+              <div className="border border-lumos-border rounded-lumos px-3 py-2.5 bg-lumos-bg/40 text-[11px] text-lumos-text-secondary">
+                A ordem do dia herda da diária: <strong className="text-lumos-text-primary">{fmtDia(diariaAtual.data)}</strong>
+                {fmtHora(diariaAtual.hora_inicio) && <> · início <strong className="text-lumos-text-primary">{fmtHora(diariaAtual.hora_inicio)}</strong></>}
+                {diariaAtual.local && <> · <strong className="text-lumos-text-primary">{diariaAtual.local}</strong></>}
+                {odDaDiaria && <span className="block mt-1 text-lumos-yellow font-bold">Essa diária já tem a OD {odDaDiaria.codigo}, dá pra abrir direto.</span>}
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Nome da ordem do dia</label>
+              <input value={nome} onChange={e => setNome(e.target.value)} className="input-lumos w-full h-10 mt-1 text-sm" />
             </div>
 
             <div>
@@ -224,10 +360,18 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
 
             <div className="flex items-center gap-2 pt-1">
               <button type="button" onClick={() => setCriando(false)} className="ml-auto text-[11px] font-bold text-lumos-text-secondary px-2">Cancelar</button>
-              <button type="button" onClick={criar} disabled={salvando}
-                className="btn-primary h-9 px-5 text-xs font-black disabled:opacity-60 flex items-center gap-1.5">
-                {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Criar
-              </button>
+              {odDaDiaria ? (
+                <button type="button" onClick={() => navigate(`/ordem-do-dia/${odDaDiaria.id}`)}
+                  className="btn-primary h-9 px-5 text-xs font-black flex items-center gap-1.5">
+                  <ChevronRight className="w-3.5 h-3.5" /> Abrir a OD dessa diária
+                </button>
+              ) : (
+                <button type="button" onClick={criar} disabled={salvando}
+                  className="btn-primary h-9 px-5 text-xs font-black disabled:opacity-60 flex items-center gap-1.5">
+                  {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {diariaSel === 'nova' ? 'Criar diária e OD' : 'Criar'}
+                </button>
+              )}
             </div>
           </div>
         </Modal>
