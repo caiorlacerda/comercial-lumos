@@ -35,6 +35,7 @@ interface NotaRequest {
   status: string;
   nota_arquivo: { name: string; path: string } | null;
   dados_pagamento?: string | null;
+  origem?: string | null;
   fornecedor: { id: string; nome: string; email: string | null } | null;
   projeto: { name: string } | null;
 }
@@ -65,6 +66,18 @@ const brData = (iso?: string | null) => {
 };
 const brl = (v: number | null) =>
   v == null ? '—' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+const ORIGEM_LABEL: Record<string, string> = {
+  diaria: 'criada pelas diárias do projeto',
+  custo: 'criada pelo custo do projeto',
+  manual: 'criada à mão',
+};
+
+const diasAte = (iso: string) => {
+  const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+  const alvo = new Date(`${iso}T12:00:00`);
+  return Math.round((alvo.getTime() - hoje.getTime()) / 86400000);
+};
 
 const NOTA_STATUS: Record<string, { label: string; cls: string }> = {
   agendada:      { label: 'Agendada',      cls: 'bg-sky-500/15 text-sky-500 border-sky-500/30' },
@@ -120,7 +133,7 @@ export default function Fornecedores() {
       const colsBase = 'id, descricao, valor, data_servico, enviar_em, pagar_em, token, status, nota_arquivo, fornecedor:fornecedores(id, nome, email), projeto:projects(name)';
       let q: { data: unknown; error: { message: string } | null } = await supabase
         .from('nota_requests')
-        .select(`${colsBase}, dados_pagamento`)
+        .select(`${colsBase}, dados_pagamento, origem`)
         .order('enviar_em', { ascending: false });
       // Coluna dados_pagamento pode não existir ainda; tenta sem ela.
       if (q.error) {
@@ -318,6 +331,7 @@ export default function Fornecedores() {
           onMarcarPaga={n => atualizarNota(n.id, { status: 'paga' })}
           onCancelar={n => atualizarNota(n.id, { status: 'cancelada' })}
           onReativar={n => atualizarNota(n.id, { status: 'agendada' })}
+          onValor={(n, valor) => atualizarNota(n.id, { valor })}
         />
       ) : listaAtiva.length === 0 ? (
         <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">
@@ -506,7 +520,41 @@ export default function Fornecedores() {
 }
 
 // ── Aba Notas ──────────────────────────────────────────────────────────────
-function NotasTab({ notas, indisponivel, enviandoId, onEnviar, onCopiar, onVer, onMarcarPaga, onCancelar, onReativar }: {
+function ValorEditavel({ n, onSave }: { n: NotaRequest; onSave: (valor: number | null) => void }) {
+  // Cobrança criada pelas diárias nasce sem valor; edita direto na linha.
+  const [editando, setEditando] = useState(false);
+  if (!editando) {
+    return (
+      <button
+        onClick={() => setEditando(true)}
+        className={clsx('text-xs font-bold whitespace-nowrap hover:underline underline-offset-4 decoration-dotted',
+          n.valor == null ? 'text-lumos-text-secondary/60 italic' : 'text-lumos-text-primary')}
+        title="Clique pra editar o valor"
+      >
+        {n.valor == null ? 'definir valor' : brl(n.valor)}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      defaultValue={n.valor ?? ''}
+      placeholder="1500,00"
+      inputMode="decimal"
+      className="input-lumos w-[92px] h-7 text-xs px-2"
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditando(false); }}
+      onBlur={e => {
+        const raw = e.target.value.trim();
+        setEditando(false);
+        if (raw === '') { if (n.valor != null) onSave(null); return; }
+        const num = Number(raw.replace(/\./g, '').replace(',', '.'));
+        if (!Number.isNaN(num) && num !== n.valor) onSave(num);
+      }}
+    />
+  );
+}
+
+function NotasTab({ notas, indisponivel, enviandoId, onEnviar, onCopiar, onVer, onMarcarPaga, onCancelar, onReativar, onValor }: {
   notas: NotaRequest[];
   indisponivel: boolean;
   enviandoId: string | null;
@@ -516,6 +564,7 @@ function NotasTab({ notas, indisponivel, enviandoId, onEnviar, onCopiar, onVer, 
   onMarcarPaga: (n: NotaRequest) => void;
   onCancelar: (n: NotaRequest) => void;
   onReativar: (n: NotaRequest) => void;
+  onValor: (n: NotaRequest, valor: number | null) => void;
 }) {
   if (indisponivel) {
     return (
@@ -588,7 +637,14 @@ function NotasTab({ notas, indisponivel, enviandoId, onEnviar, onCopiar, onVer, 
 
   const Status = ({ n }: { n: NotaRequest }) => {
     const s = NOTA_STATUS[n.status] || NOTA_STATUS.agendada;
-    return <span className={clsx('text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', s.cls)}>{s.label}</span>;
+    let label = s.label;
+    let title: string | undefined = n.origem ? ORIGEM_LABEL[n.origem] : undefined;
+    if (n.status === 'agendada') {
+      const dias = diasAte(n.enviar_em);
+      label = dias <= 0 ? 'Envia hoje' : dias === 1 ? 'Envia amanhã' : `Envia em ${dias} dias`;
+      title = `E-mail automático em ${brData(n.enviar_em)}${title ? `, ${title}` : ''}`;
+    }
+    return <span title={title} className={clsx('text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', s.cls)}>{label}</span>;
   };
 
   return (
@@ -625,7 +681,11 @@ function NotasTab({ notas, indisponivel, enviandoId, onEnviar, onCopiar, onVer, 
                     <div className="text-xs text-lumos-text-primary max-w-[260px] truncate" title={n.descricao}>{n.descricao}</div>
                     {n.projeto?.name && <div className="text-[10px] text-lumos-text-secondary truncate">{n.projeto.name}</div>}
                   </td>
-                  <td className="px-4 py-2.5 text-xs font-bold text-lumos-text-primary whitespace-nowrap">{brl(n.valor)}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    {['agendada', 'email_enviado', 'nota_recebida'].includes(n.status)
+                      ? <ValorEditavel n={n} onSave={v => onValor(n, v)} />
+                      : <span className="text-xs font-bold text-lumos-text-primary">{brl(n.valor)}</span>}
+                  </td>
                   <td className="px-4 py-2.5 text-xs text-lumos-text-secondary whitespace-nowrap">{brData(n.data_servico)}</td>
                   <td className="px-4 py-2.5 text-xs text-lumos-text-secondary whitespace-nowrap">{brData(n.enviar_em)}</td>
                   <td className="px-4 py-2.5 text-xs text-lumos-text-secondary whitespace-nowrap">{brData(n.pagar_em)}</td>
