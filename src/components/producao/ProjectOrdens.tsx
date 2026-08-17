@@ -69,10 +69,10 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
     // Locais das diárias do projeto + roteiros dos arquivos, pra escolher no modal.
     const [dias, docs] = await Promise.all([
       supabase.from('project_diarias').select('local').eq('project_id', projectId),
-      supabase.from('project_documents').select('id, name, url').eq('project_id', projectId).eq('tag', 'roteiro'),
+      supabase.from('project_roteiros').select('id, nome, url').eq('project_id', projectId).order('ordem').order('created_at'),
     ]);
     setLocais([...new Set((dias.data || []).map(d => (d as any).local).filter(Boolean))] as string[]);
-    setRoteiros((docs.data as any[]) || []);
+    setRoteiros(((docs.data as any[]) || []).map(d => ({ id: d.id, name: d.nome, url: d.url })));
   };
 
   const criar = async () => {
@@ -199,7 +199,7 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Roteiros para esta diária</label>
               {roteiros.length === 0 ? (
                 <p className="text-[11px] text-lumos-text-secondary italic mt-1">
-                  Nenhum roteiro no projeto. Suba nos Arquivos com a categoria "Roteiro" e ele aparece aqui.
+                  Nenhum roteiro no projeto. Cole o link do Google Docs na aba Roteiros e ele aparece aqui.
                 </p>
               ) : (
                 <div className="mt-1 border border-lumos-border rounded-lumos divide-y divide-lumos-border/60 max-h-40 overflow-y-auto custom-scrollbar">

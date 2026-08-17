@@ -497,8 +497,8 @@ export default function OrdemDoDiaDetalhe() {
     if (o.project_id) {
       supabase.from('projects').select('name').eq('id', o.project_id).maybeSingle()
         .then(({ data: p }) => setProjetoNome((p as any)?.name || null));
-      supabase.from('project_documents').select('id, name, url').eq('project_id', o.project_id).eq('tag', 'roteiro')
-        .then(({ data: docs }) => setRoteiros((docs as any[]) || []));
+      supabase.from('project_roteiros').select('id, nome, url').eq('project_id', o.project_id).order('ordem').order('created_at')
+        .then(({ data: docs }) => setRoteiros(((docs as any[]) || []).map(d => ({ id: d.id, name: d.nome, url: d.url }))));
     }
   }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -937,7 +937,7 @@ export default function OrdemDoDiaDetalhe() {
             <div className="card p-8 text-center">
               <ScrollText className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" />
               <p className="text-sm font-bold text-lumos-text-primary">Nenhum roteiro no projeto.</p>
-              <p className="text-xs text-lumos-text-secondary mt-1 max-w-md mx-auto">Suba o roteiro nos Arquivos do projeto com a categoria "Roteiro" e ele aparece aqui. O módulo completo de roteiros (decupagem, storyboard) vem numa próxima fase.</p>
+              <p className="text-xs text-lumos-text-secondary mt-1 max-w-md mx-auto">Cole o link do Google Docs na aba Roteiros do projeto e ele aparece aqui pra vincular à diária.</p>
             </div>
           ) : (
             <div className="card divide-y divide-lumos-border/60 overflow-hidden">

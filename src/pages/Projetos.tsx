@@ -11,6 +11,7 @@ import ProjectBriefing from '@/components/producao/ProjectBriefing';
 import ProjectDiarias from '@/components/producao/ProjectDiarias';
 import ProjectOrdens from '@/components/producao/ProjectOrdens';
 import ProjectEquipe from '@/components/producao/ProjectEquipe';
+import ProjectRoteiros from '@/components/producao/ProjectRoteiros';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
@@ -797,7 +798,7 @@ export default function Projetos() {
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
   // ── Hub do projeto (Fase 1 do redesign): abas + ferramentas da lista ──
-  const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'arquivos'>('status');
+  const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'roteiros' | 'arquivos'>('status');
   // Sub-abas do Briefing: o briefing em si, o Resumo (antiga visão geral) e os Arquivos.
   const [briefingSub, setBriefingSub] = useState<'geral' | 'resumo' | 'arquivos'>('geral');
   // Status do orçamento ligado ao projeto — alimenta as etapas automáticas do pipeline.
@@ -950,7 +951,7 @@ export default function Projetos() {
       // ?tab= abre direto numa aba do hub (ex.: Visão Geral → Entregas).
       // Depois do reset do effect de troca de projeto, então usa timeout 0.
       const tab = searchParams.get('tab');
-      if (tab && ['status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'arquivos'].includes(tab)) {
+      if (tab && ['status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos'].includes(tab)) {
         // 'geral' e 'arquivos' viraram sub-abas do Briefing; links antigos seguem valendo.
         const mapa: Record<string, ['briefing', 'resumo' | 'arquivos']> = { geral: ['briefing', 'resumo'], arquivos: ['briefing', 'arquivos'] };
         setTimeout(() => {
@@ -2206,6 +2207,7 @@ export default function Projetos() {
                       { key: 'diarias' as const, label: 'Diárias', count: null as number | null },
                       { key: 'ordemdia' as const, label: 'Ordem do dia', count: null as number | null },
                       { key: 'equipe' as const, label: 'Equipe', count: null as number | null },
+                      { key: 'roteiros' as const, label: 'Roteiros', count: null as number | null },
                     ]).map(t => (
                       <button key={t.key} onClick={() => setProjTab(t.key)}
                         className={clsx('px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors',
@@ -2260,6 +2262,11 @@ export default function Projetos() {
                 {/* ================= ABA: EQUIPE ================= */}
                 {projTab === 'equipe' && (
                 <ProjectEquipe key={'eq' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: ROTEIROS ================= */}
+                {projTab === 'roteiros' && (
+                <ProjectRoteiros key={'rt' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
                 )}
 
                 {/* ================= SUB-ABA: RESUMO (antiga Visão geral, dentro do Briefing) ================= */}

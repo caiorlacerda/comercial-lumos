@@ -31,8 +31,8 @@ const FASES: Fase[] = [
       { key: 'reuniao_briefing', label: 'Reunião de briefing' },
       { key: 'briefing_preenchido', label: 'Briefing preenchido', auto: true },
       { key: 'referencias', label: 'Brainstorm e referências' },
-      { key: 'roteiro_criado', label: 'Criação do roteiro' },
-      { key: 'roteiro_aprovado', label: 'Roteiro aprovado pelo cliente' },
+      { key: 'roteiro_criado', label: 'Criação do roteiro', auto: true },
+      { key: 'roteiro_aprovado', label: 'Roteiro aprovado pelo cliente', auto: true },
     ],
   },
   {
@@ -80,15 +80,17 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
   const [dados, setDados] = useState({
     temBriefing: false, nDiarias: 0, todasDiariasPassadas: false,
     nOrdens: 0, nVideos: 0, foiAoCliente: false, temDecisao: 0, todosAprovados: false,
+    nRoteiros: 0, roteiroAprovado: false,
   });
 
   const load = useCallback(async () => {
-    const [checks, brief, diarias, ordens, videos] = await Promise.all([
+    const [checks, brief, diarias, ordens, videos, rots] = await Promise.all([
       supabase.from('project_stage_checks').select('stage_key').eq('project_id', projectId),
       supabase.from('project_briefings').select('sections').eq('project_id', projectId).maybeSingle(),
       supabase.from('project_diarias').select('data').eq('project_id', projectId),
       supabase.from('ordens_do_dia').select('id').eq('project_id', projectId),
       supabase.from('video_versions').select('group_id, versao, status, client_decision').eq('project_id', projectId),
+      supabase.from('project_roteiros').select('status').eq('project_id', projectId),
     ]);
     setManuais(new Set((checks.data || []).map(c => c.stage_key)));
 
@@ -116,6 +118,8 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
       foiAoCliente: grupos.some(g => CLIENTE.includes(g.status)),
       temDecisao: vs.filter(v => v.client_decision).length,
       todosAprovados: grupos.length > 0 && grupos.every(g => g.status === 'APROVADO'),
+      nRoteiros: (rots.data || []).length,
+      roteiroAprovado: (rots.data || []).some((r: any) => r.status === 'aprovado'),
     });
     setLoading(false);
   }, [projectId]);
@@ -126,6 +130,8 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
     orcamento_enviado: budgetStatus != null && budgetStatus !== 'rascunho',
     orcamento_aprovado: budgetStatus === 'aprovado',
     briefing_preenchido: dados.temBriefing,
+    roteiro_criado: dados.nRoteiros > 0,
+    roteiro_aprovado: dados.roteiroAprovado,
     diarias_planejadas: dados.nDiarias > 0,
     ordem_do_dia: dados.nOrdens > 0,
     gravacao: dados.todasDiariasPassadas,
