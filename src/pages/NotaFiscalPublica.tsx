@@ -19,6 +19,7 @@ interface NotaInfo {
   pagar_em?: string;
   status?: string;
   arquivo?: string | null;
+  pix_atual?: string | null;
 }
 
 const brl = (v?: number | null) =>
@@ -36,15 +37,27 @@ export default function NotaFiscalPublica() {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erro, setErro] = useState('');
+  const [dadosPagamento, setDadosPagamento] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!token) return;
     supabase.rpc('get_nota_request', { p_token: token }).then(({ data, error }) => {
-      setInfo(error ? { ok: false, error: error.message } : (data as NotaInfo));
+      const i = error ? { ok: false, error: error.message } : (data as NotaInfo);
+      setInfo(i);
+      if (i?.ok && i.pix_atual) setDadosPagamento(i.pix_atual);
       setLoading(false);
     });
   }, [token]);
+
+  const pedirArquivo = () => {
+    if (!dadosPagamento.trim()) {
+      setErro('Antes de enviar a nota, confirme seus dados bancários e sua chave PIX no campo acima.');
+      return;
+    }
+    setErro('');
+    fileRef.current?.click();
+  };
 
   const enviarArquivo = async (file: File) => {
     if (!token) return;
@@ -56,7 +69,13 @@ export default function NotaFiscalPublica() {
       const path = `${token}/${Date.now()}_${nomeLimpo}`;
       const { error: upErr } = await supabase.storage.from('notas-fiscais').upload(path, file, { upsert: false });
       if (upErr) throw upErr;
-      const { data, error } = await supabase.rpc('submit_nota', { p_token: token, p_path: path, p_file_name: file.name });
+      let { data, error } = await supabase.rpc('submit_nota', {
+        p_token: token, p_path: path, p_file_name: file.name, p_dados_pagamento: dadosPagamento.trim() || null,
+      });
+      // Banco ainda na versão sem o campo de dados de pagamento: envia sem ele.
+      if (error && /p_dados_pagamento|function|schema/i.test(error.message)) {
+        ({ data, error } = await supabase.rpc('submit_nota', { p_token: token, p_path: path, p_file_name: file.name }));
+      }
       if (error) throw error;
       if (!(data as any)?.ok) throw new Error('Link inválido ou cobrança encerrada.');
       setEnviado(true);
@@ -72,9 +91,8 @@ export default function NotaFiscalPublica() {
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white flex flex-col">
-      <header className="px-6 py-5 border-b border-white/10 flex items-center gap-2">
-        <div className="w-7 h-7 bg-[#EFC700] rounded flex items-center justify-center text-black font-black text-sm">L</div>
-        <span className="font-black tracking-widest text-sm">PRODUTORA LUMOS</span>
+      <header className="px-6 py-5 border-b border-white/10">
+        <img src="/logo/Logotipo-Branco-Alpha.svg" alt="Produtora Lumos" className="h-7" />
       </header>
 
       <main className="flex-1 flex items-center justify-center px-4 py-10">
@@ -147,14 +165,29 @@ export default function NotaFiscalPublica() {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={enviando}
-                className="w-full bg-[#EFC700] hover:bg-[#ffd91e] text-black font-black rounded-xl py-3.5 flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
-              >
-                {enviando ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileUp className="w-5 h-5" />}
-                {enviando ? 'Enviando…' : 'Enviar nota fiscal'}
-              </button>
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-white/50 block">
+                    Seus dados bancários e chave PIX *
+                  </label>
+                  <textarea
+                    value={dadosPagamento}
+                    onChange={e => setDadosPagamento(e.target.value)}
+                    rows={3}
+                    placeholder="Ex: PIX (CPF): 000.000.000-00 · Banco Nubank, ag 0001, conta 1234567-8"
+                    className="w-full bg-black/30 border border-white/15 focus:border-[#EFC700] rounded-xl p-3 text-sm outline-none resize-none placeholder:text-white/25"
+                  />
+                  <p className="text-[11px] text-white/40">Confira se está tudo certo, o pagamento vai cair aí.</p>
+                </div>
+                <button
+                  onClick={pedirArquivo}
+                  disabled={enviando}
+                  className="w-full bg-[#EFC700] hover:bg-[#ffd91e] text-black font-black rounded-xl py-3.5 flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
+                >
+                  {enviando ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileUp className="w-5 h-5" />}
+                  {enviando ? 'Enviando…' : 'Enviar nota fiscal'}
+                </button>
+              </>
             )}
 
             <input

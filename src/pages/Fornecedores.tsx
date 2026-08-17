@@ -34,6 +34,7 @@ interface NotaRequest {
   token: string;
   status: string;
   nota_arquivo: { name: string; path: string } | null;
+  dados_pagamento?: string | null;
   fornecedor: { id: string; nome: string; email: string | null } | null;
   projeto: { name: string } | null;
 }
@@ -116,13 +117,18 @@ export default function Fornecedores() {
       setLoading(false);
     }
     if (podeVerNotas) {
-      const { data, error } = await supabase
+      const colsBase = 'id, descricao, valor, data_servico, enviar_em, pagar_em, token, status, nota_arquivo, fornecedor:fornecedores(id, nome, email), projeto:projects(name)';
+      let q: { data: unknown; error: { message: string } | null } = await supabase
         .from('nota_requests')
-        .select('id, descricao, valor, data_servico, enviar_em, pagar_em, token, status, nota_arquivo, fornecedor:fornecedores(id, nome, email), projeto:projects(name)')
+        .select(`${colsBase}, dados_pagamento`)
         .order('enviar_em', { ascending: false });
+      // Coluna dados_pagamento pode não existir ainda; tenta sem ela.
+      if (q.error) {
+        q = await supabase.from('nota_requests').select(colsBase).order('enviar_em', { ascending: false });
+      }
       // Tabela pode ainda não existir (migration pendente); a aba avisa.
-      if (error) setNotasIndisponiveis(true);
-      else { setNotasIndisponiveis(false); setNotas((data as any[]) || []); }
+      if (q.error) setNotasIndisponiveis(true);
+      else { setNotasIndisponiveis(false); setNotas((q.data as any[]) || []); }
     }
   }
 
@@ -609,6 +615,11 @@ function NotasTab({ notas, indisponivel, enviandoId, onEnviar, onCopiar, onVer, 
                   <td className="px-4 py-2.5">
                     <div className="font-bold text-lumos-text-primary">{n.fornecedor ? formatName(n.fornecedor.nome) : '—'}</div>
                     {!n.fornecedor?.email && <div className="text-[10px] text-red-500 font-bold">sem e-mail cadastrado</div>}
+                    {n.dados_pagamento && (
+                      <div className="text-[10px] text-lumos-text-secondary truncate max-w-[220px]" title={n.dados_pagamento}>
+                        PIX: {n.dados_pagamento}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="text-xs text-lumos-text-primary max-w-[260px] truncate" title={n.descricao}>{n.descricao}</div>
@@ -637,6 +648,9 @@ function NotasTab({ notas, indisponivel, enviandoId, onEnviar, onCopiar, onVer, 
                 <Status n={n} />
               </div>
               <div className="text-[11px] text-lumos-text-secondary truncate mt-0.5">{n.descricao}</div>
+              {n.dados_pagamento && (
+                <div className="text-[10px] text-lumos-text-secondary truncate">PIX: {n.dados_pagamento}</div>
+              )}
               <div className="flex items-center justify-between gap-2 mt-1.5">
                 <span className="text-[11px] text-lumos-text-secondary">
                   {brl(n.valor)} · cobrança {brData(n.enviar_em)} · paga {brData(n.pagar_em)}

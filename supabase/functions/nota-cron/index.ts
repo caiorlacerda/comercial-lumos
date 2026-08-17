@@ -12,6 +12,10 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const APP_URL = 'https://app.produtoralumos.com.br';
 const FROM = 'Produtora Lumos <nao-responda@mail.produtoralumos.com.br>';
+const LOGO_URL = `${APP_URL}/logo-lumos.png`;
+// Dados de faturamento da Lumos (o tomador da nota).
+const LUMOS_CNPJ = '51.253.010/0001-70';
+const LUMOS_RAZAO = 'LUMOS PRODUTORA AUDIOVISUAL LTDA';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -30,21 +34,38 @@ function emailHtml(r: {
   valor: number | null; pagar_em: string; link: string;
 }) {
   const valorTxt = r.valor != null ? ` no valor de <strong>${brl(r.valor)}</strong>` : '';
+  const linhaDado = (rotulo: string, valor: string) => `
+        <tr>
+          <td style="padding: 5px 0; font-size: 12px; color: #777; white-space: nowrap; vertical-align: top;">${rotulo}</td>
+          <td style="padding: 5px 0 5px 16px; font-size: 13px; color: #1a1a1a; font-weight: bold;">${valor}</td>
+        </tr>`;
   return `
   <div style="font-family: Arial, Helvetica, sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a;">
-    <div style="background: #111; padding: 20px 28px; border-radius: 12px 12px 0 0;">
-      <span style="color: #EFC700; font-size: 18px; font-weight: 800; letter-spacing: 1px;">PRODUTORA LUMOS</span>
+    <div style="background: #ffffff; padding: 22px 28px 18px; border: 1px solid #e5e5e5; border-bottom: 4px solid #EFC700; border-radius: 12px 12px 0 0;">
+      <img src="${LOGO_URL}" alt="Lumos" height="30" style="display: block; height: 30px;" />
     </div>
-    <div style="border: 1px solid #e5e5e5; border-top: 0; border-radius: 0 0 12px 12px; padding: 28px;">
+    <div style="border: 1px solid #e5e5e5; border-top: 0; border-radius: 0 0 12px 12px; padding: 28px; background: #ffffff;">
       <p style="font-size: 15px;">Olá, <strong>${r.fornecedor}</strong>!</p>
       <p style="font-size: 14px; line-height: 1.6;">
         O pagamento do seu job <strong>${r.descricao}</strong>${r.projeto ? ` (projeto ${r.projeto})` : ''}${valorTxt}
         está previsto para <strong>${brData(r.pagar_em)}</strong>.
       </p>
       <p style="font-size: 14px; line-height: 1.6;">
-        Para recebermos tudo em dia, precisamos da sua nota fiscal. É só emitir e enviar o arquivo pelo botão abaixo:
+        Para recebermos tudo em dia, precisamos que você emita sua nota fiscal. Os dados para a emissão:
       </p>
-      <p style="text-align: center; margin: 28px 0;">
+      <div style="background: #faf8f0; border: 1px solid #EFC700; border-radius: 10px; padding: 16px 20px; margin: 18px 0;">
+        <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+          ${linhaDado('CNPJ', LUMOS_CNPJ)}
+          ${linhaDado('Razão Social', LUMOS_RAZAO)}
+          ${linhaDado('Descrição na nota', `Serviços prestados de ${r.descricao}`)}
+          ${r.valor != null ? linhaDado('Valor', brl(r.valor)) : ''}
+        </table>
+      </div>
+      <p style="font-size: 14px; line-height: 1.6;">
+        Depois é só enviar o arquivo pelo botão abaixo. Na mesma página, confirme também os seus
+        <strong>dados bancários e a sua chave PIX</strong>, para o pagamento cair certinho:
+      </p>
+      <p style="text-align: center; margin: 26px 0;">
         <a href="${r.link}" style="background: #EFC700; color: #111; font-weight: 800; font-size: 14px; text-decoration: none; padding: 13px 30px; border-radius: 8px; display: inline-block;">
           Enviar nota fiscal
         </a>
