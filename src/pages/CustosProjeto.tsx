@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import Modal from '@/components/common/Modal';
+import EncerrarProjetoModal from '@/components/financeiro/EncerrarProjetoModal';
 import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -138,7 +139,6 @@ export default function CustosProjeto() {
   const [aba, setAba] = useState<'ativos' | 'encerrados'>('ativos');
   const [colunasAbertas, setColunasAbertas] = useState(false);
   const [encerrando, setEncerrando] = useState<any | null>(null);
-  const [encerrandoBusy, setEncerrandoBusy] = useState(false);
   // Cada ADM escolhe as colunas que quer, e a escolha segue ele em qualquer
   // computador (fica no banco, não no navegador).
   const { prefs: viewPrefs, salvar: salvarPrefs } = useViewPrefs<{ colunas: string[] }>(
@@ -399,58 +399,10 @@ export default function CustosProjeto() {
     }
   };
 
-  // Encerrar: abre o modal já com o levantamento do que ainda falta entrar.
-  const abrirEncerrar = async (p: any, e: React.MouseEvent) => {
+  // Encerrar/reabrir: o modal compartilhado faz o levantamento e o resto.
+  const abrirEncerrar = (p: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (p.encerrado_em) { setEncerrando({ ...p, reabrindo: true }); return; }
-    setEncerrando({ ...p, carregando: true });
-    let aReceber = 0, parcelas: any[] = [];
-    if (p.budget_id) {
-      const { data } = await supabase
-        .from('receivables')
-        .select('description, total_amount, received_amount, due_date, status')
-        .eq('budget_id', p.budget_id)
-        .not('status', 'in', '("recebido","cancelado")');
-      parcelas = data || [];
-      aReceber = parcelas.reduce((s, r) => s + (Number(r.total_amount || 0) - Number(r.received_amount || 0)), 0);
-    }
-    setEncerrando({ ...p, carregando: false, aReceber, parcelas });
-  };
-
-  const confirmarEncerrar = async () => {
-    if (!encerrando) return;
-    setEncerrandoBusy(true);
-    const reabrindo = !!encerrando.reabrindo;
-    const { error } = await supabase
-      .from('projetos_financeiro')
-      .update(reabrindo
-        ? { encerrado_em: null, encerrado_por: null }
-        : { encerrado_em: new Date().toISOString(), encerrado_por: profile?.id || null })
-      .eq('id', encerrando.id);
-    setEncerrandoBusy(false);
-    if (error) { toast.error('Não foi possível salvar.'); return; }
-
-    if (!reabrindo) {
-      // Avisa os ADMs do que ficou pendente, senão o projeto some da lista e
-      // o dinheiro que falta some junto.
-      const faltando = Number(encerrando.aReceber || 0);
-      const admins = await getAdminUserIds();
-      await notify({
-        userIds: admins,
-        event: NOTIFICATION_EVENTS.PROJETO_FINANCEIRO_ENCERRADO,
-        title: faltando > 0 ? 'Projeto encerrado com valor a receber' : 'Projeto encerrado, tudo recebido ✓',
-        body: faltando > 0
-          ? `${encerrando.name}: ainda faltam ${fmtBRL(faltando)} do cliente.`
-          : `${encerrando.name}: não sobrou nada a receber.`,
-        link: `/financeiro/custos-projeto/${encerrando.project_id}`,
-        data: { project_id: encerrando.project_id, a_receber: faltando },
-      });
-    }
-
-    toast.success(reabrindo ? 'Projeto reaberto.' : 'Projeto encerrado.');
-    setEncerrando(null);
-    setAba(reabrindo ? 'ativos' : 'encerrados');
-    fetchProjects(true);
+    setEncerrando(p);
   };
 
   const filtered = projects.filter(p => {
@@ -1161,60 +1113,21 @@ export default function CustosProjeto() {
 
       {/* Encerrar / reabrir projeto no financeiro */}
       {encerrando && (
-        <Modal
-          isOpen
+        <EncerrarProjetoModal
+          proj={{
+            id: encerrando.id,
+            name: encerrando.name,
+            project_id: encerrando.project_id,
+            budget_id: encerrando.budget_id,
+            encerrado_em: encerrando.encerrado_em,
+          }}
           onClose={() => setEncerrando(null)}
-          title={encerrando.reabrindo ? 'Reabrir projeto' : 'Encerrar projeto'}
-          maxWidth="max-w-md"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-lumos-text-primary font-bold">{encerrando.name}</p>
-
-            {encerrando.reabrindo ? (
-              <p className="text-xs text-lumos-text-secondary">
-                O projeto volta pra lista de em andamento. Nada do histórico é perdido nesse caminho.
-              </p>
-            ) : encerrando.carregando ? (
-              <p className="text-xs text-lumos-text-secondary">Conferindo o que falta receber…</p>
-            ) : (
-              <>
-                <div className={clsx('rounded-lumos border p-4',
-                  encerrando.aReceber > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5')}>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Ainda falta receber</p>
-                  <p className={clsx('text-2xl font-black mt-1 tabular-nums', encerrando.aReceber > 0 ? 'text-red-500' : 'text-green-500')}>
-                    {encerrando.aReceber > 0 ? fmtBRL(encerrando.aReceber) : 'Nada, tudo recebido ✓'}
-                  </p>
-                  {encerrando.parcelas?.length > 0 && (
-                    <ul className="mt-3 space-y-1.5 border-t border-lumos-border pt-3">
-                      {encerrando.parcelas.map((r: any, i: number) => (
-                        <li key={i} className="flex justify-between gap-3 text-[11px]">
-                          <span className="text-lumos-text-secondary truncate">{r.description}</span>
-                          <span className="font-bold tabular-nums flex-shrink-0">
-                            {fmtBRL(Number(r.total_amount || 0) - Number(r.received_amount || 0))}
-                            <span className="text-lumos-text-secondary font-normal"> · {fmtDia(r.due_date)}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <p className="text-xs text-lumos-text-secondary">
-                  O projeto sai da lista de em andamento e vai pra aba Encerrados. Os custos e o histórico continuam lá,
-                  e os administradores recebem um aviso com o que ficou pendente.
-                  {!encerrando.budget_id && ' Este projeto não tem proposta ligada, então não deu pra conferir as parcelas.'}
-                </p>
-              </>
-            )}
-
-            <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setEncerrando(null)} className="btn-secondary flex-1">Cancelar</button>
-              <button type="button" onClick={confirmarEncerrar} disabled={encerrandoBusy || encerrando.carregando}
-                className="btn-primary flex-1 h-10 disabled:opacity-60">
-                {encerrandoBusy ? 'Salvando…' : encerrando.reabrindo ? 'Reabrir' : 'Encerrar projeto'}
-              </button>
-            </div>
-          </div>
-        </Modal>
+          onDone={() => {
+            // Fica na aba onde o usuário está; o projeto só muda de lista.
+            setEncerrando(null);
+            fetchProjects(true);
+          }}
+        />
       )}
     </div>
   );
