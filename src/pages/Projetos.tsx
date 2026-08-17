@@ -2222,7 +2222,7 @@ export default function Projetos() {
 
                 {/* ================= ABA: BRIEFING ================= */}
                 {projTab === 'briefing' && (
-                <ProjectBriefing key={'br' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                <ProjectBriefing key={'br' + selectedProject.id} projectId={selectedProject.id} driveFolderId={selectedProject.drive_folder_id} canManage={canManage} />
                 )}
 
                 {/* ================= ABA: DIÁRIAS ================= */}
@@ -2237,7 +2237,7 @@ export default function Projetos() {
 
                 {/* ================= ABA: EQUIPE ================= */}
                 {projTab === 'equipe' && (
-                <ProjectEquipe key={'eq' + selectedProject.id} projectId={selectedProject.id} />
+                <ProjectEquipe key={'eq' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
                 )}
 
                 {/* ================= ABA: RESUMO (antiga Visão geral) ================= */}

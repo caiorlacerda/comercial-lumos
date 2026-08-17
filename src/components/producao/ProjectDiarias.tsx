@@ -16,6 +16,7 @@ import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 interface Diaria {
   id: string; nome: string; data: string | null; duracao_horas: number;
   local: string | null; descricao: string | null; ordem: number;
+  google_event_id?: string | null;
 }
 
 interface Props { projectId: string; canManage: boolean }
@@ -64,22 +65,37 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
       local: editando.local?.trim() || null,
       descricao: editando.descricao?.trim() || null,
     };
-    const q = editando.id
-      ? supabase.from('project_diarias').update(payload).eq('id', editando.id)
-      : supabase.from('project_diarias').insert([{ ...payload, created_by: profile?.id || null }]);
-    const { error } = await q;
+    let diariaId = editando.id || null;
+    if (editando.id) {
+      const { error } = await supabase.from('project_diarias').update(payload).eq('id', editando.id);
+      if (error) { setSalvando(false); toast.error('Não foi possível salvar a diária.'); return; }
+    } else {
+      const { data, error } = await supabase.from('project_diarias')
+        .insert([{ ...payload, created_by: profile?.id || null }]).select('id').single();
+      if (error || !data) { setSalvando(false); toast.error('Não foi possível salvar a diária.'); return; }
+      diariaId = data.id;
+    }
     setSalvando(false);
-    if (error) { toast.error('Não foi possível salvar a diária.'); return; }
     setEditando(null);
     setClima({});
     load();
+    // Diária no calendário da produção: melhor esforço, sem travar o fluxo.
+    if (diariaId && payload.data) {
+      supabase.functions.invoke('calendar-diaria', { body: { action: 'upsert', diaria_id: diariaId } })
+        .then(({ data: r, error }) => {
+          if (error || (r as any)?.error) toast.error('Diária salva, mas o Google Calendar não aceitou. Confere a conexão do calendário.');
+          else if ((r as any)?.event_id) { toast.success('Diária no Google Calendar ✓'); load(); }
+        });
+    }
   };
 
   const excluir = async () => {
     if (!editando?.id) return;
     if (!confirm(`Excluir a diária "${editando.nome}"?`)) return;
+    const eventId = (editando as Diaria).google_event_id;
     const { error } = await supabase.from('project_diarias').delete().eq('id', editando.id);
     if (error) { toast.error('Não foi possível excluir.'); return; }
+    if (eventId) void supabase.functions.invoke('calendar-diaria', { body: { action: 'delete', event_id: eventId } });
     setEditando(null);
     load();
   };
@@ -148,7 +164,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                 )}
-                <p className="text-[13.5px] font-black pr-8">{d.nome}</p>
+                <p className="text-[13.5px] font-black pr-8 text-lumos-text-primary">{d.nome}</p>
                 {d.descricao && <p className="text-[11.5px] text-lumos-text-secondary mt-0.5 leading-snug">{d.descricao}</p>}
 
                 {chuva && p && (
@@ -157,7 +173,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                   </p>
                 )}
 
-                <div className="mt-3 space-y-1.5 text-[11.5px]">
+                <div className="mt-3 space-y-1.5 text-[11.5px] text-lumos-text-primary">
                   <p className="flex items-center gap-2">
                     <CalendarDays className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
                     <span className={clsx(passada && 'text-lumos-text-secondary')}>{fmtData(d.data)}</span>
@@ -181,6 +197,9 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                     <p className="text-[10.5px] text-lumos-text-secondary">
                       Previsão: {p.tempMin}° a {p.tempMax}° · {p.chanceChuva}% de chuva
                     </p>
+                  )}
+                  {d.google_event_id && (
+                    <p className="text-[10px] font-bold text-green-600 dark:text-green-500">No Google Calendar ✓</p>
                   )}
                 </div>
               </div>
