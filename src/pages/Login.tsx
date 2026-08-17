@@ -146,6 +146,7 @@ export default function Login() {
                   password: import.meta.env.VITE_TEST_PASSWORD as string,
                 });
                 if (error) setError('Robô de testes: ' + error.message);
+                else navigate('/');
               }}
               className="mt-3 w-full h-10 text-xs font-black uppercase tracking-widest border border-dashed border-lumos-yellow/50 text-lumos-yellow rounded-lumos hover:bg-lumos-yellow/10"
             >

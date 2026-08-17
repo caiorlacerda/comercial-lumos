@@ -136,7 +136,10 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
     encerramento: projectStatus === 'concluido',
   }), [budgetStatus, dados, projectStatus]);
 
-  const isDone = useCallback((e: Etapa) => e.auto ? !!autoDone[e.key] : manuais.has(e.key), [autoDone, manuais]);
+  // Automática vale como feita quando o DADO confirma OU quando o time marcou
+  // à mão — projeto sem orçamento (ou sem diária, sem OD) não pode ficar preso
+  // num degrau que nenhum clique destrava.
+  const isDone = useCallback((e: Etapa) => (e.auto && !!autoDone[e.key]) || manuais.has(e.key), [autoDone, manuais]);
 
   const { feitas, total, proxima } = useMemo(() => {
     const todas = FASES.flatMap(f => f.etapas);
@@ -146,7 +149,8 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
   }, [isDone]);
 
   const toggle = async (e: Etapa) => {
-    if (e.auto || !canManage) return;
+    // O que o sistema confirmou pelos dados ninguém desmarca; o resto é livre.
+    if (!canManage || (e.auto && autoDone[e.key])) return;
     const marcada = manuais.has(e.key);
     const novo = new Set(manuais);
     if (marcada) novo.delete(e.key); else novo.add(e.key);
@@ -200,14 +204,17 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
               <div className="space-y-0.5">
                 {fase.etapas.map((e, i) => {
                   const feito = isDone(e);
+                  const travada = e.auto && !!autoDone[e.key]; // confirmada pelos dados
+                  const clicavel = canManage && !travada;
                   const atual = proxima === e;
                   return (
                     <button key={e.key} type="button" onClick={() => toggle(e)}
-                      disabled={e.auto || !canManage}
-                      title={e.auto ? 'Etapa automática, marcada pelo próprio sistema' : canManage ? (feito ? 'Desmarcar' : 'Marcar como feita') : undefined}
+                      disabled={!clicavel}
+                      title={travada ? 'Confirmada pelo sistema a partir dos dados do projeto'
+                        : e.auto && canManage ? (feito ? 'Desmarcar' : 'O sistema marca sozinho quando acontecer, mas dá pra marcar à mão')
+                        : canManage ? (feito ? 'Desmarcar' : 'Marcar como feita') : undefined}
                       className={clsx('w-full flex items-start gap-2.5 px-1.5 py-1.5 rounded text-left relative',
-                        !e.auto && canManage && 'hover:bg-lumos-text-primary/5 cursor-pointer',
-                        (e.auto || !canManage) && 'cursor-default')}>
+                        clicavel ? 'hover:bg-lumos-text-primary/5 cursor-pointer' : 'cursor-default')}>
                       {/* trilho vertical */}
                       {i < fase.etapas.length - 1 && (
                         <span className={clsx('absolute left-[16px] top-[26px] bottom-[-4px] w-[2px]',
@@ -217,7 +224,7 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
                         feito ? 'bg-lumos-yellow border-lumos-yellow text-black'
                           : atual ? 'border-lumos-yellow text-lumos-yellow bg-lumos-surface'
                           : 'border-lumos-text-secondary/25 text-lumos-text-secondary/40 bg-lumos-surface')}>
-                        {feito ? <Check className="w-3 h-3" /> : e.auto ? <Lock className="w-2.5 h-2.5" /> : null}
+                        {feito ? (travada ? <Lock className="w-2.5 h-2.5" /> : <Check className="w-3 h-3" />) : null}
                       </span>
                       <span className="min-w-0">
                         <span className={clsx('block text-[11.5px] font-bold leading-tight',
@@ -236,7 +243,7 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
       </div>
 
       <p className="text-[10.5px] text-lumos-text-secondary">
-        Etapas com cadeado são automáticas: o sistema marca sozinho quando o dado de verdade acontece (orçamento aprovado, vídeo enviado, projeto encerrado). As outras, o time marca à mão.
+        Etapa com cadeado foi confirmada pelo próprio sistema (orçamento aprovado, vídeo enviado, projeto encerrado) e não desmarca. Todas as outras o time marca à mão, inclusive as automáticas que ainda não aconteceram.
       </p>
     </div>
   );
