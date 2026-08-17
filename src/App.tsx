@@ -395,6 +395,15 @@ function VersionWatcher() {
   return null;
 }
 
+// A Agenda é de quem vive a produção (produção, admin, editores, equipamentos,
+// fornecedores) — papel básico não enxerga tarefas e diárias do time todo.
+function AgendaGuard() {
+  const { isAdmin, can } = useAuth();
+  const pode = isAdmin || can('ordem_do_dia') || can('cronograma_edicao') || can('fornecedores') || can('equipamentos') || can('custos_projeto');
+  if (!pode) return <Navigate to="/" replace />;
+  return <Agenda />;
+}
+
 function AppContent() {
   return (
     <Router>
@@ -645,7 +654,7 @@ function AppContent() {
             <Route path="/producao/board" element={<PermissionGuard permission="ordem_do_dia"><ProducaoBoard /></PermissionGuard>} />
             <Route path="/producao/schedule" element={<PermissionGuard permission="ordem_do_dia"><ProducaoSchedule /></PermissionGuard>} />
             <Route path="/producao/cronograma-edicao" element={<PermissionGuard permission="cronograma_edicao"><CronogramaEdicao /></PermissionGuard>} />
-            <Route path="/producao/agenda" element={<Agenda />} />
+            <Route path="/producao/agenda" element={<AgendaGuard />} />
             {/* Gerenciador de Projetos agora vive DENTRO do layout: as pills de
                 views ficam visíveis também na página do projeto. */}
             <Route path="/producao/projetos" element={<PermissionGuard permission="ordem_do_dia"><Projetos /></PermissionGuard>} />

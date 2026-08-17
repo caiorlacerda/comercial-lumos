@@ -42,7 +42,7 @@ export const NAV_SECTIONS: Section[] = [
   {
     id: 'producao',
     title: 'PRODUÇÃO',
-    visibleWhen: () => true, // Agenda é de todo mundo; o resto segue filtrado por permissão
+    visibleWhen: ({ can }) => can('ordem_do_dia') || can('fornecedores') || can('custos_projeto') || can('cronograma_edicao') || can('equipamentos'),
     items: [
       // Calendário, Board, Timeline e Cronograma são "views" acessadas por
       // pills no topo das páginas de produção (ProducaoViewsNav), não itens

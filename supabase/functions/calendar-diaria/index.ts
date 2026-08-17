@@ -60,8 +60,17 @@ serve(async (req) => {
 
     if (body.action === 'delete') {
       if (!body.event_id) return json({ error: 'event_id obrigatório' }, 400)
+      // Só apagamos evento que NÓS criamos (marcado com lumos_diaria) — sem
+      // isso, qualquer usuário autenticado poderia apagar eventos arbitrários
+      // do calendário da produção passando um id.
+      const g = await fetch(`${base}/${encodeURIComponent(body.event_id)}`, { headers: gauth })
+      if (g.status === 404 || g.status === 410) return json({ ok: true })
+      if (!g.ok) return json({ error: `consulta falhou ${g.status}` }, 502)
+      const ev = await g.json()
+      if (!ev?.extendedProperties?.private?.lumos_diaria) {
+        return json({ error: 'este evento não foi criado pelo app' }, 403)
+      }
       const r = await fetch(`${base}/${encodeURIComponent(body.event_id)}`, { method: 'DELETE', headers: gauth })
-      // 404/410 = já não existe; missão cumprida do mesmo jeito
       if (!r.ok && r.status !== 404 && r.status !== 410) return json({ error: `delete falhou ${r.status}` }, 502)
       return json({ ok: true })
     }
@@ -93,6 +102,7 @@ serve(async (req) => {
       ...(d.local ? { location: d.local } : {}),
       start: comHora ? { dateTime: `${d.data}T${hIni}:00`, timeZone: TZ } : { date: d.data },
       end: comHora ? { dateTime: `${d.data}T${hFim}:00`, timeZone: TZ } : { date: fimDia },
+      extendedProperties: { private: { lumos_diaria: d.id } },
     }
 
     let eventId = d.google_event_id as string | null
