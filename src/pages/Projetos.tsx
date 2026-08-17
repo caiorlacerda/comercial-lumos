@@ -801,8 +801,6 @@ export default function Projetos() {
   const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'roteiros' | 'arquivos'>('status');
   // Sub-abas do Briefing: o briefing em si, o Resumo (antiga visão geral) e os Arquivos.
   const [briefingSub, setBriefingSub] = useState<'geral' | 'resumo' | 'arquivos'>('geral');
-  // Status do orçamento ligado ao projeto — alimenta as etapas automáticas do pipeline.
-  const [projBudgetStatus, setProjBudgetStatus] = useState<string | null>(null);
   const [taskSearch, setTaskSearch] = useState('');
   const [taskStatusFilter, setTaskStatusFilter] = useState('all');
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all');
@@ -903,15 +901,6 @@ export default function Projetos() {
       supabase.from('project_documents').select('url').eq('project_id', selectedProjectId)
         .ilike('name', 'OS %').order('created_at', { ascending: false }).limit(1)
         .then(({ data }) => setOsUrl(data?.[0]?.url || null));
-      // Status do orçamento do projeto (alimenta o pipeline da aba Status).
-      setProjBudgetStatus(null);
-      {
-        const proj = projects.find(pr => pr.id === selectedProjectId);
-        if (proj?.budget_id) {
-          supabase.from('budgets').select('status').eq('id', proj.budget_id).maybeSingle()
-            .then(({ data }) => setProjBudgetStatus((data as any)?.status ?? null));
-        }
-      }
       // Contadores leves das abas Entregas (vídeos = grupos) e Arquivos.
       supabase.from('video_versions').select('group_id').eq('project_id', selectedProjectId)
         .then(({ data }) => setEntregasCount(data ? new Set(data.map((v: any) => v.group_id)).size : null));
@@ -2224,7 +2213,6 @@ export default function Projetos() {
                 <ProjectStatusPipeline key={'st' + selectedProject.id}
                   projectId={selectedProject.id}
                   projectStatus={selectedProject.status}
-                  budgetStatus={projBudgetStatus}
                   canManage={canManage} />
                 )}
 

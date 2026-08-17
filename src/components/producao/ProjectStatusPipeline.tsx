@@ -15,16 +15,9 @@ import { useToast } from '@/context/ToastContext';
 interface Etapa { key: string; label: string; auto?: boolean }
 interface Fase { nome: string; etapas: Etapa[] }
 
+// Sem fase de Negociação: projeto que chegou aqui já passou pelo comercial —
+// o pipeline começa direto na pré-produção.
 const FASES: Fase[] = [
-  {
-    nome: 'Negociação',
-    etapas: [
-      { key: 'contato_inicial', label: 'Contato inicial' },
-      { key: 'orcamento_enviado', label: 'Envio do orçamento', auto: true },
-      { key: 'followup', label: 'Follow-up da proposta' },
-      { key: 'orcamento_aprovado', label: 'Aprovação do orçamento', auto: true },
-    ],
-  },
   {
     nome: 'Pré-produção',
     etapas: [
@@ -68,11 +61,10 @@ const FASES: Fase[] = [
 interface Props {
   projectId: string;
   projectStatus: 'ativo' | 'concluido';
-  budgetStatus: string | null; // status do orçamento ligado (null = sem orçamento)
   canManage: boolean;
 }
 
-export default function ProjectStatusPipeline({ projectId, projectStatus, budgetStatus, canManage }: Props) {
+export default function ProjectStatusPipeline({ projectId, projectStatus, canManage }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
@@ -127,8 +119,6 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
 
   // Estado de cada etapa automática, derivado dos dados de verdade.
   const autoDone: Record<string, boolean> = useMemo(() => ({
-    orcamento_enviado: budgetStatus != null && budgetStatus !== 'rascunho',
-    orcamento_aprovado: budgetStatus === 'aprovado',
     briefing_preenchido: dados.temBriefing,
     roteiro_criado: dados.nRoteiros > 0,
     roteiro_aprovado: dados.roteiroAprovado,
@@ -140,7 +130,7 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, budget
     feedback_cliente: dados.temDecisao > 0,
     aprovacao_final: dados.todosAprovados,
     encerramento: projectStatus === 'concluido',
-  }), [budgetStatus, dados, projectStatus]);
+  }), [dados, projectStatus]);
 
   // Automática vale como feita quando o DADO confirma OU quando o time marcou
   // à mão — projeto sem orçamento (ou sem diária, sem OD) não pode ficar preso
