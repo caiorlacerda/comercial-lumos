@@ -63,6 +63,7 @@ const FornecedorEditor = lazy(() => import('@/pages/FornecedorEditor'));
 const CadastroFornecedorPublico = lazy(() => import('@/pages/CadastroFornecedorPublico'));
 const DefinirSenha = lazy(() => import('@/pages/DefinirSenha'));
 const RevisaoPublica = lazy(() => import('@/pages/RevisaoPublica'));
+const NotaFiscalPublica = lazy(() => import('@/pages/NotaFiscalPublica'));
 const PortalCliente = lazy(() => import('@/pages/PortalCliente'));
 
 
@@ -417,6 +418,7 @@ function AppContent() {
           <Route path="/definir-senha" element={<DefinirSenha />} />
           <Route path="/redefinir-senha" element={<DefinirSenha />} />
           <Route path="/revisao/:token" element={<RevisaoPublica />} />
+          <Route path="/nota/:token" element={<NotaFiscalPublica />} />
           <Route path="/portal/:token" element={<PortalCliente />} />
           <Route
             path="/"

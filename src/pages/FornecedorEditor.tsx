@@ -5,6 +5,7 @@ import { ArrowLeft, Truck, Plus, Trash2, Save } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import Select from '@/components/ui/Select';
 import ServicosDatalist from '@/components/common/ServicosDatalist';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
@@ -40,7 +41,9 @@ export default function FornecedorEditor() {
     telefone: '',
     email: '',
     payment_info: '',
-    notes: ''
+    notes: '',
+    tipo: 'profissional',
+    cidade: ''
   });
   
   const [services, setServices] = useState<ServiceItem[]>([
@@ -71,7 +74,9 @@ export default function FornecedorEditor() {
         telefone: supplier.telefone || '',
         email: supplier.email || '',
         payment_info: supplier.payment_info || '',
-        notes: supplier.notes || ''
+        notes: supplier.notes || '',
+        tipo: supplier.tipo || 'profissional',
+        cidade: supplier.cidade || ''
       });
 
       const { data: sData, error: sError } = await supabase
@@ -134,21 +139,36 @@ export default function FornecedorEditor() {
         email: formData.email.trim() || null,
         payment_info: formData.payment_info.trim() || null,
         notes: formData.notes.trim() || null,
+        tipo: formData.tipo,
+        cidade: formData.cidade.trim() || null,
         updated_at: new Date().toISOString()
       };
 
+      // Antes da migration as colunas tipo/cidade não existem; nesse caso
+      // salva sem elas em vez de perder o cadastro.
+      const semColunasNovas = () => {
+        const { tipo: _t, cidade: _c, ...resto } = payload as any;
+        return resto;
+      };
       if (id) {
-        const { error } = await supabase
-          .from('fornecedores')
-          .update(payload)
-          .eq('id', id);
+        let { error } = await supabase.from('fornecedores').update(payload).eq('id', id);
+        if (error && /column|tipo|cidade/i.test(error.message)) {
+          ({ error } = await supabase.from('fornecedores').update(semColunasNovas()).eq('id', id));
+        }
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('fornecedores')
           .insert([{ ...payload, created_by: profile?.id }])
           .select()
           .single();
+        if (error && /column|tipo|cidade/i.test(error.message)) {
+          ({ data, error } = await supabase
+            .from('fornecedores')
+            .insert([{ ...semColunasNovas(), created_by: profile?.id }])
+            .select()
+            .single());
+        }
         if (error) throw error;
         supplierId = data.id;
       }
@@ -281,6 +301,28 @@ export default function FornecedorEditor() {
                 placeholder="Ex: contato@fornecedor.com"
                 value={formData.email}
                 onChange={e => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Tipo</label>
+              <Select
+                className="input-lumos w-full h-10"
+                value={formData.tipo}
+                onChange={v => setFormData({ ...formData, tipo: v })}
+                options={[
+                  { value: 'profissional', label: 'Profissional' },
+                  { value: 'empresa', label: 'Empresa' },
+                ]}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Cidade</label>
+              <input 
+                type="text" 
+                className="input-lumos w-full h-10 px-4" 
+                placeholder="Ex: São Paulo, SP"
+                value={formData.cidade}
+                onChange={e => setFormData({ ...formData, cidade: e.target.value })}
               />
             </div>
             <div className="space-y-2 md:col-span-2">

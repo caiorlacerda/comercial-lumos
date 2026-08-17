@@ -113,14 +113,22 @@ export default function RevisaoPublica() {
   const [askChanges, setAskChanges] = useState(false);
   const decision = data?.video.client_decision ?? null;
 
+  // Fase interna: o mesmo link serve à revisão do time, com a decisão certa.
+  const modoInterno = data?.video.status === 'EM_REVISAO_INTERNA' || data?.video.status === 'ALTERACOES_INTERNAS';
+
   const decide = async (kind: 'aprovado' | 'ajustes') => {
     if (!viewerId || deciding) return;
     setDeciding(true);
-    const { data: res, error: err } = await supabase.rpc('review_decide', {
+    const { data: res, error: err } = await supabase.rpc(modoInterno ? 'review_decide_interna' : 'review_decide', {
       p_token: token, p_viewer_id: viewerId, p_decision: kind,
     });
     setDeciding(false);
-    if (err || !(res as any)?.ok) { setError('Não foi possível registrar. Tente novamente.'); return; }
+    if (err || !(res as any)?.ok) {
+      setError((res as any)?.error === 'em_revisao_interna'
+        ? 'Este vídeo ainda está em revisão interna da Lumos.'
+        : 'Não foi possível registrar. Tente novamente.');
+      return;
+    }
     setAskChanges(false);
     await load();
   };
@@ -496,10 +504,20 @@ export default function RevisaoPublica() {
         {/* Comentários */}
         <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:h-full lg:min-h-0', isFs && 'hidden')}>
 
-          {/* Decisão do cliente: aprovar ou pedir ajustes */}
+          {/* Decisão: fase interna decide "libera pro cliente"; fase cliente decide "aprova" */}
           {viewerId && (
             <div className="px-3 py-3 border-b border-lumos-border">
-              {decision === 'aprovado' ? (
+              {modoInterno && (
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> Revisão interna da Lumos
+                </p>
+              )}
+              {data.video.status === 'ALTERACOES_INTERNAS' ? (
+                <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500 flex items-start gap-2">
+                  <RotateCcw className="w-4 h-4 flex-shrink-0 mt-px" />
+                  <span>Alterações solicitadas na revisão interna. Nova versão a caminho.</span>
+                </div>
+              ) : decision === 'aprovado' ? (
                 <div className="rounded-lumos border border-green-500/40 bg-green-500/10 px-3 py-2.5 text-[12px] font-bold text-green-500 flex items-start gap-2">
                   <Check className="w-4 h-4 flex-shrink-0 mt-px" />
                   <span>Vídeo aprovado por {data.video.client_decided_by}. A equipe da Lumos já foi avisada.</span>
@@ -532,11 +550,11 @@ export default function RevisaoPublica() {
                 <div className="flex gap-2">
                   <button onClick={() => decide('aprovado')} disabled={deciding}
                     className="flex-1 h-10 rounded-lumos bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
-                    <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : 'Aprovar vídeo'}
+                    <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : modoInterno ? 'Aprovar e liberar pro cliente' : 'Aprovar vídeo'}
                   </button>
                   <button onClick={() => setAskChanges(true)} disabled={deciding}
                     className="flex-1 h-10 rounded-lumos border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
-                    <RotateCcw className="w-4 h-4" /> Pedir ajustes
+                    <RotateCcw className="w-4 h-4" /> {modoInterno ? 'Pedir alteração' : 'Pedir ajustes'}
                   </button>
                 </div>
               )}

@@ -1,17 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, Clock, CloudRain, Copy, Loader2, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarDays, Clock, CloudRain, Copy, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
+import QuickForm from '@/components/common/QuickForm';
 import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 
 /**
  * Diárias de gravação do projeto: data, duração, local e descrição, com
  * previsão do tempo automática por local e data (Open-Meteo). Chuva com 30%+
- * de chance vira alerta no topo e no card.
+ * de chance vira alerta no topo e no card. Cada diária tem a própria ESCALA
+ * (equipe interna ou fornecedor): fornecedor escalado em diária com data é o
+ * que dispara a cobrança automática de nota fiscal.
  */
+
+export interface MembroDiaria {
+  id: string;
+  diaria_id: string;
+  funcao: string | null;
+  user: { id: string; full_name: string } | null;
+  freela: { id: string; nome: string } | null;
+}
+
+interface PessoaCatalogo { tipo: 'user' | 'freela'; id: string; nome: string; funcao?: string | null; doProjeto?: boolean }
 
 interface Diaria {
   id: string; nome: string; data: string | null; duracao_horas: number;
@@ -41,15 +54,93 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [clima, setClima] = useState<Record<string, PrevisaoDia | null>>({});
   const [editando, setEditando] = useState<Partial<Diaria> | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [equipes, setEquipes] = useState<Record<string, MembroDiaria[]>>({});
+  const [escalaIndisponivel, setEscalaIndisponivel] = useState(false);
+  const [escalando, setEscalando] = useState<Diaria | null>(null);
+  const [catalogo, setCatalogo] = useState<PessoaCatalogo[]>([]);
+  const [editandoFuncao, setEditandoFuncao] = useState<MembroDiaria | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('project_diarias')
       .select('*').eq('project_id', projectId)
       .order('data', { ascending: true, nullsFirst: false }).order('ordem');
-    setDiarias((data as Diaria[]) || []);
+    const lista = (data as Diaria[]) || [];
+    setDiarias(lista);
     setLoading(false);
+    // Escala de cada diária (tabela pode não existir antes da migration).
+    if (lista.length > 0) {
+      const eq = await supabase.from('diaria_members')
+        .select('id, diaria_id, funcao, user:app_users!user_id(id, full_name), freela:fornecedores(id, nome)')
+        .in('diaria_id', lista.map(d => d.id));
+      if (eq.error) setEscalaIndisponivel(true);
+      else {
+        setEscalaIndisponivel(false);
+        const porDiaria: Record<string, MembroDiaria[]> = {};
+        for (const m of (eq.data as unknown as MembroDiaria[]) || []) {
+          (porDiaria[m.diaria_id] ||= []).push(m);
+        }
+        setEquipes(porDiaria);
+      }
+    } else {
+      setEquipes({});
+    }
   }, [projectId]);
   useEffect(() => { load(); }, [load]);
+
+  // Catálogo de quem pode ser escalado: equipe do projeto em destaque,
+  // depois todos os fornecedores e o time Lumos.
+  useEffect(() => {
+    (async () => {
+      const [pm, forn, users] = await Promise.all([
+        supabase.from('project_members').select('user_id, freela_id, funcao').eq('project_id', projectId),
+        supabase.from('fornecedores').select('id, nome').order('nome'),
+        supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
+      ]);
+      const funcaoDe = new Map<string, string | null>();
+      const doProjeto = new Set<string>();
+      for (const m of (pm.data as any[]) || []) {
+        const k = m.user_id ? `user:${m.user_id}` : `freela:${m.freela_id}`;
+        doProjeto.add(k);
+        funcaoDe.set(k, m.funcao || null);
+      }
+      const pessoas: PessoaCatalogo[] = [
+        ...(((forn.data as any[]) || []).map(f => ({
+          tipo: 'freela' as const, id: f.id, nome: f.nome,
+          funcao: funcaoDe.get(`freela:${f.id}`) || null, doProjeto: doProjeto.has(`freela:${f.id}`),
+        }))),
+        ...(((users.data as any[]) || []).map(u => ({
+          tipo: 'user' as const, id: u.id, nome: u.full_name,
+          funcao: funcaoDe.get(`user:${u.id}`) || null, doProjeto: doProjeto.has(`user:${u.id}`),
+        }))),
+      ];
+      setCatalogo(pessoas);
+    })();
+  }, [projectId]);
+
+  const escalar = async (d: Diaria, p: PessoaCatalogo) => {
+    const { error } = await supabase.from('diaria_members').insert({
+      diaria_id: d.id,
+      user_id: p.tipo === 'user' ? p.id : null,
+      freela_id: p.tipo === 'freela' ? p.id : null,
+      funcao: p.funcao || null,
+      added_by: profile?.id || null,
+    });
+    if (error) toast.error(`Não deu pra escalar: ${error.message}`);
+    else load();
+  };
+
+  const desescalar = async (m: MembroDiaria) => {
+    const { error } = await supabase.from('diaria_members').delete().eq('id', m.id);
+    if (error) toast.error('Não foi possível remover da escala.');
+    else load();
+  };
+
+  const salvarFuncao = async (m: MembroDiaria, funcao: string) => {
+    setEditandoFuncao(null);
+    const { error } = await supabase.from('diaria_members').update({ funcao: funcao.trim() || null }).eq('id', m.id);
+    if (error) toast.error('Não foi possível salvar a função.');
+    else load();
+  };
 
   // Clima: busca uma vez por diária com local + data dentro da janela.
   useEffect(() => {
@@ -219,6 +310,47 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                     <p className="text-[10px] font-bold text-green-600 dark:text-green-500">No Google Calendar ✓</p>
                   )}
                 </div>
+
+                {/* Escala desta diária: quem trabalha nela. Fornecedor escalado
+                    em diária com data dispara a cobrança de nota sozinho. */}
+                <div className="mt-3 pt-3 border-t border-lumos-border/50">
+                  <p className="text-[9.5px] font-black uppercase tracking-widest text-lumos-text-secondary flex items-center gap-1.5 mb-1.5">
+                    <Users2 className="w-3 h-3" /> Equipe da diária
+                    {(equipes[d.id]?.length || 0) > 0 && <span className="normal-case tracking-normal">· {equipes[d.id]!.length}</span>}
+                  </p>
+                  {escalaIndisponivel ? (
+                    <p className="text-[10px] text-lumos-text-secondary italic">Falta rodar a migration da escala no banco.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(equipes[d.id] || []).map(m => (
+                        <span key={m.id} className={clsx('inline-flex items-center gap-1 rounded-full border pl-2 py-0.5 text-[10.5px] font-bold',
+                          m.freela ? 'bg-lumos-yellow/10 border-lumos-yellow/40 text-lumos-text-primary' : 'bg-lumos-text-secondary/10 border-lumos-border text-lumos-text-primary',
+                          canManage ? 'pr-1' : 'pr-2')}>
+                          <button type="button" disabled={!canManage} title={canManage ? 'Editar função' : undefined}
+                            onClick={() => canManage && setEditandoFuncao(m)} className="text-left">
+                            {m.freela?.nome || m.user?.full_name}
+                            {m.funcao && <span className="text-lumos-text-secondary font-semibold"> · {m.funcao}</span>}
+                          </button>
+                          {canManage && (
+                            <button type="button" onClick={() => desescalar(m)}
+                              className="p-0.5 rounded-full text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10" title="Tirar da escala">
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      {canManage && (
+                        <button type="button" onClick={() => setEscalando(d)}
+                          className="inline-flex items-center gap-1 rounded-full border border-dashed border-lumos-text-secondary/40 px-2 py-0.5 text-[10.5px] font-bold text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow transition-colors">
+                          <UserPlus className="w-3 h-3" /> Escalar
+                        </button>
+                      )}
+                      {!canManage && (equipes[d.id]?.length || 0) === 0 && (
+                        <span className="text-[10px] text-lumos-text-secondary italic">Ninguém escalado ainda.</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -285,6 +417,86 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           </div>
         </Modal>
       )}
+
+      {escalando && (
+        <EscalarModal
+          diaria={escalando}
+          catalogo={catalogo}
+          jaEscalados={new Set((equipes[escalando.id] || []).map(m => m.freela ? `freela:${m.freela.id}` : `user:${m.user?.id}`))}
+          onEscalar={p => escalar(escalando, p)}
+          onClose={() => setEscalando(null)}
+        />
+      )}
+
+      {editandoFuncao && (
+        <QuickForm
+          title={`Função de ${editandoFuncao.freela?.nome || editandoFuncao.user?.full_name}`}
+          fields={[{ key: 'funcao', label: 'Função nesta diária', placeholder: 'Ex.: Direção de fotografia', value: editandoFuncao.funcao || '' }]}
+          submitLabel="Salvar"
+          onSubmit={v => salvarFuncao(editandoFuncao, v.funcao || '')}
+          onClose={() => setEditandoFuncao(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Modal de escalar: busca em todo mundo, equipe do projeto em destaque ───
+function EscalarModal({ diaria, catalogo, jaEscalados, onEscalar, onClose }: {
+  diaria: Diaria;
+  catalogo: PessoaCatalogo[];
+  jaEscalados: Set<string>;
+  onEscalar: (p: PessoaCatalogo) => void;
+  onClose: () => void;
+}) {
+  const [busca, setBusca] = useState('');
+  const q = busca.trim().toLowerCase();
+  const disponiveis = catalogo.filter(p => !jaEscalados.has(`${p.tipo}:${p.id}`) && (!q || p.nome.toLowerCase().includes(q)));
+  const grupos: { titulo: string; itens: PessoaCatalogo[] }[] = [
+    { titulo: 'Equipe do projeto', itens: disponiveis.filter(p => p.doProjeto) },
+    { titulo: 'Fornecedores', itens: disponiveis.filter(p => !p.doProjeto && p.tipo === 'freela') },
+    { titulo: 'Time Lumos', itens: disponiveis.filter(p => !p.doProjeto && p.tipo === 'user') },
+  ].filter(g => g.itens.length > 0);
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Escalar em "${diaria.nome}"`} maxWidth="max-w-md">
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary pointer-events-none" />
+          <input autoFocus value={busca} onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar pessoa ou fornecedor…" className="input-lumos pl-9 w-full h-10 text-sm" />
+        </div>
+        <p className="text-[10.5px] text-lumos-text-secondary">
+          Fornecedor escalado em diária com data já agenda a cobrança de nota sozinho.
+        </p>
+        <div className="border border-lumos-border rounded-lumos max-h-72 overflow-y-auto custom-scrollbar divide-y divide-lumos-border/40">
+          {grupos.length === 0 && (
+            <p className="text-xs text-lumos-text-secondary italic p-4 text-center">Ninguém encontrado.</p>
+          )}
+          {grupos.map(g => (
+            <div key={g.titulo}>
+              <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary bg-lumos-bg/60 px-3 py-1.5 sticky top-0">{g.titulo}</p>
+              {g.itens.map(pessoa => (
+                <button key={`${pessoa.tipo}:${pessoa.id}`} type="button"
+                  onClick={() => { onEscalar(pessoa); onClose(); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-lumos-text-primary/5 transition-colors">
+                  <span className={clsx('w-7 h-7 rounded-full text-[10px] font-black flex items-center justify-center flex-shrink-0',
+                    pessoa.tipo === 'freela' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
+                    {pessoa.nome.trim().split(/\s+/).slice(0, 2).map(x => x[0]?.toUpperCase() || '').join('')}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-xs font-bold text-lumos-text-primary block truncate">{pessoa.nome}</span>
+                    <span className="text-[10px] text-lumos-text-secondary block truncate">
+                      {pessoa.tipo === 'freela' ? 'Fornecedor' : 'Time Lumos'}{pessoa.funcao ? ` · ${pessoa.funcao}` : ''}
+                    </span>
+                  </span>
+                  <UserPlus className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 }
