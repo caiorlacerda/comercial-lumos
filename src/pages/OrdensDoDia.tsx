@@ -9,11 +9,13 @@ import Modal from '@/components/common/Modal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { OrdemDoDia } from '@/types/ordemDoDia';
+import QuickForm from '@/components/common/QuickForm';
 
 export default function OrdensDoDia() {
   const navigate = useNavigate();
   const toast = useToast();
   const [ordens, setOrdens] = useState<OrdemDoDia[]>([]);
+  const [novaAberta, setNovaAberta] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export default function OrdensDoDia() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">Ordens do Dia</h1>
           <p className="text-lumos-text-secondary text-sm">Briefings e cronogramas operacionais das produções.</p>
         </div>
-        <button onClick={() => navigate('/ordem-do-dia/nova')} className="btn-primary h-10 px-6 flex items-center gap-2">
+        <button onClick={() => setNovaAberta(true)} className="btn-primary h-10 px-6 flex items-center gap-2">
           <Plus className="w-4 h-4" /> Nova Ordem do Dia
         </button>
       </div>
@@ -162,6 +164,32 @@ export default function OrdensDoDia() {
           </div>
         </div>
       </Modal>
+      {novaAberta && (
+        <QuickForm title="Nova Ordem do Dia" submitLabel="Criar"
+          fields={[
+            { key: 'nome', label: 'Nome', value: 'Ordem do Dia - ', required: true },
+            { key: 'data', label: 'Data da produção', type: 'date' },
+            { key: 'hora', label: 'Hora do início', type: 'time', value: '08:00' },
+            { key: 'locacao', label: 'Primeira locação (opcional)', placeholder: 'Ex.: Praia da Reserva, Rio de Janeiro' },
+          ]}
+          onSubmit={async v => {
+            const base: Record<string, unknown> = {
+              codigo: `OD-${ordens.length + 1}`,
+              titulo: v.nome.trim(),
+              data_producao: v.data || null,
+              hora_inicio: v.hora || null,
+              ...(v.locacao.trim() ? { locacao: { nome: v.locacao.trim(), endereco: '', observacoes: '' } } : {}),
+            };
+            let { data: novo, error } = await supabase.from('ordens_do_dia').insert([base]).select('id').single();
+            if (error && /hora_inicio/.test(String(error.message))) {
+              const { hora_inicio: _h, ...semHora } = base;
+              ({ data: novo, error } = await supabase.from('ordens_do_dia').insert([semHora]).select('id').single());
+            }
+            if (error || !novo) { toast.error('Não foi possível criar.'); return; }
+            navigate(`/ordem-do-dia/${novo.id}`);
+          }}
+          onClose={() => setNovaAberta(false)} />
+      )}
     </div>
   );
 }

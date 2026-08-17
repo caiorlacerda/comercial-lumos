@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import QuickForm from '@/components/common/QuickForm';
 
 /**
  * Briefing estruturado do projeto, nas 7 categorias do benchmark, em sanfona.
@@ -145,11 +146,8 @@ export default function ProjectBriefing({ projectId, canManage }: Props) {
     if (!canManage) return;
     void persist({ ...sec, confirmar: sec.confirmar.map((c, j) => j === i ? { ...c, done: !c.done } : c) });
   };
-  const addConfirmar = () => {
-    const t = prompt('O que precisa ser confirmado com o cliente?');
-    if (!t?.trim()) return;
-    void persist({ ...sec, confirmar: [...sec.confirmar, { t: t.trim(), done: false }] });
-  };
+  const [addAberto, setAddAberto] = useState(false);
+  const addConfirmar = () => setAddAberto(true);
   const rmConfirmar = (i: number) => {
     void persist({ ...sec, confirmar: sec.confirmar.filter((_, j) => j !== i) });
   };
@@ -260,6 +258,13 @@ export default function ProjectBriefing({ projectId, canManage }: Props) {
           )}
         </div>
       </Grupo>
+
+      {addAberto && (
+        <QuickForm title="Informação a confirmar" submitLabel="Adicionar"
+          fields={[{ key: 't', label: 'O que precisa ser confirmado com o cliente?', type: 'textarea', required: true }]}
+          onSubmit={v => void persist({ ...sec, confirmar: [...sec.confirmar, { t: v.t.trim(), done: false }] })}
+          onClose={() => setAddAberto(false)} />
+      )}
     </div>
   );
 }

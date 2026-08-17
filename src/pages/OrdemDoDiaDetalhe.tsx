@@ -4,12 +4,14 @@ import {
   ArrowLeft, CalendarDays, Check, ChevronDown, Clock, CloudRain, Copy, ExternalLink,
   Loader2, MapPin, Pencil, Plus, Shirt, Sun, Trash2, Users2, Video, Package, Camera,
   FileText, ArrowUp, ArrowDown, AlertTriangle, Megaphone, ScrollText, Wrench,
-  Utensils, Coffee, Truck, SlidersHorizontal,
+  Utensils, Coffee, Truck, SlidersHorizontal, FileDown,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import QuickForm, { type QFField } from '@/components/common/QuickForm';
+import Select from '@/components/ui/Select';
 import { geocode, previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 import { notify, getUserIdsWithPermission } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
@@ -46,6 +48,7 @@ interface OD {
   figurino: ItemSimples[];
   equipamentos: ItemSimples[];
   roteiros: { id: string; name: string; url: string }[];
+  contatos: { funcao: string; nome: string; telefone: string }[];
   project_id: string | null;
 }
 
@@ -342,17 +345,13 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
               <>
                 <div>
                   <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Partida</label>
-                  <select value={cfg.locacao} onChange={e => setCfg({ ...cfg, locacao: e.target.value })} className="input-lumos w-full h-10 mt-1 text-sm">
-                    {locsAtivas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
-                    <option value="">Outro lugar</option>
-                  </select>
+                  <Select value={cfg.locacao} onChange={v => setCfg({ ...cfg, locacao: v })} className="input-lumos w-full h-10 mt-1 text-sm"
+                    options={[...locsAtivas.map(l => ({ value: l.nome, label: l.nome })), { value: '', label: 'Outro lugar' }]} />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Chegada</label>
-                  <select value={cfg.chegada} onChange={e => setCfg({ ...cfg, chegada: e.target.value })} className="input-lumos w-full h-10 mt-1 text-sm">
-                    {locsAtivas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
-                    <option value="">Outro lugar</option>
-                  </select>
+                  <Select value={cfg.chegada} onChange={v => setCfg({ ...cfg, chegada: v })} className="input-lumos w-full h-10 mt-1 text-sm"
+                    options={[...locsAtivas.map(l => ({ value: l.nome, label: l.nome })), { value: '', label: 'Outro lugar' }]} />
                 </div>
                 <label className="flex items-center gap-2 text-[11.5px] font-bold text-lumos-text-primary">
                   <input type="checkbox" checked={cfg.manual} onChange={e => setCfg({ ...cfg, manual: e.target.checked })} className="accent-[#EFC700]" />
@@ -368,10 +367,8 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
             ) : (
               <div>
                 <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Locação</label>
-                <select value={cfg.locacao} onChange={e => setCfg({ ...cfg, locacao: e.target.value })} className="input-lumos w-full h-10 mt-1 text-sm">
-                  {locsAtivas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
-                  <option value="">Sem locação</option>
-                </select>
+                <Select value={cfg.locacao} onChange={v => setCfg({ ...cfg, locacao: v })} className="input-lumos w-full h-10 mt-1 text-sm"
+                  options={[...locsAtivas.map(l => ({ value: l.nome, label: l.nome })), { value: '', label: 'Sem locação' }]} />
               </div>
             )}
 
@@ -467,6 +464,9 @@ export default function OrdemDoDiaDetalhe() {
   const [roteiros, setRoteiros] = useState<{ id: string; name: string; url: string }[]>([]);
   const [projetoNome, setProjetoNome] = useState<string | null>(null);
   const salvandoRef = useRef(false);
+  // Formulário rápido do app (nada de prompt() do navegador).
+  const [qf, setQf] = useState<null | { title: string; fields: QFField[]; submitLabel?: string; onSubmit: (v: Record<string, string>) => void }>(null);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   // ── Carga ──────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -490,6 +490,7 @@ export default function OrdemDoDiaDetalhe() {
       figurino: o.figurino || [],
       equipamentos: o.equipamentos || [],
       roteiros: Array.isArray(o.roteiros) ? o.roteiros : [],
+      contatos: o.contatos || [],
       aprovacao: o.aprovacao || 'rascunho',
     });
     setLoading(false);
@@ -594,7 +595,7 @@ export default function OrdemDoDiaDetalhe() {
             <h1 className="text-lg font-black text-lumos-text-primary font-heading truncate">{od.titulo}</h1>
             {canManage && (
               <button type="button" title="Renomear"
-                onClick={() => { const t = prompt('Título da ordem do dia:', od.titulo); if (t?.trim()) void patch({ titulo: t.trim() }); }}
+                onClick={() => setQf({ title: 'Renomear ordem do dia', fields: [{ key: 'titulo', label: 'Título', value: od.titulo, required: true }], onSubmit: v => void patch({ titulo: v.titulo.trim() }) })}
                 className="p-1 text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3.5 h-3.5" /></button>
             )}
           </div>
@@ -625,9 +626,34 @@ export default function OrdemDoDiaDetalhe() {
             {od.aprovacao === 'aprovada' ? <><Check className="w-3.5 h-3.5" /> Aprovada</> : 'Rascunho'}
             {canManage && <ChevronDown className="w-3 h-3" />}
           </button>
-          <button type="button" onClick={() => navigate(`/ordem-do-dia/${od.id}/editar`)}
-            className="text-[11px] font-bold border border-lumos-border rounded-lumos px-3 h-8 text-lumos-text-secondary hover:text-lumos-text-primary">
-            Editor clássico / PDF
+          <button type="button" disabled={gerandoPdf}
+            onClick={async () => {
+              setGerandoPdf(true);
+              try {
+                const [{ pdf }, { OrdemDoDiaPDF }, React] = await Promise.all([
+                  import('@react-pdf/renderer'), import('@/components/editor/OrdemDoDiaPDF'), import('react'),
+                ]);
+                const l0 = od.locacoes.find(x => x.incluida);
+                const ordem = {
+                  id: od.id, codigo: od.codigo, titulo: od.titulo, data_producao: od.data_producao,
+                  data_emissao: new Date().toISOString(), clima: od.clima,
+                  ponto_encontro: od.ponto_encontro || { nome: '', endereco: '' },
+                  locacao: l0 ? { nome: l0.nome, endereco: l0.endereco, observacoes: l0.obs || '' } : (od.locacao || { nome: '', endereco: '', observacoes: '' }),
+                  contatos: od.contatos, equipe: od.equipe, plano_acao: od.plano_acao, talentos: od.talentos,
+                  secoes_ativas: { clima: true, ponto_encontro: true, locacao: true, contatos: true, equipe: true, plano_acao: true, talentos: true },
+                  created_at: '', updated_at: '', created_by: null,
+                } as any;
+                const blob = await pdf(React.createElement(OrdemDoDiaPDF, { ordem }) as any).toBlob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `OD_${od.codigo.replace(/[^\w-]/g, '')}_Lumos_${od.titulo.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_')}.pdf`;
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(a.href);
+              } catch { toast.error('Não foi possível gerar o PDF.'); }
+              finally { setGerandoPdf(false); }
+            }}
+            className="text-[11px] font-bold border border-lumos-border rounded-lumos px-3 h-8 text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 disabled:opacity-60">
+            {gerandoPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} Exportar PDF
           </button>
         </div>
       </div>
@@ -663,8 +689,9 @@ export default function OrdemDoDiaDetalhe() {
               <CalendarDays className="w-3.5 h-3.5 text-lumos-yellow" />
               <p className="text-[9.5px] font-black uppercase tracking-widest text-lumos-text-secondary">Data</p>
               {canManage && (
-                <input type="date" value={od.data_producao || ''} onChange={e => void patch({ data_producao: e.target.value || null }, true)}
-                  className="ml-auto input-lumos h-7 text-[11px] w-[130px]" />
+                <button type="button" title="Alterar data"
+                  onClick={() => setQf({ title: 'Data da produção', fields: [{ key: 'data', label: 'Data', type: 'date', value: od.data_producao || '' }], onSubmit: v => void patch({ data_producao: v.data || null }) })}
+                  className="ml-auto p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3 h-3" /></button>
               )}
             </div>
             <p className="text-[15px] font-black text-lumos-text-primary">{fmtDataLonga(od.data_producao)}</p>
@@ -769,11 +796,11 @@ export default function OrdemDoDiaDetalhe() {
               <Clock className="w-3.5 h-3.5 text-lumos-yellow" />
               <p className="text-[9.5px] font-black uppercase tracking-widest text-lumos-text-secondary">Call time</p>
               {canManage && (
-                <button type="button" onClick={() => {
-                  const grupo = prompt('Grupo (ex.: Direção e Produção):'); if (!grupo?.trim()) return;
-                  const hora = prompt('Horário de chegada (ex.: 06:30):', '06:00'); if (!hora?.trim()) return;
-                  void editarLista('call_times', [...od.call_times, { grupo: grupo.trim(), hora: hora.trim() }]);
-                }} className="ml-auto p-1 text-lumos-text-secondary hover:text-lumos-yellow" title="Adicionar grupo"><Plus className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => setQf({ title: 'Call time', submitLabel: 'Adicionar', fields: [
+                  { key: 'grupo', label: 'Grupo', placeholder: 'Ex.: Direção e Produção', required: true },
+                  { key: 'hora', label: 'Horário de chegada', type: 'time', value: '06:00', required: true },
+                ], onSubmit: v => void editarLista('call_times', [...od.call_times, { grupo: v.grupo.trim(), hora: v.hora }]) })}
+                  className="ml-auto p-1 text-lumos-text-secondary hover:text-lumos-yellow" title="Adicionar grupo"><Plus className="w-3.5 h-3.5" /></button>
               )}
             </div>
             {od.call_times.length === 0 ? (
@@ -839,11 +866,11 @@ export default function OrdemDoDiaDetalhe() {
           <div className="flex items-center">
             <p className="text-xs font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2"><MapPin className="w-4 h-4 text-lumos-yellow" /> Locações</p>
             {canManage && (
-              <button type="button" onClick={() => {
-                const nome = prompt('Nome da locação:'); if (!nome?.trim()) return;
-                const endereco = prompt('Endereço completo:') || '';
-                void editarLista('locacoes', [...od.locacoes, { nome: nome.trim(), endereco: endereco.trim(), incluida: true }]);
-              }} className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Criar locação</button>
+              <button type="button" onClick={() => setQf({ title: 'Nova locação', submitLabel: 'Criar', fields: [
+                { key: 'nome', label: 'Nome', placeholder: 'Ex.: Praia da Reserva', required: true },
+                { key: 'endereco', label: 'Endereço completo', placeholder: 'Rua, número, bairro, cidade' },
+              ], onSubmit: v => void editarLista('locacoes', [...od.locacoes, { nome: v.nome.trim(), endereco: v.endereco.trim(), incluida: true }]) })}
+                className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Criar locação</button>
             )}
           </div>
           {od.locacoes.length === 0 ? (
@@ -879,11 +906,11 @@ export default function OrdemDoDiaDetalhe() {
                   </div>
                   {canManage && (
                     <>
-                      <button type="button" onClick={() => {
-                        const nome = prompt('Nome:', l.nome); if (nome === null) return;
-                        const endereco = prompt('Endereço:', l.endereco); if (endereco === null) return;
-                        void editarLista('locacoes', od.locacoes.map((x, j) => j === i ? { ...x, nome: nome.trim() || x.nome, endereco: endereco.trim() } : x));
-                      }} className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow opacity-0 group-hover:opacity-100" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button type="button" onClick={() => setQf({ title: 'Editar locação', fields: [
+                        { key: 'nome', label: 'Nome', value: l.nome, required: true },
+                        { key: 'endereco', label: 'Endereço completo', value: l.endereco },
+                      ], onSubmit: v => void editarLista('locacoes', od.locacoes.map((x, j) => j === i ? { ...x, nome: v.nome.trim(), endereco: v.endereco.trim() } : x)) })}
+                        className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow opacity-0 group-hover:opacity-100" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
                       <button type="button" onClick={() => void editarLista('locacoes', od.locacoes.filter((_, j) => j !== i))}
                         className="p-1.5 text-lumos-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100" title="Remover"><Trash2 className="w-3.5 h-3.5" /></button>
                       <button type="button" onClick={() => void editarLista('locacoes', od.locacoes.map((x, j) => j === i ? { ...x, incluida: !x.incluida } : x))}
@@ -973,11 +1000,11 @@ export default function OrdemDoDiaDetalhe() {
                     Puxar equipe do projeto
                   </button>
                 )}
-                <button type="button" onClick={() => {
-                  const nome = prompt('Nome:'); if (!nome?.trim()) return;
-                  const funcao = prompt('Função nesta diária:') || '';
-                  void editarLista('equipe', [...od.equipe, { nome: nome.trim(), funcao: funcao.trim() }]);
-                }} className="btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Adicionar</button>
+                <button type="button" onClick={() => setQf({ title: 'Adicionar à ficha técnica', submitLabel: 'Adicionar', fields: [
+                  { key: 'nome', label: 'Nome', required: true },
+                  { key: 'funcao', label: 'Função nesta diária', placeholder: 'Ex.: Diretor de fotografia' },
+                ], onSubmit: v => void editarLista('equipe', [...od.equipe, { nome: v.nome.trim(), funcao: v.funcao.trim() }]) })}
+                  className="btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Adicionar</button>
               </span>
             )}
           </div>
@@ -996,10 +1023,10 @@ export default function OrdemDoDiaDetalhe() {
                   </div>
                   {canManage && (
                     <span className="flex opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button type="button" onClick={() => {
-                        const funcao = prompt(`Função de ${m.nome}:`, m.funcao); if (funcao === null) return;
-                        void editarLista('equipe', od.equipe.map((x, j) => j === i ? { ...x, funcao: funcao.trim() } : x));
-                      }} className="p-1 text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button type="button" onClick={() => setQf({ title: `Função de ${m.nome}`, fields: [
+                        { key: 'funcao', label: 'Função nesta diária', value: m.funcao },
+                      ], onSubmit: v => void editarLista('equipe', od.equipe.map((x, j) => j === i ? { ...x, funcao: v.funcao.trim() } : x)) })}
+                        className="p-1 text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3.5 h-3.5" /></button>
                       <button type="button" onClick={() => void editarLista('equipe', od.equipe.filter((_, j) => j !== i))}
                         className="p-1 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                     </span>
@@ -1017,11 +1044,11 @@ export default function OrdemDoDiaDetalhe() {
           <div className="flex items-center">
             <p className="text-xs font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2"><Video className="w-4 h-4 text-lumos-yellow" /> Elenco · {od.talentos.length}</p>
             {canManage && (
-              <button type="button" onClick={() => {
-                const nome = prompt('Nome do talento:'); if (!nome?.trim()) return;
-                const papel = prompt('Papel/personagem:') || '';
-                void editarLista('talentos', [...od.talentos, { nome: nome.trim(), funcao: papel.trim(), horario_chegada: '', horario_gravacao: '', obs: '' }]);
-              }} className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Adicionar</button>
+              <button type="button" onClick={() => setQf({ title: 'Adicionar ao elenco', submitLabel: 'Adicionar', fields: [
+                { key: 'nome', label: 'Nome do talento', required: true },
+                { key: 'papel', label: 'Papel/personagem', placeholder: 'Ex.: Apresentadora' },
+              ], onSubmit: v => void editarLista('talentos', [...od.talentos, { nome: v.nome.trim(), funcao: v.papel.trim(), horario_chegada: '', horario_gravacao: '', obs: '' }]) })}
+                className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Adicionar</button>
             )}
           </div>
           {od.talentos.length === 0 ? (
@@ -1040,12 +1067,12 @@ export default function OrdemDoDiaDetalhe() {
                     </div>
                     {canManage && (
                       <span className="flex opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button type="button" onClick={() => {
-                          const chegada = prompt('Horário de chegada:', t.horario_chegada || ''); if (chegada === null) return;
-                          const grava = prompt('Horário de gravação:', t.horario_gravacao || ''); if (grava === null) return;
-                          const obs = prompt('Observações:', t.obs || ''); if (obs === null) return;
-                          void editarLista('talentos', od.talentos.map((x, j) => j === i ? { ...x, horario_chegada: chegada.trim(), horario_gravacao: grava.trim(), obs: obs.trim() } : x));
-                        }} className="p-1 text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => setQf({ title: `Detalhes de ${t.nome}`, fields: [
+                          { key: 'chegada', label: 'Horário de chegada', type: 'time', value: t.horario_chegada || '' },
+                          { key: 'grava', label: 'Horário de gravação', type: 'time', value: t.horario_gravacao || '' },
+                          { key: 'obs', label: 'Observações', type: 'textarea', value: t.obs || '' },
+                        ], onSubmit: v => void editarLista('talentos', od.talentos.map((x, j) => j === i ? { ...x, horario_chegada: v.chegada, horario_gravacao: v.grava, obs: v.obs.trim() } : x)) })}
+                          className="p-1 text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3.5 h-3.5" /></button>
                         <button type="button" onClick={() => void editarLista('talentos', od.talentos.filter((_, j) => j !== i))}
                           className="p-1 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                       </span>
@@ -1074,12 +1101,18 @@ export default function OrdemDoDiaDetalhe() {
               {campo} · {od[campo].length}
             </p>
             {canManage && (
-              <button type="button" onClick={() => {
-                const nome = prompt(campo === 'objetos' ? 'Objeto de cena:' : campo === 'figurino' ? 'Look/figurino:' : 'Equipamento:'); if (!nome?.trim()) return;
-                const desc = prompt(campo === 'figurino' ? 'De qual personagem? (opcional)' : 'Descrição (opcional):') || '';
-                const item: ItemSimples = campo === 'figurino' ? { nome: nome.trim(), personagem: desc.trim() } : { nome: nome.trim(), desc: desc.trim() };
-                void editarLista(campo, [...od[campo], item]);
-              }} className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Adicionar</button>
+              <button type="button" onClick={() => setQf({
+                title: campo === 'objetos' ? 'Novo objeto de cena' : campo === 'figurino' ? 'Novo look' : 'Novo equipamento',
+                submitLabel: 'Adicionar',
+                fields: [
+                  { key: 'nome', label: campo === 'objetos' ? 'Objeto' : campo === 'figurino' ? 'Look/figurino' : 'Equipamento', required: true },
+                  { key: 'desc', label: campo === 'figurino' ? 'De qual personagem? (opcional)' : 'Descrição (opcional)' },
+                ],
+                onSubmit: v => {
+                  const item: ItemSimples = campo === 'figurino' ? { nome: v.nome.trim(), personagem: v.desc.trim() } : { nome: v.nome.trim(), desc: v.desc.trim() };
+                  void editarLista(campo, [...od[campo], item]);
+                },
+              })} className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Adicionar</button>
             )}
           </div>
           {od[campo].length === 0 ? (
@@ -1112,6 +1145,8 @@ export default function OrdemDoDiaDetalhe() {
           )}
         </div>
       ))}
+
+      {qf && <QuickForm title={qf.title} fields={qf.fields} submitLabel={qf.submitLabel} onSubmit={qf.onSubmit} onClose={() => setQf(null)} />}
 
       {/* ═════════ ABA OUTRAS OBSERVAÇÕES ═════════ */}
       {aba === 'obs' && (
