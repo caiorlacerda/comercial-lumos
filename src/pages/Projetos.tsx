@@ -2203,11 +2203,11 @@ export default function Projetos() {
                       { key: 'status' as const, label: 'Status', count: null as number | null },
                       { key: 'briefing' as const, label: 'Briefing', count: null as number | null },
                       { key: 'tarefas' as const, label: 'Tarefas', count: activeCount },
+                      { key: 'roteiros' as const, label: 'Roteiros', count: null as number | null },
                       { key: 'entregas' as const, label: 'Entregas', count: entregasCount },
                       { key: 'diarias' as const, label: 'Diárias', count: null as number | null },
                       { key: 'ordemdia' as const, label: 'Ordem do dia', count: null as number | null },
                       { key: 'equipe' as const, label: 'Equipe', count: null as number | null },
-                      { key: 'roteiros' as const, label: 'Roteiros', count: null as number | null },
                     ]).map(t => (
                       <button key={t.key} onClick={() => setProjTab(t.key)}
                         className={clsx('px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors',
