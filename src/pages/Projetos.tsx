@@ -6,6 +6,12 @@ import TaskVideoReview from '@/components/producao/TaskVideoReview';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
 import PortalModal from '@/components/producao/PortalModal';
+import ProjectStatusPipeline from '@/components/producao/ProjectStatusPipeline';
+import ProjectBriefing from '@/components/producao/ProjectBriefing';
+import ProjectDiarias from '@/components/producao/ProjectDiarias';
+import ProjectOrdens from '@/components/producao/ProjectOrdens';
+import ProjectEquipe from '@/components/producao/ProjectEquipe';
+import ProjectRoteiros from '@/components/producao/ProjectRoteiros';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
@@ -792,7 +798,9 @@ export default function Projetos() {
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
   // ── Hub do projeto (Fase 1 do redesign): abas + ferramentas da lista ──
-  const [projTab, setProjTab] = useState<'geral' | 'tarefas' | 'entregas' | 'arquivos'>('tarefas');
+  const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'roteiros' | 'arquivos'>('status');
+  // Sub-abas do Briefing: o briefing em si, o Resumo (antiga visão geral) e os Arquivos.
+  const [briefingSub, setBriefingSub] = useState<'geral' | 'resumo' | 'arquivos'>('geral');
   const [taskSearch, setTaskSearch] = useState('');
   const [taskStatusFilter, setTaskStatusFilter] = useState('all');
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all');
@@ -880,7 +888,8 @@ export default function Projetos() {
     setSelectedTaskId(null);
     setSelTaskIds(new Set());
     // Reset do hub ao trocar de projeto (aba, busca e filtros voltam ao padrão).
-    setProjTab('tarefas');
+    setProjTab('status');
+    setBriefingSub('geral');
     setTaskSearch('');
     setTaskStatusFilter('all');
     setTaskAssigneeFilter('all');
@@ -931,8 +940,13 @@ export default function Projetos() {
       // ?tab= abre direto numa aba do hub (ex.: Visão Geral → Entregas).
       // Depois do reset do effect de troca de projeto, então usa timeout 0.
       const tab = searchParams.get('tab');
-      if (tab && ['geral', 'tarefas', 'entregas', 'arquivos'].includes(tab)) {
-        setTimeout(() => setProjTab(tab as any), 0);
+      if (tab && ['status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos'].includes(tab)) {
+        // 'geral' e 'arquivos' viraram sub-abas do Briefing; links antigos seguem valendo.
+        const mapa: Record<string, ['briefing', 'resumo' | 'arquivos']> = { geral: ['briefing', 'resumo'], arquivos: ['briefing', 'arquivos'] };
+        setTimeout(() => {
+          if (mapa[tab]) { setProjTab('briefing'); setBriefingSub(mapa[tab][1]); }
+          else setProjTab(tab as any);
+        }, 0);
       }
     }
     // Mantém projectId na URL (reflete o projeto aberto → destaque na sidebar e
@@ -2175,10 +2189,14 @@ export default function Projetos() {
                   {/* Abas do hub */}
                   <div className="flex gap-1 border-t border-lumos-border/50 -mx-5 md:-mx-6 px-5 md:px-6 overflow-x-auto no-scrollbar">
                     {([
-                      { key: 'geral' as const, label: 'Visão geral', count: null as number | null },
+                      { key: 'status' as const, label: 'Status', count: null as number | null },
+                      { key: 'briefing' as const, label: 'Briefing', count: null as number | null },
                       { key: 'tarefas' as const, label: 'Tarefas', count: activeCount },
+                      { key: 'roteiros' as const, label: 'Roteiros', count: null as number | null },
                       { key: 'entregas' as const, label: 'Entregas', count: entregasCount },
-                      { key: 'arquivos' as const, label: 'Arquivos', count: docsCount },
+                      { key: 'diarias' as const, label: 'Diárias', count: null as number | null },
+                      { key: 'ordemdia' as const, label: 'Ordem do dia', count: null as number | null },
+                      { key: 'equipe' as const, label: 'Equipe', count: null as number | null },
                     ]).map(t => (
                       <button key={t.key} onClick={() => setProjTab(t.key)}
                         className={clsx('px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors',
@@ -2190,8 +2208,57 @@ export default function Projetos() {
                   </div>
                 </div>
 
-                {/* ================= ABA: VISÃO GERAL ================= */}
-                {projTab === 'geral' && (
+                {/* ================= ABA: STATUS (pipeline do ciclo) ================= */}
+                {projTab === 'status' && (
+                <ProjectStatusPipeline key={'st' + selectedProject.id}
+                  projectId={selectedProject.id}
+                  projectStatus={selectedProject.status}
+                  canManage={canManage} />
+                )}
+
+                {/* ================= ABA: BRIEFING (sub-abas: Geral | Resumo | Arquivos) ================= */}
+                {projTab === 'briefing' && (
+                <div className="space-y-3">
+                  <div className="flex gap-1 border-b border-lumos-border">
+                    {([['geral', 'Briefing'], ['resumo', 'Resumo'], ['arquivos', 'Arquivos']] as const).map(([key, label]) => (
+                      <button key={key} type="button" onClick={() => setBriefingSub(key)}
+                        className={clsx('px-3.5 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 transition-colors',
+                          briefingSub === key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {briefingSub === 'geral' && (
+                    <ProjectBriefing key={'br' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                  )}
+                  {briefingSub === 'arquivos' && (
+                    <ProjectDocuments projectId={selectedProject.id} driveFolderId={selectedProject.drive_folder_id} canManage={canManage} />
+                  )}
+                </div>
+                )}
+
+                {/* ================= ABA: DIÁRIAS ================= */}
+                {projTab === 'diarias' && (
+                <ProjectDiarias key={'di' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: ORDEM DO DIA ================= */}
+                {projTab === 'ordemdia' && (
+                <ProjectOrdens key={'od' + selectedProject.id} projectId={selectedProject.id} projectName={selectedProject.name} projectCode={selectedProject.code} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: EQUIPE ================= */}
+                {projTab === 'equipe' && (
+                <ProjectEquipe key={'eq' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: ROTEIROS ================= */}
+                {projTab === 'roteiros' && (
+                <ProjectRoteiros key={'rt' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= SUB-ABA: RESUMO (antiga Visão geral, dentro do Briefing) ================= */}
+                {projTab === 'briefing' && briefingSub === 'resumo' && (
                 <div className="space-y-5">
 
                   {/* Resumo rápido */}
@@ -2815,14 +2882,7 @@ export default function Projetos() {
                   <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
                 )}
 
-                {/* ================= ABA: ARQUIVOS (documentos) ================= */}
-                {projTab === 'arquivos' && (
-                  <ProjectDocuments
-                    projectId={selectedProject.id}
-                    driveFolderId={selectedProject.drive_folder_id}
-                    canManage={canManage}
-                  />
-                )}
+
 
               </div>
             ) : selectedClientId && selectedClient ? (

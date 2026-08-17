@@ -1,19 +1,17 @@
 import { Suspense } from 'react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import ProducaoViewsNav from '@/components/producao/ProducaoViewsNav';
 
-// Layout das VIEWS de produção (Visão Geral, Calendário, Board, Timeline,
-// Cronograma). A nav de pills fica FORA da troca de página — não pisca, fica
-// sempre no mesmo lugar; só o conteúdo abaixo faz um fade-in ao trocar. O
-// Suspense interno mantém a nav visível enquanto o chunk lazy da view carrega.
+// Layout das páginas de produção. As antigas pills de views (Visão Geral,
+// Calendário, Board, Timeline, Cronograma) saíram a pedido do Caio: a Visão
+// Geral é o destino de "Todos os Projetos" na sidebar, e o calendário virou a
+// página Agenda. As rotas das outras views continuam existindo por URL.
 export default function ProducaoLayout() {
   const location = useLocation();
   const outlet = useOutlet();
 
   return (
     <div className="space-y-6 font-work-sans">
-      <ProducaoViewsNav />
       <motion.div
         key={location.pathname}
         initial={{ opacity: 0 }}

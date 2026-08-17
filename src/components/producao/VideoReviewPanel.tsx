@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Film, ExternalLink, Check, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
+import { Film, ExternalLink, Check, AlertTriangle, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,6 +11,8 @@ import { type ReviewStatus, STATUS_UI, STATUS_TO_TASK, taskStatusToVideo } from 
 import { captureVideoThumb } from '@/lib/videoThumb';
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
+
+type ItemFila = { id: string; file: File; pct: number; status: 'espera' | 'subindo' | 'ok' | 'erro'; erro?: string };
 
 interface VideoVersion {
   id: string;
@@ -81,8 +83,9 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     }
   }, []);
   const [uploading, setUploading] = useState(false);
-  const [uploadPct, setUploadPct] = useState(0);
-  const [uploadName, setUploadName] = useState('');
+  const [fila, setFila] = useState<ItemFila[]>([]);
+  const rodandoRef = useRef(false);
+  const pendentesRef = useRef<ItemFila[]>([]);
   const [fileDragging, setFileDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number } | null>(null);
@@ -265,36 +268,112 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   };
 
   const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv|mpg|mpeg|wmv|mts|m2ts)$/i;
-  const uploadFile = async (file: File) => {
-    if (!file) return;
-    if (!(file.type.startsWith('video/') || VIDEO_EXT.test(file.name))) { toast.error('Selecione um arquivo de vídeo.'); return; }
-    setUploading(true); setUploadPct(0); setUploadName(file.name);
+  const ehVideo = (f: File) => f.type.startsWith('video/') || VIDEO_EXT.test(f.name);
+
+  /** PUT com barra de progresso. Serve pros dois caminhos de upload. */
+  const put = (url: string, body: File, headers: Record<string, string>, metodo: 'PUT' | 'POST', onPct: (p: number) => void) =>
+    new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(metodo, url);
+      Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+      xhr.upload.onprogress = e => { if (e.lengthComputable) onPct(e.loaded / e.total); };
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
+        ? resolve()
+        : reject(Object.assign(new Error(`http ${xhr.status}`), { status: xhr.status }));
+      // Sem status = não chegou resposta: rede caiu ou o CORS barrou.
+      xhr.onerror = () => reject(Object.assign(new Error('rede'), { status: 0 }));
+      xhr.send(body);
+    });
+
+  const enviarUm = async (item: ItemFila) => {
+    const { file } = item;
+    const { data: { session } } = await supabase.auth.getSession();
+    const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    const token = session?.access_token || anon;
+    const mime = file.type || 'video/mp4';
+    const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/drive-upload`
+      + `?project_id=${encodeURIComponent(projectId)}&file_name=${encodeURIComponent(file.name)}&mime_type=${encodeURIComponent(mime)}`;
+    const onPct = (p: number) => setFila(f => f.map(i => i.id === item.id ? { ...i, pct: p } : i));
+
+    // Caminho principal: pedimos só o endereço da sessão e mandamos os bytes
+    // direto pro Google. Assim o arquivo não atravessa a nossa função, que é o
+    // que trava com vídeo grande e com vários ao mesmo tempo.
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-      const token = session?.access_token || anon;
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/drive-upload`
-        + `?project_id=${encodeURIComponent(projectId)}&file_name=${encodeURIComponent(file.name)}&mime_type=${encodeURIComponent(file.type || 'video/mp4')}`;
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', url);
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        xhr.setRequestHeader('apikey', anon);
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-        xhr.upload.onprogress = e => { if (e.lengthComputable) setUploadPct(e.loaded / e.total); };
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`${xhr.status}`));
-        xhr.onerror = () => reject(new Error('network'));
-        xhr.send(file);
+      const r = await fetch(`${base}&mode=init&size=${file.size}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, apikey: anon },
       });
-      setUploadPct(1);
-      toast.success('Upload concluído ✓ Detectando na revisão…');
+      const j = await r.json();
+      if (!r.ok || !j?.upload_url) throw Object.assign(new Error(j?.error || 'init'), { status: r.status });
+      await put(j.upload_url, file, { 'Content-Type': mime }, 'PUT', onPct);
+      return;
+    } catch (e: any) {
+      // Se o Google não aceitou o envio direto do navegador, cai no caminho
+      // antigo (bytes por dentro da nossa função). Mais lento, mas funciona.
+      if (e?.status !== 0) throw e;
+    }
+    await put(base, file, { Authorization: `Bearer ${token}`, apikey: anon, 'Content-Type': mime }, 'POST', onPct);
+  };
+
+  /**
+   * Sobe a fila, 2 por vez: rápido sem virar briga de banda entre eles.
+   * A lista de pendentes vive num ref, não no estado, pra quem for solto no
+   * meio do envio entrar na mesma leva em vez de ficar parado esperando.
+   */
+  const rodarFila = async () => {
+    if (rodandoRef.current) return;
+    rodandoRef.current = true;
+    setUploading(true);
+    let enviados = 0, erros = 0;
+
+    const trabalhador = async () => {
+      for (;;) {
+        const item = pendentesRef.current.shift();
+        if (!item) return;
+        setFila(f => f.map(i => i.id === item.id ? { ...i, status: 'subindo' } : i));
+        try {
+          await enviarUm(item);
+          enviados++;
+          setFila(f => f.map(i => i.id === item.id ? { ...i, status: 'ok', pct: 1 } : i));
+        } catch (e: any) {
+          erros++;
+          setFila(f => f.map(i => i.id === item.id ? { ...i, status: 'erro', erro: String(e?.message || 'falhou') } : i));
+        }
+      }
+    };
+    // Enquanto entrar arquivo novo, continua trabalhando.
+    while (pendentesRef.current.length) {
+      await Promise.all([trabalhador(), trabalhador()]);
+    }
+
+    // Uma varredura só no fim, não uma por arquivo.
+    if (enviados) {
       await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
       await fetchVersions();
-    } catch {
-      toast.error('Falha no upload. Tente novamente.');
-    } finally {
-      setUploading(false); setUploadName(''); setUploadPct(0);
     }
+    if (erros) toast.error(`${erros} arquivo(s) falharam${enviados ? ', os outros subiram' : ''}.`);
+    else toast.success(`${enviados} vídeo(s) enviados ✓`);
+
+    rodandoRef.current = false;
+    setUploading(false);
+    // Deixa a lista na tela um tempinho pra pessoa ver o resultado.
+    setTimeout(() => setFila(f => (rodandoRef.current ? f : [])), 6000);
+  };
+
+  const enfileirar = (arquivos: FileList | File[] | null) => {
+    const todos = Array.from(arquivos || []);
+    if (!todos.length) return;
+    const videos = todos.filter(ehVideo);
+    if (videos.length < todos.length) {
+      toast.error(`${todos.length - videos.length} arquivo(s) ignorados, só entram vídeos.`);
+    }
+    if (!videos.length) return;
+    const novos: ItemFila[] = videos.map((file, i) => ({
+      id: `${Date.now()}-${i}-${file.name}`, file, pct: 0, status: 'espera',
+    }));
+    pendentesRef.current.push(...novos);
+    setFila(f => [...f.filter(x => x.status !== 'ok'), ...novos]);
+    void rodarFila();
   };
 
   const startRename = (v: VideoVersion) => { setMenuFor(null); setRenaming({ id: v.id, value: v.file_name, orig: v.file_name }); };
@@ -816,15 +895,15 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     <div className="card p-5 md:p-6 relative"
       onDragOver={e => { if (canManage && !uploading && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(true); } }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFileDragging(false); }}
-      onDrop={e => { if (canManage && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(false); const f = e.dataTransfer.files?.[0]; if (f) uploadFile(f); } }}
+      onDrop={e => { if (canManage && Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); setFileDragging(false); enfileirar(e.dataTransfer.files); } }}
     >
       {fileDragging && (
         <div className="absolute inset-0 z-40 rounded-lumos border-2 border-dashed border-lumos-yellow bg-lumos-yellow/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <p className="text-sm font-black text-lumos-yellow flex items-center gap-2"><Upload className="w-5 h-5" /> Solte o vídeo aqui pra enviar</p>
+          <p className="text-sm font-black text-lumos-yellow flex items-center gap-2"><Upload className="w-5 h-5" /> Solte os vídeos aqui pra enviar</p>
         </div>
       )}
-      <input ref={fileInputRef} type="file" accept="video/*" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }} />
+      <input ref={fileInputRef} type="file" accept="video/*" multiple className="hidden"
+        onChange={e => { enfileirar(e.target.files); e.target.value = ''; }} />
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h3 className="text-xs font-black text-lumos-text-primary uppercase tracking-widest flex items-center gap-2">
@@ -904,15 +983,45 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
         </div>
       )}
 
-      {uploading && (
-        <div className="mb-4 p-3 rounded-lumos border border-lumos-yellow/30 bg-lumos-yellow/5">
-          <div className="flex items-center justify-between mb-1.5 gap-2">
-            <span className="text-[11px] font-bold text-lumos-text-primary flex items-center gap-1.5 truncate"><Upload className="w-3.5 h-3.5 text-lumos-yellow flex-shrink-0" /> Enviando <span className="truncate">{uploadName}</span></span>
-            <span className="text-[11px] font-mono font-bold text-lumos-yellow flex-shrink-0">{Math.round(uploadPct * 100)}%</span>
+      {fila.length > 0 && (
+        <div className="mb-4 p-3 rounded-lumos border border-lumos-yellow/30 bg-lumos-yellow/5 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-black text-lumos-text-primary uppercase tracking-wide flex items-center gap-1.5">
+              <Upload className="w-3.5 h-3.5 text-lumos-yellow" />
+              {uploading ? 'Enviando' : 'Envio concluído'}
+            </span>
+            <span className="text-[11px] font-mono font-bold text-lumos-yellow tabular-nums">
+              {fila.filter(i => i.status === 'ok').length}/{fila.length}
+            </span>
           </div>
-          <div className="h-1.5 rounded-full bg-lumos-text-secondary/20 overflow-hidden">
-            <div className="h-full bg-lumos-yellow transition-all" style={{ width: `${Math.round(uploadPct * 100)}%` }} />
-          </div>
+
+          {fila.map(i => (
+            <div key={i.id}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[11px] font-bold text-lumos-text-primary truncate flex items-center gap-1.5">
+                  {i.status === 'ok' && <Check className="w-3 h-3 text-green-500 flex-shrink-0" />}
+                  {i.status === 'erro' && <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0" />}
+                  <span className="truncate">{i.file.name}</span>
+                </span>
+                <span className={clsx('text-[10.5px] font-mono font-bold flex-shrink-0 tabular-nums',
+                  i.status === 'erro' ? 'text-red-500' : i.status === 'ok' ? 'text-green-500' : 'text-lumos-yellow')}>
+                  {i.status === 'erro' ? 'falhou' : i.status === 'espera' ? 'na fila' : `${Math.round(i.pct * 100)}%`}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-lumos-text-secondary/20 overflow-hidden">
+                <div className={clsx('h-full transition-all', i.status === 'erro' ? 'bg-red-500' : i.status === 'ok' ? 'bg-green-500' : 'bg-lumos-yellow')}
+                  style={{ width: `${i.status === 'erro' ? 100 : Math.round(i.pct * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+
+          {fila.some(i => i.status === 'erro') && (
+            <button type="button"
+              onClick={() => enfileirar(fila.filter(i => i.status === 'erro').map(i => i.file))}
+              className="text-[10.5px] font-black uppercase tracking-wide text-lumos-yellow hover:underline">
+              Tentar de novo os que falharam
+            </button>
+          )}
         </div>
       )}
 

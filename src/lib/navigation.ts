@@ -50,14 +50,14 @@ export const NAV_SECTIONS: Section[] = [
       // que é a visão "Todos os Projetos"; na sidebar ele vira um dropdown
       // com a árvore de clientes → projetos.
       { icon: ClipboardList, label: 'Projetos', path: '/producao', permission: 'ordem_do_dia', end: true },
-      { icon: CalendarDays, label: 'Ordem do Dia', path: '/ordem-do-dia', permission: 'ordem_do_dia' },
+      // A Agenda é o calendário geral (diárias, ordens do dia, prazos e
+      // entregas) e substituiu na sidebar as antigas entradas de Ordem do Dia,
+      // Templates de Tarefas e Cronograma de Edição — as páginas continuam
+      // existindo por rota e pelas abas dos projetos.
+      { icon: CalendarDays, label: 'Agenda', path: '/producao/agenda' },
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
       { icon: Package, label: 'Equipamentos', path: '/producao/equipamentos', permission: 'equipamentos' },
-      { icon: FileStack, label: 'Templates de Tarefas', path: '/producao/templates-tarefas', permission: 'admin' },
       { icon: KeyRound, label: 'Acessos & Senhas', path: '/producao/acessos', permission: 'acessos' },
-      // Cronograma de Edição no sidebar para todos que têm a permissão
-      // (admin, produção e editor). Admin/produção também acessam pelas views.
-      { icon: CalendarDays, label: 'Cronograma de Edição', path: '/producao/cronograma-edicao', permission: 'cronograma_edicao' },
     ],
   },
   {

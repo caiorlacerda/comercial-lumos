@@ -50,12 +50,13 @@ const ProducaoOverview = lazy(() => import('@/pages/ProducaoOverview'));
 const ProducaoDashboard = lazy(() => import('@/pages/ProducaoDashboard'));
 const ProducaoBoard = lazy(() => import('@/pages/ProducaoBoard'));
 const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
+const Agenda = lazy(() => import('@/pages/Agenda'));
 const Projetos = lazy(() => import('@/pages/Projetos'));
 const TemplatesTarefas = lazy(() => import('@/pages/TemplatesTarefas'));
 const Acessos = lazy(() => import('@/pages/Acessos'));
 const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
 const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
-const OrdemDoDiaEditor = lazy(() => import('@/pages/OrdemDoDiaEditor'));
+const OrdemDoDiaDetalhe = lazy(() => import('@/pages/OrdemDoDiaDetalhe'));
 const Fornecedores = lazy(() => import('@/pages/Fornecedores'));
 const Equipamentos = lazy(() => import('@/pages/Equipamentos'));
 const FornecedorEditor = lazy(() => import('@/pages/FornecedorEditor'));
@@ -394,6 +395,15 @@ function VersionWatcher() {
   return null;
 }
 
+// A Agenda é de quem vive a produção (produção, admin, editores, equipamentos,
+// fornecedores) — papel básico não enxerga tarefas e diárias do time todo.
+function AgendaGuard() {
+  const { isAdmin, can } = useAuth();
+  const pode = isAdmin || can('ordem_do_dia') || can('cronograma_edicao') || can('fornecedores') || can('equipamentos') || can('custos_projeto');
+  if (!pode) return <Navigate to="/" replace />;
+  return <Agenda />;
+}
+
 function AppContent() {
   return (
     <Router>
@@ -644,6 +654,7 @@ function AppContent() {
             <Route path="/producao/board" element={<PermissionGuard permission="ordem_do_dia"><ProducaoBoard /></PermissionGuard>} />
             <Route path="/producao/schedule" element={<PermissionGuard permission="ordem_do_dia"><ProducaoSchedule /></PermissionGuard>} />
             <Route path="/producao/cronograma-edicao" element={<PermissionGuard permission="cronograma_edicao"><CronogramaEdicao /></PermissionGuard>} />
+            <Route path="/producao/agenda" element={<AgendaGuard />} />
             {/* Gerenciador de Projetos agora vive DENTRO do layout: as pills de
                 views ficam visíveis também na página do projeto. */}
             <Route path="/producao/projetos" element={<PermissionGuard permission="ordem_do_dia"><Projetos /></PermissionGuard>} />
@@ -688,21 +699,11 @@ function AppContent() {
             }
           />
           <Route
-            path="/ordem-do-dia/nova"
-            element={
-              <AuthWrapper>
-                <PermissionGuard permission="ordem_do_dia">
-                  <OrdemDoDiaEditor />
-                </PermissionGuard>
-              </AuthWrapper>
-            }
-          />
-          <Route
             path="/ordem-do-dia/:id"
             element={
               <AuthWrapper>
                 <PermissionGuard permission="ordem_do_dia">
-                  <OrdemDoDiaEditor />
+                  <OrdemDoDiaDetalhe />
                 </PermissionGuard>
               </AuthWrapper>
             }

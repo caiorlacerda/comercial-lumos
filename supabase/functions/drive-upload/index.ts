@@ -63,9 +63,17 @@ serve(async (req) => {
   const projectId = url.searchParams.get('project_id') ?? ''
   const fileName = url.searchParams.get('file_name') ?? ''
   const mimeType = url.searchParams.get('mime_type') || 'video/mp4'
-  const contentLength = req.headers.get('content-length')
+  // mode=init: não recebe o arquivo, só abre a sessão no Drive e devolve o
+  // endereço dela. O navegador manda os bytes direto pro Google, sem atravessar
+  // esta função — é o que permite arquivo grande e vários ao mesmo tempo sem
+  // esbarrar em tempo/memória daqui. O caminho antigo (corpo por aqui) continua
+  // valendo como plano B.
+  const initOnly = url.searchParams.get('mode') === 'init'
+  const contentLength = initOnly
+    ? (url.searchParams.get('size') || null)
+    : req.headers.get('content-length')
   if (!projectId || !fileName) return json({ error: 'project_id e file_name obrigatórios' }, 400)
-  if (!req.body) return json({ error: 'sem corpo' }, 400)
+  if (!initOnly && !req.body) return json({ error: 'sem corpo' }, 400)
 
   try {
     const token = await googleToken()
@@ -107,6 +115,9 @@ serve(async (req) => {
     })
     const session = initRes.headers.get('location')
     if (!session) return json({ error: `init falhou ${initRes.status}` }, 502)
+
+    // Devolve a sessão e sai de cena: quem carrega o arquivo é o navegador.
+    if (initOnly) return json({ ok: true, upload_url: session })
 
     // 2) Repassa o corpo (streaming) direto pro Google
     const putRes = await fetch(session, {
