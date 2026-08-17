@@ -11,7 +11,7 @@ export interface PrevisaoDia {
 
 const geoCache = new Map<string, { lat: number; lon: number } | null>();
 
-async function geocode(local: string): Promise<{ lat: number; lon: number } | null> {
+export async function geocode(local: string): Promise<{ lat: number; lon: number } | null> {
   const key = local.trim().toLowerCase();
   if (geoCache.has(key)) return geoCache.get(key)!;
   try {

@@ -4,12 +4,13 @@ import {
   ArrowLeft, CalendarDays, Check, ChevronDown, Clock, CloudRain, Copy, ExternalLink,
   Loader2, MapPin, Pencil, Plus, Shirt, Sun, Trash2, Users2, Video, Package, Camera,
   FileText, ArrowUp, ArrowDown, AlertTriangle, Megaphone, ScrollText, Wrench,
+  Utensils, Coffee, Truck, SlidersHorizontal,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
-import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
+import { geocode, previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 import type { AtividadePlano, MembroEquipe, Talento } from '@/types/ordemDoDia';
 
 /**
@@ -72,6 +73,381 @@ const hojeLocal = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const fmtMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CRONOGRAMA PRINCIPAL 2.0 — momentos tipados, altura relativa ao tempo e a
+// agulha do horário atual. Vive fora da página pelo mesmo motivo do CardRegra:
+// o tick de 1s não pode remontar os inputs.
+// ─────────────────────────────────────────────────────────────────────────────
+type TipoMomento = 'gravacao' | 'producao' | 'desproducao' | 'almoco' | 'jantar' | 'lanche' | 'deslocamento' | 'intervalo' | 'personalizado';
+interface Momento extends AtividadePlano { tipo?: TipoMomento; locacao?: string; chegada?: string; paralelo?: boolean }
+
+const TIPOS: Record<TipoMomento, { label: string; Icon: any; cor: string; defMin: number }> = {
+  gravacao:      { label: 'Gravação',      Icon: Video,     cor: '#ef4444', defMin: 60 },
+  producao:      { label: 'Produção',      Icon: Wrench,    cor: '#3b82f6', defMin: 60 },
+  desproducao:   { label: 'Desprodução',   Icon: Package,   cor: '#64748b', defMin: 45 },
+  almoco:        { label: 'Almoço',        Icon: Utensils,  cor: '#22c55e', defMin: 60 },
+  jantar:        { label: 'Jantar',        Icon: Utensils,  cor: '#16a34a', defMin: 60 },
+  lanche:        { label: 'Lanche',        Icon: Coffee,    cor: '#84cc16', defMin: 15 },
+  deslocamento:  { label: 'Deslocamento',  Icon: Truck,     cor: '#a855f7', defMin: 30 },
+  intervalo:     { label: 'Intervalo',     Icon: Clock,     cor: '#14b8a6', defMin: 5 },
+  personalizado: { label: 'Personalizado', Icon: Pencil,    cor: '#EFC700', defMin: 30 },
+};
+
+function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange }: {
+  od: { plano_acao: Momento[]; hora_inicio: string | null };
+  canManage: boolean; agora: Date; hoje: boolean;
+  locsAtivas: { nome: string }[];
+  onChange: (lista: Momento[]) => void;
+}) {
+  const rows = od.plano_acao as Momento[];
+  const [pickerAberto, setPickerAberto] = useState(false);
+  const [cfg, setCfg] = useState<null | { tipo: TipoMomento; locacao: string; chegada: string; duracao: number; paralelo: boolean; descricao: string; manual: boolean; calculando: boolean }>(null);
+  const [alturaRel, setAlturaRel] = useState(() => { try { return localStorage.getItem('lumos_od_altura') === '1'; } catch { return false; } });
+  const [cfgAberto, setCfgAberto] = useState(false);
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [agulhaTop, setAgulhaTop] = useState<number | null>(null);
+
+  const toggleAltura = () => setAlturaRel(v => { try { localStorage.setItem('lumos_od_altura', v ? '0' : '1'); } catch { /* ignora */ } return !v; });
+
+  // A agulha do agora: acha em qual linha (ou fronteira) o horário atual cai e
+  // mede a posição real no DOM — funciona com e sem altura relativa.
+  useEffect(() => {
+    if (!hoje || !rows.length || !wrapRef.current) { setAgulhaTop(null); return; }
+    const nowMin = agora.getHours() * 60 + agora.getMinutes() + agora.getSeconds() / 60;
+    const wrapTop = wrapRef.current.getBoundingClientRect().top;
+    let top: number | null = null;
+    for (let i = 0; i < rows.length; i++) {
+      const el = rowRefs.current[i]; if (!el) continue;
+      const ri = minutos(rows[i].inicio); const rf = minutos(rows[i].fim);
+      const r = el.getBoundingClientRect();
+      if (ri != null && rf != null && rf > ri && nowMin >= ri && nowMin <= rf) {
+        top = r.top - wrapTop + ((nowMin - ri) / (rf - ri)) * r.height; break;
+      }
+      if (ri != null && nowMin < ri) { top = r.top - wrapTop; break; }
+      if (rf != null && nowMin > rf) top = r.bottom - wrapTop;
+    }
+    setAgulhaTop(top);
+  }, [agora, rows, hoje, alturaRel]);
+
+  const statusDe = (r: Momento): 'atrasado' | 'agora' | 'pendente' => {
+    if (!hoje) return 'pendente';
+    const nowMin = agora.getHours() * 60 + agora.getMinutes();
+    const ri = minutos(r.inicio); const rf = minutos(r.fim);
+    if (rf != null && nowMin > rf) return 'atrasado';
+    if (ri != null && nowMin >= ri) return 'agora';
+    return 'pendente';
+  };
+
+  const abrirCfg = (tipo: TipoMomento) => {
+    setPickerAberto(false);
+    setCfg({ tipo, locacao: locsAtivas[0]?.nome || '', chegada: locsAtivas[1]?.nome || locsAtivas[0]?.nome || '', duracao: TIPOS[tipo].defMin, paralelo: false, descricao: '', manual: false, calculando: false });
+  };
+
+  // Deslocamento: tenta calcular o trajeto de carro (geocode + OSRM, sem chave).
+  const calcularTrajeto = async () => {
+    if (!cfg) return;
+    setCfg(c => c ? { ...c, calculando: true } : c);
+    try {
+      const [a, b] = await Promise.all([geocode(cfg.locacao), geocode(cfg.chegada)]);
+      if (!a || !b) throw new Error('sem geo');
+      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`);
+      const j = await r.json();
+      const seg = j?.routes?.[0]?.duration;
+      if (!seg) throw new Error('sem rota');
+      setCfg(c => c ? { ...c, duracao: Math.max(5, Math.round(seg / 60 / 5) * 5), calculando: false } : c);
+    } catch {
+      setCfg(c => c ? { ...c, calculando: false, manual: true } : c);
+    }
+  };
+
+  const criar = () => {
+    if (!cfg) return;
+    const ultimo = rows[rows.length - 1];
+    const base = cfg.paralelo ? (ultimo?.inicio || od.hora_inicio || '08:00') : (ultimo?.fim || od.hora_inicio || '08:00');
+    const ini = minutos(base) ?? 480;
+    const t = TIPOS[cfg.tipo];
+    const desc = cfg.descricao.trim()
+      || (cfg.tipo === 'deslocamento' ? `Deslocamento: ${cfg.locacao || '?'} → ${cfg.chegada || '?'}` : t.label + (cfg.locacao ? ` — ${cfg.locacao}` : ''));
+    const novo: Momento = {
+      inicio: fmtMin(ini), fim: fmtMin(Math.min(ini + Math.max(5, cfg.duracao), 1439)),
+      descricao: desc, responsavel: '', destaque: cfg.tipo === 'gravacao',
+      tipo: cfg.tipo, locacao: cfg.tipo === 'deslocamento' ? undefined : (cfg.locacao || undefined),
+      chegada: cfg.tipo === 'deslocamento' ? cfg.chegada : undefined,
+      paralelo: cfg.paralelo || undefined,
+    };
+    setCfg(null);
+    onChange([...rows, novo]);
+  };
+
+  const editar = (i: number, campo: keyof Momento, valor: unknown) =>
+    onChange(rows.map((x, j) => j === i ? { ...x, [campo]: valor } : x));
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2 flex-wrap">
+        <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-primary">Cronograma principal</p>
+        <div className="ml-auto flex items-center gap-2 relative">
+          <button type="button" onClick={() => setCfgAberto(o => !o)} title="Exibição"
+            className={clsx('p-2 rounded-lumos border', cfgAberto ? 'border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+          </button>
+          {cfgAberto && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setCfgAberto(false)} />
+              <div className="absolute right-0 top-10 w-72 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-40 p-3.5">
+                <div className="flex items-start gap-3">
+                  <button type="button" onClick={toggleAltura}
+                    className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0 mt-0.5', alturaRel ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                    <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', alturaRel ? 'left-5' : 'left-0.5')} />
+                  </button>
+                  <span>
+                    <span className="block text-xs font-bold text-lumos-text-primary">Altura relativa ao tempo</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary leading-snug mt-0.5">A altura de cada linha fica proporcional à duração do momento. Desligado, todas as linhas têm a mesma altura.</span>
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+          {canManage && (
+            <button type="button" onClick={() => setPickerAberto(true)}
+              className="btn-primary h-8 px-3.5 text-[11px] font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Novo momento</button>
+          )}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-center text-xs text-lumos-text-secondary italic py-8">O minuto a minuto do dia: chegada, montagem, gravação, refeições, deslocamentos.</p>
+      ) : (
+        <div ref={wrapRef} className="relative">
+          {/* cabeçalho */}
+          <div className="grid grid-cols-[130px_70px_44px_1fr_96px_92px] gap-2 px-4 py-2 border-b border-lumos-border text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary max-lg:hidden">
+            <span>Hora</span><span>Duração</span><span>Tipo</span><span>Descrição</span><span>Ações</span><span>Status</span>
+          </div>
+
+          {rows.map((r, i) => {
+            const t = TIPOS[(r.tipo as TipoMomento) || 'personalizado'] || TIPOS.personalizado;
+            const st = statusDe(r);
+            const dur = minutos(r.fim) != null && minutos(r.inicio) != null ? Math.max(0, minutos(r.fim)! - minutos(r.inicio)!) : null;
+            const alturaMin = alturaRel && dur ? Math.min(Math.max(dur * 1.8, 44), 520) : undefined;
+            return (
+              <div key={i} ref={el => { rowRefs.current[i] = el; }}
+                style={{ minHeight: alturaMin, borderLeft: `3px solid ${t.cor}` }}
+                className={clsx('grid grid-cols-[130px_70px_44px_1fr_96px_92px] max-lg:grid-cols-[110px_1fr_80px] gap-2 px-4 py-2 border-b border-lumos-border/60 items-start group',
+                  r.destaque && 'bg-lumos-yellow/[0.04]')}>
+                {/* hora */}
+                <span className="flex items-center gap-1 tabular-nums text-[11.5px] font-black text-lumos-text-primary pt-1">
+                  {canManage ? (
+                    <>
+                      <input type="time" defaultValue={r.inicio || ''} onBlur={e => e.target.value !== r.inicio && editar(i, 'inicio', e.target.value)} className="input-lumos h-7 text-[10.5px] w-[62px] px-1" />
+                      –
+                      <input type="time" defaultValue={r.fim || ''} onBlur={e => e.target.value !== r.fim && editar(i, 'fim', e.target.value)} className="input-lumos h-7 text-[10.5px] w-[62px] px-1" />
+                    </>
+                  ) : <>{r.inicio} – {r.fim}</>}
+                </span>
+                {/* duração */}
+                <span className="text-[10.5px] text-lumos-text-secondary tabular-nums pt-2 max-lg:hidden">
+                  {dur != null && dur > 0 ? (dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ` ${dur % 60}m` : ''}` : `${dur}min`) : '—'}
+                </span>
+                {/* tipo */}
+                <span className="pt-1.5 max-lg:hidden" title={t.label}>
+                  <t.Icon className="w-4 h-4" style={{ color: t.cor }} />
+                </span>
+                {/* descrição + chips */}
+                <span className="min-w-0">
+                  {canManage ? (
+                    <input defaultValue={r.descricao} onBlur={e => e.target.value !== r.descricao && editar(i, 'descricao', e.target.value)}
+                      placeholder="O que acontece nesse bloco" className="input-lumos h-8 text-[12px] w-full" />
+                  ) : <span className="text-[12.5px] font-bold text-lumos-text-primary">{r.descricao}</span>}
+                  <span className="flex flex-wrap gap-1.5 mt-1">
+                    {r.locacao && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{r.locacao}</span>}
+                    {r.tipo === 'deslocamento' && r.chegada && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5">→ {r.chegada}</span>}
+                    {r.paralelo && <span className="text-[9px] font-black uppercase text-purple-400 bg-purple-500/10 rounded-full px-2 py-0.5">paralelo</span>}
+                    {r.responsavel && <span className="text-[9px] font-bold text-lumos-text-secondary">resp.: {r.responsavel}</span>}
+                  </span>
+                </span>
+                {/* ações */}
+                <span className="pt-1 max-lg:hidden">
+                  {canManage && (
+                    <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button type="button" disabled={i === 0} onClick={() => { const l = [...rows]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; onChange(l); }}
+                        className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowUp className="w-3.5 h-3.5" /></button>
+                      <button type="button" disabled={i === rows.length - 1} onClick={() => { const l = [...rows]; [l[i + 1], l[i]] = [l[i], l[i + 1]]; onChange(l); }}
+                        className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5" /></button>
+                      <button type="button" onClick={() => editar(i, 'destaque', !r.destaque)} title="Destacar"
+                        className={clsx('p-1', r.destaque ? 'text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-yellow')}>★</button>
+                      <button type="button" onClick={() => onChange(rows.filter((_, j) => j !== i))}
+                        className="p-1 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </span>
+                  )}
+                </span>
+                {/* status */}
+                <span className={clsx('pt-2 inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase',
+                  st === 'atrasado' ? 'text-red-500' : st === 'agora' ? 'text-lumos-yellow' : 'text-lumos-text-secondary')}>
+                  <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', st === 'atrasado' ? 'bg-red-500' : st === 'agora' ? 'bg-lumos-yellow animate-pulse' : 'bg-lumos-text-secondary/40')} />
+                  {st === 'atrasado' ? 'Atrasado' : st === 'agora' ? 'Agora' : 'Pendente'}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* A agulha do horário atual */}
+          {agulhaTop != null && (
+            <div className="absolute left-0 right-0 pointer-events-none z-10" style={{ top: agulhaTop }}>
+              <div className="relative h-0">
+                <div className="absolute left-0 right-0 h-[2px] bg-red-500/80" />
+                <span className="absolute -left-0 -top-2.5 flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 ml-1" />
+                  <span className="text-[9px] font-black text-white bg-red-500 rounded px-1.5 py-0.5 tabular-nums">
+                    {String(agora.getHours()).padStart(2, '0')}:{String(agora.getMinutes()).padStart(2, '0')}
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Picker de tipo de momento */}
+      {pickerAberto && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={() => setPickerAberto(false)}>
+          <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-black text-lumos-text-primary mb-3">Novo momento</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.keys(TIPOS) as TipoMomento[]).map(k => (
+                <button key={k} type="button" onClick={() => abrirCfg(k)}
+                  className="border border-lumos-border rounded-lumos p-3 flex flex-col items-center gap-1.5 hover:border-lumos-yellow/60 hover:bg-lumos-yellow/[0.05] transition-colors">
+                  {(() => { const I = TIPOS[k].Icon; return <I className="w-4 h-4" style={{ color: TIPOS[k].cor }} />; })()}
+                  <span className="text-[10px] font-black text-lumos-text-primary">{TIPOS[k].label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Config do momento escolhido */}
+      {cfg && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={() => setCfg(null)}>
+          <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-black text-lumos-text-primary">Configurar {TIPOS[cfg.tipo].label}</p>
+
+            {cfg.tipo === 'deslocamento' ? (
+              <>
+                <div>
+                  <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Partida</label>
+                  <select value={cfg.locacao} onChange={e => setCfg({ ...cfg, locacao: e.target.value })} className="input-lumos w-full h-10 mt-1 text-sm">
+                    {locsAtivas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
+                    <option value="">Outro lugar</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Chegada</label>
+                  <select value={cfg.chegada} onChange={e => setCfg({ ...cfg, chegada: e.target.value })} className="input-lumos w-full h-10 mt-1 text-sm">
+                    {locsAtivas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
+                    <option value="">Outro lugar</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 text-[11.5px] font-bold text-lumos-text-primary">
+                  <input type="checkbox" checked={cfg.manual} onChange={e => setCfg({ ...cfg, manual: e.target.checked })} className="accent-[#EFC700]" />
+                  Inserir tempo manualmente
+                </label>
+                {!cfg.manual && (
+                  <button type="button" onClick={calcularTrajeto} disabled={cfg.calculando}
+                    className="w-full h-9 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center gap-2 disabled:opacity-60">
+                    {cfg.calculando ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Calculando trajeto…</> : <>Calcular trajeto de carro ({cfg.duracao} min)</>}
+                  </button>
+                )}
+              </>
+            ) : (
+              <div>
+                <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Locação</label>
+                <select value={cfg.locacao} onChange={e => setCfg({ ...cfg, locacao: e.target.value })} className="input-lumos w-full h-10 mt-1 text-sm">
+                  {locsAtivas.map(l => <option key={l.nome} value={l.nome}>{l.nome}</option>)}
+                  <option value="">Sem locação</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Duração (minutos)</label>
+              <div className="flex items-center gap-2 mt-1">
+                <button type="button" onClick={() => setCfg({ ...cfg, duracao: Math.max(5, cfg.duracao - 5) })} className="w-9 h-9 rounded-lumos border border-lumos-border text-lumos-text-primary font-black">−</button>
+                <input type="number" min={5} step={5} value={cfg.duracao} onChange={e => setCfg({ ...cfg, duracao: Number(e.target.value) || 5 })}
+                  className="input-lumos h-9 flex-1 text-center text-sm font-bold" />
+                <button type="button" onClick={() => setCfg({ ...cfg, duracao: cfg.duracao + 5 })} className="w-9 h-9 rounded-lumos border border-lumos-border text-lumos-text-primary font-black">+</button>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-[11.5px] font-bold text-lumos-text-primary">
+              <input type="checkbox" checked={cfg.paralelo} onChange={e => setCfg({ ...cfg, paralelo: e.target.checked })} className="accent-[#EFC700]" />
+              Acontece em paralelo a outro momento
+            </label>
+
+            <div>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Descrição (opcional)</label>
+              <textarea rows={2} value={cfg.descricao} onChange={e => setCfg({ ...cfg, descricao: e.target.value })}
+                placeholder="Adicione uma descrição…" className="input-lumos w-full mt-1 text-sm resize-y" />
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button type="button" onClick={() => { setCfg(null); setPickerAberto(true); }} className="text-[11px] font-bold text-lumos-text-secondary px-2">← Voltar</button>
+              <button type="button" onClick={criar} className="ml-auto btn-primary h-9 px-5 text-xs font-black flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" /> Criar momento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Cartão de regra do set. Vive FORA do componente da página de propósito: a
+// página re-renderiza a cada segundo (relógio AGORA) e um componente definido
+// inline seria remontado a cada tick — o lápis fechava sozinho e o texto saía
+// invertido (cursor voltava pro início). Aqui o estado local sobrevive.
+function CardRegra({ valor, titulo, Icon, destaque, canManage, onSave }: {
+  valor: string; titulo: string; Icon: any; destaque?: boolean; canManage: boolean;
+  onSave: (v: string) => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [draft, setDraft] = useState('');
+  const tem = !!valor.trim();
+  return (
+    <div className={clsx('card p-4', destaque && tem && 'border-amber-500/50')}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <Icon className={clsx('w-3.5 h-3.5', destaque && tem ? 'text-amber-500' : 'text-lumos-yellow')} />
+        <p className="text-[9.5px] font-black uppercase tracking-widest text-lumos-text-secondary">{titulo}</p>
+        {destaque && tem && <AlertTriangle className="w-3 h-3 text-amber-500 ml-auto" />}
+        {canManage && !editando && (
+          <button type="button" onClick={() => { setDraft(valor); setEditando(true); }}
+            className={clsx('p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow', !(destaque && tem) && 'ml-auto')} title="Editar">
+            <Pencil className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      {editando ? (
+        <div>
+          <textarea autoFocus rows={2} value={draft} onChange={e => setDraft(e.target.value)}
+            className="input-lumos w-full text-[12.5px] resize-y" />
+          <div className="flex gap-2 mt-1.5">
+            <button type="button" onClick={() => { setEditando(false); onSave(draft.trim()); }}
+              className="bg-lumos-yellow text-black text-[10px] font-black rounded px-2.5 py-1">Salvar</button>
+            <button type="button" onClick={() => setEditando(false)} className="text-[10px] font-bold text-lumos-text-secondary">Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <p className={clsx('text-[12.5px] leading-snug', tem ? 'text-lumos-text-primary' : 'text-lumos-text-secondary italic')}>
+          {valor || 'Clique no lápis pra preencher.'}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function OrdemDoDiaDetalhe() {
   const { id } = useParams();
@@ -199,43 +575,6 @@ export default function OrdemDoDiaDetalhe() {
 
   const locsAtivas = od.locacoes.filter(l => l.incluida);
   const chuva = (clima?.chanceChuva ?? 0) >= 30;
-
-  // Cartão editável simples (texto corrido) usado nas regras do set.
-  const CardRegra = ({ campo, titulo, Icon, destaque }: { campo: keyof Regras; titulo: string; Icon: any; destaque?: boolean }) => {
-    const [editando, setEditando] = useState(false);
-    const [draft, setDraft] = useState(od.regras[campo] || '');
-    const tem = !!(od.regras[campo] || '').trim();
-    return (
-      <div className={clsx('card p-4', destaque && tem && 'border-amber-500/50')}>
-        <div className="flex items-center gap-2 mb-1.5">
-          <Icon className={clsx('w-3.5 h-3.5', destaque && tem ? 'text-amber-500' : 'text-lumos-yellow')} />
-          <p className="text-[9.5px] font-black uppercase tracking-widest text-lumos-text-secondary">{titulo}</p>
-          {destaque && tem && <AlertTriangle className="w-3 h-3 text-amber-500 ml-auto" />}
-          {canManage && !editando && (
-            <button type="button" onClick={() => { setDraft(od.regras[campo] || ''); setEditando(true); }}
-              className={clsx('p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow', !(destaque && tem) && 'ml-auto')} title="Editar">
-              <Pencil className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-        {editando ? (
-          <div>
-            <textarea autoFocus rows={2} value={draft} onChange={e => setDraft(e.target.value)}
-              className="input-lumos w-full text-[12.5px] resize-y" />
-            <div className="flex gap-2 mt-1.5">
-              <button type="button" onClick={() => { setEditando(false); void patch({ regras: { ...od.regras, [campo]: draft.trim() } }, true); }}
-                className="bg-lumos-yellow text-black text-[10px] font-black rounded px-2.5 py-1">Salvar</button>
-              <button type="button" onClick={() => setEditando(false)} className="text-[10px] font-bold text-lumos-text-secondary">Cancelar</button>
-            </div>
-          </div>
-        ) : (
-          <p className={clsx('text-[12.5px] leading-snug', tem ? 'text-lumos-text-primary' : 'text-lumos-text-secondary italic')}>
-            {od.regras[campo] || 'Clique no lápis pra preencher.'}
-          </p>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-4 font-work-sans pb-16">
@@ -467,92 +806,14 @@ export default function OrdemDoDiaDetalhe() {
 
         {/* Regras do set em 4 cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-          <CardRegra campo="vestimenta" titulo="Vestimenta" Icon={Shirt} destaque />
-          <CardRegra campo="redes" titulo="Postagem em redes sociais" Icon={Megaphone} />
-          <CardRegra campo="setup_camera" titulo="Setup de câmera" Icon={Camera} />
-          <CardRegra campo="outras" titulo="Outras observações" Icon={FileText} />
+          <CardRegra valor={od.regras.vestimenta || ''} titulo="Vestimenta" Icon={Shirt} destaque canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, vestimenta: v } }, true)} />
+          <CardRegra valor={od.regras.redes || ''} titulo="Postagem em redes sociais" Icon={Megaphone} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, redes: v } }, true)} />
+          <CardRegra valor={od.regras.setup_camera || ''} titulo="Setup de câmera" Icon={Camera} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, setup_camera: v } }, true)} />
+          <CardRegra valor={od.regras.outras || ''} titulo="Outras observações" Icon={FileText} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, outras: v } }, true)} />
         </div>
 
-        {/* Cronograma principal */}
-        <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2 flex-wrap">
-            <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-primary">Cronograma principal</p>
-            {canManage && (
-              <button type="button" onClick={() => {
-                const ultima = cron.rows[cron.rows.length - 1];
-                const ini = ultima?.fim || od.hora_inicio || '08:00';
-                const fimSug = fmtMin(Math.min((minutos(ini) ?? 480) + 60, 1439));
-                void editarLista('plano_acao', [...od.plano_acao, { inicio: ini, fim: fimSug, descricao: '', responsavel: '', destaque: false }]);
-              }} className="ml-auto btn-primary h-8 px-3.5 text-[11px] font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Novo momento</button>
-            )}
-          </div>
-          {cron.rows.length === 0 ? (
-            <p className="text-center text-xs text-lumos-text-secondary italic py-8">O minuto a minuto do dia: chegada, montagem, gravação, refeições, desmontagem.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[640px]">
-                <thead>
-                  <tr className="text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary border-b border-lumos-border">
-                    <th className="px-4 py-2">Hora</th><th className="px-2 py-2">Duração</th>
-                    <th className="px-2 py-2 w-full">Descrição</th><th className="px-2 py-2">Ações</th><th className="px-4 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-lumos-border/60">
-                  {od.plano_acao.map((r, i) => {
-                    const st = statusLinha(r);
-                    const dur = minutos(r.fim) != null && minutos(r.inicio) != null ? (minutos(r.fim)! - minutos(r.inicio)!) : null;
-                    const editar = (campo: keyof AtividadePlano, valor: string | boolean) =>
-                      void editarLista('plano_acao', od.plano_acao.map((x, j) => j === i ? { ...x, [campo]: valor } : x));
-                    return (
-                      <tr key={i} className={clsx('group', r.destaque && 'bg-lumos-yellow/[0.04]')}>
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          {canManage ? (
-                            <span className="flex items-center gap-1 tabular-nums text-[12px] font-black text-lumos-text-primary">
-                              <input type="time" value={r.inicio || ''} onChange={e => editar('inicio', e.target.value)} className="input-lumos h-7 text-[11px] w-[74px]" />
-                              –
-                              <input type="time" value={r.fim || ''} onChange={e => editar('fim', e.target.value)} className="input-lumos h-7 text-[11px] w-[74px]" />
-                            </span>
-                          ) : <span className="text-[12px] font-black tabular-nums">{r.inicio} – {r.fim}</span>}
-                        </td>
-                        <td className="px-2 py-2 text-[11px] text-lumos-text-secondary whitespace-nowrap tabular-nums">
-                          {dur != null && dur > 0 ? (dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ` ${dur % 60}min` : ''}` : `${dur}min`) : '—'}
-                        </td>
-                        <td className="px-2 py-2">
-                          {canManage ? (
-                            <input value={r.descricao} onChange={e => editar('descricao', e.target.value)}
-                              placeholder="O que acontece nesse bloco" className="input-lumos h-8 text-[12px] w-full" />
-                          ) : <span className="text-[12.5px] font-bold text-lumos-text-primary">{r.descricao}</span>}
-                          {r.responsavel && <p className="text-[10px] text-lumos-text-secondary mt-0.5">resp.: {r.responsavel}</p>}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          {canManage && (
-                            <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button type="button" disabled={i === 0} onClick={() => { const l = [...od.plano_acao]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; void editarLista('plano_acao', l); }}
-                                className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowUp className="w-3.5 h-3.5" /></button>
-                              <button type="button" disabled={i === od.plano_acao.length - 1} onClick={() => { const l = [...od.plano_acao]; [l[i + 1], l[i]] = [l[i], l[i + 1]]; void editarLista('plano_acao', l); }}
-                                className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5" /></button>
-                              <button type="button" onClick={() => editar('destaque', !r.destaque)} title="Destacar"
-                                className={clsx('p-1', r.destaque ? 'text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-yellow')}>★</button>
-                              <button type="button" onClick={() => void editarLista('plano_acao', od.plano_acao.filter((_, j) => j !== i))}
-                                className="p-1 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          <span className={clsx('inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase',
-                            st === 'atrasado' ? 'text-red-500' : st === 'agora' ? 'text-lumos-yellow' : 'text-lumos-text-secondary')}>
-                            <span className={clsx('w-1.5 h-1.5 rounded-full', st === 'atrasado' ? 'bg-red-500' : st === 'agora' ? 'bg-lumos-yellow animate-pulse' : 'bg-lumos-text-secondary/40')} />
-                            {st === 'atrasado' ? 'Atrasado' : st === 'agora' ? 'Agora' : 'Pendente'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <CronogramaPrincipal od={od} canManage={canManage} agora={agora} hoje={cron.hoje}
+          locsAtivas={locsAtivas} onChange={lista => void editarLista('plano_acao', lista)} />
       </>)}
 
       {/* ═════════ ABA LOCAÇÕES ═════════ */}
@@ -823,10 +1084,10 @@ export default function OrdemDoDiaDetalhe() {
       {/* ═════════ ABA OUTRAS OBSERVAÇÕES ═════════ */}
       {aba === 'obs' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-          <CardRegra campo="vestimenta" titulo="Regras de vestimenta" Icon={Shirt} destaque />
-          <CardRegra campo="redes" titulo="Regras de postagem da equipe em redes sociais" Icon={Megaphone} />
-          <CardRegra campo="setup_camera" titulo="Setup de câmera" Icon={Camera} />
-          <CardRegra campo="outras" titulo="Outras observações" Icon={FileText} />
+          <CardRegra valor={od.regras.vestimenta || ''} titulo="Regras de vestimenta" Icon={Shirt} destaque canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, vestimenta: v } }, true)} />
+          <CardRegra valor={od.regras.redes || ''} titulo="Regras de postagem da equipe em redes sociais" Icon={Megaphone} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, redes: v } }, true)} />
+          <CardRegra valor={od.regras.setup_camera || ''} titulo="Setup de câmera" Icon={Camera} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, setup_camera: v } }, true)} />
+          <CardRegra valor={od.regras.outras || ''} titulo="Outras observações" Icon={FileText} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, outras: v } }, true)} />
         </div>
       )}
     </div>
