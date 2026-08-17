@@ -56,6 +56,7 @@ const Acessos = lazy(() => import('@/pages/Acessos'));
 const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
 const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
 const OrdemDoDiaEditor = lazy(() => import('@/pages/OrdemDoDiaEditor'));
+const OrdemDoDiaDetalhe = lazy(() => import('@/pages/OrdemDoDiaDetalhe'));
 const Fornecedores = lazy(() => import('@/pages/Fornecedores'));
 const Equipamentos = lazy(() => import('@/pages/Equipamentos'));
 const FornecedorEditor = lazy(() => import('@/pages/FornecedorEditor'));
@@ -699,6 +700,16 @@ function AppContent() {
           />
           <Route
             path="/ordem-do-dia/:id"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="ordem_do_dia">
+                  <OrdemDoDiaDetalhe />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+          <Route
+            path="/ordem-do-dia/:id/editar"
             element={
               <AuthWrapper>
                 <PermissionGuard permission="ordem_do_dia">
