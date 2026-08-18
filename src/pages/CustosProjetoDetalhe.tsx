@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { formatBudgetCode } from '@/utils/formatters';
-import { ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, TrendingUp } from 'lucide-react';
+import { Archive, ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, RotateCcw, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
+import EncerrarProjetoModal from '@/components/financeiro/EncerrarProjetoModal';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
@@ -33,6 +34,8 @@ export default function CustosProjetoDetalhe() {
   const { profile } = useAuth();
   const toast = useToast();
   const [project, setProject] = useState<any>(null);
+  const [finRegistro, setFinRegistro] = useState<any>(null);
+  const [encerrandoProj, setEncerrandoProj] = useState(false);
   const [costs, setCosts] = useState<any[]>([]);
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -407,6 +410,7 @@ export default function CustosProjetoDetalhe() {
         }
       }
 
+      setFinRegistro(finData);
       setProject({ 
         ...projectData, 
         budget_items: budgetItems, 
@@ -839,6 +843,11 @@ export default function CustosProjetoDetalhe() {
               <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight">
                 {project.name}
               </h1>
+              {finRegistro?.encerrado_em && (
+                <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary bg-lumos-text-secondary/10 border border-lumos-border rounded-full px-2 py-0.5">
+                  Encerrado
+                </span>
+              )}
             </div>
             {project.client?.name && (
               <p className="text-lumos-text-secondary text-sm flex items-center gap-1">
@@ -855,6 +864,17 @@ export default function CustosProjetoDetalhe() {
           >
             <Pencil className="w-4 h-4" /> Editar
           </button>
+          {finRegistro && (
+            <button
+              onClick={() => setEncerrandoProj(true)}
+              className="btn-secondary flex items-center gap-2 h-10 px-4 text-xs"
+              title={finRegistro.encerrado_em ? 'Reabrir projeto' : 'Encerrar projeto no financeiro'}
+            >
+              {finRegistro.encerrado_em
+                ? <><RotateCcw className="w-4 h-4" /> Reabrir</>
+                : <><Archive className="w-4 h-4" /> Encerrar</>}
+            </button>
+          )}
           {project.budget_id && (
             <Link
               to={`/orcamentos/${project.budget_id}`}
@@ -1734,6 +1754,23 @@ export default function CustosProjetoDetalhe() {
       )}
 
       {/* Batch Delete Confirmation Modal */}
+      {encerrandoProj && finRegistro && (
+        <EncerrarProjetoModal
+          proj={{
+            id: finRegistro.id,
+            name: project.name,
+            project_id: id!,
+            budget_id: project.budget_id || finRegistro.proposta_id,
+            encerrado_em: finRegistro.encerrado_em,
+          }}
+          onClose={() => setEncerrandoProj(false)}
+          onDone={() => {
+            setEncerrandoProj(false);
+            fetchProjectData();
+          }}
+        />
+      )}
+
       <Modal isOpen={isBatchDeleteModalOpen} onClose={() => setIsBatchDeleteModalOpen(false)} title="Excluir Itens">
         <div className="space-y-4">
           <div className="flex gap-4 items-start">
