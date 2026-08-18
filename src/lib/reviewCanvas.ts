@@ -6,6 +6,37 @@ export const COLORS = ['#EFC700', '#ef4444', '#3b82f6', '#22c55e', '#ffffff'];
 export const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 export const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 
+// Timecode de edição no formato hh:mm:ss:ff (pedido do time: apontar o corte
+// no frame exato, como no frame.io). O fps vem de estimarFps; 25 é o padrão
+// enquanto o vídeo não roda.
+export const timecode = (ms: number, fps = 25) => {
+  const totalS = Math.floor(ms / 1000);
+  const h = Math.floor(totalS / 3600), m = Math.floor((totalS % 3600) / 60), s = totalS % 60;
+  const ff = Math.min(Math.max(Math.round(fps) - 1, 0), Math.floor(((ms / 1000) % 1) * fps));
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(h)}:${p(m)}:${p(s)}:${p(ff)}`;
+};
+
+// Mede o fps real do vídeo observando os frames apresentados (só funciona com
+// o vídeo tocando). Arredonda pro fps de produção mais próximo; sem suporte do
+// navegador, fica nos 25.
+export function estimarFps(video: HTMLVideoElement, onFps: (fps: number) => void) {
+  const v = video as HTMLVideoElement & { requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => void };
+  if (typeof v.requestVideoFrameCallback !== 'function') { onFps(25); return; }
+  const deltas: number[] = [];
+  let ultimo = -1;
+  const tick = (_now: number, meta: { mediaTime: number }) => {
+    if (ultimo >= 0 && meta.mediaTime > ultimo) deltas.push(meta.mediaTime - ultimo);
+    ultimo = meta.mediaTime;
+    if (deltas.length < 12) { v.requestVideoFrameCallback!(tick); return; }
+    deltas.sort((a, b) => a - b);
+    const bruto = 1 / deltas[Math.floor(deltas.length / 2)];
+    const comuns = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
+    onFps(comuns.reduce((melhor, c) => (Math.abs(c - bruto) < Math.abs(melhor - bruto) ? c : melhor), 25));
+  };
+  v.requestVideoFrameCallback!(tick);
+}
+
 export const fmtTime = (ms: number) => {
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;

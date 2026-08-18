@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import UserAvatar from '@/components/common/UserAvatar';
-import { COLORS, SPEEDS, STREAM_BASE, fmtTime, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
+import { COLORS, SPEEDS, STREAM_BASE, timecode, estimarFps, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
 import { captureVideoThumb } from '@/lib/videoThumb';
 
 interface TeamComment {
@@ -36,6 +36,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [comments, setComments] = useState<TeamComment[]>([]);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
+  const [fps, setFps] = useState(25);
+  const fpsMedido = useRef(false);
   const [durationMs, setDurationMs] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(1);
@@ -296,7 +298,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               onLoadedData={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onCanPlay={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onError={() => { setReady(true); setVideoUnsupported(true); }}
-              onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onClick={togglePlay} playsInline />
+              onPlay={e => { setPlaying(true); if (!fpsMedido.current) { fpsMedido.current = true; estimarFps(e.currentTarget, setFps); } }} onPause={() => setPlaying(false)} onClick={togglePlay} playsInline />
             <canvas ref={canvasRef} className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
               onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp} />
             {!ready && !videoUnsupported && <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" /></div>}
@@ -326,7 +328,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
               <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
               {durationMs > 0 && comments.map(c => (
-                <button key={c.id} onClick={e => { e.stopPropagation(); viewComment(c); }} title={`${c.author_name} · ${fmtTime(c.timecode_ms)}`}
+                <button key={c.id} onClick={e => { e.stopPropagation(); viewComment(c); }} title={`${c.author_name} · ${timecode(c.timecode_ms, fps)}`}
                   className="absolute -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg hover:scale-150 transition-transform z-10"
                   style={{ left: `${(c.timecode_ms / durationMs) * 100}%` }} />
               ))}
@@ -341,7 +343,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               <button onClick={toggleMute} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}</button>
               <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={e => setVol(Number(e.target.value))} className="w-16 accent-lumos-yellow cursor-pointer" />
             </div>
-            <span className="text-xs font-mono font-bold text-lumos-text-secondary tabular-nums">{fmtTime(currentMs)} <span className="opacity-50">/ {durationMs ? fmtTime(durationMs) : '—'}</span></span>
+            <span className="text-xs font-mono font-bold text-lumos-text-secondary tabular-nums">{timecode(currentMs, fps)} <span className="opacity-50">/ {durationMs ? timecode(durationMs, fps) : '—'}</span></span>
             <div className="flex-1" />
             <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
             <button onClick={fullscreen} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
@@ -389,7 +391,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <span className="text-[11px] font-black text-lumos-text-primary truncate">{c.author_name}{!c.is_team && <span className="ml-1 text-[8px] uppercase text-amber-400">Cliente</span>}</span>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        <span className="text-[10px] font-mono font-bold text-lumos-yellow">{fmtTime(c.timecode_ms)}</span>
+                        <span className="text-[10px] font-mono font-bold text-lumos-yellow">{timecode(c.timecode_ms, fps)}</span>
 
                         {/* Três pontinhos: só no MEU comentário */}
                         {isMine(c) && editingId !== c.id && (
@@ -470,7 +472,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           {/* Compositor */}
           <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1"><Clock className="w-3 h-3" /> em {fmtTime(currentMs)}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1"><Clock className="w-3 h-3" /> em {timecode(currentMs, fps)}</span>
               {composing && (
                 <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors">
                   <X className="w-3 h-3" /> Cancelar
@@ -496,7 +498,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             <div className="flex items-end gap-2">
               <textarea value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
                 onKeyDown={onCommentKey}
-                rows={2} placeholder={`Comentar em ${fmtTime(currentMs)}…`} className="input-lumos flex-1 text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug" />
+                rows={2} placeholder={`Comentar em ${timecode(currentMs, fps)}…`} className="input-lumos flex-1 text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug" />
               <button onClick={submit} disabled={sending || (!commentText.trim() && shapes.length === 0)}
                 className="btn-primary h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
