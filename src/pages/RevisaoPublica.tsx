@@ -32,14 +32,12 @@ interface ReviewData {
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
+import { timecode, estimarFps } from '@/lib/reviewCanvas';
+
 const COLORS = ['#EFC700', '#ef4444', '#3b82f6', '#22c55e', '#ffffff'];
 const LOGO_WATERMARK = '/logo/Logo-Branco-Alpha.svg';
 
-const fmtTime = (ms: number) => {
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return (h > 0 ? `${h}:` : '') + `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-};
+
 const fmtSize = (b: number | null) => b ? `${(b / 1048576).toFixed(1)} MB` : '—';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +65,8 @@ export default function RevisaoPublica() {
 
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
+  const [fps, setFps] = useState(25);
+  const fpsMedido = useRef(false);
   const [durationMs, setDurationMs] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(1);
@@ -352,7 +352,7 @@ export default function RevisaoPublica() {
     ['Arquivo', data.video.file_name],
     ['Versão', `v${String(data.video.versao).padStart(2, '0')}`],
     ['Resolução', data.video.width ? `${data.video.width}×${data.video.height}` : '—'],
-    ['Duração', durationMs ? fmtTime(durationMs) : '—'],
+    ['Duração', durationMs ? timecode(durationMs, fps) : '—'],
     ['Formato', (data.video.mime_type || '').split('/')[1]?.toUpperCase() || '—'],
     ['Tamanho', fmtSize(data.video.size_bytes)],
   ];
@@ -416,7 +416,7 @@ export default function RevisaoPublica() {
               onLoadedData={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onCanPlay={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onError={() => { setReady(true); setVideoUnsupported(true); }}
-              onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
+              onPlay={e => { setPlaying(true); if (!fpsMedido.current) { fpsMedido.current = true; estimarFps(e.currentTarget, setFps); } }} onPause={() => setPlaying(false)}
               onClick={togglePlay} playsInline
             />
             {!ready && !videoUnsupported && (
@@ -466,7 +466,7 @@ export default function RevisaoPublica() {
               {/* marcadores */}
               {durationMs > 0 && data.comments.map(c => (
                 <button key={c.id} onClick={e => { e.stopPropagation(); viewComment(c); }}
-                  title={`${c.author_name} · ${fmtTime(c.timecode_ms)}${c.body ? ` — ${c.body}` : ''}`}
+                  title={`${c.author_name} · ${timecode(c.timecode_ms, fps)}${c.body ? ` — ${c.body}` : ''}`}
                   className="absolute -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg hover:scale-150 transition-transform z-10"
                   style={{ left: `${(c.timecode_ms / durationMs) * 100}%` }} />
               ))}
@@ -490,7 +490,7 @@ export default function RevisaoPublica() {
                 onChange={e => setVol(Number(e.target.value))} className="w-16 accent-lumos-yellow cursor-pointer" />
             </div>
             <span className="text-xs font-mono font-bold text-lumos-text-secondary tabular-nums">
-              {fmtTime(currentMs)} <span className="opacity-50">/ {durationMs ? fmtTime(durationMs) : '—'}</span>
+              {timecode(currentMs, fps)} <span className="opacity-50">/ {durationMs ? timecode(durationMs, fps) : '—'}</span>
             </span>
             <div className="flex-1" />
             <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
@@ -588,7 +588,7 @@ export default function RevisaoPublica() {
                     </span>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <span className="text-[10px] font-mono font-bold text-lumos-yellow flex items-center gap-1">
-                        {c.resolved && <Check className="w-3 h-3 text-green-500" />}{fmtTime(c.timecode_ms)}
+                        {c.resolved && <Check className="w-3 h-3 text-green-500" />}{timecode(c.timecode_ms, fps)}
                       </span>
 
                       {/* Três pontinhos: só no MEU comentário */}
@@ -671,7 +671,7 @@ export default function RevisaoPublica() {
           <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1">
-                <Clock className="w-3 h-3" /> em {fmtTime(currentMs)}
+                <Clock className="w-3 h-3" /> em {timecode(currentMs, fps)}
               </span>
               {composing && (
                 <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors">
@@ -702,7 +702,7 @@ export default function RevisaoPublica() {
               <textarea
                 value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
                 onKeyDown={onCommentKey}
-                rows={2} placeholder={`Comentar em ${fmtTime(currentMs)}…`}
+                rows={2} placeholder={`Comentar em ${timecode(currentMs, fps)}…`}
                 className="input-lumos flex-1 text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug"
               />
               <button onClick={submitComment} disabled={sending || (!commentText.trim() && shapes.length === 0)}
