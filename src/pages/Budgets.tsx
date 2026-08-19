@@ -19,6 +19,7 @@ import {
   Filter,
   ExternalLink,
   FileDown,
+  ListChecks,
   Check,
   ChevronUp,
   ChevronDown,
@@ -349,7 +350,7 @@ export default function Budgets() {
     }
   };
 
-  const handleExportPDF = async (budget: Budget, showAlerts = true) => {
+  const handleExportPDF = async (budget: Budget, showAlerts = true, detalhado = false) => {
     try {
       if (showAlerts) setExportingId(budget.id);
       setActiveMenu(null);
@@ -394,7 +395,8 @@ export default function Budgets() {
         fullBudget.code,
         fullBudget.clients?.name || 'Cliente',
         fullBudget.clients?.agency_name,
-        fullBudget.project_name
+        fullBudget.project_name,
+        detalhado ? 'DETALHADA_' : ''
       );
 
       const blob = await pdf(
@@ -405,6 +407,7 @@ export default function Budgets() {
           items={items}
           financials={financials}
           userName={currentUser?.user_metadata?.full_name || 'Equipe Lumos'}
+          detalhado={detalhado}
         />
       ).toBlob();
 
@@ -897,6 +900,18 @@ export default function Budgets() {
                             >
                               <FileDown className={clsx("w-4 h-4 text-green-500", exportingId === budget.id && "animate-bounce")} />
                               {exportingId === budget.id ? 'Gerando...' : 'Gerar Orçamento PDF'}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportPDF(budget, true, true);
+                              }}
+                              disabled={exportingId === budget.id}
+                              title="Proposta com o valor de cada item listado"
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-lumos-text-primary hover:bg-lumos-bg transition-colors disabled:opacity-50"
+                            >
+                              <ListChecks className="w-4 h-4 text-green-500" />
+                              PDF detalhado (valores por item)
                             </button>
                             <button
                               onClick={(e) => {

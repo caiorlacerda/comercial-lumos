@@ -193,6 +193,15 @@ const styles = StyleSheet.create({
   colQty: { width: '15%', textAlign: 'center' },
   colUnit: { width: '15%', textAlign: 'center' },
 
+  // Modo detalhado: as mesmas colunas, mais estreitas, abrindo espaço pro
+  // valor unitário e o total de cada item.
+  colNameD: { width: '26%' },
+  colDescD: { width: '26%' },
+  colQtyD: { width: '8%', textAlign: 'center' },
+  colUnitD: { width: '12%', textAlign: 'center' },
+  colValorD: { width: '14%', textAlign: 'right' },
+  colTotalD: { width: '14%', textAlign: 'right' },
+
   // Group Subtotal
   groupSubtotalRow: {
     flexDirection: 'row',
@@ -360,9 +369,11 @@ interface BudgetPDFProps {
   items: BudgetItem[];
   financials: VersionFinancials;
   userName?: string;
+  /** Proposta detalhada: mostra valor unitário e total de cada item. */
+  detalhado?: boolean;
 }
 
-export const BudgetPDF = ({ budget, version, contact, items, financials, userName }: BudgetPDFProps) => {
+export const BudgetPDF = ({ budget, version, contact, items, financials, userName, detalhado = false }: BudgetPDFProps) => {
   if (!budget || !version || !financials) return null;
 
   const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -392,7 +403,7 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
   const proposalTag = nomenclatureHeader;
 
   return (
-    <Document title={`PROPOSTA_LUMOS_${formattedCode.replace('#', '')}`}>
+    <Document title={`PROPOSTA_LUMOS_${formattedCode.replace('#', '')}${detalhado ? '_DETALHADA' : ''}`}>
       {/* PÁGINA 1: PROPOSTA FINANCEIRA */}
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho */}
@@ -476,10 +487,12 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
           <View wrap={false}>
             <Text style={styles.sectionTitle}>Proposta Financeira Detalhada</Text>
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderCell, styles.colName]}>Item / Serviço</Text>
-              <Text style={[styles.tableHeaderCell, styles.colDesc]}>Descrição</Text>
-              <Text style={[styles.tableHeaderCell, styles.colQty]}>Qtd</Text>
-              <Text style={[styles.tableHeaderCell, styles.colUnit]}>Unid.</Text>
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colNameD : styles.colName]}>Item / Serviço</Text>
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colDescD : styles.colDesc]}>Descrição</Text>
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colQtyD : styles.colQty]}>Qtd</Text>
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colUnitD : styles.colUnit]}>Unid.</Text>
+              {detalhado && <Text style={[styles.tableHeaderCell, styles.colValorD]}>Valor unit.</Text>}
+              {detalhado && <Text style={[styles.tableHeaderCell, styles.colTotalD]}>Total</Text>}
             </View>
           </View>
 
@@ -490,16 +503,27 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
             const groupSum = groupItems.reduce((sum, item) =>
               sum + item.unit_cost * markupMultiplier * item.quantity, 0);
 
-            const renderItemRow = (item: BudgetItem, index: number) => (
-              <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]} wrap={false}>
-                <Text style={[styles.tableCell, styles.colName]}>{item.name}</Text>
-                <Text style={[styles.tableCell, styles.colDesc, { color: '#888', fontSize: 7, lineHeight: 1.4 }]}>
-                  {item.description || ''}
-                </Text>
-                <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
-                <Text style={[styles.tableCell, styles.colUnit]}>{item.unit_label}</Text>
-              </View>
-            );
+            const renderItemRow = (item: BudgetItem, index: number) => {
+              const valorUnitario = item.unit_cost * markupMultiplier;
+              return (
+                <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]} wrap={false}>
+                  <Text style={[styles.tableCell, detalhado ? styles.colNameD : styles.colName]}>{item.name}</Text>
+                  <Text style={[styles.tableCell, detalhado ? styles.colDescD : styles.colDesc, { color: '#888', fontSize: 7, lineHeight: 1.4 }]}>
+                    {item.description || ''}
+                  </Text>
+                  <Text style={[styles.tableCell, detalhado ? styles.colQtyD : styles.colQty]}>{item.quantity}</Text>
+                  <Text style={[styles.tableCell, detalhado ? styles.colUnitD : styles.colUnit]}>{item.unit_label}</Text>
+                  {detalhado && (
+                    <Text style={[styles.tableCell, styles.colValorD]}>{formatCurrency(valorUnitario)}</Text>
+                  )}
+                  {detalhado && (
+                    <Text style={[styles.tableCell, styles.colTotalD, { fontWeight: 700 }]}>
+                      {formatCurrency(valorUnitario * item.quantity)}
+                    </Text>
+                  )}
+                </View>
+              );
+            };
 
             return (
               /* wrap={false} mantém o grupo inteiro numa só página, evitando divisões no meio da categoria */
