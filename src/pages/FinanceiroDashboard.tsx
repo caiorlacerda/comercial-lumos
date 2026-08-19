@@ -22,7 +22,7 @@ import {
   FileText,
   TrendingDown,
   FolderOpen
-} from 'lucide-react';
+, Landmark } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import {
@@ -183,16 +183,15 @@ const DASHBOARD_BLOCKS_CATALOG: DashboardBlockDef[] = [
     defaultSize: 'full',
     defaultActive: true
   },
-  // Blocos futuros (Caixa V2)
   {
     id: 'kpi-saldo-conta',
     title: 'Saldo Geral em Conta',
-    description: 'Saldo real disponível integrado com extratos bancários.',
+    description: 'Saldo final do último extrato bancário importado em Movimentações.',
     group: 'caixa',
     defaultSize: 'small',
-    defaultActive: false,
-    isFuture: true
+    defaultActive: false
   },
+  // Blocos futuros (Caixa V2)
   {
     id: 'chart-fluxo-caixa',
     title: 'Gráfico: Fluxo de Caixa Real',
@@ -216,6 +215,7 @@ const DEFAULT_PREFERENCES: BlockPreference[] = [
 
 export default function FinanceiroDashboard() {
   const [period, setPeriod] = useState<PeriodType>('mes');
+  const [saldoExtrato, setSaldoExtrato] = useState<{ valor: number; quando: string } | null>(null);
   const [rawProjects, setRawProjects] = useState<any[]>([]);
   const [payables, setPayables] = useState<any[]>([]);
   const [receivables, setReceivables] = useState<any[]>([]);
@@ -235,6 +235,17 @@ export default function FinanceiroDashboard() {
       },
     })
   );
+
+  // Saldo real: o extrato importado nas Movimentações manda aqui.
+  useEffect(() => {
+    supabase.from('bank_imports')
+      .select('saldo_final, periodo, created_at')
+      .not('saldo_final', 'is', null)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (data?.saldo_final != null) setSaldoExtrato({ valor: Number(data.saldo_final), quando: data.periodo || '' });
+      });
+  }, []);
 
   useEffect(() => {
     loadPreferencesAndData();
@@ -764,6 +775,22 @@ export default function FinanceiroDashboard() {
                     onHide={() => toggleBlockVisibility(catalogBlock.id)}
                     onChangeSize={(newSize) => changeBlockSize(catalogBlock.id, newSize)}
                   >
+                    {/* KPI Saldo em conta (extrato importado) */}
+                    {catalogBlock.id === 'kpi-saldo-conta' && (
+                      <div>
+                        <div className="p-2 bg-sky-500/10 rounded-lumos text-sky-500 w-fit mb-4">
+                          <Landmark className="w-5 h-5" />
+                        </div>
+                        <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Saldo Geral em Conta</p>
+                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                          {saldoExtrato ? formatBRL(saldoExtrato.valor) : '—'}
+                        </p>
+                        <p className="text-[10px] text-lumos-text-secondary mt-1">
+                          {saldoExtrato ? `Extrato ${saldoExtrato.quando}` : 'Importe um extrato em Movimentações.'}
+                        </p>
+                      </div>
+                    )}
+
                     {/* KPI Faturamento */}
                     {catalogBlock.id === 'kpi-faturamento' && (
                       <div>
