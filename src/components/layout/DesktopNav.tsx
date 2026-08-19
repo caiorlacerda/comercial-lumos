@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Home, Briefcase, Video, DollarSign, Settings, Sun, Moon, LogOut, BookOpen,
+  Home, Briefcase, Video, DollarSign, Settings, Sun, Moon, LogOut, BookOpen, Eye, EyeOff,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
+import { usePrivacy } from '@/context/PrivacyContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
 import { getVisibleSections, getSectionItems } from '@/lib/navigation';
 import { openCommandPalette } from '@/components/common/CommandPalette';
@@ -30,6 +31,7 @@ const SECTION_META: Record<SectionType, { label: string; icon: React.ComponentTy
 export default function DesktopNav() {
   const { can, isAdmin, profile, user, signOut, updatePresenceStatus } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { ocultarValores, toggleValores } = usePrivacy();
   const { activeSection, navigateToSection } = useLayout();
   const navigate = useNavigate();
   const location = useLocation();
@@ -96,6 +98,23 @@ export default function DesktopNav() {
   const railFooter = (
     <>
       <WorldClock vertical className="mb-1" />
+      {/* Modo apresentação: some com os valores em dinheiro do app inteiro.
+          Aparece pra quem enxerga qualquer pedaço do Financeiro. */}
+      {(isAdmin || can('custos_projeto') || can('reembolso')) && (
+        <button
+          onClick={toggleValores}
+          title={ocultarValores ? 'Valores ocultos, clique para mostrar' : 'Ocultar valores para apresentar a plataforma'}
+          aria-pressed={ocultarValores}
+          className={clsx(
+            'flex items-center justify-center rounded-lumos size-11 transition-colors',
+            ocultarValores
+              ? 'text-lumos-yellow bg-lumos-yellow/15'
+              : 'text-lumos-text-secondary hover:bg-lumos-text-secondary/10 hover:text-lumos-text-primary',
+          )}
+        >
+          {ocultarValores ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+        </button>
+      )}
       <button
         onClick={toggleTheme}
         title="Alternar tema"

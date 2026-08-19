@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import { ThemeProvider } from '@/context/ThemeContext.tsx'
 import { ToastProvider } from '@/context/ToastContext.tsx'
+import { PrivacyProvider } from '@/context/PrivacyContext.tsx'
 import './index.css'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 
@@ -55,7 +56,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <ThemeProvider>
         <ToastProvider>
-          <App />
+          <PrivacyProvider>
+            <App />
+          </PrivacyProvider>
         </ToastProvider>
       </ThemeProvider>
     </GoogleOAuthProvider>
