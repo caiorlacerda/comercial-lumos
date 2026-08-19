@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Menu, Sun, Moon, LogOut, Settings, User, Bell, ChevronDown, Search } from 'lucide-react';
+import { Menu, Sun, Moon, LogOut, Settings, User, Bell, ChevronDown, Search, Eye, EyeOff } from 'lucide-react';
 import { openCommandPalette } from '@/components/common/CommandPalette';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
+import { usePrivacy } from '@/context/PrivacyContext';
 import { useLayout, SectionType } from '@/context/LayoutContext';
 import StatusDot from '@/components/common/StatusDot';
 import NotificationBell from '@/components/layout/NotificationBell';
@@ -14,6 +15,7 @@ import { clsx } from 'clsx';
 export default function Topbar() {
   const { signOut, user, profile, isAdmin, can, updatePresenceStatus } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { ocultarValores, toggleValores } = usePrivacy();
   const { activeSection, navigateToSection, mobileSidebarOpen, setMobileSidebarOpen } = useLayout();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -117,6 +119,24 @@ export default function Topbar() {
           <Search className="w-4 h-4" />
           <kbd className="text-[9px] font-black uppercase tracking-wider opacity-60">⌘K</kbd>
         </button>
+
+        {/* Modo apresentação: some com os valores em dinheiro do app inteiro.
+            Quem enxerga qualquer pedaço do Financeiro tem o botão. */}
+        {(isAdmin || can('custos_projeto') || can('reembolso')) && (
+          <button
+            onClick={toggleValores}
+            className={clsx(
+              'p-2 rounded-full transition-all flex items-center justify-center',
+              ocultarValores
+                ? 'text-lumos-yellow bg-lumos-yellow/15 ring-1 ring-lumos-yellow/30'
+                : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5',
+            )}
+            title={ocultarValores ? 'Valores ocultos, clique para mostrar' : 'Ocultar valores para apresentar a plataforma'}
+            aria-pressed={ocultarValores}
+          >
+            {ocultarValores ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          </button>
+        )}
 
         {/* Notification Bell */}
         <NotificationBell />

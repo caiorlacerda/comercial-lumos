@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, LogOut, Search } from 'lucide-react';
+import { ChevronLeft, Eye, EyeOff, LogOut, Search } from 'lucide-react';
 import { openCommandPalette } from '@/components/common/CommandPalette';
 import { useAuth } from '@/hooks/useAuth';
+import { usePrivacy } from '@/context/PrivacyContext';
 import NotificationBell from '@/components/layout/NotificationBell';
 import StatusDot from '@/components/common/StatusDot';
 import { BottomSheet } from '@/components/ui/BottomSheet';
@@ -10,7 +11,8 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 export default function MobileHeader() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, isAdmin, can } = useAuth();
+  const { ocultarValores, toggleValores } = usePrivacy();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const mainScreens = [
@@ -94,6 +96,19 @@ export default function MobileHeader() {
             >
               <Search className="w-5 h-5" />
             </button>
+
+            {(isAdmin || can('custos_projeto') || can('reembolso')) && (
+              <button
+                onClick={toggleValores}
+                className={ocultarValores
+                  ? 'p-1.5 rounded-full text-lumos-yellow bg-lumos-yellow/15'
+                  : 'p-1.5 rounded-full text-lumos-text-secondary hover:text-lumos-yellow transition-colors'}
+                title={ocultarValores ? 'Valores ocultos, clique para mostrar' : 'Ocultar valores'}
+                aria-pressed={ocultarValores}
+              >
+                {ocultarValores ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            )}
 
             <NotificationBell />
 

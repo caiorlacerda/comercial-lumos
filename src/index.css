@@ -340,3 +340,30 @@ body {
 .wiki-content table { width: 100%; border-collapse: collapse; margin: 0 0 18px; font-size: 14px; }
 .wiki-content th, .wiki-content td { border: 1px solid var(--color-lumos-border); padding: 8px 12px; text-align: left; }
 .wiki-content th { background: rgba(127,127,127,0.08); font-weight: 700; }
+
+/* MODO APRESENTAÇÃO — o "olho" que some com os valores em dinheiro.
+   O borrão preserva o tamanho do texto, então nenhuma tabela ou card muda de
+   layout ao ligar e desligar. */
+[data-valores-ocultos='1'] .lumos-valor-oculto {
+  filter: blur(0.38em);
+  -webkit-user-select: none;
+  user-select: none;
+  transition: filter 140ms ease;
+}
+/* Em input o blur levaria a borda junto; aqui o texto vira bolinhas, e onde
+   isso não existe cai no borrão pelo text-shadow. */
+[data-valores-ocultos='1'] input.lumos-valor-oculto {
+  filter: none;
+  color: transparent;
+  text-shadow: 0 0 0.4em var(--color-lumos-text-primary);
+}
+@supports (-webkit-text-security: disc) {
+  [data-valores-ocultos='1'] input.lumos-valor-oculto {
+    -webkit-text-security: disc;
+    color: inherit;
+    text-shadow: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-valores-ocultos='1'] .lumos-valor-oculto { transition: none; }
+}
