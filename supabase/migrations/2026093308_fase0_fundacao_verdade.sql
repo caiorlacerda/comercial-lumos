@@ -22,33 +22,39 @@ ALTER TABLE public.projects       ADD COLUMN IF NOT EXISTS production_value nume
 ALTER TABLE public.budget_versions ADD COLUMN IF NOT EXISTS contact_id uuid;
 
 -- FKs com NOT VALID: valem pra dados novos sem exigir limpeza do legado.
+-- LIÇÃO DO HOTFIX 2026093310: só cria a FK se a coluna ainda não tem NENHUMA
+-- (produção tinha FKs criadas fora do versionamento; duplicar a relação
+-- quebra os joins do app com PGRST201 — foi o sumiço dos custos no detalhe).
 DO $$
+DECLARE
+  alvo record;
+  n int;
 BEGIN
-  BEGIN
-    ALTER TABLE public.project_costs
-      ADD CONSTRAINT fk_project_costs_fornecedor
-      FOREIGN KEY (fornecedor_id) REFERENCES public.fornecedores(id) ON DELETE SET NULL NOT VALID;
-  EXCEPTION WHEN duplicate_object THEN NULL; END;
-  BEGIN
-    ALTER TABLE public.project_costs
-      ADD CONSTRAINT fk_project_costs_fornecedor_servico
-      FOREIGN KEY (fornecedor_servico_id) REFERENCES public.fornecedor_servicos(id) ON DELETE SET NULL NOT VALID;
-  EXCEPTION WHEN duplicate_object THEN NULL; END;
-  BEGIN
-    ALTER TABLE public.payables
-      ADD CONSTRAINT fk_payables_project
-      FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE SET NULL NOT VALID;
-  EXCEPTION WHEN duplicate_object THEN NULL; END;
-  BEGIN
-    ALTER TABLE public.reimbursements
-      ADD CONSTRAINT fk_reimbursements_project
-      FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE SET NULL NOT VALID;
-  EXCEPTION WHEN duplicate_object THEN NULL; END;
-  BEGIN
-    ALTER TABLE public.budget_versions
-      ADD CONSTRAINT fk_budget_versions_contact
-      FOREIGN KEY (contact_id) REFERENCES public.client_contacts(id) ON DELETE SET NULL NOT VALID;
-  EXCEPTION WHEN duplicate_object THEN NULL; END;
+  FOR alvo IN
+    SELECT * FROM (VALUES
+      ('fk_project_costs_fornecedor',         'project_costs',   'fornecedor_id',         'fornecedores',        'SET NULL'),
+      ('fk_project_costs_fornecedor_servico', 'project_costs',   'fornecedor_servico_id', 'fornecedor_servicos', 'SET NULL'),
+      ('fk_payables_project',                 'payables',        'project_id',            'projects',            'SET NULL'),
+      ('fk_reimbursements_project',           'reimbursements',  'project_id',            'projects',            'SET NULL'),
+      ('fk_budget_versions_contact',          'budget_versions', 'contact_id',            'client_contacts',     'SET NULL')
+    ) AS t(nome, tabela, coluna, ref, acao)
+  LOOP
+    SELECT count(*) INTO n
+    FROM pg_constraint c
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+    WHERE c.contype = 'f'
+      AND c.conrelid = ('public.' || alvo.tabela)::regclass
+      AND a.attname = alvo.coluna;
+
+    IF n = 0 THEN
+      EXECUTE format(
+        'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES public.%I(id) ON DELETE %s NOT VALID',
+        alvo.tabela, alvo.nome, alvo.coluna, alvo.ref, alvo.acao
+      );
+    ELSE
+      RAISE NOTICE 'coluna %.% já tem FK — nada a criar', alvo.tabela, alvo.coluna;
+    END IF;
+  END LOOP;
 END $$;
 
 -- ── 2. Travas de unicidade (puladas com aviso se houver duplicata) ────────
