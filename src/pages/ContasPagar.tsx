@@ -86,14 +86,23 @@ export default function ContasPagar() {
         supabase.from('projects').select('id, name, code').order('name', { ascending: true })
       ]);
 
+      // Verdade única: quando a conta a pagar já está VINCULADA a um custo ou
+      // reembolso (Fase 1), o custo espelhado sai da união pra mesma despesa
+      // não aparecer duas vezes. O pagamento sincroniza pelos gatilhos do banco.
+      const pagaveis = (payablesRes.data || []) as any[];
+      const custosCobertos = new Set(pagaveis.map(p => p.cost_id).filter(Boolean));
+      const reembolsosCobertos = new Set(pagaveis.map(p => p.reimbursement_id).filter(Boolean));
       const unifiedPayables = [
-        ...(payablesRes.data || []).map(p => ({ ...p, _type: 'payable' })),
-        ...(costsRes.data || []).map(c => ({ 
-          ...c, 
-          _type: 'project_cost', 
-          due_date: c.cost_date,
-          paid_at: c.paid_at || null
-        }))
+        ...pagaveis.map(p => ({ ...p, _type: 'payable' })),
+        ...(costsRes.data || [])
+          .filter((c: any) => !custosCobertos.has(c.id)
+            && !(c.reimbursement_id && reembolsosCobertos.has(c.reimbursement_id)))
+          .map(c => ({ 
+            ...c, 
+            _type: 'project_cost', 
+            due_date: c.payment_due_date || c.cost_date,
+            paid_at: c.paid_at || null
+          }))
       ].sort((a, b) => new Date(b.due_date || b.created_at).getTime() - new Date(a.due_date || a.created_at).getTime());
 
       setPayables(unifiedPayables);
@@ -190,11 +199,14 @@ export default function ContasPagar() {
         paid_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      if (item._type === 'project_cost') {
-        updateData.status = 'pago';
-        updateData.paid_by = profile?.id;
+      updateData.status = 'pago';
+      updateData.paid_by = profile?.id;
+      let { error } = await supabase.from(table).update(updateData).eq('id', item.id);
+      // Banco ainda sem a Fase 1 (payables sem status/paid_by): paga só com paid_at.
+      if (error && table === 'payables' && /status|paid_by|column/i.test(error.message)) {
+        ({ error } = await supabase.from('payables')
+          .update({ paid_at: updateData.paid_at, updated_at: updateData.updated_at }).eq('id', item.id));
       }
-      const { error } = await supabase.from(table).update(updateData).eq('id', item.id);
       if (error) throw error;
       fetchData();
     } catch (error: any) { toast.error(error.message); }
@@ -210,7 +222,7 @@ export default function ContasPagar() {
 
       const promises = [];
       if (payablesIds.length > 0) {
-        promises.push(supabase.from('payables').update({ paid_at: new Date().toISOString() }).in('id', payablesIds));
+        promises.push(supabase.from('payables').update({ paid_at: new Date().toISOString(), status: 'pago', paid_by: profile?.id || null }).in('id', payablesIds));
       }
       if (projectCostsIds.length > 0) {
         promises.push(supabase.from('project_costs').update({ 
