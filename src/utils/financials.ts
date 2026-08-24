@@ -33,6 +33,10 @@ export interface BudgetVersion {
   notes_client?: string | null;
   payment_terms?: string | null;
   validity_days?: number | null;
+  /** Como o cliente paga (Fase 2): gera as parcelas na aprovação. */
+  payment_plan?: 'a_vista' | 'entrada_saldo' | null;
+  payment_days?: number | null;
+  payment_entry_pct?: number | null;
   logistics_date?: string | null;
   logistics_time?: string | null;
   logistics_location?: string | null;

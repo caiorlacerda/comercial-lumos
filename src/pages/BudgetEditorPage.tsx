@@ -503,6 +503,9 @@ export default function BudgetEditorPage() {
             notes_internal: version.notes_internal,
             notes_client: version.notes_client,
             payment_terms: version.payment_terms,
+            payment_plan: version.payment_plan || null,
+            payment_days: version.payment_days ?? null,
+            payment_entry_pct: version.payment_entry_pct ?? null,
             validity_days: version.validity_days,
             logistics_date: version.logistics_date || null,
             logistics_time: version.logistics_time || null,
@@ -540,6 +543,9 @@ export default function BudgetEditorPage() {
             notes_internal: version.notes_internal,
             notes_client: version.notes_client,
             payment_terms: version.payment_terms,
+            payment_plan: version.payment_plan || null,
+            payment_days: version.payment_days ?? null,
+            payment_entry_pct: version.payment_entry_pct ?? null,
             validity_days: version.validity_days,
             logistics_date: version.logistics_date || null,
             logistics_time: version.logistics_time || null,
@@ -647,6 +653,9 @@ export default function BudgetEditorPage() {
           notes_internal: version.notes_internal,
           notes_client: version.notes_client,
           payment_terms: version.payment_terms,
+          payment_plan: version.payment_plan || null,
+          payment_days: version.payment_days ?? null,
+          payment_entry_pct: version.payment_entry_pct ?? null,
           validity_days: version.validity_days,
           logistics_date: version.logistics_date || null,
           logistics_time: version.logistics_time || null,
@@ -1576,6 +1585,49 @@ export default function BudgetEditorPage() {
                         </>
                       );
                     })()}
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Parcelamento</label>
+                    <Select
+                      disabled={isReadOnly}
+                      className="input-lumos w-full text-xs disabled:opacity-70"
+                      value={version?.payment_plan || 'a_vista'}
+                      onChange={(v) => {
+                        setVersion(vv => vv ? { ...vv, payment_plan: v as 'a_vista' | 'entrada_saldo' } : null);
+                        isDirty.current = true;
+                      }}
+                      options={[
+                        { value: 'a_vista', label: 'Valor cheio, uma parcela' },
+                        { value: 'entrada_saldo', label: 'Entrada no fechamento + saldo' },
+                      ]}
+                    />
+                    {/* Vira parcela de verdade, com vencimento, quando a proposta for aprovada. */}
+                    <div className="flex items-center gap-2 mt-2">
+                      {version?.payment_plan === 'entrada_saldo' && (
+                        <>
+                          <input
+                            type="number" min={1} max={99} disabled={isReadOnly}
+                            className="input-lumos w-16 h-9 text-xs disabled:opacity-70"
+                            value={version?.payment_entry_pct ?? 50}
+                            onChange={(e) => {
+                              setVersion(vv => vv ? { ...vv, payment_entry_pct: Number(e.target.value) || 50 } : null);
+                              isDirty.current = true;
+                            }}
+                          />
+                          <span className="text-[11px] text-lumos-text-secondary">% de entrada, saldo em</span>
+                        </>
+                      )}
+                      <input
+                        type="number" min={0} disabled={isReadOnly}
+                        className="input-lumos w-20 h-9 text-xs disabled:opacity-70"
+                        value={version?.payment_days ?? 30}
+                        onChange={(e) => {
+                          setVersion(vv => vv ? { ...vv, payment_days: Number(e.target.value) || 0 } : null);
+                          isDirty.current = true;
+                        }}
+                      />
+                      <span className="text-[11px] text-lumos-text-secondary">dias</span>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Validade (Dias)</label>

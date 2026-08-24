@@ -11,6 +11,20 @@ import { calcFinancials } from '@/utils/financials';
 export async function syncBudgetApprovalFlow(budgetId: string, optionalTotalAmount?: number) {
   if (!budgetId || budgetId === 'draft') return;
 
+  // FASE 2 DA VERDADE ÚNICA: a aprovação é uma função transacional no banco —
+  // projeto, parcelas (conforme a condição de pagamento da proposta) e registro
+  // financeiro nascem juntos ou nada nasce. O caminho antigo abaixo só roda se
+  // a função ainda não existir no banco (migration pendente), pra nenhuma
+  // aprovação ficar travada durante a transição.
+  const { data: rpc, error: rpcErr } = await supabase.rpc('aprovar_orcamento', { p_budget_id: budgetId });
+  if (!rpcErr && (rpc as { ok?: boolean } | null)?.ok) {
+    await sincronizarTarefasPadrao(budgetId);
+    return;
+  }
+  if (rpcErr && !/aprovar_orcamento|function|schema|404/i.test(rpcErr.message)) {
+    throw new Error('Erro ao aprovar o orçamento: ' + rpcErr.message);
+  }
+
   // 1. Fetch budget details (client_id, category, etc)
   const { data: budget, error: bErr } = await supabase
     .from('budgets')
@@ -153,49 +167,53 @@ export async function syncBudgetApprovalFlow(budgetId: string, optionalTotalAmou
     }
   }
 
-  // 5. Sync DEFAULT TASKS from template if project has no tasks (Idempotent and completely isolated)
-  try {
-    const { count, error: errCount } = await supabase
-      .from('project_tasks')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', projectId)
-      .is('deleted_at', null);   // tarefa na lixeira não conta como "projeto já tem tarefas"
-
-    if (errCount) {
-      console.warn('[syncBudgetApprovalFlow] Erro ao verificar contagem de tarefas:', errCount.message);
-    } else if (count === 0) {
-      const { data: templates, error: errTemplates } = await supabase
-        .from('project_task_templates')
-        .select('titulo, descricao, ordem, prioridade')
-        .eq('segmento', budget.category)
-        .order('ordem', { ascending: true });
-
-      if (errTemplates) {
-        console.warn('[syncBudgetApprovalFlow] Erro ao buscar templates de tarefas:', errTemplates.message);
-      } else if (templates && templates.length > 0) {
-        const tasksToInsert = templates.map((t) => ({
-          project_id: projectId,
-          titulo: t.titulo,
-          descricao: t.descricao,
-          status: 'na_fila',
-          prioridade: t.prioridade,
-          ordem: t.ordem,
-          data_inicio: null,
-          data_fim: null,
-        }));
-
-        const { error: errInsert } = await supabase
-          .from('project_tasks')
-          .insert(tasksToInsert);
-
-        if (errInsert) {
-          console.warn('[syncBudgetApprovalFlow] Erro ao inserir tarefas do template:', errInsert.message);
-        }
-      }
-    }
-  } catch (err) {
-    // Isolamento completo: qualquer falha na criação de tarefas não pode impedir a conclusão do fluxo principal
-    console.error('[syncBudgetApprovalFlow] Falha inesperada ao sincronizar tarefas padrão do projeto:', err);
-  }
+  await sincronizarTarefasPadrao(budgetId, projectId, budget.category);
 }
 
+
+
+/**
+ * Tarefas padrão do segmento: roda depois da aprovação, isolada de propósito —
+ * falha aqui nunca derruba a aprovação em si.
+ */
+async function sincronizarTarefasPadrao(budgetId: string, projectIdConhecido?: string | null, categoriaConhecida?: string | null) {
+  try {
+    let projectId = projectIdConhecido || null;
+    let categoria = categoriaConhecida || null;
+    if (!projectId || !categoria) {
+      const { data: b } = await supabase.from('budgets')
+        .select('category, project:projects(id)').eq('id', budgetId).maybeSingle();
+      projectId = projectId || (b?.project as { id?: string }[] | { id?: string } | null as any)?.id
+        || (Array.isArray(b?.project) ? b?.project[0]?.id : null) || null;
+      categoria = categoria || b?.category || null;
+    }
+    if (!projectId) {
+      const { data: p } = await supabase.from('projects').select('id').eq('budget_id', budgetId).maybeSingle();
+      projectId = p?.id || null;
+    }
+    if (!projectId || !categoria) return;
+
+    const { count } = await supabase.from('project_tasks')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', projectId).is('deleted_at', null);
+    if (count && count > 0) return;
+
+    const { data: templates } = await supabase.from('project_task_templates')
+      .select('titulo, descricao, ordem, prioridade')
+      .eq('segmento', categoria).order('ordem', { ascending: true });
+    if (!templates || templates.length === 0) return;
+
+    await supabase.from('project_tasks').insert(templates.map(t => ({
+      project_id: projectId,
+      titulo: t.titulo,
+      descricao: t.descricao,
+      status: 'na_fila',
+      prioridade: t.prioridade,
+      ordem: t.ordem,
+      data_inicio: null,
+      data_fim: null,
+    })));
+  } catch (err) {
+    console.error('[aprovacao] tarefas padrão não sincronizaram:', err);
+  }
+}
