@@ -9,7 +9,7 @@ import {
   Plus,
   Trash2,
   Copy,
-  FileDown,
+  FileDown, ListChecks,
   AlertCircle,
   MoreVertical,
   ChevronDown,
@@ -162,6 +162,7 @@ export default function BudgetEditorPage() {
   
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingPDFDetalhado, setIsGeneratingPDFDetalhado] = useState(false);
   const [isGeneratingOS, setIsGeneratingOS] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [approvalResponse, setApprovalResponse] = useState<{ approved: boolean; approver_name: string | null; approver_notes: string | null; created_at: string } | null>(null);
@@ -1014,16 +1015,17 @@ export default function BudgetEditorPage() {
     }
   };
 
-  const handleGenerateAndBackup = async (shouldBackup: boolean = true) => {
+  const handleGenerateAndBackup = async (shouldBackup: boolean = true, detalhado: boolean = false) => {
     if (!financials || !budget || !version) return;
     
-    setIsGeneratingPDF(true);
+    if (detalhado) setIsGeneratingPDFDetalhado(true); else setIsGeneratingPDF(true);
     try {
       const fileName = getPdfFileName(
         budget.code,
         budget.clients?.name || 'Cliente',
         budget.clients?.agency_name,
-        budget.project_name
+        budget.project_name,
+        detalhado ? 'DETALHADA_' : ''
       );
       
       const blob = await pdf(
@@ -1034,6 +1036,7 @@ export default function BudgetEditorPage() {
           items={items} 
           financials={financials} 
           userName={user?.user_metadata?.full_name || user?.email}
+          detalhado={detalhado}
         />
       ).toBlob();
 
@@ -1051,7 +1054,7 @@ export default function BudgetEditorPage() {
       // Backup if needed
       const isNegotiating = budget.status === 'em_negociacao';
 
-      if (shouldBackup && isNegotiating) {
+      if (shouldBackup && isNegotiating && !detalhado) {
         try {
           await uploadToDrive(blob, fileName);
           toast.success('PDF salvo no Google Drive ✓');
@@ -1064,6 +1067,7 @@ export default function BudgetEditorPage() {
       toast.error('Erro ao gerar o PDF da proposta.');
     } finally {
       setIsGeneratingPDF(false);
+      setIsGeneratingPDFDetalhado(false);
     }
   };
 
@@ -1862,6 +1866,17 @@ export default function BudgetEditorPage() {
                 >
                   <FileDown className="w-4 h-4" />
                   {isGeneratingPDF ? 'Preparando...' : 'Gerar Orçamento PDF'}
+                </button>
+
+                {/* Mesma proposta, com valor unitário e total de cada item. */}
+                <button
+                  onClick={() => handleGenerateAndBackup(false, true)}
+                  disabled={isGeneratingPDFDetalhado}
+                  title="Proposta com o valor de cada item listado"
+                  className="btn-secondary w-full py-4 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]"
+                >
+                  <ListChecks className="w-4 h-4" />
+                  {isGeneratingPDFDetalhado ? 'Preparando...' : 'PDF detalhado (valores por item)'}
                 </button>
 
                 <button

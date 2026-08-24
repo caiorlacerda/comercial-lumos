@@ -146,8 +146,8 @@ export default function FluxoDeCaixa() {
       setLoading(true);
       const [recRes, payRes, pcRes, reimbRes, lfRes, fcRes, clientsRes, catsRes, tsRes, projRes] = await Promise.all([
         supabase.from('receivables').select('id, received_amount, received_at, status').not('received_at', 'is', null),
-        supabase.from('payables').select('id, amount, paid_at, description, category').not('paid_at', 'is', null),
-        supabase.from('project_costs').select('id, amount, paid_at, description, budget_id').not('paid_at', 'is', null),
+        supabase.from('payables').select('*').not('paid_at', 'is', null),
+        supabase.from('project_costs').select('id, amount, paid_at, description, budget_id, reimbursement_id').not('paid_at', 'is', null),
         supabase.from('reimbursements').select('id, amount, paid_at, status').not('paid_at', 'is', null).eq('status', 'pago'),
         supabase.from('lancamentos_financeiros').select('*').order('data', { ascending: true }),
         supabase.from('fixed_costs').select('amount').eq('is_active', true),
@@ -221,7 +221,15 @@ export default function FluxoDeCaixa() {
     });
 
     // Payables → saídas
+    // VERDADE ÚNICA (Fase 1): com pagamentos sincronizados entre custo,
+    // conta a pagar e reembolso, cada despesa é contada UMA vez:
+    // · custo de projeto pago conta sempre (é o mestre);
+    // · conta a pagar conta só quando NÃO espelha custo nem reembolso;
+    // · reembolso pago conta só quando não tem projeto (interno) — e como o
+    //   payable interno espelha o reembolso, ele também é excluído acima.
+    const reembolsosComCusto = new Set(projectCosts.map((pc: any) => pc.reimbursement_id).filter(Boolean));
     payables.forEach(p => {
+      if ((p as any).cost_id || (p as any).reimbursement_id) return; // espelho: quem conta é a origem
       const d = p.paid_at?.slice(0, 10);
       if (!d || !d.startsWith(yearStr)) return;
       const m = parseInt(d.slice(5, 7)) - 1;
@@ -252,8 +260,9 @@ export default function FluxoDeCaixa() {
       });
     });
 
-    // Reimbursements → saídas
+    // Reimbursements → saídas (só os internos, sem custo espelho no projeto)
     reimbursements.forEach(r => {
+      if (reembolsosComCusto.has(r.id)) return; // já contado como custo de projeto
       const d = r.paid_at?.slice(0, 10);
       if (!d || !d.startsWith(yearStr)) return;
       const m = parseInt(d.slice(5, 7)) - 1;

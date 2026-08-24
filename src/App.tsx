@@ -35,6 +35,10 @@ const Mural = lazy(() => import('@/pages/Mural'));
 
 // Financeiro
 const FinanceiroDashboard = lazy(() => import('@/pages/FinanceiroDashboard'));
+const FinanceiroMovimentacoes = lazy(() => import('@/pages/FinanceiroMovimentacoes'));
+const FinanceiroNotas = lazy(() => import('@/pages/FinanceiroNotas'));
+const FinanceiroContas = lazy(() => import('@/pages/FinanceiroContas'));
+const FinanceiroMetas = lazy(() => import('@/pages/FinanceiroMetas'));
 const ContasPagar = lazy(() => import('@/pages/ContasPagar'));
 const ContasReceber = lazy(() => import('@/pages/ContasReceber'));
 const Reembolso = lazy(() => import('@/pages/Reembolso'));
@@ -558,25 +562,48 @@ function AppContent() {
             } 
           />
           <Route 
-            path="/financeiro/contas-pagar" 
+            path="/financeiro/movimentacoes" 
             element={
               <AuthWrapper>
                 <PermissionGuard permission="financeiro_admin">
-                  <ContasPagar />
+                  <FinanceiroMovimentacoes />
                 </PermissionGuard>
               </AuthWrapper>
             } 
           />
           <Route 
-            path="/financeiro/contas-receber" 
+            path="/financeiro/notas" 
             element={
               <AuthWrapper>
                 <PermissionGuard permission="financeiro_admin">
-                  <ContasReceber />
+                  <FinanceiroNotas />
                 </PermissionGuard>
               </AuthWrapper>
             } 
           />
+          <Route 
+            path="/financeiro/contas" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <FinanceiroContas />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          <Route 
+            path="/financeiro/metas" 
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="financeiro_admin">
+                  <FinanceiroMetas />
+                </PermissionGuard>
+              </AuthWrapper>
+            } 
+          />
+          {/* Endereços antigos de contas seguem funcionando na página nova */}
+          <Route path="/financeiro/contas-pagar" element={<Navigate to="/financeiro/contas?tab=pagar" replace />} />
+          <Route path="/financeiro/contas-receber" element={<Navigate to="/financeiro/contas?tab=receber" replace />} />
           <Route 
             path="/financeiro/reembolso" 
             element={
