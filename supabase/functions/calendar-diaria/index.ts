@@ -83,7 +83,10 @@ serve(async (req) => {
     if (!d) return json({ error: 'diária não encontrada' }, 404)
     if (!d.data) return json({ ok: true, skipped: 'sem data, nada a agendar' })
 
-    const { data: proj } = await db.from('projects').select('name, code').eq('id', d.project_id).maybeSingle()
+    const { data: proj } = await db.from('projects')
+      .select('name, code, client:clients(name)')
+      .eq('id', d.project_id).maybeSingle()
+    const cliente = (proj?.client as { name?: string } | null)?.name || null
 
     // Com horário vira compromisso com hora; sem, evento de dia inteiro
     // (end de dia inteiro é exclusivo, por isso o +1 dia).
@@ -93,7 +96,9 @@ serve(async (req) => {
     const comHora = !!(hIni && hFim)
     const fimDia = new Date(new Date(d.data + 'T12:00:00').getTime() + 86400000).toISOString().slice(0, 10)
     const evento = {
-      summary: `🎬 ${d.nome}${proj?.name ? ` — ${proj.name}` : ''}`,
+      // Padrão do time: CLIENTE | NOME DO PROJETO | NOME DA DIÁRIA.
+      // Parte que não existir simplesmente sai, sem deixar barra sobrando.
+      summary: '🎬 ' + [cliente, proj?.name, d.nome].filter(Boolean).join(' | '),
       description:
         `Diária de gravação${proj?.code ? ` · ${proj.code}` : ''}\n` +
         `Duração prevista: ${Number(d.duracao_horas).toLocaleString('pt-BR')}h\n` +
