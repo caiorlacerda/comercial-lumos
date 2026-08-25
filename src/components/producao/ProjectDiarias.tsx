@@ -250,7 +250,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
       {diarias.length === 0 ? (
         <div className="card p-8 text-center">
           <CalendarDays className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" />
-          <p className="text-sm font-bold">Nenhuma diária planejada.</p>
+          <p className="text-sm font-bold text-lumos-text-primary">Nenhuma diária planejada.</p>
           <p className="text-xs text-lumos-text-secondary mt-1 max-w-md mx-auto">
             Cadastre as diárias com data e local: a previsão do tempo aparece sozinha, e a etapa "Diárias planejadas" do Status marca automaticamente.
           </p>

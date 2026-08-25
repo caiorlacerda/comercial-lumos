@@ -161,7 +161,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-lumos-text-primary p-6 text-center">
         <div className="bg-red-500/10 border border-red-500 p-6 rounded-lumos max-w-md">
           <h2 className="text-xl font-bold mb-2">Erro de Configuração</h2>
           <p className="text-lumos-text-secondary text-sm mb-4">
@@ -188,7 +188,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   }
   if (user && profileChecked && !profile) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-lumos-text-primary p-6 text-center">
         <div className="bg-yellow-500/10 border border-yellow-500 p-8 rounded-lumos max-w-md">
           <h2 className="text-xl font-bold mb-2">Acesso Pendente</h2>
           <p className="text-lumos-text-secondary text-sm mb-6">
@@ -206,7 +206,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
 
   if (!loading && profile?.status === 'inativo') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-white p-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg text-lumos-text-primary p-6 text-center">
         <div className="bg-red-500/10 border border-red-500 p-8 rounded-lumos max-w-md">
           <h2 className="text-xl font-bold mb-2">Acesso Bloqueado</h2>
           <p className="text-lumos-text-secondary text-sm mb-6">

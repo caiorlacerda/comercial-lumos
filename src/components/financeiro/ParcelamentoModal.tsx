@@ -103,7 +103,7 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
           <>
             {resumo && (
               <div className="rounded-lumos border border-lumos-border p-3 text-[12.5px] space-y-1">
-                <div className="flex justify-between"><span className="text-lumos-text-secondary">Valor do projeto</span><span className="font-bold">{brl(resumo.total)}</span></div>
+                <div className="flex justify-between"><span className="text-lumos-text-secondary">Valor do projeto</span><span className="font-bold text-lumos-text-primary">{brl(resumo.total)}</span></div>
                 {resumo.recebido > 0 && (
                   <div className="flex justify-between"><span className="text-lumos-text-secondary">Já recebido (fica intacto)</span><span className="font-bold text-green-500">{brl(resumo.recebido)}</span></div>
                 )}
@@ -159,11 +159,11 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
                 <p className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary">Vai ficar assim</p>
                 {plano === 'entrada_saldo' ? (
                   <>
-                    <div className="flex justify-between"><span>Entrada</span><span className="font-bold">{brl(entrada)} · {brData(base)}</span></div>
-                    <div className="flex justify-between"><span>Saldo</span><span className="font-bold">{brl(saldo - entrada)} · {brData(somaDias(base, dias))}</span></div>
+                    <div className="flex justify-between text-lumos-text-primary"><span>Entrada</span><span className="font-bold">{brl(entrada)} · {brData(base)}</span></div>
+                    <div className="flex justify-between text-lumos-text-primary"><span>Saldo</span><span className="font-bold">{brl(saldo - entrada)} · {brData(somaDias(base, dias))}</span></div>
                   </>
                 ) : (
-                  <div className="flex justify-between"><span>Parcela única</span><span className="font-bold">{brl(saldo)} · {brData(somaDias(base, dias))}</span></div>
+                  <div className="flex justify-between text-lumos-text-primary"><span>Parcela única</span><span className="font-bold">{brl(saldo)} · {brData(somaDias(base, dias))}</span></div>
                 )}
               </div>
             )}
