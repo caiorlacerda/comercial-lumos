@@ -148,6 +148,12 @@ html, body {
 /* Bloqueia também o gesto de "voltar/avançar" por swipe lateral no Safari iOS */
 body {
   overscroll-behavior: contain;
+  /* A cor herdada TEM que vir do token do tema.
+     O @apply text-lumos-text-primary do @layer base congelava o branco do
+     tailwind.config.js (que ainda guarda a paleta escura antiga), então todo
+     texto sem classe de cor sumia no tema claro — o caso do bloco "vai ficar
+     assim" no modal de parcelamento. Aqui a herança volta a seguir o tema. */
+  color: var(--color-lumos-text-primary);
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }

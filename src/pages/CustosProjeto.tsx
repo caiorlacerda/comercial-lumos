@@ -145,11 +145,18 @@ export default function CustosProjeto() {
     'custos_projeto', { colunas: COLUNAS_PADRAO }
   );
   const colunasVisiveis = COLUNAS.filter(c => (viewPrefs.colunas || COLUNAS_PADRAO).includes(c.key));
-  const toggleColuna = (key: string) => {
+  const toggleColuna = async (key: string) => {
     const atuais = viewPrefs.colunas || COLUNAS_PADRAO;
     const novas = atuais.includes(key) ? atuais.filter((k: string) => k !== key) : [...atuais, key];
     if (!novas.length) return; // pelo menos uma coluna tem que sobrar
-    salvarPrefs({ colunas: COLUNAS.filter(c => novas.includes(c.key)).map(c => c.key) });
+    const r = await salvarPrefs({ colunas: COLUNAS.filter(c => novas.includes(c.key)).map(c => c.key) });
+    // Antes isso falhava calado e a escolha voltava ao padrão no próximo login,
+    // sem ninguém entender por quê. Agora a falha aparece.
+    if (r && !r.ok) {
+      toast.error(r.erro === 'sessão expirada'
+        ? 'Sua sessão expirou, entre de novo pra escolha de colunas ficar salva.'
+        : `Não deu pra salvar a escolha de colunas: ${r.erro}`);
+    }
   };
 
   const [groupByClient, setGroupByClient] = useState(false);

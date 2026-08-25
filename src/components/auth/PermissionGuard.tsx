@@ -11,7 +11,7 @@ interface PermissionGuardProps {
  * Tela exibida quando o usuário está logado mas sua conta foi desativada
  */
 export const AcessoBloqueado = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] text-white p-6 text-center animate-in fade-in duration-500">
+  <div className="flex flex-col items-center justify-center min-h-[60vh] text-lumos-text-primary p-6 text-center animate-in fade-in duration-500">
     <div className="bg-red-500/10 border border-red-500/20 p-8 rounded-lumos max-w-md backdrop-blur-sm">
       <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
         <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -30,7 +30,7 @@ export const AcessoBloqueado = () => (
  * Tela exibida quando o usuário tenta acessar uma rota sem a permissão necessária
  */
 export const SemPermissao = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] text-white p-6 text-center animate-in fade-in duration-500">
+  <div className="flex flex-col items-center justify-center min-h-[60vh] text-lumos-text-primary p-6 text-center animate-in fade-in duration-500">
     <div className="bg-yellow-500/10 border border-yellow-500/20 p-8 rounded-lumos max-w-md backdrop-blur-sm">
       <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
         <svg className="w-8 h-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

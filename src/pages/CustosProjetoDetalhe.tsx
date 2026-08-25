@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { formatBudgetCode } from '@/utils/formatters';
-import { Archive, ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, Pencil, RotateCcw, TrendingUp } from 'lucide-react';
+import { Archive, ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, CalendarClock, Pencil, RotateCcw, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
+import ParcelamentoModal from '@/components/financeiro/ParcelamentoModal';
 import EncerrarProjetoModal from '@/components/financeiro/EncerrarProjetoModal';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
@@ -36,6 +37,7 @@ export default function CustosProjetoDetalhe() {
   const [project, setProject] = useState<any>(null);
   const [finRegistro, setFinRegistro] = useState<any>(null);
   const [encerrandoProj, setEncerrandoProj] = useState(false);
+  const [parcelando, setParcelando] = useState(false);
   const [costs, setCosts] = useState<any[]>([]);
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -1419,12 +1421,25 @@ export default function CustosProjetoDetalhe() {
                   <Target className="w-4 h-4 text-lumos-yellow" /> Dados Financeiros
                 </h3>
                 {!isEditingFinance ? (
-                  <button
-                    onClick={() => setIsEditingFinance(true)}
-                    className="text-xs text-lumos-yellow hover:underline font-bold flex items-center gap-1 uppercase tracking-wider text-right"
-                  >
-                    <Pencil className="w-3.5 h-3.5 inline mr-1" /> Editar
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Combinado de pagamento costuma vir depois do fechamento:
+                        é aqui, no financeiro, que ele vira parcela de verdade. */}
+                    {project?.budget_id && (
+                      <button
+                        onClick={() => setParcelando(true)}
+                        title="Definir como o cliente vai pagar (vira parcela com vencimento)"
+                        className="text-xs text-lumos-text-secondary hover:text-lumos-yellow font-bold flex items-center gap-1 uppercase tracking-wider"
+                      >
+                        <CalendarClock className="w-3.5 h-3.5" /> Parcelamento
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setIsEditingFinance(true)}
+                      className="text-xs text-lumos-yellow hover:underline font-bold flex items-center gap-1 uppercase tracking-wider text-right"
+                    >
+                      <Pencil className="w-3.5 h-3.5 inline mr-1" /> Editar
+                    </button>
+                  </div>
                 ) : (
                   <button
                     onClick={() => {
@@ -1754,6 +1769,15 @@ export default function CustosProjetoDetalhe() {
       )}
 
       {/* Batch Delete Confirmation Modal */}
+      {parcelando && project?.budget_id && (
+        <ParcelamentoModal
+          budgetId={project.budget_id}
+          nomeProjeto={project.name}
+          onClose={() => setParcelando(false)}
+          onDone={() => fetchProjectData()}
+        />
+      )}
+
       {encerrandoProj && finRegistro && (
         <EncerrarProjetoModal
           proj={{
