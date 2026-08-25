@@ -96,13 +96,17 @@ export function useViewPrefs<T extends Record<string, unknown>>(viewKey: string,
       uid = sess?.session?.user?.id ?? null;
       uidRef.current = uid;
     }
-    if (!uid) return;
+    if (!uid) return { ok: false, erro: 'sessão expirada' };
     gravarCache(viewKey, uid, completo);
 
     const { error } = await supabase.from('user_view_prefs').upsert({
       user_id: uid, view_key: viewKey, prefs: completo, updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,view_key' });
-    if (error) console.error(`[useViewPrefs:${viewKey}] não deu pra salvar a preferência:`, error.message);
+    if (error) {
+      console.error(`[useViewPrefs:${viewKey}] não deu pra salvar a preferência:`, error.message);
+      return { ok: false, erro: error.message };
+    }
+    return { ok: true };
   }, [viewKey, aplicar]);
 
   return { prefs, salvar, carregado };
