@@ -14,12 +14,13 @@ import {
   FileDown,
   ChevronUp,
   ChevronDown,
-  Pencil,
+  CalendarClock, Pencil,
   X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import ParcelamentoModal from '@/components/financeiro/ParcelamentoModal';
 import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -55,6 +56,7 @@ export default function ContasReceber() {
   const [clients, setClients] = useState<any[]>([]);
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [parcelando, setParcelando] = useState<{ budgetId: string; nome?: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newReceivableData, setNewReceivableData] = useState({
     description: '',
@@ -503,6 +505,16 @@ export default function ContasReceber() {
       <td className="px-6 py-4 text-sm text-lumos-text-secondary whitespace-nowrap">{fmtDate(r.received_at)}</td>
       <td className="px-6 py-4 text-right">
         <div className="flex justify-end items-center gap-1" onClick={e => e.stopPropagation()}>
+          {r.budget_id && (
+            <button
+              onClick={() => setParcelando({ budgetId: r.budget_id, nome: r.budget?.project_name || r.description })}
+              title={r.due_date ? 'Refazer o parcelamento deste projeto' : 'Definir o parcelamento deste projeto'}
+              className={clsx('p-2 rounded transition-colors',
+                r.due_date ? 'text-lumos-text-secondary hover:text-lumos-yellow' : 'text-lumos-yellow bg-lumos-yellow/10')}
+            >
+              <CalendarClock className="w-4 h-4" />
+            </button>
+          )}
           <button onClick={() => openEdit(r)} title="Editar" className="p-2 text-lumos-text-secondary hover:text-lumos-yellow rounded transition-colors"><Pencil className="w-4 h-4" /></button>
           {r.budget_id && <Link to={`/orcamentos/${r.budget_id}`} title="Ver orçamento" className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary rounded"><FileText className="w-4 h-4" /></Link>}
           <button onClick={() => { setDeletingId(r.id); setIsDeleteModalOpen(true); }} title="Excluir" className="p-2 text-lumos-text-secondary hover:text-red-500 rounded transition-colors">
@@ -938,6 +950,15 @@ export default function ContasReceber() {
             </div>
           </form>
         </div>
+      )}
+
+      {parcelando && (
+        <ParcelamentoModal
+          budgetId={parcelando.budgetId}
+          nomeProjeto={parcelando.nome}
+          onClose={() => setParcelando(null)}
+          onDone={() => fetchReceivables(true)}
+        />
       )}
 
       <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Excluir Recebível">
