@@ -75,7 +75,13 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   // Depois que o menu monta, mede a altura REAL e encaixa na tela. Estimar a
   // altura não funciona (o menu muda de tamanho conforme a etapa do vídeo), e
   // era isso que fazia o dropdown vazar pro rodapé.
+  // Guarda o menu aberto: o fechamento por rolagem precisa saber diferenciar
+  // "a página rolou" (aí o menu descola do botão e tem que fechar) de "a pessoa
+  // rolou a lista DENTRO do menu" (aí não pode fechar, senão não dá pra chegar
+  // no item lá embaixo).
+  const menuElRef = useRef<HTMLDivElement | null>(null);
   const fitMenu = useCallback((el: HTMLDivElement | null) => {
+    menuElRef.current = el;
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.bottom > window.innerHeight - 8) {
@@ -409,12 +415,21 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     if (!menuFor && !stackMenuFor) return;
     const close = () => { setMenuFor(null); setStackMenuFor(null); };
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    // Rolagem de dentro do próprio menu não fecha nada. O ouvinte é de captura
+    // (pega a rolagem de qualquer elemento), então sem essa checagem a lista de
+    // "Empilhar como versão de" se fechava no primeiro deslize e ninguém
+    // conseguia alcançar um vídeo que estivesse mais embaixo.
+    const onScroll = (e: Event) => {
+      const alvo = e.target as Node | null;
+      if (alvo && menuElRef.current?.contains(alvo)) return;
+      close();
+    };
     document.addEventListener('keydown', onEsc);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', close);
     return () => {
       document.removeEventListener('keydown', onEsc);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', close);
     };
   }, [menuFor, stackMenuFor]);
