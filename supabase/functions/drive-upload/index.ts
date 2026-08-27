@@ -69,6 +69,35 @@ serve(async (req) => {
   // esbarrar em tempo/memória daqui. O caminho antigo (corpo por aqui) continua
   // valendo como plano B.
   const initOnly = url.searchParams.get('mode') === 'init'
+
+  // mode=probe: o navegador manda os bytes direto pro Google, e o Google NÃO
+  // devolve cabeçalho de CORS na resposta da sessão. Resultado: o upload chega
+  // inteiro, mas o navegador enxerga "erro de rede" (status 0). Quem confiava
+  // nesse erro reenviava o arquivo pela função e o projeto ficava com DUAS
+  // cópias do mesmo vídeo, que é a "versão 2" que aparecia sozinha.
+  // Aqui perguntamos ao Google, do servidor (sem CORS no caminho), quantos
+  // bytes ele realmente recebeu. É a consulta de status do upload resumável.
+  if (url.searchParams.get('mode') === 'probe') {
+    let uploadUrl = '', size = 0
+    try { const b = await req.json(); uploadUrl = b?.upload_url ?? ''; size = Number(b?.size ?? 0) } catch (_) { /* corpo inválido */ }
+    if (!uploadUrl || !size) return json({ error: 'upload_url e size obrigatórios' }, 400)
+    if (!/^https:\/\/[a-z0-9.-]*googleapis\.com\//i.test(uploadUrl)) return json({ error: 'upload_url inválida' }, 400)
+    const st = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Range': `bytes */${size}`, 'Content-Length': '0' },
+    })
+    // 200/201 = o Google já tem o arquivo inteiro. 308 = faltou pedaço.
+    if (st.status === 200 || st.status === 201) {
+      const file = await st.json().catch(() => ({}))
+      return json({ ok: true, complete: true, id: file.id ?? null })
+    }
+    if (st.status === 308) {
+      const r = st.headers.get('range') // ex.: "bytes=0-12345"
+      const recebido = r ? Number(r.split('-')[1] ?? 0) + 1 : 0
+      return json({ ok: true, complete: false, received: recebido })
+    }
+    return json({ ok: true, complete: false, received: 0, status: st.status })
+  }
   const contentLength = initOnly
     ? (url.searchParams.get('size') || null)
     : req.headers.get('content-length')
