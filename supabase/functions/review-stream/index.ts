@@ -35,6 +35,61 @@ async function googleToken(): Promise<string> {
   return data.access_token
 }
 
+// --- Cache da resolução token → arquivo ----------------------------------
+// Tocar um vídeo dispara DEZENAS de requisições de trecho, e cada uma refazia
+// as MESMAS três consultas ao banco antes de pedir o primeiro byte ao Drive.
+// Era o grosso dos ~2s de espera que a equipe sentia como "buffer ruim".
+// Guardamos o resultado por pouco tempo: 15s é curto o bastante para uma versão
+// nova aparecer quase na hora e longo o bastante para sumir com o custo durante
+// a reprodução.
+type Resolvido = { fileId: string; origId: string; mime: string; fileName: string; allowDownload: boolean; useProxy: boolean }
+const TTL_MS = 15_000
+const cacheLink = new Map<string, { valor: Resolvido | null; exp: number }>()
+
+async function resolverToken(token: string, wantsDownload: boolean): Promise<Resolvido | null> {
+  const chave = `${token}|${wantsDownload ? 'dl' : 'st'}`
+  const hit = cacheLink.get(chave)
+  if (hit && hit.exp > Date.now()) return hit.valor
+
+  const guardar = (valor: Resolvido | null) => {
+    cacheLink.set(chave, { valor, exp: Date.now() + TTL_MS })
+    if (cacheLink.size > 500) for (const [k, v] of cacheLink) { if (v.exp < Date.now()) cacheLink.delete(k) }
+    return valor
+  }
+
+  const { data: link } = await db.from('review_links').select('video_version_id, group_id, allow_download').eq('token', token).eq('active', true).maybeSingle()
+  if (!link) return guardar(null)
+
+  // O link segue o GRUPO: resolve sempre a versão mais recente (maior versão).
+  // Uma consulta só resolve os dois casos — antes eram duas.
+  let version: any = null
+  if (link.group_id) {
+    const { data } = await db.from('video_versions')
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status')
+      .eq('group_id', link.group_id).order('versao', { ascending: false }).limit(1).maybeSingle()
+    version = data
+  }
+  if (!version) {
+    const { data } = await db.from('video_versions')
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status')
+      .eq('id', link.video_version_id).maybeSingle()
+    version = data
+  }
+  if (!version?.drive_file_id) return guardar(null)
+
+  // Se há um proxy MP4 pronto (transcode do ProRes/.mov), reproduz ele. O
+  // download continua entregando o arquivo original.
+  const useProxy = !!version.proxy_file_id && version.transcode_status === 'ready' && !wantsDownload
+  return guardar({
+    fileId: useProxy ? version.proxy_file_id : version.drive_file_id,
+    origId: version.drive_file_id,
+    mime: version.mime_type || '',
+    fileName: version.file_name || '',
+    allowDownload: !!link.allow_download,
+    useProxy,
+  })
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -44,25 +99,20 @@ serve(async (req) => {
 
   const wantsDownload = url.searchParams.get('download') === '1'
 
-  // Token → arquivo do Drive (só links ativos). O link segue o GRUPO: resolve
-  // sempre a versão mais recente (maior versão) do grupo.
-  const { data: link } = await db.from('review_links').select('*').eq('token', token).eq('active', true).maybeSingle()
-  if (!link) return new Response('invalid token', { status: 403, headers: CORS })
+  const t0 = Date.now()
+  const alvo = await resolverToken(token, wantsDownload)
+  const msResolver = Date.now() - t0
+  if (!alvo) return new Response('invalid token', { status: 403, headers: CORS })
 
-  let versionId = link.video_version_id
-  if (link.group_id) {
-    const { data: cur } = await db.from('video_versions').select('id').eq('group_id', link.group_id).order('versao', { ascending: false }).limit(1).maybeSingle()
-    if (cur?.id) versionId = cur.id
-  }
-  const { data: version } = await db.from('video_versions').select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status').eq('id', versionId).maybeSingle()
-  if (!version?.drive_file_id) return new Response('not found', { status: 404, headers: CORS })
+  const version = { mime_type: alvo.mime, file_name: alvo.fileName }
+  const link = { allow_download: alvo.allowDownload }
+  const useProxy = alvo.useProxy
+  const fileId = alvo.fileId
 
-  // Se há um proxy MP4 pronto (transcode do ProRes/.mov), reproduz ele. O
-  // download continua entregando o arquivo original.
-  const useProxy = !!version.proxy_file_id && version.transcode_status === 'ready' && !wantsDownload
-  const fileId = useProxy ? version.proxy_file_id : version.drive_file_id
-
+  const t1 = Date.now()
   const gToken = await googleToken()
+  const msToken = Date.now() - t1
+  const t2 = Date.now()
   const range = req.headers.get('range')
   const driveRes = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
@@ -80,6 +130,10 @@ serve(async (req) => {
   const cr = driveRes.headers.get('content-range'); if (cr) headers.set('Content-Range', cr)
   const cl = driveRes.headers.get('content-length'); if (cl) headers.set('Content-Length', cl)
   headers.set('Cache-Control', 'private, max-age=3600')
+  // Deixa o custo de cada etapa visível no DevTools (aba Network → Timing) e
+  // medível de fora, pra ninguém precisar adivinhar de novo onde o tempo foi.
+  headers.set('Server-Timing', `resolver;dur=${msResolver}, gtoken;dur=${msToken}, drive;dur=${Date.now() - t2}`)
+  headers.set('Access-Control-Expose-Headers', 'content-range, accept-ranges, content-length, server-timing')
 
   // Download direto (só se o link permitir): força "salvar como" com o nome real
   if (wantsDownload && link.allow_download) {

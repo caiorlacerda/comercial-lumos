@@ -304,6 +304,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     // Caminho principal: pedimos só o endereço da sessão e mandamos os bytes
     // direto pro Google. Assim o arquivo não atravessa a nossa função, que é o
     // que trava com vídeo grande e com vários ao mesmo tempo.
+    let sessao: string | null = null;
     try {
       const r = await fetch(`${base}&mode=init&size=${file.size}`, {
         method: 'POST',
@@ -311,12 +312,30 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       });
       const j = await r.json();
       if (!r.ok || !j?.upload_url) throw Object.assign(new Error(j?.error || 'init'), { status: r.status });
-      await put(j.upload_url, file, { 'Content-Type': mime }, 'PUT', onPct);
+      sessao = j.upload_url as string;
+      await put(sessao, file, { 'Content-Type': mime }, 'PUT', onPct);
       return;
     } catch (e: any) {
       // Se o Google não aceitou o envio direto do navegador, cai no caminho
       // antigo (bytes por dentro da nossa função). Mais lento, mas funciona.
       if (e?.status !== 0) throw e;
+    }
+
+    // Status 0 quase nunca quer dizer que o arquivo não subiu: o Google não
+    // devolve CORS na resposta da sessão, então o navegador cega mesmo quando
+    // recebeu tudo. Antes a gente reenviava por reflexo e o projeto ficava com
+    // duas cópias do mesmo vídeo. Agora perguntamos ao Google, pelo servidor,
+    // se ele já tem o arquivo inteiro — e só reenviamos se faltou pedaço.
+    if (sessao) {
+      try {
+        const p = await fetch(`${base}&mode=probe`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, apikey: anon, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ upload_url: sessao, size: file.size }),
+        });
+        const pj = await p.json();
+        if (p.ok && pj?.complete) { onPct(1); return; }
+      } catch { /* não deu pra confirmar: segue pro plano B */ }
     }
     await put(base, file, { Authorization: `Bearer ${token}`, apikey: anon, 'Content-Type': mime }, 'POST', onPct);
   };
