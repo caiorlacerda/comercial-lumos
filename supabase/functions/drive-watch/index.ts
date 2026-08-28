@@ -306,6 +306,145 @@ async function backfillMeta(limit = 8): Promise<number> {
 }
 
 // Renomeia o arquivo no Drive + espelha o file_name no banco.
+// --- Faxina das cópias duplicadas -----------------------------------------
+// Duas linhas do MESMO grupo, com o MESMO nome de arquivo e criadas com pouco
+// tempo de diferença, são o mesmo upload contado duas vezes. Fica a mais
+// antiga; a mais nova sai de cena.
+//
+// Nada é apagado do Drive: o arquivo repetido é movido para 99_DUPLICADOS na
+// raiz do drive compartilhado, de onde dá pra recuperar se algo escapar.
+// E a duplicata só sai se não tiver nada preso nela — comentário, link de
+// revisão ou cópia aprovada. Se tiver, ela é preservada e aparece no relatório.
+const JANELA_MS = 120_000
+
+async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
+  const { data: todas } = await db.from('video_versions')
+    .select('id, project_id, group_id, versao, file_name, drive_file_id, approved_file_id, status, created_at, size_bytes')
+    .order('created_at', { ascending: true })
+
+  // Junta por grupo + nome do arquivo e acha os pares coladinhos no tempo.
+  const porChave = new Map<string, any[]>()
+  for (const v of todas || []) {
+    const k = `${v.group_id}|${v.file_name}`
+    if (!porChave.has(k)) porChave.set(k, [])
+    porChave.get(k)!.push(v)
+  }
+  const candidatas: any[] = []
+  for (const vs of porChave.values()) {
+    for (let i = 1; i < vs.length; i++) {
+      const dt = new Date(vs[i].created_at).getTime() - new Date(vs[i - 1].created_at).getTime()
+      if (dt >= 0 && dt <= JANELA_MS) candidatas.push({ ...vs[i], ficou: vs[i - 1].id })
+    }
+  }
+  if (!candidatas.length) return { encontradas: 0, movidas: 0, preservadas: [] }
+
+  // Trava de segurança: o que tem histórico preso não sai.
+  const ids = candidatas.map(c => c.id)
+  const { data: comentarios } = await db.from('review_comments').select('video_version_id').in('video_version_id', ids)
+  const { data: links } = await db.from('review_links').select('video_version_id').in('video_version_id', ids)
+  const presos = new Set([
+    ...(comentarios || []).map((c: any) => c.video_version_id),
+    ...(links || []).map((l: any) => l.video_version_id),
+  ])
+
+  // As duas cópias são o MESMO upload, byte a byte. Então comentário e link que
+  // caíram na cópia repetida valem igual na que fica: os tempos batem, o vídeo
+  // é o mesmo. Em vez de abandonar essas, a gente transfere o histórico para a
+  // gêmea e segue. A conferência de tamanho é a garantia de que são de fato o
+  // mesmo arquivo, e não um corte diferente subido com o mesmo nome.
+  const porId = new Map((todas || []).map((v: any) => [v.id, v]))
+  const mesmoArquivo = (c: any) => {
+    const ficou = porId.get(c.ficou)
+    return ficou && Number(ficou.size_bytes || -1) === Number(c.size_bytes || -2)
+  }
+
+  // Quando foi a cópia repetida que acabou sendo aprovada, a aprovação (e o
+  // status) passam para a gêmea. O arquivo em 02_APROVADO não se mexe: só muda
+  // qual linha responde por ele. Se a gêmea já tiver a própria aprovação, aí
+  // são coisas distintas e a gente não encosta.
+  const podeHerdarAprovacao = (c: any) => {
+    if (!c.approved_file_id) return true
+    const ficou = porId.get(c.ficou)
+    return !!ficou && !ficou.approved_file_id && mesmoArquivo(c)
+  }
+
+  const seguras = candidatas.filter(c => (!presos.has(c.id) || mesmoArquivo(c)) && podeHerdarAprovacao(c))
+  const comHistorico = seguras.filter(c => presos.has(c.id))
+  const comAprovacao = seguras.filter(c => !!c.approved_file_id)
+  const preservadas = candidatas.filter(c => !seguras.includes(c))
+    .map(c => ({
+      arquivo: c.file_name,
+      motivo: c.approved_file_id ? 'a gêmea também tem aprovação própria, são vídeos distintos'
+        : 'tem histórico e o tamanho não bate com a gêmea, pode ser outro corte',
+    }))
+
+  const bytes = seguras.reduce((s, c) => s + Number(c.size_bytes || 0), 0)
+  if (dryRun) {
+    return {
+      encontradas: candidatas.length,
+      seriamMovidas: seguras.length,
+      comHistoricoTransferido: comHistorico.length,
+      comAprovacaoTransferida: comAprovacao.length,
+      gigas: +(bytes / 1e9).toFixed(2),
+      preservadas,
+      amostra: seguras.slice(0, 8).map(c => ({ arquivo: c.file_name, versao: c.versao })),
+    }
+  }
+
+  const pastaDup = await ensureFolder(DRIVE_ID, '99_DUPLICADOS')
+  let movidas = 0
+  const falhas: string[] = []
+  const gruposMexidos = new Set<string>()
+
+  let historicoMovido = 0
+  for (const c of seguras) {
+    try {
+      // A aprovação também muda de dono, senão o vídeo "desaprovaria" sozinho.
+      if (c.approved_file_id) {
+        await db.from('video_versions')
+          .update({ approved_file_id: c.approved_file_id, status: c.status })
+          .eq('id', c.ficou)
+      }
+      // Primeiro o histórico muda de dono, senão ele iria embora junto.
+      if (presos.has(c.id)) {
+        const a = await db.from('review_comments').update({ video_version_id: c.ficou }).eq('video_version_id', c.id).select('id')
+        const b = await db.from('review_links').update({ video_version_id: c.ficou }).eq('video_version_id', c.id).select('id')
+        historicoMovido += (a.data?.length || 0) + (b.data?.length || 0)
+      }
+      if (c.drive_file_id) {
+        // Descobre onde o arquivo está hoje pra tirar dessa pasta ao mover.
+        const info = await driveFetch(`files/${c.drive_file_id}?fields=parents`)
+        const pais = (info.parents || []).join(',')
+        await driveFetch(
+          `files/${c.drive_file_id}?addParents=${pastaDup}${pais ? `&removeParents=${pais}` : ''}&fields=id`,
+          { method: 'PATCH', body: JSON.stringify({}) },
+        )
+      }
+      await db.from('video_versions').delete().eq('id', c.id)
+      gruposMexidos.add(c.group_id)
+      movidas++
+    } catch (err: any) {
+      falhas.push(`${c.file_name}: ${String(err?.message || err).slice(0, 120)}`)
+    }
+  }
+
+  // Renumera o que sobrou, senão o grupo fica com buraco (v1, v3, v5...).
+  let renumeradas = 0
+  for (const g of gruposMexidos) {
+    const { data: restantes } = await db.from('video_versions')
+      .select('id').eq('group_id', g).order('created_at', { ascending: true })
+    let n = 0
+    for (const r of restantes || []) {
+      n++
+      await db.from('video_versions').update({ versao: n }).eq('id', r.id)
+      renumeradas++
+    }
+  }
+
+  await log(null, 'dedupe', `Movidas ${movidas} cópias para 99_DUPLICADOS (${(bytes / 1e9).toFixed(2)} GB)`)
+  return { encontradas: candidatas.length, movidas, gigas: +(bytes / 1e9).toFixed(2), historicoMovido, renumeradas, preservadas, falhas }
+}
+
 async function renameVersion(versionId: string, newName: string): Promise<void> {
   const clean = newName.trim(); if (!clean) throw new Error('nome vazio')
   const { data: v, error } = await db.from('video_versions').select('drive_file_id').eq('id', versionId).single()
@@ -345,6 +484,15 @@ serve(async (req) => {
       }
       await db.from('video_versions').delete().in('id', payload.version_ids)
       return new Response(JSON.stringify({ ok: true, deleted: (vers || []).length }), { status: 200 })
+    }
+    // Faxina das cópias que o bug do upload deixou pra trás (ver drive-upload:
+    // o navegador cegava com o CORS do Google e o arquivo subia duas vezes).
+    // Não apaga nada: o arquivo repetido vai pra pasta 99_DUPLICADOS na raiz do
+    // drive compartilhado, e a linha some do app. Com dry_run:true só relata.
+    if (payload?.action === 'dedupe') {
+      const seco = payload.dry_run !== false
+      const res = await dedupe(seco)
+      return new Response(JSON.stringify({ ok: true, dry_run: seco, ...res }), { status: 200 })
     }
     // Scan sob demanda de um projeto (botão "Verificar agora" no app)
     if (payload?.action === 'scan') {
