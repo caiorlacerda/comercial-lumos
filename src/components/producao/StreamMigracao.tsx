@@ -17,7 +17,7 @@ import { useToast } from '@/context/ToastContext';
  * nossa função, e adiantar trabalho não acelera nada, só empilha fila lá.
  */
 
-type Situacao = { total: number; prontos: number; processando: number; comErro: number; naoEnviados: number };
+type Situacao = { total: number; prontos: number; processando: number; comErro: number; naoEnviados: number; prontosSemManifesto?: number };
 
 export default function StreamMigracao() {
   const { isAdmin } = useAuth();
@@ -51,6 +51,16 @@ export default function StreamMigracao() {
   }, [chamar]);
 
   useEffect(() => { if (isAdmin) atualizar(); }, [isAdmin, atualizar]);
+
+  // Vídeo pronto mas sem o endereço do manifesto continua tocando pelo caminho
+  // lento, e isso não se resolve sozinho. Uma passada de 'conferir' recupera o
+  // que falta, então dispara assim que a tela percebe que há o que recuperar.
+  const reparou = useRef(false);
+  useEffect(() => {
+    if (!isAdmin || reparou.current || !s?.prontosSemManifesto) return;
+    reparou.current = true;
+    (async () => { try { await chamar({ action: 'conferir' }); await atualizar(); } catch { /* tenta na próxima visita */ } })();
+  }, [isAdmin, s?.prontosSemManifesto, chamar, atualizar]);
 
   // Enquanto houver vídeo em conversão, confere sozinho de tempos em tempos.
   useEffect(() => {
@@ -103,8 +113,9 @@ export default function StreamMigracao() {
     );
   }
 
-  const pct = s.total ? Math.round((s.prontos / s.total) * 100) : 0;
-  const completo = s.prontos === s.total && s.total > 0;
+  const naViaRapida = Math.max(s.prontos - (s.prontosSemManifesto || 0), 0);
+  const pct = s.total ? Math.round((naViaRapida / s.total) * 100) : 0;
+  const completo = naViaRapida === s.total && s.total > 0;
 
   return (
     <div className="px-4 py-3 border-b border-lumos-border">
@@ -115,7 +126,7 @@ export default function StreamMigracao() {
           <p className="text-[11px] text-lumos-text-secondary">
             {completo
               ? 'Todos os vídeos já abrem pela via rápida.'
-              : `${s.prontos} de ${s.total} prontos${s.processando ? `, ${s.processando} convertendo` : ''}${s.comErro ? `, ${s.comErro} com erro` : ''}.`}
+              : `${naViaRapida} de ${s.total} na via rápida${s.processando ? `, ${s.processando} convertendo` : ''}${s.prontosSemManifesto ? `, ${s.prontosSemManifesto} finalizando` : ''}${s.comErro ? `, ${s.comErro} com erro` : ''}.`}
           </p>
         </div>
 

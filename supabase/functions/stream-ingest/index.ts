@@ -195,6 +195,9 @@ serve(async (req) => {
     return json({
       total: await conta((q: any) => q),
       prontos: await conta((q: any) => q.eq('stream_status', 'pronto')),
+      // Pronto mas sem manifesto ainda cai no caminho antigo, então conta como
+      // trabalho pendente — senão a barra diz 100% com gente esperando vídeo.
+      prontosSemManifesto: await conta((q: any) => q.eq('stream_status', 'pronto').is('stream_hls', null)),
       processando: await conta((q: any) => q.eq('stream_status', 'processando')),
       comErro: await conta((q: any) => q.eq('stream_status', 'erro')),
       naoEnviados: await conta((q: any) => q.is('stream_uid', null)),
