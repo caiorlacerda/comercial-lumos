@@ -319,7 +319,7 @@ const JANELA_MS = 120_000
 
 async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
   const { data: todas } = await db.from('video_versions')
-    .select('id, project_id, group_id, versao, file_name, drive_file_id, approved_file_id, created_at, size_bytes')
+    .select('id, project_id, group_id, versao, file_name, drive_file_id, approved_file_id, status, created_at, size_bytes')
     .order('created_at', { ascending: true })
 
   // Junta por grupo + nome do arquivo e acha os pares coladinhos no tempo.
@@ -358,12 +358,23 @@ async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
     return ficou && Number(ficou.size_bytes || -1) === Number(c.size_bytes || -2)
   }
 
-  const seguras = candidatas.filter(c => (!presos.has(c.id) || mesmoArquivo(c)) && !c.approved_file_id)
+  // Quando foi a cópia repetida que acabou sendo aprovada, a aprovação (e o
+  // status) passam para a gêmea. O arquivo em 02_APROVADO não se mexe: só muda
+  // qual linha responde por ele. Se a gêmea já tiver a própria aprovação, aí
+  // são coisas distintas e a gente não encosta.
+  const podeHerdarAprovacao = (c: any) => {
+    if (!c.approved_file_id) return true
+    const ficou = porId.get(c.ficou)
+    return !!ficou && !ficou.approved_file_id && mesmoArquivo(c)
+  }
+
+  const seguras = candidatas.filter(c => (!presos.has(c.id) || mesmoArquivo(c)) && podeHerdarAprovacao(c))
   const comHistorico = seguras.filter(c => presos.has(c.id))
+  const comAprovacao = seguras.filter(c => !!c.approved_file_id)
   const preservadas = candidatas.filter(c => !seguras.includes(c))
     .map(c => ({
       arquivo: c.file_name,
-      motivo: c.approved_file_id ? 'tem cópia aprovada'
+      motivo: c.approved_file_id ? 'a gêmea também tem aprovação própria, são vídeos distintos'
         : 'tem histórico e o tamanho não bate com a gêmea, pode ser outro corte',
     }))
 
@@ -373,6 +384,7 @@ async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
       encontradas: candidatas.length,
       seriamMovidas: seguras.length,
       comHistoricoTransferido: comHistorico.length,
+      comAprovacaoTransferida: comAprovacao.length,
       gigas: +(bytes / 1e9).toFixed(2),
       preservadas,
       amostra: seguras.slice(0, 8).map(c => ({ arquivo: c.file_name, versao: c.versao })),
@@ -387,6 +399,12 @@ async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
   let historicoMovido = 0
   for (const c of seguras) {
     try {
+      // A aprovação também muda de dono, senão o vídeo "desaprovaria" sozinho.
+      if (c.approved_file_id) {
+        await db.from('video_versions')
+          .update({ approved_file_id: c.approved_file_id, status: c.status })
+          .eq('id', c.ficou)
+      }
       // Primeiro o histórico muda de dono, senão ele iria embora junto.
       if (presos.has(c.id)) {
         const a = await db.from('review_comments').update({ video_version_id: c.ficou }).eq('video_version_id', c.id).select('id')
