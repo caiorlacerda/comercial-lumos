@@ -7,6 +7,7 @@ import { formatBudgetCode } from '@/utils/formatters';
 import { Film, X, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import VideoThumb from '@/components/producao/VideoThumb';
+import StreamMigracao from '@/components/producao/StreamMigracao';
 
 interface VV {
   id: string;
@@ -99,6 +100,8 @@ export default function VideoReviewHub() {
         <h2 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Revisões de Vídeo</h2>
         <span className="text-[11px] text-lumos-text-secondary">{projects.length} {projects.length === 1 ? 'projeto' : 'projetos'} com vídeos</span>
       </div>
+
+      <StreamMigracao />
 
       {loading ? (
         <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
