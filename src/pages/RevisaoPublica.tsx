@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useVideoFonte } from '@/hooks/useVideoFonte';
 
 const LOGO = { dark: '/logo/Logotipo-Branco-Alpha.svg', light: '/logo/Logotipo-Preto-Alpha.svg' };
 
@@ -75,6 +76,7 @@ export default function RevisaoPublica() {
   const [isFs, setIsFs] = useState(false);
   const [ready, setReady] = useState(false);
   const [videoUnsupported, setVideoUnsupported] = useState(false);
+  const [menuQualidade, setMenuQualidade] = useState(false);
 
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
@@ -87,6 +89,10 @@ export default function RevisaoPublica() {
   const [sending, setSending] = useState(false);
 
   const streamUrl = useMemo(() => `${STREAM_BASE}?token=${encodeURIComponent(token)}`, [token]);
+  // Cliente também merece a via rápida: é quem costuma estar na pior internet.
+  const hlsUrl = (data as any)?.video?.stream_status === 'pronto'
+    ? ((data as any)?.video?.stream_hls || null) : null;
+  const { qualidades, qualidadeAtual, trocarQualidade, viaCdn } = useVideoFonte(videoRef, hlsUrl, streamUrl);
 
   const load = useCallback(async () => {
     const { data: res, error: err } = await supabase.rpc('get_public_review', { p_token: token });
@@ -409,7 +415,7 @@ export default function RevisaoPublica() {
             {/* object-contain: vídeo vertical (9:16) entra inteiro no player 16:9, com
                 barras pretas nas laterais. Com object-cover ele era cortado/ampliado. */}
             <video
-              ref={videoRef} src={streamUrl} preload="metadata"
+              ref={videoRef} preload="metadata"
               className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full h-full object-contain')}
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
@@ -494,6 +500,34 @@ export default function RevisaoPublica() {
             </span>
             <div className="flex-1" />
             <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
+
+            {viaCdn && qualidades.length > 1 && (
+              <div className="relative">
+                <button type="button" onClick={() => setMenuQualidade(o => !o)}
+                  className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors text-lumos-text-primary">
+                  {qualidadeAtual === -1 ? 'AUTO' : (qualidades.find(q => q.id === qualidadeAtual)?.rotulo || 'AUTO')}
+                </button>
+                {menuQualidade && (
+                  <>
+                    <div className="fixed inset-0 z-[300]" onClick={() => setMenuQualidade(false)} />
+                    <div className="absolute bottom-full right-0 mb-2 z-[301] w-28 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
+                      <button type="button" onClick={() => { trocarQualidade(-1); setMenuQualidade(false); }}
+                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                          qualidadeAtual === -1 ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                        Automática
+                      </button>
+                      {qualidades.map(q => (
+                        <button key={q.id} type="button" onClick={() => { trocarQualidade(q.id); setMenuQualidade(false); }}
+                          className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                            qualidadeAtual === q.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                          {q.rotulo}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {data.link.allow_download && (
               <a href={`${streamUrl}&download=1`} download className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar arquivo"><Download className="w-4 h-4" /></a>
             )}
