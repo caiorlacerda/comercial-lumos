@@ -70,6 +70,18 @@ async function ehAdmin(req: Request): Promise<boolean> {
   } catch (_) { return false }
 }
 
+
+// A coluna stream_hls é nova. Enquanto o ALTER não roda, gravar com ela faria o
+// UPDATE INTEIRO falhar — e aí o vídeo iria pro Stream sem ficar registrado
+// aqui, virando envio repetido. Então tenta com, e cai pra sem.
+async function gravar(id: string, campos: Record<string, unknown>) {
+  const r = await db.from('video_versions').update(campos).eq('id', id)
+  if (!r.error) return
+  if (!/stream_hls|column/i.test(String(r.error.message))) return
+  const { stream_hls: _ignora, ...semHls } = campos as any
+  await db.from('video_versions').update(semHls).eq('id', id)
+}
+
 async function enviarUma(v: { id: string; file_name: string | null }): Promise<Record<string, unknown>> {
   const url = await urlAssinada(v.id)
   const r = await cf('/copy', {
@@ -87,8 +99,12 @@ async function enviarUma(v: { id: string; file_name: string | null }): Promise<R
     return { id: v.id, ok: false, erro }
   }
   const uid = r.corpo?.result?.uid
-  await db.from('video_versions')
-    .update({ stream_uid: uid, stream_status: 'processando', stream_error: null }).eq('id', v.id)
+  await gravar(v.id, {
+    stream_uid: uid,
+    stream_hls: r.corpo?.result?.playback?.hls ?? null,
+    stream_status: 'processando',
+    stream_error: null,
+  })
   return { id: v.id, ok: true, uid }
 }
 
@@ -143,7 +159,12 @@ serve(async (req) => {
         const r = await cf(`/${v.stream_uid}`)
         const st = r.corpo?.result?.status?.state
         if (r.corpo?.result?.readyToStream) {
-          await db.from('video_versions').update({ stream_status: 'pronto' }).eq('id', v.id); prontos++
+          // O endereço do manifesto vem do próprio Cloudflare: é ele que carrega
+          // o código da conta, e não dá pra montar na mão sem chutar.
+          await gravar(v.id, {
+            stream_status: 'pronto',
+            stream_hls: r.corpo?.result?.playback?.hls ?? null,
+          }); prontos++
         } else if (st === 'error') {
           const erro = String(r.corpo?.result?.status?.errorReasonText || 'erro no processamento').slice(0, 300)
           await db.from('video_versions').update({ stream_status: 'erro', stream_error: erro }).eq('id', v.id); comErro++
