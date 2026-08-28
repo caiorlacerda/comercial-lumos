@@ -25,6 +25,7 @@ export default function StreamMigracao() {
   const [s, setS] = useState<Situacao | null>(null);
   const [rodando, setRodando] = useState(false);
   const [indisponivel, setIndisponivel] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const pararRef = useRef(false);
 
   const chamar = useCallback(async (body: Record<string, unknown>) => {
@@ -37,10 +38,15 @@ export default function StreamMigracao() {
   const atualizar = useCallback(async () => {
     try {
       setS(await chamar({ action: 'situacao' }));
+      setErro(null);
     } catch (e: any) {
+      const msg = String(e?.message || e);
       // Coluna ainda não existe = SQL da migração não rodou. Some da tela em
       // vez de mostrar erro pra quem não tem o que fazer com ele.
-      if (/stream_uid|column|schema/i.test(String(e?.message))) setIndisponivel(true);
+      if (/stream_uid|column|schema/i.test(msg)) { setIndisponivel(true); return; }
+      // Qualquer outra falha PRECISA aparecer. Sumir calado já custou tempo de
+      // procurar um card que nunca ia renderizar.
+      setErro(msg.slice(0, 160));
     }
   }, [chamar]);
 
@@ -77,7 +83,25 @@ export default function StreamMigracao() {
     }
   };
 
-  if (!isAdmin || indisponivel || !s) return null;
+  if (!isAdmin || indisponivel) return null;
+
+  if (erro || !s) {
+    return (
+      <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-3 flex-wrap">
+        <Gauge className="w-4 h-4 text-lumos-text-secondary flex-shrink-0" />
+        <div className="min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-wider text-lumos-text-primary">Player rápido</p>
+          <p className="text-[11px] text-lumos-text-secondary">
+            {erro ? `Não deu pra ler o andamento: ${erro}` : 'Consultando o andamento...'}
+          </p>
+        </div>
+        <button type="button" onClick={atualizar} title="Tentar de novo"
+          className="h-8 w-8 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center">
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
 
   const pct = s.total ? Math.round((s.prontos / s.total) * 100) : 0;
   const completo = s.prontos === s.total && s.total > 0;
