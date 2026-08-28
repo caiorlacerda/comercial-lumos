@@ -154,6 +154,20 @@ serve(async (req) => {
     if (acao === 'conferir') {
       const { data: emAndamento } = await db.from('video_versions')
         .select('id, stream_uid').eq('stream_status', 'processando').not('stream_uid', 'is', null).limit(50)
+
+      // Vídeos que ficaram prontos ANTES de a gente passar a guardar o endereço
+      // do manifesto. Sem ele o player não tem pra onde apontar, então busca o
+      // que falta aqui mesmo, na mesma varredura.
+      const { data: semManifesto } = await db.from('video_versions')
+        .select('id, stream_uid').eq('stream_status', 'pronto')
+        .is('stream_hls', null).not('stream_uid', 'is', null).limit(50)
+      let manifestosRecuperados = 0
+      for (const v of semManifesto || []) {
+        const r = await cf(`/${v.stream_uid}`)
+        const hls = r.corpo?.result?.playback?.hls
+        if (hls) { await gravar(v.id, { stream_hls: hls }); manifestosRecuperados++ }
+      }
+
       let prontos = 0, comErro = 0
       for (const v of emAndamento || []) {
         const r = await cf(`/${v.stream_uid}`)
@@ -170,7 +184,7 @@ serve(async (req) => {
           await db.from('video_versions').update({ stream_status: 'erro', stream_error: erro }).eq('id', v.id); comErro++
         }
       }
-      return json({ conferidos: (emAndamento || []).length, viraramPronto: prontos, comErro })
+      return json({ conferidos: (emAndamento || []).length, viraramPronto: prontos, comErro, manifestosRecuperados })
     }
 
     // situacao

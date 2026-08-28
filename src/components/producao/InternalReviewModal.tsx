@@ -7,6 +7,7 @@ import { useToast } from '@/context/ToastContext';
 import UserAvatar from '@/components/common/UserAvatar';
 import { COLORS, SPEEDS, STREAM_BASE, timecode, estimarFps, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
 import { captureVideoThumb } from '@/lib/videoThumb';
+import { useVideoFonte } from '@/hooks/useVideoFonte';
 
 interface TeamComment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number; body: string; created_at: string;
@@ -74,6 +75,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   // O navegador não conseguiu exibir a imagem do vídeo (codec não suportado, ex.:
   // ProRes/.mov — toca o áudio mas não mostra vídeo).
   const [videoUnsupported, setVideoUnsupported] = useState(false);
+  const [hlsUrl, setHlsUrl] = useState<string | null>(null);
+  const [menuQualidade, setMenuQualidade] = useState(false);
 
   // Thumbnail + link do Drive (fallback). A thumb usa a salva se existir; senão
   // captura um frame e persiste (o Drive não gera thumbnail para arquivos da
@@ -81,8 +84,9 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data } = await supabase.from('video_versions').select('thumb_url, drive_web_link, drive_file_id').eq('id', versionId).maybeSingle();
+      const { data } = await supabase.from('video_versions').select('thumb_url, drive_web_link, drive_file_id, stream_hls, stream_status').eq('id', versionId).maybeSingle();
       if (!alive) return;
+      if ((data as any)?.stream_status === 'pronto') setHlsUrl((data as any)?.stream_hls || null);
       setDriveLink((data as any)?.drive_web_link || ((data as any)?.drive_file_id ? `https://drive.google.com/file/d/${(data as any).drive_file_id}/view` : null));
       if (data?.thumb_url) { setPoster(data.thumb_url); return; }
       const thumb = await captureVideoThumb(streamUrl);
@@ -115,6 +119,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   }, [versionId, load]);
 
   // --- Player ---
+  // Fonte do vídeo: CDN quando a cópia existe, arquivo direto enquanto não.
+  const { qualidades, qualidadeAtual, trocarQualidade, viaCdn } =
+    useVideoFonte(videoRef, hlsUrl, streamUrl);
+
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
   const changeSpeed = () => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(next); if (videoRef.current) videoRef.current.playbackRate = next; };
   const fullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.(); else wrapRef.current?.requestFullscreen?.(); };
@@ -290,7 +298,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         {/* Player */}
         <div className="flex-1 p-4 flex flex-col gap-2 min-w-0">
           <div ref={wrapRef} className="relative w-full aspect-video bg-black rounded-lumos overflow-hidden select-none">
-            <video ref={videoRef} src={streamUrl} poster={poster || undefined} preload="metadata" className="w-full h-full object-contain block"
+            <video ref={videoRef} poster={poster || undefined} preload="metadata" className="w-full h-full object-contain block"
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
               onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
               // videoWidth 0 depois de carregar = o navegador não decodifica a trilha
@@ -346,6 +354,40 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             <span className="text-xs font-mono font-bold text-lumos-text-secondary tabular-nums">{timecode(currentMs, fps)} <span className="opacity-50">/ {durationMs ? timecode(durationMs, fps) : '—'}</span></span>
             <div className="flex-1" />
             <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
+
+            {/* Qualidade: só aparece quando o vídeo vem da CDN, que é quem tem
+                mais de uma. No arquivo direto não existe o que escolher. */}
+            {viaCdn && qualidades.length > 1 && (
+              <div className="relative">
+                <button type="button" onClick={() => setMenuQualidade(o => !o)}
+                  className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors text-lumos-text-primary">
+                  {qualidadeAtual === -1
+                    ? 'AUTO'
+                    : (qualidades.find(q => q.id === qualidadeAtual)?.rotulo || 'AUTO')}
+                </button>
+                {menuQualidade && (
+                  <>
+                    <div className="fixed inset-0 z-[300]" onClick={() => setMenuQualidade(false)} />
+                    <div className="absolute bottom-full right-0 mb-2 z-[301] w-28 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
+                      <button type="button"
+                        onClick={() => { trocarQualidade(-1); setMenuQualidade(false); }}
+                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                          qualidadeAtual === -1 ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                        Automática
+                      </button>
+                      {qualidades.map(q => (
+                        <button key={q.id} type="button"
+                          onClick={() => { trocarQualidade(q.id); setMenuQualidade(false); }}
+                          className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                            qualidadeAtual === q.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                          {q.rotulo}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <button onClick={fullscreen} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
           </div>
         </div>
