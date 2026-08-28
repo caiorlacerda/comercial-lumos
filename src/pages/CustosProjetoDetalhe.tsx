@@ -4,6 +4,7 @@ import { useGoBack } from '@/hooks/useGoBack';
 import { formatBudgetCode } from '@/utils/formatters';
 import { Archive, ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, Target, Edit2, Trash2, Check, CalendarClock, Pencil, RotateCcw, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
+import { calcFinancials } from '@/utils/financials';
 import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
 import ParcelamentoModal from '@/components/financeiro/ParcelamentoModal';
@@ -290,7 +291,7 @@ export default function CustosProjetoDetalhe() {
           if (budgetData.active_version_id) {
             const { data: itemsData } = await supabase
               .from('budget_items')
-              .select('unit_cost, quantity, version_id')
+              .select('unit_cost, quantity, version_id, item_group')
               .eq('version_id', budgetData.active_version_id);
             budgetItems = itemsData || [];
           }
@@ -776,7 +777,10 @@ export default function CustosProjetoDetalhe() {
   // TETO DE CUSTOS (Custo Direto do Orçamento)
   const tetoCustos = project.budget_id
     ? estimatedCost
-    : (projectFinanceiro?.valor_vendido || Number(project.production_value || 0)) * (1 - defaultNfPercent) / (1 + defaultMarginPercent);
+    // Sem orçamento, dá pra inverter a regra do comercial: se o preço nasce de
+    // custo ÷ (1 − margem), então o custo é preço × (1 − margem). O imposto não
+    // entra aqui, porque ele sai da margem e não do custo.
+    : (projectFinanceiro?.valor_vendido || Number(project.production_value || 0)) * (1 - defaultMarginPercent);
 
   // Sobra operacional do teto (Saldo de Produção)
   const remainingCosts = tetoCustos - totalCosts;
@@ -786,28 +790,31 @@ export default function CustosProjetoDetalhe() {
 
   // 3. Cálculos de Faturamento, Impostos e Lucro (Cascata Financeira)
   const marginPct = Number(project.active_version?.margin_pct ?? defaultMarginPercent);
-  const discountValue = Number(project.active_version?.discount_value ?? 0);
 
   // Alíquota EFETIVA de NF: prioriza o valor editado nos Dados Financeiros
   // (projectFinanceiro.nf_percent); cai para a do orçamento e por fim 0.18.
   const nfPct = Number(projectFinanceiro?.nf_percent ?? project.active_version?.nf_pct ?? 0.18);
-  // Alíquota do ORÇAMENTO: usada apenas para reconstruir o valor de venda, que é
-  // o valor contratado e não muda quando a alíquota efetiva é editada.
-  const budgetNfPct = Number(project.active_version?.nf_pct ?? nfPct);
 
-  // Subtotal (Custo + Margem)
-  const subtotalOrçado = estimatedCost * (1 + marginPct);
+  // Faturamento Bruto (venda) — o MESMO número que o comercial mostra como
+  // "Valor Final". Vem de calcFinancials, que é a fonte única do preço.
+  //
+  // Aqui essa conta era refeita na mão, e refeita errado de dois jeitos: tratava
+  // a margem como markup (custo × 1,35 em vez de custo ÷ 0,65) e o imposto como
+  // acréscimo por cima (× 1,18). No Jantar Manioca isso virava R$ 6.212,70 onde
+  // o contrato era R$ 6.000,00. Preço é assunto do comercial; o financeiro lê,
+  // não recalcula.
+  const orcamento = project.active_version
+    ? calcFinancials((project.budget_items || []) as any, project.active_version as any)
+    : null;
 
-  // Faturamento Bruto (venda) — valor contratado, FIXO. Reconstruído com a
-  // alíquota do orçamento (ou o valor de venda registrado). Não muda com a
-  // alíquota efetiva.
-  const faturamentoBruto = project.budget_id
-    ? (subtotalOrçado * (1 + budgetNfPct) - discountValue)
+  const faturamentoBruto = project.budget_id && orcamento
+    ? orcamento.valorFinal
     : (projectFinanceiro?.valor_vendido ?? Number(project.production_value || 0));
 
-  // Imposto NF — deduzido do faturamento bruto pela alíquota efetiva (embutido).
-  // Menos imposto => sobra mais (Lucro Líquido sobe).
-  const impostoNF = faturamentoBruto - (faturamentoBruto / (1 + nfPct));
+  // Imposto NF — fatia da nota, não acréscimo por cima dela: 12% de imposto é
+  // 12% do que o cliente paga, e esse dinheiro sai da margem. Mesma regra do
+  // comercial. A alíquota efetiva pode ser editada nos Dados Financeiros.
+  const impostoNF = faturamentoBruto * nfPct;
 
   // Faturamento Líquido (Receita sem imposto) = Bruto − Imposto.
   const faturamentoLiquido = faturamentoBruto - impostoNF;
