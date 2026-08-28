@@ -50,26 +50,38 @@ export function useVideoFonte(
 
     if (!hlsUrl) { usarArquivoDireto(); return; }
 
-    // Safari toca HLS nativo e faz isso melhor que qualquer biblioteca.
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      setViaCdn(true);
-      video.src = hlsUrl;
-      return;
-    }
-
     (async () => {
       const { default: HlsCtor } = await import('hls.js');
-      if (!vivo || !HlsCtor.isSupported()) { usarArquivoDireto(); return; }
+      if (!vivo) return;
+
+      // O hls.js vem PRIMEIRO. O Chrome responde "maybe" para o tipo do HLS,
+      // que é um valor verdadeiro, então testar canPlayType antes fazia todo
+      // mundo cair no player nativo: o vídeo até tocava, mas sem lista de
+      // qualidades (o menu sumia) e sem controle nenhum de adaptação — abria
+      // no nível mais baixo e demorava pra subir. Nativo só quando o hls.js
+      // não roda mesmo, que é o caso do Safari e do iOS.
+      if (!HlsCtor.isSupported()) {
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          setViaCdn(true);
+          video.src = hlsUrl;
+        } else {
+          usarArquivoDireto();
+        }
+        return;
+      }
 
       const hls = new HlsCtor({
         // Buffer generoso: a CDN entrega rápido, então vale adiantar. Antes não
         // adiantava nada, porque cada pedaço custava quase dois segundos.
         maxBufferLength: 60,
         maxMaxBufferLength: 120,
-        // Começa por uma qualidade modesta pra imagem aparecer logo, e sobe
-        // assim que a banda se mostra. É o que faz o vídeo "abrir na hora".
         startLevel: -1,
         capLevelToPlayerSize: true,
+        // Sem isso o hls.js supõe uma banda pessimista, abre na pior qualidade
+        // e leva um tempão pra subir — foi exatamente a queixa. Partindo de uma
+        // estimativa realista, ele já entra numa qualidade decente e corrige
+        // pra baixo se a internet não acompanhar.
+        abrEwmaDefaultEstimate: 5_000_000,
       });
       hlsRef.current = hls;
 
@@ -78,7 +90,13 @@ export function useVideoFonte(
         setViaCdn(true);
         setQualidades(
           (dados.levels || [])
-            .map((n: any, i: number) => ({ id: i, altura: n.height || 0, rotulo: n.height ? `${n.height}p` : `Nível ${i + 1}` }))
+            .map((n: any, i: number) => {
+              // Em vídeo vertical a altura é o lado GRANDE: 1080x1920 apareceria
+              // como "1920p". O nome da qualidade sempre segue o lado menor, que
+              // é o que a equipe e o cliente reconhecem.
+              const lado = n.width && n.height ? Math.min(n.width, n.height) : (n.height || 0);
+              return { id: i, altura: lado, rotulo: lado ? `${lado}p` : `Nível ${i + 1}` };
+            })
             .sort((x: Qualidade, y: Qualidade) => y.altura - x.altura),
         );
       });
