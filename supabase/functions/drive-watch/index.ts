@@ -347,15 +347,32 @@ async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
     ...(links || []).map((l: any) => l.video_version_id),
   ])
 
-  const seguras = candidatas.filter(c => !presos.has(c.id) && !c.approved_file_id)
-  const preservadas = candidatas.filter(c => presos.has(c.id) || c.approved_file_id)
-    .map(c => ({ arquivo: c.file_name, motivo: c.approved_file_id ? 'tem cópia aprovada' : 'tem comentário ou link de revisão' }))
+  // As duas cópias são o MESMO upload, byte a byte. Então comentário e link que
+  // caíram na cópia repetida valem igual na que fica: os tempos batem, o vídeo
+  // é o mesmo. Em vez de abandonar essas, a gente transfere o histórico para a
+  // gêmea e segue. A conferência de tamanho é a garantia de que são de fato o
+  // mesmo arquivo, e não um corte diferente subido com o mesmo nome.
+  const porId = new Map((todas || []).map((v: any) => [v.id, v]))
+  const mesmoArquivo = (c: any) => {
+    const ficou = porId.get(c.ficou)
+    return ficou && Number(ficou.size_bytes || -1) === Number(c.size_bytes || -2)
+  }
+
+  const seguras = candidatas.filter(c => (!presos.has(c.id) || mesmoArquivo(c)) && !c.approved_file_id)
+  const comHistorico = seguras.filter(c => presos.has(c.id))
+  const preservadas = candidatas.filter(c => !seguras.includes(c))
+    .map(c => ({
+      arquivo: c.file_name,
+      motivo: c.approved_file_id ? 'tem cópia aprovada'
+        : 'tem histórico e o tamanho não bate com a gêmea, pode ser outro corte',
+    }))
 
   const bytes = seguras.reduce((s, c) => s + Number(c.size_bytes || 0), 0)
   if (dryRun) {
     return {
       encontradas: candidatas.length,
       seriamMovidas: seguras.length,
+      comHistoricoTransferido: comHistorico.length,
       gigas: +(bytes / 1e9).toFixed(2),
       preservadas,
       amostra: seguras.slice(0, 8).map(c => ({ arquivo: c.file_name, versao: c.versao })),
@@ -367,8 +384,15 @@ async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
   const falhas: string[] = []
   const gruposMexidos = new Set<string>()
 
+  let historicoMovido = 0
   for (const c of seguras) {
     try {
+      // Primeiro o histórico muda de dono, senão ele iria embora junto.
+      if (presos.has(c.id)) {
+        const a = await db.from('review_comments').update({ video_version_id: c.ficou }).eq('video_version_id', c.id).select('id')
+        const b = await db.from('review_links').update({ video_version_id: c.ficou }).eq('video_version_id', c.id).select('id')
+        historicoMovido += (a.data?.length || 0) + (b.data?.length || 0)
+      }
       if (c.drive_file_id) {
         // Descobre onde o arquivo está hoje pra tirar dessa pasta ao mover.
         const info = await driveFetch(`files/${c.drive_file_id}?fields=parents`)
@@ -400,7 +424,7 @@ async function dedupe(dryRun: boolean): Promise<Record<string, unknown>> {
   }
 
   await log(null, 'dedupe', `Movidas ${movidas} cópias para 99_DUPLICADOS (${(bytes / 1e9).toFixed(2)} GB)`)
-  return { encontradas: candidatas.length, movidas, gigas: +(bytes / 1e9).toFixed(2), renumeradas, preservadas, falhas }
+  return { encontradas: candidatas.length, movidas, gigas: +(bytes / 1e9).toFixed(2), historicoMovido, renumeradas, preservadas, falhas }
 }
 
 async function renameVersion(versionId: string, newName: string): Promise<void> {
