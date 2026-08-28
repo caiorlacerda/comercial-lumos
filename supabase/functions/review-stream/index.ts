@@ -90,10 +90,53 @@ async function resolverToken(token: string, wantsDownload: boolean): Promise<Res
   })
 }
 
+// --- Busca assinada (para o Cloudflare Stream puxar o arquivo) -------------
+// O Stream precisa de uma URL pública para copiar o vídeo, e nem toda versão
+// tem link de revisão criado. Em vez de abrir a função, assinamos um endereço
+// curto: vale para UMA versão e por pouco tempo. A chave é a mesma do webhook
+// do Drive, que já mora só no servidor.
+const PULL_SECRET = Deno.env.get('DRIVE_WEBHOOK_SECRET') ?? ''
+
+async function assinatura(versionId: string, exp: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(PULL_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  )
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${versionId}.${exp}`))
+  return [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   const url = new URL(req.url)
+
+  // Caminho da cópia: ?v=<versao>&exp=<timestamp>&sig=<hmac>
+  const vId = url.searchParams.get('v')
+  const exp = url.searchParams.get('exp')
+  const sig = url.searchParams.get('sig')
+  if (vId && exp && sig) {
+    if (!PULL_SECRET) return new Response('pull desabilitado', { status: 503, headers: CORS })
+    if (Number(exp) < Date.now()) return new Response('link expirado', { status: 403, headers: CORS })
+    if (sig !== await assinatura(vId, exp)) return new Response('assinatura inválida', { status: 403, headers: CORS })
+
+    const { data: v } = await db.from('video_versions')
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status').eq('id', vId).maybeSingle()
+    if (!v?.drive_file_id) return new Response('not found', { status: 404, headers: CORS })
+    const usaProxy = !!v.proxy_file_id && v.transcode_status === 'ready'
+    const gt = await googleToken()
+    const r = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${usaProxy ? v.proxy_file_id : v.drive_file_id}?alt=media&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${gt}`, ...(req.headers.get('range') ? { Range: req.headers.get('range')! } : {}) } },
+    )
+    const h = new Headers(CORS)
+    h.set('Content-Type', 'video/mp4')
+    h.set('Accept-Ranges', 'bytes')
+    const cr2 = r.headers.get('content-range'); if (cr2) h.set('Content-Range', cr2)
+    const cl2 = r.headers.get('content-length'); if (cl2) h.set('Content-Length', cl2)
+    return new Response(r.body, { status: r.status, headers: h })
+  }
+
   const token = url.searchParams.get('token') ?? ''
   if (!token) return new Response('missing token', { status: 400, headers: CORS })
 
