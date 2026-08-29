@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw, Search, SlidersHorizontal } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +12,7 @@ import { useVideoFonte } from '@/hooks/useVideoFonte';
 
 interface TeamComment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number; body: string; created_at: string;
+  resolved?: boolean;
   author_user_id: string | null; edited_at: string | null; // dono do comentário + marca de edição
   annotations: { type: string; data: { color?: string; points?: Point[] } }[];
 }
@@ -49,6 +50,48 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [verHistorico, setVerHistorico] = useState<number | null>(null);
   const [decidindo, setDecidindo] = useState(false);
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
+
+  // Achar o comentário certo numa lista de 40 é o trabalho de verdade da
+  // revisão. Busca, ordem e filtro moram aqui.
+  const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState<'timecode' | 'novos' | 'antigos' | 'autor'>('timecode');
+  const [filtro, setFiltro] = useState<'todos' | 'pendentes' | 'resolvidos' | 'anotados' | 'meus'>('todos');
+  const [painelFiltro, setPainelFiltro] = useState(false);
+
+  const meuNome = (profile?.full_name || '').toLowerCase();
+  const visiveis = (() => {
+    const q = busca.trim().toLowerCase();
+    let lista = comments.filter(c => {
+      if (filtro === 'pendentes' && c.resolved) return false;
+      if (filtro === 'resolvidos' && !c.resolved) return false;
+      if (filtro === 'anotados' && !c.annotations.length) return false;
+      // "me citaram": pega tanto a menção com @ quanto comentário endereçado.
+      if (filtro === 'meus' && !(c.body || '').toLowerCase().includes('@' + meuNome)) return false;
+      if (!q) return true;
+      return (c.body || '').toLowerCase().includes(q) || (c.author_name || '').toLowerCase().includes(q);
+    });
+    const porTempo = (x: TeamComment, y: TeamComment) => x.timecode_ms - y.timecode_ms;
+    if (ordem === 'timecode') lista = [...lista].sort(porTempo);
+    if (ordem === 'novos') lista = [...lista].sort((x, y) => y.created_at.localeCompare(x.created_at));
+    if (ordem === 'antigos') lista = [...lista].sort((x, y) => x.created_at.localeCompare(y.created_at));
+    if (ordem === 'autor') lista = [...lista].sort((x, y) => (x.author_name || '').localeCompare(y.author_name || '', 'pt-BR') || porTempo(x, y));
+    return lista;
+  })();
+
+  /** Resolver passa por RPC: a policy de UPDATE só deixa o autor editar o
+   *  próprio texto, e quem atende o pedido quase nunca é quem pediu. */
+  const alternarResolvido = async (c: TeamComment) => {
+    const { data, error } = await supabase.rpc('review_marcar_resolvido', {
+      p_comment_id: c.id, p_resolvido: !c.resolved,
+    });
+    if (error || !(data as any)?.ok) {
+      toast.error(/function|schema/i.test(String(error?.message))
+        ? 'Falta rodar a migration 2026093317.'
+        : 'Não deu pra marcar.');
+      return;
+    }
+    setComments(cs => cs.map(x => (x.id === c.id ? { ...x, resolved: !c.resolved } : x)));
+  };
   const [pedindoAlteracao, setPedindoAlteracao] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
@@ -117,7 +160,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   }, [versionId, streamUrl]);
 
   const load = useCallback(async () => {
-    const campos = 'id, author_name, is_team, timecode_ms, body, created_at, author_user_id, edited_at, review_annotations(type, data)';
+    const campos = 'id, author_name, is_team, timecode_ms, body, created_at, author_user_id, edited_at, resolved, review_annotations(type, data)';
     const arrumar = (lista: any[]) => (lista || []).map((c: any) => ({
       ...c, annotations: (c.review_annotations || []).map((a: any) => ({ type: a.type, data: a.data })),
     }));
@@ -496,9 +539,61 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             title="Arraste para redimensionar"
             className="hidden lg:block absolute left-0 top-0 h-full w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-lumos-yellow/40 active:bg-lumos-yellow/60 transition-colors z-20"
           />
-          <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between flex-shrink-0">
-            <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários do time</span>
-            <span className="text-[10px] font-bold text-lumos-text-secondary/70">{comments.length}</span>
+          <div className="px-4 py-3 border-b border-lumos-border flex-shrink-0 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários do time</span>
+              <span className="text-[10px] font-bold text-lumos-text-secondary/70">
+                {visiveis.length === comments.length ? comments.length : `${visiveis.length} de ${comments.length}`}
+              </span>
+            </div>
+
+            {comments.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-lumos-text-secondary/60 pointer-events-none" />
+                  <input value={busca} onChange={e => setBusca(e.target.value)}
+                    placeholder="Buscar no texto ou por quem escreveu…"
+                    className="input-lumos w-full h-8 text-[11px] pl-7 pr-6" />
+                  {busca && (
+                    <button type="button" onClick={() => setBusca('')} title="Limpar"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary">
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative flex-shrink-0">
+                  <button type="button" onClick={() => setPainelFiltro(o => !o)}
+                    title="Ordenar e filtrar"
+                    className={clsx('h-8 w-8 rounded-lumos border flex items-center justify-center transition-colors',
+                      filtro !== 'todos' || ordem !== 'timecode'
+                        ? 'border-lumos-yellow text-lumos-yellow'
+                        : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                  {painelFiltro && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setPainelFiltro(false)} />
+                      <div className="absolute right-0 top-9 z-50 w-52 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
+                        <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Ordenar por</p>
+                        {([['timecode','Tempo no vídeo'],['novos','Mais recentes'],['antigos','Mais antigos'],['autor','Quem escreveu']] as const).map(([v, l]) => (
+                          <button key={v} type="button" onClick={() => setOrdem(v)}
+                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                              ordem === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
+                        ))}
+                        <div className="h-px bg-lumos-border my-1" />
+                        <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Mostrar</p>
+                        {([['todos','Todos'],['pendentes','Só pendentes'],['resolvidos','Só resolvidos'],['anotados','Com desenho'],['meus','Onde me citaram']] as const).map(([v, l]) => (
+                          <button key={v} type="button" onClick={() => setFiltro(v)}
+                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                              filtro === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Decisão da revisão interna, no mesmo lugar onde ela acontece. Antes
@@ -544,9 +639,11 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           )}
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 min-h-[120px]">
-            {comments.length === 0 ? (
-              <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.</p>
-            ) : comments.map(c => (
+            {visiveis.length === 0 ? (
+              <p className="text-xs text-lumos-text-secondary italic text-center py-8">
+                {comments.length ? 'Nada encontrado com esse filtro.' : 'Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.'}
+              </p>
+            ) : visiveis.map(c => (
               <div
                 key={c.id}
                 onClick={() => editingId !== c.id && viewComment(c)}
@@ -554,7 +651,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   'relative w-full text-left p-2.5 rounded-lumos border transition-all',
                   editingId === c.id
                     ? 'border-lumos-yellow/60 bg-lumos-text-secondary/[0.03]'
-                    : 'border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer'
+                    : 'border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer',
+                  // Resolvido some do primeiro plano sem sumir da lista: o olho
+                  // vai pro que ainda falta.
+                  c.resolved && editingId !== c.id && 'opacity-55',
                 )}
               >
                 <div className="flex items-start gap-2">
@@ -568,6 +668,17 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <span className="text-[11px] font-black text-lumos-text-primary truncate">{c.author_name}{!c.is_team && <span className="ml-1 text-[8px] uppercase text-amber-400">Cliente</span>}</span>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* Resolver é de QUALQUER um da equipe, não só de quem
+                            escreveu: quem atende o pedido raramente é quem pediu,
+                            e comentário de cliente não tem autor interno. */}
+                        <button type="button" title={c.resolved ? 'Marcar como pendente' : 'Marcar como resolvido'}
+                          onClick={e => { e.stopPropagation(); alternarResolvido(c); }}
+                          className={clsx('w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0',
+                            c.resolved
+                              ? 'bg-green-500 border-green-500 text-white'
+                              : 'border-lumos-border text-transparent hover:border-green-500/60')}>
+                          <Check className="w-3 h-3" />
+                        </button>
                         <span className="text-[10px] font-mono font-bold text-lumos-yellow">{timecode(c.timecode_ms, fps)}</span>
 
                         {/* Três pontinhos: só no MEU comentário */}
