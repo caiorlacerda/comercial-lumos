@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw, Search, SlidersHorizontal, Frame, ClipboardPaste } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw, Search, SlidersHorizontal, Frame, ClipboardPaste, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { supabase } from '@/lib/supabase';
@@ -84,6 +85,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const atual = versoes.find(v => v.id === versaoAtiva);
   const maisNova = versoes.length ? versoes[0].id : versionId;
   const vendoAntiga = versaoAtiva !== maisNova;
+  const indice = versoes.findIndex(v => v.id === versaoAtiva);
+  const temAnterior = indice >= 0 && indice < versoes.length - 1;   // mais antiga
+  const temProxima = indice > 0;                                    // mais nova
+  const irPara = (i: number) => {
+    const alvo = versoes[i];
+    if (!alvo) return;
+    setVersaoAtiva(alvo.id); setMenuVersao(false); setViewingShapes([]); resetComposer();
+  };
   // Zoom pra conferir detalhe (legenda cortada, logo torto, ruído). Escala o
   // conjunto vídeo+canvas junto, então a anotação continua caindo no mesmo
   // ponto da imagem: as coordenadas são normalizadas sobre o retângulo, que a
@@ -520,8 +529,16 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
 
-  return (
-    <div className={clsx('fixed inset-0 z-50 bg-lumos-bg text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
+  /**
+   * Vai pro body em portal, e não no meio da árvore da página.
+   *
+   * O player é fixed inset-0 e ocupa a tela inteira, mas nascia dentro do
+   * conteúdo — e a barra lateral do app acabava ganhando o clique na faixa da
+   * esquerda do cabeçalho. Enquanto ali só havia texto, ninguém notou; virou
+   * bug no dia em que o seletor de versões foi parar nesse canto.
+   */
+  return createPortal(
+    <div className={clsx('fixed inset-0 z-[200] bg-lumos-bg text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
       {/* Sem isto o confirm() nunca aparecia e a promessa ficava pendurada:
           excluir comentário simplesmente não acontecia, em silêncio. */}
       {dialogoConfirmar}
@@ -546,7 +563,15 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           {projectName ? `${projectName} · ` : ''}
 
           {versoes.length > 1 ? (
-            <span className="relative">
+            <span className="relative inline-flex items-center gap-0.5">
+              {/* Setas: pular pra anterior e pra próxima sem abrir lista, que é
+                  como se compara de verdade — indo e voltando. A lista continua
+                  ali pra quando se sabe qual versão se quer. */}
+              <button type="button" onClick={() => irPara(indice + 1)} disabled={!temAnterior}
+                title="Versão anterior"
+                className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
               <button type="button" onClick={() => setMenuVersao(o => !o)}
                 title="Trocar de versão"
                 className={clsx('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lumos border text-sm font-black transition-colors',
@@ -571,6 +596,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   </div>
                 </>
               )}
+              <button type="button" onClick={() => irPara(indice - 1)} disabled={!temProxima}
+                title="Versão mais nova"
+                className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <span className="text-[10px] font-bold text-lumos-text-secondary/70 normal-case tracking-normal ml-0.5">
+                {versoes.length - indice} de {versoes.length}
+              </span>
             </span>
           ) : (
             <>v{String(versao).padStart(2, '0')}</>
@@ -1154,6 +1187,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           </div>
         </aside>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
