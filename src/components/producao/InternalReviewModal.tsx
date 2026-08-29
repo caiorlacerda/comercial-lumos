@@ -54,6 +54,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   const [composing, setComposing] = useState(false);
   const [commentText, setCommentText] = useState('');
+  // Seletor de @: guarda onde o @ começou pra trocar exatamente aquele pedaço
+  // do texto quando a pessoa escolher alguém.
+  const [mencao, setMencao] = useState<{ busca: string; inicio: number } | null>(null);
+  const comentarioRef = useRef<HTMLTextAreaElement>(null);
   // Equipe (para avatar + status nos comentários, casando pelo nome do autor)
   const [team, setTeam] = useState<{ id: string; full_name: string; avatar_url?: string | null }[]>([]);
   const userByName = useMemo(() => {
@@ -256,6 +260,43 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     window.addEventListener('pointerup', up);
   };
 
+  // Enquanto digita: se houver um "@" ainda em aberto na palavra atual, abre a
+  // lista. Fecha ao dar espaço, porque aí virou texto comum.
+  const aoDigitar = (valor: string, cursor: number) => {
+    setCommentText(valor);
+    const antes = valor.slice(0, cursor);
+    const at = antes.lastIndexOf('@');
+    if (at < 0) { setMencao(null); return; }
+    const trecho = antes.slice(at + 1);
+    if (/\s{2,}|\n/.test(trecho) || trecho.length > 24) { setMencao(null); return; }
+    if (at > 0 && !/[\s(]/.test(antes[at - 1])) { setMencao(null); return; }
+    setMencao({ busca: trecho.toLowerCase(), inicio: at });
+  };
+
+  const escolherMencao = (u: { id: string; full_name: string }) => {
+    if (!mencao) return;
+    const cursor = comentarioRef.current?.selectionStart ?? commentText.length;
+    const novo = commentText.slice(0, mencao.inicio) + '@' + u.full_name + ' ' + commentText.slice(cursor);
+    setCommentText(novo);
+    setMencao(null);
+    requestAnimationFrame(() => {
+      const pos = mencao.inicio + u.full_name.length + 2;
+      comentarioRef.current?.focus();
+      comentarioRef.current?.setSelectionRange(pos, pos);
+    });
+  };
+
+  // Quem foi realmente mencionado: casa pelo nome completo, do mais longo pro
+  // mais curto, pra "Ana Paula" não virar "Ana".
+  const acharMencionados = (texto: string) => {
+    const ids: string[] = [];
+    [...team].sort((x, y) => y.full_name.length - x.full_name.length).forEach(u => {
+      const tag = ('@' + u.full_name).replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      if (new RegExp(`(^|\\s)${tag}(\\s|$|[,.!?])`).test(texto) && !ids.includes(u.id)) ids.push(u.id);
+    });
+    return ids;
+  };
+
   const submit = async () => {
     if (!commentText.trim() && shapes.length === 0) return;
     setSending(true);
@@ -264,6 +305,17 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
       .select('id').single();
     if (!error && c && shapes.length) {
       await supabase.from('review_annotations').insert(shapes.map(s => ({ comment_id: c.id, type: s.type, data: { color: s.color, points: s.points } })));
+    }
+    if (!error && c) {
+      const mencionados = acharMencionados(commentText);
+      if (mencionados.length) {
+        // Falhar aqui não pode derrubar o comentário: o aviso é importante, o
+        // registro do pedido é mais.
+        const { error: eM } = await supabase.from('review_comment_mentions')
+          .insert(mencionados.map(uid => ({ comment_id: c.id, mentioned_user_id: uid })));
+        if (eM) console.error('menções na revisão:', eM.message);
+        else toast.success(`${mencionados.length} pessoa(s) avisada(s) ✓`);
+      }
     }
     setSending(false);
     if (error) { toast.error('Não foi possível comentar.'); return; }
@@ -617,9 +669,33 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             </div>
 
             <div className="flex items-end gap-2">
-              <textarea value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
-                onKeyDown={onCommentKey}
-                rows={2} placeholder={`Comentar em ${timecode(currentMs, fps)}…`} className="input-lumos flex-1 text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug" />
+              <div className="flex-1 relative">
+                <textarea ref={comentarioRef} value={commentText} onFocus={ensureComposing}
+                  onChange={e => aoDigitar(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+                  onKeyDown={onCommentKey}
+                  rows={2} placeholder={`Comentar em ${timecode(currentMs, fps)}… use @ para chamar alguém`}
+                  className="input-lumos w-full text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug" />
+
+                {/* Lista de quem chamar. Só gente ativa do app — a menção existe
+                    pra virar notificação, então nome solto não serve. */}
+                {mencao && (() => {
+                  const achados = team
+                    .filter(u => u.full_name.toLowerCase().includes(mencao.busca))
+                    .slice(0, 6);
+                  if (!achados.length) return null;
+                  return (
+                    <div className="absolute bottom-full left-0 mb-1 w-60 max-h-56 overflow-y-auto custom-scrollbar rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl z-50 p-1">
+                      {achados.map(u => (
+                        <button key={u.id} type="button" onClick={() => escolherMencao(u)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-lumos-text-secondary/10">
+                          <UserAvatar user={u} size={20} />
+                          <span className="text-[11.5px] font-bold text-lumos-text-primary truncate">{u.full_name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
               <button onClick={submit} disabled={sending || (!commentText.trim() && shapes.length === 0)}
                 className="btn-primary h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}

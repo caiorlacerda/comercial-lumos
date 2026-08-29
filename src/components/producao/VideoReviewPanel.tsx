@@ -49,9 +49,14 @@ const vLabel = (n: number) => `v${String(n).padStart(2, '0')}`;
 const driveFileUrl = (id: string) => `https://drive.google.com/file/d/${id}/view`;
 const normTxt = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-interface Props { projectId: string; tasks: { id: string; titulo: string; status?: string }[]; }
+interface Props {
+  projectId: string;
+  tasks: { id: string; titulo: string; status?: string }[];
+  /** Id da versão a abrir direto, vindo do link da notificação de menção. */
+  abrirVersao?: string | null;
+}
 
-export default function VideoReviewPanel({ projectId, tasks }: Props) {
+export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Props) {
   const { isAdmin, profile, can } = useAuth();
   const toast = useToast();
   const canManage = isAdmin || can('ordem_do_dia');
@@ -469,6 +474,18 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
       new Date(a.current.uploaded_at || a.current.created_at).getTime()
     );
   }, [versions]);
+
+  // Veio de uma menção: abre o vídeo citado assim que a lista carregar. Uma vez
+  // só, senão fechar o modal faria ele reabrir sem parar.
+  const jaAbriuPorLink = useRef(false);
+  useEffect(() => {
+    if (!abrirVersao || jaAbriuPorLink.current || loading) return;
+    const alvo = groups.find(g => g.versions.some(v => v.id === abrirVersao));
+    if (!alvo) return;
+    jaAbriuPorLink.current = true;
+    openReview(alvo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrirVersao, groups, loading]);
 
   const shownGroups = useMemo(() => groups.filter(g => {
     if (statusFilter !== 'all' && g.current.status !== statusFilter) return false;

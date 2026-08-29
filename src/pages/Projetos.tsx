@@ -2898,7 +2898,7 @@ export default function Projetos() {
 
                 {/* ================= ABA: ENTREGAS (revisão de vídeo) ================= */}
                 {projTab === 'entregas' && (
-                  <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} />
+                  <VideoReviewPanel projectId={selectedProject.id} tasks={projectTasks} abrirVersao={searchParams.get('review')} />
                 )}
 
 
