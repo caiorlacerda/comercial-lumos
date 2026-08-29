@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,6 +35,11 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const barRef = useRef<HTMLDivElement>(null);
 
   const [comments, setComments] = useState<TeamComment[]>([]);
+  // O que o CLIENTE pediu nas versões anteriores deste vídeo. Sem isso o editor
+  // abre a v03 e não enxerga o pedido feito na v02 — que é justamente o que ele
+  // precisa atender. Só leitura: pertence a outro corte.
+  const [historico, setHistorico] = useState<{ versao: number; comments: TeamComment[] }[]>([]);
+  const [verHistorico, setVerHistorico] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [fps, setFps] = useState(25);
@@ -98,12 +103,38 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   }, [versionId, streamUrl]);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('review_comments')
-      .select('id, author_name, is_team, timecode_ms, body, created_at, author_user_id, edited_at, review_annotations(type, data)')
-      .eq('video_version_id', versionId)
+    const campos = 'id, author_name, is_team, timecode_ms, body, created_at, author_user_id, edited_at, review_annotations(type, data)';
+    const arrumar = (lista: any[]) => (lista || []).map((c: any) => ({
+      ...c, annotations: (c.review_annotations || []).map((a: any) => ({ type: a.type, data: a.data })),
+    }));
+
+    const { data } = await supabase.from('review_comments').select(campos)
+      .eq('video_version_id', versionId).order('timecode_ms', { ascending: true });
+    setComments(arrumar(data || []));
+
+    // Versões anteriores do MESMO vídeo, com o que o cliente pediu em cada uma.
+    const { data: essa } = await supabase.from('video_versions')
+      .select('group_id, versao').eq('id', versionId).maybeSingle();
+    if (!essa?.group_id) { setHistorico([]); return; }
+    const { data: irmas } = await supabase.from('video_versions')
+      .select('id, versao').eq('group_id', essa.group_id).neq('id', versionId);
+    if (!irmas?.length) { setHistorico([]); return; }
+
+    const { data: antigos } = await supabase.from('review_comments').select(campos + ', video_version_id')
+      .in('video_version_id', irmas.map(i => i.id))
+      .eq('is_team', false)
       .order('timecode_ms', { ascending: true });
-    setComments((data || []).map((c: any) => ({ ...c, annotations: (c.review_annotations || []).map((a: any) => ({ type: a.type, data: a.data })) })));
+
+    const versaoDe: Record<string, number> = {};
+    irmas.forEach(i => { versaoDe[i.id] = i.versao; });
+    const porVersao: Record<number, TeamComment[]> = {};
+    arrumar(antigos || []).forEach((c: any) => {
+      const n = versaoDe[c.video_version_id];
+      (porVersao[n] ||= []).push(c);
+    });
+    setHistorico(Object.entries(porVersao)
+      .map(([n, cs]) => ({ versao: Number(n), comments: cs }))
+      .sort((x, y) => y.versao - x.versao));
   }, [versionId]);
 
   useEffect(() => { load(); }, [load]);
@@ -509,6 +540,54 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 </div>
               </div>
             ))}
+
+            {/* O que o cliente pediu antes. O editor precisa disso na mão pra
+                atender o pedido da versão passada sem ter que caçar no link. */}
+            {!!historico.length && (
+              <div className="pt-3 mt-1 border-t border-lumos-border/60 space-y-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-0.5">
+                  Pedidos do cliente em versões anteriores
+                </p>
+                {historico.map(h => (
+                  <div key={h.versao} className="rounded-lumos border border-lumos-border/50 overflow-hidden">
+                    <button type="button"
+                      onClick={() => setVerHistorico(x => (x === h.versao ? null : h.versao))}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-lumos-text-secondary/[0.04]">
+                      <span className="text-[11px] font-bold text-lumos-text-primary">
+                        v{String(h.versao).padStart(2, '0')}
+                        <span className="ml-1.5 font-normal text-lumos-text-secondary">
+                          {h.comments.length} {h.comments.length === 1 ? 'pedido' : 'pedidos'}
+                        </span>
+                      </span>
+                      <ChevronDown className={clsx('w-3.5 h-3.5 text-lumos-text-secondary transition-transform',
+                        verHistorico === h.versao && 'rotate-180')} />
+                    </button>
+                    {verHistorico === h.versao && (
+                      <div className="px-2.5 pb-2.5 space-y-1.5">
+                        {h.comments.map(c => (
+                          <div key={c.id} className="rounded border border-lumos-border/40 bg-lumos-text-secondary/[0.03] p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10.5px] font-bold text-lumos-text-secondary truncate">{c.author_name}</span>
+                              <span className="text-[10px] font-mono font-bold text-lumos-text-secondary/70 flex-shrink-0">
+                                {timecode(c.timecode_ms, fps)}
+                              </span>
+                            </div>
+                            {c.body && (
+                              <p className="text-[11px] text-lumos-text-secondary/90 leading-snug whitespace-pre-line break-words mt-0.5">
+                                {c.body}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                        <p className="text-[9.5px] text-lumos-text-secondary/60 leading-snug pt-0.5">
+                          Tempos referentes à v{String(h.versao).padStart(2, '0')}, que era outro corte.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Compositor */}

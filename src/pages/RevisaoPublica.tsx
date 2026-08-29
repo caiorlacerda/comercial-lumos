@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import {
   Play, Pause, Maximize, Download, Pencil, MoveUpRight,
   Square, Eraser, Send, Clock, Check, Sun, Moon, Volume2, VolumeX, Info, X,
-  MoreVertical, Trash2, AlertTriangle, RotateCcw,
+  MoreVertical, Trash2, AlertTriangle, RotateCcw, ChevronDown,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -29,6 +29,8 @@ interface ReviewData {
     client_decision: string | null; client_decided_by: string | null; client_decided_at: string | null;
   };
   comments: Comment[];
+  /** O que o cliente pediu nas versões anteriores deste mesmo vídeo. */
+  historico?: { versao: number; criada_em: string; comments: Comment[] }[];
 }
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
@@ -77,6 +79,7 @@ export default function RevisaoPublica() {
   const [ready, setReady] = useState(false);
   const [videoUnsupported, setVideoUnsupported] = useState(false);
   const [menuQualidade, setMenuQualidade] = useState(false);
+  const [verHistorico, setVerHistorico] = useState<number | null>(null);
 
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
@@ -96,7 +99,14 @@ export default function RevisaoPublica() {
 
   const load = useCallback(async () => {
     const { data: res, error: err } = await supabase.rpc('get_public_review', { p_token: token });
-    if (err || !res || (res as any).error) { setError('Link inválido ou expirado.'); setLoading(false); return; }
+    if (err || !res || (res as any).error) {
+      // Fase interna não é erro de link: é o processo. O cliente merece saber
+      // que o vídeo existe e está em ajustes, sem ver o material cru.
+      setError((res as any)?.error === 'em_revisao_interna'
+        ? 'Este vídeo está em ajustes com a equipe da Lumos. Assim que estiver pronto, você é avisado e este mesmo link volta a funcionar.'
+        : 'Link inválido ou expirado.');
+      setLoading(false); return;
+    }
     setData(res as ReviewData);
     setDurationMs(prev => prev || (res as ReviewData).video.duration_ms || 0);
     setLoading(false);
@@ -120,12 +130,14 @@ export default function RevisaoPublica() {
   const decision = data?.video.client_decision ?? null;
 
   // Fase interna: o mesmo link serve à revisão do time, com a decisão certa.
-  const modoInterno = data?.video.status === 'EM_REVISAO_INTERNA' || data?.video.status === 'ALTERACOES_INTERNAS';
+  // A revisão interna acontece DENTRO da plataforma, com login e permissão.
+  // Esta página é do cliente e só do cliente: era daqui que saía o risco de um
+  // link repassado por engano virar aprovação interna feita por gente de fora.
 
   const decide = async (kind: 'aprovado' | 'ajustes') => {
     if (!viewerId || deciding) return;
     setDeciding(true);
-    const { data: res, error: err } = await supabase.rpc(modoInterno ? 'review_decide_interna' : 'review_decide', {
+    const { data: res, error: err } = await supabase.rpc('review_decide', {
       p_token: token, p_viewer_id: viewerId, p_decision: kind,
     });
     setDeciding(false);
@@ -538,14 +550,10 @@ export default function RevisaoPublica() {
         {/* Comentários */}
         <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:h-full lg:min-h-0', isFs && 'hidden')}>
 
-          {/* Decisão: fase interna decide "libera pro cliente"; fase cliente decide "aprova" */}
+          {/* Decisão do cliente. A fase interna nem chega aqui: o backend
+              devolve "em_revisao_interna" e a página mostra o aviso. */}
           {viewerId && (
             <div className="px-3 py-3 border-b border-lumos-border">
-              {modoInterno && (
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> Revisão interna da Lumos
-                </p>
-              )}
               {data.video.status === 'ALTERACOES_INTERNAS' ? (
                 <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500 flex items-start gap-2">
                   <RotateCcw className="w-4 h-4 flex-shrink-0 mt-px" />
@@ -584,11 +592,11 @@ export default function RevisaoPublica() {
                 <div className="flex gap-2">
                   <button onClick={() => decide('aprovado')} disabled={deciding}
                     className="flex-1 h-10 rounded-lumos bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
-                    <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : modoInterno ? 'Aprovar e liberar pro cliente' : 'Aprovar vídeo'}
+                    <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : 'Aprovar vídeo'}
                   </button>
                   <button onClick={() => setAskChanges(true)} disabled={deciding}
                     className="flex-1 h-10 rounded-lumos border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
-                    <RotateCcw className="w-4 h-4" /> {modoInterno ? 'Pedir alteração' : 'Pedir ajustes'}
+                    <RotateCcw className="w-4 h-4" /> Pedir ajustes
                   </button>
                 </div>
               )}
@@ -698,6 +706,57 @@ export default function RevisaoPublica() {
                   )}
                 </div>
               ))
+            )}
+
+            {/* Histórico: o que este cliente pediu nas versões anteriores.
+                Serve pra ele conferir se foi atendido, em vez de ter que
+                lembrar de cabeça ou repetir o pedido. Só leitura: o comentário
+                pertence a outro corte, e o tempo dele não bate com este. */}
+            {!!data.historico?.length && (
+              <div className="pt-3 mt-1 border-t border-lumos-border/60 space-y-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-0.5">
+                  O que você pediu antes
+                </p>
+                {data.historico.map(h => (
+                  <div key={h.versao} className="rounded-lumos border border-lumos-border/50 overflow-hidden">
+                    <button type="button"
+                      onClick={() => setVerHistorico(x => (x === h.versao ? null : h.versao))}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-lumos-text-secondary/[0.04]">
+                      <span className="text-[11px] font-bold text-lumos-text-primary">
+                        v{String(h.versao).padStart(2, '0')}
+                        <span className="ml-1.5 font-normal text-lumos-text-secondary">
+                          {h.comments.length} {h.comments.length === 1 ? 'pedido' : 'pedidos'}
+                        </span>
+                      </span>
+                      <ChevronDown className={clsx('w-3.5 h-3.5 text-lumos-text-secondary transition-transform',
+                        verHistorico === h.versao && 'rotate-180')} />
+                    </button>
+                    {verHistorico === h.versao && (
+                      <div className="px-2.5 pb-2.5 space-y-1.5">
+                        {h.comments.map(c => (
+                          <div key={c.id} className="rounded border border-lumos-border/40 bg-lumos-text-secondary/[0.03] p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10.5px] font-bold text-lumos-text-secondary truncate">{c.author_name}</span>
+                              <span className="text-[10px] font-mono font-bold text-lumos-text-secondary/70 flex items-center gap-1 flex-shrink-0">
+                                {c.resolved && <Check className="w-3 h-3 text-green-500" />}
+                                {timecode(c.timecode_ms, fps)}
+                              </span>
+                            </div>
+                            {c.body && (
+                              <p className="text-[11px] text-lumos-text-secondary/90 leading-snug whitespace-pre-line break-words mt-0.5">
+                                {c.body}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                        <p className="text-[9.5px] text-lumos-text-secondary/60 leading-snug pt-0.5">
+                          Tempos referentes à v{String(h.versao).padStart(2, '0')}, que era um corte diferente deste.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
