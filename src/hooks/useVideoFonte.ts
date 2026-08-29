@@ -40,9 +40,13 @@ export function useVideoFonte(
     const video = videoRef.current;
     if (!video) return;
     let vivo = true;
+    let guarda: number | undefined;
 
     const usarArquivoDireto = () => {
       if (!vivo) return;
+      window.clearTimeout(guarda);
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
       setViaCdn(false);
       setQualidades([]);
       if (video.src !== fallbackUrl) video.src = fallbackUrl;
@@ -50,9 +54,38 @@ export function useVideoFonte(
 
     if (!hlsUrl) { usarArquivoDireto(); return; }
 
+    /**
+     * REDE DE SEGURANÇA do caminho da CDN.
+     *
+     * Cada etapa daqui pra frente pode falhar sem avisar ninguém: o pedaço do
+     * hls.js pode não chegar (chunk velho logo depois de um deploy, rede da
+     * empresa barrando), o navegador pode dizer que toca HLS nativo e não tocar
+     * (o Chrome responde "maybe" e depois não decodifica), a CDN pode não
+     * responder. Em qualquer um desses casos o vídeo simplesmente não recebia
+     * fonte nenhuma: girava pra sempre, sem mensagem e sem botão de qualidade
+     * — que foi exatamente a tela que apareceu num teste.
+     *
+     * Então: se em alguns segundos nada tiver começado a carregar, cai pro
+     * arquivo direto. Ele é mais lento, mas toca. Player parado pra sempre é
+     * pior que vídeo lento.
+     */
+    guarda = window.setTimeout(() => {
+      if (!vivo || video.readyState !== 0) return;
+      console.warn('[lumos] a CDN não respondeu a tempo; tocando o arquivo direto.');
+      usarArquivoDireto();
+    }, 8000);
+
     (async () => {
-      const { default: HlsCtor } = await import('hls.js');
-      if (!vivo) return;
+      let HlsCtor: typeof import('hls.js').default;
+      try {
+        HlsCtor = (await import('hls.js')).default;
+      } catch {
+        // Sem o hls.js não existe caminho de CDN: vai direto pro arquivo, em
+        // vez de deixar a promessa morrer no silêncio.
+        usarArquivoDireto();
+        return;
+      }
+      if (!vivo) { window.clearTimeout(guarda); return; }
 
       // O hls.js vem PRIMEIRO. O Chrome responde "maybe" para o tipo do HLS,
       // que é um valor verdadeiro, então testar canPlayType antes fazia todo
@@ -106,7 +139,6 @@ export function useVideoFonte(
       hls.on(HlsCtor.Events.ERROR, (_e, dados: any) => {
         if (!dados?.fatal) return;
         // Falhou de vez: melhor cair no arquivo direto do que deixar tela preta.
-        hls.destroy(); hlsRef.current = null;
         usarArquivoDireto();
       });
 
@@ -116,6 +148,7 @@ export function useVideoFonte(
 
     return () => {
       vivo = false;
+      window.clearTimeout(guarda);
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
@@ -130,3 +163,4 @@ export function useVideoFonte(
 
   return { qualidades, qualidadeAtual, trocarQualidade, viaCdn };
 }
+
