@@ -56,9 +56,17 @@ export default function RevisaoPublica() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // O identificador do espectador é POR LINK (cada link tem seus comentários),
+  // mas o NOME é da pessoa, não do link. Guardando por link, cada vídeo novo
+  // fazia o cliente digitar tudo de novo — atrito à toa, num público que já
+  // estava desconfiado de "mais um cadastro".
+  const NOME_SALVO = 'rev_nome';
   const [viewerId, setViewerId] = useState<string | null>(() => localStorage.getItem(`rev_viewer_${token}`));
-  const [viewerName, setViewerName] = useState<string>(() => localStorage.getItem(`rev_name_${token}`) || '');
-  const [nameInput, setNameInput] = useState('');
+  const [viewerName, setViewerName] = useState<string>(
+    () => localStorage.getItem(`rev_name_${token}`) || localStorage.getItem(NOME_SALVO) || ''
+  );
+  const [nameInput, setNameInput] = useState(() => localStorage.getItem(NOME_SALVO) || '');
+  const [entrandoSozinho, setEntrandoSozinho] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -136,15 +144,27 @@ export default function RevisaoPublica() {
     return () => { vivo = false; };
   }, [data?.video?.id]);
 
-  const identify = async () => {
-    if (!nameInput.trim()) return;
-    const { data: vid, error: err } = await supabase.rpc('review_identify', { p_token: token, p_name: nameInput.trim() });
+  const identify = async (nomeDireto?: string) => {
+    const nome = (nomeDireto ?? nameInput).trim();
+    if (!nome) return;
+    const { data: vid, error: err } = await supabase.rpc('review_identify', { p_token: token, p_name: nome });
     if (err) { setError('Não foi possível entrar. Tente novamente.'); return; }
     localStorage.setItem(`rev_viewer_${token}`, vid as string);
-    localStorage.setItem(`rev_name_${token}`, nameInput.trim());
+    localStorage.setItem(`rev_name_${token}`, nome);
+    localStorage.setItem(NOME_SALVO, nome);   // vale pro próximo vídeo também
     setViewerId(vid as string);
-    setViewerName(nameInput.trim());
+    setViewerName(nome);
   };
+
+  // Já sabemos quem é? Entra direto. A pessoa continua podendo trocar de nome
+  // depois, então nada fica preso a um chute.
+  useEffect(() => {
+    if (viewerId || !data || entrandoSozinho) return;
+    const salvo = localStorage.getItem(NOME_SALVO);
+    if (!salvo) return;
+    setEntrandoSozinho(true);
+    identify(salvo).finally(() => setEntrandoSozinho(false));
+  }, [viewerId, data, entrandoSozinho]);
 
   // --- Decisão do cliente (aprovar / pedir ajustes) ---
   const [deciding, setDeciding] = useState(false);
@@ -378,7 +398,7 @@ export default function RevisaoPublica() {
             onKeyDown={e => e.key === 'Enter' && identify()}
             placeholder="Como você se chama?" className="input-lumos w-full h-11 text-sm mb-4"
           />
-          <button onClick={identify} disabled={!nameInput.trim()} className="btn-primary w-full h-11 text-sm font-black uppercase tracking-widest">
+          <button onClick={() => identify()} disabled={!nameInput.trim()} className="btn-primary w-full h-11 text-sm font-black uppercase tracking-widest">
             Entrar
           </button>
           <p className="text-[10px] text-lumos-text-secondary/60 text-center mt-4">Ao entrar, seu nome fica registrado nesta revisão.</p>
@@ -431,6 +451,25 @@ export default function RevisaoPublica() {
           </span>
         </div>
         <div className="flex items-center gap-1.5">
+          {/* Quem a plataforma acha que você é. Fica visível porque agora o nome
+              é reaproveitado entre links: se alguém pegar o computador do colega,
+              precisa ser óbvio em nome de quem o comentário vai sair. */}
+          {viewerName && (
+            <button type="button"
+              onClick={() => {
+                if (!window.confirm(`Você está comentando como "${viewerName}". Quer entrar com outro nome?`)) return;
+                localStorage.removeItem(NOME_SALVO);
+                localStorage.removeItem(`rev_viewer_${token}`);
+                localStorage.removeItem(`rev_name_${token}`);
+                setViewerId(null); setViewerName(''); setNameInput('');
+              }}
+              title="Trocar de nome"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary transition-colors max-w-[180px]">
+              <span className="truncate">{viewerName}</span>
+              <span className="text-lumos-text-secondary/60 flex-shrink-0">trocar</span>
+            </button>
+          )}
+
           {/* Info (nome, resolução, tamanho, versão… tudo num lugar só) */}
           <div className="relative">
             <button onClick={() => setShowInfo(s => !s)}
