@@ -50,6 +50,11 @@ const PERM_OPTIONS = [
   { key: 'equipe_dados', label: 'Dados da Equipe (RH)' },
   { key: 'reembolso', label: 'Reembolso' },
   { key: 'custos_projeto', label: 'Custos de Projeto' },
+  // Quem pode dar o aval interno num vídeo e liberar pro cliente. Fica aqui de
+  // propósito: o time unificou atendimento, editor e social no papel "time",
+  // então não dá pra decidir isso pelo cargo — é pessoa a pessoa.
+  { key: 'revisao_interna', label: 'Aprovar vídeo na revisão interna' },
+  { key: 'equipamentos', label: 'Equipamentos (inventário, reservas, manutenção)' },
 ];
 
 // Campos de RH (tabela team_members)
