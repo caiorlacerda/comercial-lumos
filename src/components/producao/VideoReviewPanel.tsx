@@ -103,7 +103,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   const pendentesRef = useRef<ItemFila[]>([]);
   const [fileDragging, setFileDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number } | null>(null);
+  const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number; status: string; version: VideoVersion } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -180,7 +180,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     }
     setBusy(null);
     if (!link) { toast.error('Não foi possível abrir a revisão.'); return; }
-    setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao });
+    setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao, status: g.current.status, version: g.current });
   };
 
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); setConfirmingDelete(false); return n; });
@@ -1202,6 +1202,15 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         token={reviewModal.token}
         fileName={reviewModal.fileName}
         versao={reviewModal.versao}
+        status={reviewModal.status}
+        podeDecidir={podeAvalInterno}
+        // Decidir de dentro do player usa a MESMA transição do menu ⋯: status do
+        // vídeo, status da tarefa e link do cliente saem de um lugar só. Duas
+        // cópias dessa regra viravam duas verdades na primeira mudança.
+        onDecidir={async (proximo) => {
+          await transition(reviewModal.version, proximo);
+          setReviewModal(null);
+        }}
         onClose={() => { setReviewModal(null); fetchVersions(); }}
       />
     )}

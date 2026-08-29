@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,10 +21,16 @@ interface Props {
   fileName: string;
   versao: number;
   projectName?: string;
+  /** Etapa atual do vídeo — decide qual decisão faz sentido oferecer. */
+  status?: string;
+  /** Só quem tem 'revisao_interna' decide. O editor sobe, mas não aprova o próprio trabalho. */
+  podeDecidir?: boolean;
+  /** Executa a transição no painel: status do vídeo, da tarefa e link do cliente. */
+  onDecidir?: (proximo: 'EM_REVISAO_CLIENTE' | 'ALTERACOES_INTERNAS') => Promise<void> | void;
   onClose: () => void;
 }
 
-export default function InternalReviewModal({ versionId, token, fileName, versao, projectName, onClose }: Props) {
+export default function InternalReviewModal({ versionId, token, fileName, versao, projectName, status, podeDecidir, onDecidir, onClose }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
   const authorName = profile?.full_name || 'Equipe';
@@ -40,6 +46,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   // precisa atender. Só leitura: pertence a outro corte.
   const [historico, setHistorico] = useState<{ versao: number; comments: TeamComment[] }[]>([]);
   const [verHistorico, setVerHistorico] = useState<number | null>(null);
+  const [decidindo, setDecidindo] = useState(false);
+  const [pedindoAlteracao, setPedindoAlteracao] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [fps, setFps] = useState(25);
@@ -490,6 +498,48 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários do time</span>
             <span className="text-[10px] font-bold text-lumos-text-secondary/70">{comments.length}</span>
           </div>
+
+          {/* Decisão da revisão interna, no mesmo lugar onde ela acontece. Antes
+              era preciso fechar o player, achar o card e caçar o menu ⋯ — e
+              decisão longe de onde se decide é decisão que não se toma.
+              A transição em si continua sendo a do painel: status do vídeo, da
+              tarefa e link do cliente saem de um lugar só. */}
+          {podeDecidir && onDecidir && (status === 'EM_REVISAO_INTERNA' || status === 'ALTERACOES_INTERNAS') && (
+            <div className="px-3 py-3 border-b border-lumos-border flex-shrink-0">
+              {pedindoAlteracao ? (
+                <div className="rounded-lumos border border-lumos-border px-3 py-2.5">
+                  <p className="text-[12px] font-bold text-lumos-text-primary">Comente no vídeo o que precisa mudar e confirme.</p>
+                  <p className="text-[11px] text-lumos-text-secondary mt-0.5">O editor recebe seus comentários junto com o pedido.</p>
+                  <div className="flex gap-2 mt-2.5">
+                    <button onClick={() => setPedindoAlteracao(false)} disabled={decidindo}
+                      className="flex-1 h-8 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary">
+                      Cancelar
+                    </button>
+                    <button disabled={decidindo}
+                      onClick={async () => { setDecidindo(true); await onDecidir('ALTERACOES_INTERNAS'); }}
+                      className="flex-1 h-8 rounded-lumos bg-amber-500 text-black text-[11px] font-black hover:brightness-95 disabled:opacity-60">
+                      {decidindo ? 'Enviando…' : 'Confirmar alteração'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button disabled={decidindo}
+                    onClick={async () => { setDecidindo(true); await onDecidir('EM_REVISAO_CLIENTE'); }}
+                    className="flex-1 h-10 rounded-lumos bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
+                    <Check className="w-4 h-4" /> {decidindo ? 'Enviando…' : 'Aprovar e liberar pro cliente'}
+                  </button>
+                  <button onClick={() => setPedindoAlteracao(true)} disabled={decidindo}
+                    className="flex-1 h-10 rounded-lumos border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
+                    <RotateCcw className="w-4 h-4" /> Pedir alteração
+                  </button>
+                </div>
+              )}
+              <p className="text-[9.5px] text-lumos-text-secondary/60 mt-2 leading-snug">
+                Aprovar move o vídeo e a tarefa de etapa, e cria o link do cliente.
+              </p>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 min-h-[120px]">
             {comments.length === 0 ? (
