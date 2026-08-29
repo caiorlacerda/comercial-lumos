@@ -4,11 +4,14 @@ import {
   Play, Pause, Maximize, Download, Pencil, MoveUpRight,
   Square, Eraser, Send, Clock, Check, Sun, Moon, Volume2, VolumeX, Info, X,
   MoreVertical, Trash2, AlertTriangle, RotateCcw, ChevronDown,
+  ChevronLeft, ChevronRight, Search, SlidersHorizontal, ClipboardPaste, Frame,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useVideoFonte } from '@/hooks/useVideoFonte';
 import { useConfirm } from '@/components/ui/useConfirm';
+import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
+import ColarComentarios from '@/components/producao/ColarComentarios';
 
 const LOGO = { dark: '/logo/Logotipo-Branco-Alpha.svg', light: '/logo/Logotipo-Preto-Alpha.svg' };
 
@@ -21,6 +24,14 @@ interface Comment {
   body: string; resolved: boolean; created_at: string; annotations: Annotation[];
   viewer_id: string | null; edited_at: string | null; // dono do comentário + marca de edição
 }
+/** Uma versão do mesmo vídeo, como o cliente pode vê-la. */
+interface PublicVersion {
+  id: string; versao: number; file_name: string; created_at: string; status: string;
+  width: number | null; height: number | null; duration_ms: number | null;
+  size_bytes: number | null; mime_type: string | null;
+  stream_hls: string | null; stream_status: string | null;
+  comments: Comment[];
+}
 interface ReviewData {
   link: { token: string; watermark: boolean; allow_download: boolean };
   video: {
@@ -30,6 +41,8 @@ interface ReviewData {
     client_decision: string | null; client_decided_by: string | null; client_decided_at: string | null;
   };
   comments: Comment[];
+  /** Todas as versões que o cliente pode assistir, da mais nova pra mais antiga. */
+  versoes?: PublicVersion[];
   /** O que o cliente pediu nas versões anteriores deste mesmo vídeo. */
   historico?: { versao: number; criada_em: string; comments: Comment[] }[];
 }
@@ -114,11 +127,82 @@ export default function RevisaoPublica() {
   const drawingRef = useRef<Shape | null>(null);
   const [sending, setSending] = useState(false);
 
-  const streamUrl = useMemo(() => `${STREAM_BASE}?token=${encodeURIComponent(token)}`, [token]);
+  /**
+   * COMPARAR VERSÕES — do lado do cliente também.
+   *
+   * Ele já lia o que tinha pedido antes, mas não conseguia ASSISTIR à versão
+   * anterior. Na prática, "compare a v01 com a v02" voltava pra quem atende:
+   * exportar, subir em outro lugar, mandar por fora. É o mesmo botão que a
+   * equipe tem, com a mesma regra: versão antiga é só leitura, porque comentar
+   * ou decidir sobre um corte que já foi substituído confunde mais que ajuda.
+   */
+  const versoes = data?.versoes ?? [];
+  const [versaoAtiva, setVersaoAtiva] = useState<string | null>(null);
+  const [menuVersao, setMenuVersao] = useState(false);
+  const atual = versoes.find(v => v.id === versaoAtiva) ?? versoes[0] ?? null;
+  const vendoAntiga = !!atual && !!versoes.length && atual.id !== versoes[0].id;
+  const indice = atual ? versoes.findIndex(v => v.id === atual.id) : -1;
+  const temAnterior = indice >= 0 && indice < versoes.length - 1;   // mais antiga
+  const temProxima = indice > 0;                                    // mais nova
+  const irPara = (i: number) => {
+    const alvo = versoes[i];
+    if (!alvo || alvo.id === atual?.id) return;
+    setVersaoAtiva(alvo.id); setMenuVersao(false);
+    setViewingShapes([]); resetComposer();
+    setCurrentMs(0); setDurationMs(alvo.duration_ms || 0); setReady(false);
+  };
+
+  const streamUrl = useMemo(() => {
+    const base = `${STREAM_BASE}?token=${encodeURIComponent(token)}`;
+    // Sem o ?versao a função resolve sempre a mais nova, e o seletor mostraria
+    // o vídeo errado — pior do que não ter seletor.
+    return vendoAntiga && atual ? `${base}&versao=${encodeURIComponent(atual.id)}` : base;
+  }, [token, vendoAntiga, atual?.id]);
   // Cliente também merece a via rápida: é quem costuma estar na pior internet.
-  const hlsUrl = (data as any)?.video?.stream_status === 'pronto'
-    ? ((data as any)?.video?.stream_hls || null) : null;
+  // Cada versão tem a própria cópia na CDN; ao trocar, o player segue a dela.
+  const hlsUrl = atual
+    ? (atual.stream_status === 'pronto' ? atual.stream_hls : null)
+    : ((data as any)?.video?.stream_status === 'pronto' ? ((data as any)?.video?.stream_hls || null) : null);
   const { qualidades, qualidadeAtual, trocarQualidade, viaCdn } = useVideoFonte(videoRef, hlsUrl, streamUrl);
+
+  // Comentários da versão que está no player (a antiga tem os dela).
+  const comentarios = atual?.comments ?? data?.comments ?? [];
+
+  // Achar o pedido certo numa lista de 40 é o trabalho de verdade da revisão.
+  // Busca, ordem e filtro moram aqui — os mesmos da revisão interna.
+  const [busca, setBusca] = useState('');
+  const [ordem, setOrdem] = useState<'timecode' | 'novos' | 'antigos' | 'autor'>('timecode');
+  const [filtro, setFiltro] = useState<'todos' | 'pendentes' | 'resolvidos' | 'anotados' | 'meus'>('todos');
+  const [painelFiltro, setPainelFiltro] = useState(false);
+  const [colando, setColando] = useState(false);
+  const visiveis = (() => {
+    const q = busca.trim().toLowerCase();
+    let lista = comentarios.filter(c => {
+      if (filtro === 'pendentes' && c.resolved) return false;
+      if (filtro === 'resolvidos' && !c.resolved) return false;
+      if (filtro === 'anotados' && !c.annotations.length) return false;
+      if (filtro === 'meus' && !(viewerId && c.viewer_id === viewerId)) return false;
+      if (!q) return true;
+      return (c.body || '').toLowerCase().includes(q) || (c.author_name || '').toLowerCase().includes(q);
+    });
+    const porTempo = (x: Comment, y: Comment) => x.timecode_ms - y.timecode_ms;
+    if (ordem === 'timecode') lista = [...lista].sort(porTempo);
+    if (ordem === 'novos') lista = [...lista].sort((x, y) => y.created_at.localeCompare(x.created_at));
+    if (ordem === 'antigos') lista = [...lista].sort((x, y) => x.created_at.localeCompare(y.created_at));
+    if (ordem === 'autor') lista = [...lista].sort((x, y) => (x.author_name || '').localeCompare(y.author_name || '', 'pt-BR') || porTempo(x, y));
+    return lista;
+  })();
+
+  // Ferramentas de imagem: guias de enquadramento, máscara e zoom. O cliente
+  // confere o corte vertical e o detalhe pequeno (legenda, logo) sem precisar
+  // pedir um still pra equipe.
+  const [guia, setGuia] = useState<GuiaId>(null);
+  const [mascara, setMascara] = useState(false);
+  const [menuVisual, setMenuVisual] = useState(false);
+  const [dimVideo, setDimVideo] = useState({ w: 0, h: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const arrastando = useRef<{ x: number; y: number } | null>(null);
 
   const load = useCallback(async () => {
     const { data: res, error: err } = await supabase.rpc('get_public_review', { p_token: token });
@@ -345,6 +429,65 @@ export default function RevisaoPublica() {
     await load();
   };
 
+  /**
+   * Colar o retorno que veio por fora (e-mail, WhatsApp) e virar comentário no
+   * tempo certo. Do lado do cliente isso é ainda mais comum: quem decide quase
+   * nunca é quem assiste, e o retorno chega em lista.
+   */
+  const criarColados = async (itens: { ms: number; texto: string }[]) => {
+    for (const it of itens) {
+      const { error: err } = await supabase.rpc('review_add_comment', {
+        p_token: token, p_viewer_id: viewerId, p_timecode_ms: Math.round(it.ms),
+        p_body: it.texto, p_annotations: [],
+      });
+      if (err) { setAviso('Alguns comentários não foram enviados.'); break; }
+    }
+    await load();
+  };
+
+  /**
+   * FRAME PARADO pra levar pra reunião ou pro retorno escrito.
+   *
+   * Só aparece quando o link permite download: se o vídeo não pode sair daqui,
+   * um still exportado limpo seria a mesma saída por outra porta. E quando o
+   * link tem marca d'água, ela é DESENHADA no frame — o canvas não copia o que
+   * está por cima em HTML, e um still sem marca justamente na captura que
+   * costuma circular seria o pior lugar pra perder a atribuição.
+   */
+  const baixarFrame = () => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) { setAviso('Não deu pra capturar o frame.'); return; }
+    const cv = document.createElement('canvas');
+    cv.width = v.videoWidth; cv.height = v.videoHeight;
+    const ctx = cv.getContext('2d');
+    if (!ctx) { setAviso('Não deu pra capturar o frame.'); return; }
+    try { ctx.drawImage(v, 0, 0, cv.width, cv.height); } catch { setAviso('Não deu pra capturar o frame.'); return; }
+    if (data?.link.watermark && viewerName) {
+      const corpo = Math.max(16, Math.round(cv.width * 0.022));
+      ctx.font = `900 ${corpo}px system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = Math.max(1, corpo * 0.06);
+      ctx.save();
+      ctx.translate(cv.width / 2, cv.height / 2);
+      ctx.rotate(-Math.PI / 6);
+      const passoX = corpo * 12, passoY = corpo * 5;
+      for (let x = -cv.width; x < cv.width; x += passoX) {
+        for (let y = -cv.height; y < cv.height; y += passoY) {
+          ctx.strokeText(viewerName, x, y); ctx.fillText(viewerName, x, y);
+        }
+      }
+      ctx.restore();
+    }
+    let img: string;
+    try { img = cv.toDataURL('image/jpeg', 0.9); } catch { setAviso('Não deu pra capturar o frame.'); return; }
+    const a = document.createElement('a');
+    a.href = img;
+    a.download = `${(atual?.file_name ?? data?.video.file_name ?? 'frame').replace(/\.[^.]+$/, '')} ${timecode(currentMs, fps).replace(/:/g, '-')}.jpg`;
+    a.click();
+    setMenuVisual(false);
+  };
+
   const viewComment = (c: Comment) => {
     seekTo(c.timecode_ms);
     setComposing(false);
@@ -417,16 +560,23 @@ export default function RevisaoPublica() {
     );
   }
 
+  // A ficha é do vídeo que está no player, não do mais novo: em versão antiga,
+  // dizer o tamanho e a resolução da outra seria informação errada.
+  const emExibicao = atual ?? data.video;
   const specs: [string, string][] = [
     ['Projeto', data.video.project_name],
-    ['Arquivo', data.video.file_name],
-    ['Versão', `v${String(data.video.versao).padStart(2, '0')}`],
-    ['Resolução', data.video.width ? `${data.video.width}×${data.video.height}` : '—'],
+    ['Arquivo', emExibicao.file_name],
+    ['Versão', `v${String(emExibicao.versao).padStart(2, '0')}`],
+    ['Resolução', emExibicao.width ? `${emExibicao.width}×${emExibicao.height}` : '—'],
     ['Duração', durationMs ? timecode(durationMs, fps) : '—'],
-    ['Formato', (data.video.mime_type || '').split('/')[1]?.toUpperCase() || '—'],
-    ['Tamanho', fmtSize(data.video.size_bytes)],
+    ['Formato', (emExibicao.mime_type || '').split('/')[1]?.toUpperCase() || '—'],
+    ['Tamanho', fmtSize(emExibicao.size_bytes)],
   ];
   const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
+  // "O que você pediu antes": as outras versões que têm pedido, sem repetir a
+  // que já está no player. Sai da MESMA lista do seletor — duas fontes contando
+  // a mesma história é como nasce divergência.
+  const outrasVersoes = versoes.filter(v => v.id !== atual?.id && v.comments.length > 0);
 
   // No desktop a tela inteira cabe na viewport (sem rolar para achar os controles):
   // altura travada e o vídeo ocupa só a altura que sobra. No mobile segue o fluxo
@@ -434,6 +584,10 @@ export default function RevisaoPublica() {
   return (
     <div className={clsx('min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-lumos-bg text-lumos-text-primary font-work-sans', themeClass)}>
       {dialogoConfirmar}
+      {colando && (
+        <ColarComentarios fps={fps} duracaoMs={durationMs}
+          onConfirmar={criarColados} onClose={() => setColando(false)} />
+      )}
       {aviso && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[400] px-4 py-2.5 rounded-lumos bg-lumos-surface border border-red-500/40 shadow-2xl">
           <p className="text-[12px] font-bold text-red-400">{aviso}</p>
@@ -462,8 +616,56 @@ export default function RevisaoPublica() {
       <header className="h-14 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
         <div className="flex items-center gap-3 min-w-0">
           <img src={theme === 'dark' ? LOGO.dark : LOGO.light} alt="Lumos" className="h-7 transition-all duration-300 flex-shrink-0" />
-          <span className="text-sm font-black truncate border-l border-lumos-border pl-3">
-            {data.video.project_name} <span className="text-lumos-text-secondary font-bold">· v{String(data.video.versao).padStart(2, '0')}</span>
+          {/* O truncate vale só pro NOME DO PROJETO. No contêiner, o
+              overflow:hidden cortaria a lista de versões, que abre pra fora da
+              caixa: o botão clicaria e nada apareceria. */}
+          <span className="text-sm font-black flex items-center gap-2 min-w-0 border-l border-lumos-border pl-3">
+            <span className="truncate min-w-0">{data.video.project_name}</span>
+            {versoes.length > 1 ? (
+              <span className="relative inline-flex items-center gap-0.5 flex-shrink-0">
+                {/* Setas: ir e voltar sem abrir lista, que é como se compara de
+                    verdade. A lista fica pra quando já se sabe qual versão. */}
+                <button type="button" onClick={() => irPara(indice + 1)} disabled={!temAnterior}
+                  title="Versão anterior"
+                  className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button type="button" onClick={() => setMenuVersao(o => !o)} title="Trocar de versão"
+                  className={clsx('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lumos border text-sm font-black transition-colors',
+                    vendoAntiga ? 'border-amber-500 text-amber-500' : 'border-lumos-border hover:border-lumos-yellow/60')}>
+                  v{String(atual?.versao ?? data.video.versao).padStart(2, '0')}
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {menuVersao && (
+                  <>
+                    <div className="fixed inset-0 z-[300]" onClick={() => setMenuVersao(false)} />
+                    <div className="absolute left-0 top-8 z-[301] w-64 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
+                      {versoes.map((v, i) => (
+                        <button key={v.id} type="button" onClick={() => irPara(i)}
+                          className={clsx('w-full text-left px-2 py-1.5 rounded hover:bg-lumos-text-secondary/10',
+                            v.id === atual?.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                          <span className="text-[11px] font-black">v{String(v.versao).padStart(2, '0')}</span>
+                          {i === 0 && <span className="ml-1.5 text-[9px] font-black uppercase text-green-500">atual</span>}
+                          <span className="ml-1.5 text-[10px] font-normal text-lumos-text-secondary">
+                            {v.comments.length} {v.comments.length === 1 ? 'pedido' : 'pedidos'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <button type="button" onClick={() => irPara(indice - 1)} disabled={!temProxima}
+                  title="Versão mais nova"
+                  className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <span className="text-[10px] font-bold text-lumos-text-secondary/70 ml-0.5 hidden sm:inline">
+                  {versoes.length - indice} de {versoes.length}
+                </span>
+              </span>
+            ) : (
+              <span className="text-lumos-text-secondary font-bold flex-shrink-0">· v{String(data.video.versao).padStart(2, '0')}</span>
+            )}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -519,20 +721,43 @@ export default function RevisaoPublica() {
               controles) e o box 16:9 é limitado por max-h-full, então nunca empurra os
               controles para fora da tela. No mobile segue o fluxo normal (sem esticar). */}
           <div className="lg:flex-1 lg:min-h-0 flex items-center justify-center">
-          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 w-full flex items-center justify-center' : 'w-full aspect-video max-h-full rounded-lumos')}>
+          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 w-full flex items-center justify-center' : 'w-full aspect-video max-h-full rounded-lumos')}
+            onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
+            onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
+            onPointerUp={() => { arrastando.current = null; }}
+            onPointerLeave={() => { arrastando.current = null; }}
+            style={{ cursor: zoom > 1 && !(composing && tool) ? 'grab' : undefined }}>
+            {/* Vídeo e canvas escalam JUNTOS: as coordenadas do desenho são
+                normalizadas sobre o retângulo, que a transformação também
+                escala, então a anotação continua caindo no mesmo ponto da
+                imagem com qualquer zoom. */}
+            <div className={clsx('origin-center transition-transform duration-100',
+                isFs ? 'relative w-full h-full flex items-center justify-center' : 'absolute inset-0')}
+              style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
             {/* object-contain: vídeo vertical (9:16) entra inteiro no player 16:9, com
                 barras pretas nas laterais. Com object-cover ele era cortado/ampliado. */}
             <video
               ref={videoRef} preload="metadata"
               className={clsx('block', isFs ? 'max-h-full max-w-full w-auto h-auto object-contain' : 'w-full h-full object-contain')}
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
-              onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
-              onLoadedData={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
+              onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); setDimVideo({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight }); redraw(); }}
+              onLoadedData={e => { setReady(true); setDimVideo({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight }); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onCanPlay={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onError={() => { setReady(true); setVideoUnsupported(true); }}
               onPlay={e => { setPlaying(true); if (!fpsMedido.current) { fpsMedido.current = true; estimarFps(e.currentTarget, setFps); } }} onPause={() => setPlaying(false)}
               onClick={togglePlay} playsInline
             />
+            {/* Canvas de anotações */}
+            <canvas
+              ref={canvasRef}
+              className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
+              onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp}
+            />
+            {/* A guia mora DENTRO da transformação, junto do vídeo: com zoom,
+                moldura parada sobre imagem ampliada mostraria um corte que não
+                existe — guia errada é pior que guia nenhuma. */}
+            <GuiasDeEnquadramento guia={guia} mascara={mascara} larguraVideo={dimVideo.w} alturaVideo={dimVideo.h} />
+            </div>
             {!ready && !videoUnsupported && (
               <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" />
@@ -550,25 +775,31 @@ export default function RevisaoPublica() {
                 )}
               </div>
             )}
-            {/* Marca d'água = logo Lumos + nome (atribuição) */}
+            {/* MARCA D'ÁGUA — serve pra identificar quem gravou a tela ou tirou
+                print. Estava pequena demais pra isso: numa captura de celular ou
+                num recorte, o nome virava borrão e a marca só atrapalhava a
+                revisão sem cumprir a função.
+                Agora o NOME é o elemento principal (o logo vira o secundário),
+                em corpo maior e com sombra escura por baixo, pra continuar
+                legível sobre cena clara. A opacidade sobe pouco: precisa ser
+                lida numa captura, não incomodar quem está revisando. */}
             {data.link.watermark && (
               <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-                <div className="absolute inset-0 flex flex-wrap gap-x-14 gap-y-12 -rotate-[30deg] scale-150 opacity-[0.11]">
-                  {Array.from({ length: 40 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-1.5 whitespace-nowrap">
-                      <img src={LOGO_WATERMARK} alt="" className="h-3.5 w-auto" />
-                      <span className="text-white text-[9px] font-bold">{viewerName}</span>
+                <div className="absolute inset-0 flex flex-wrap gap-x-20 gap-y-16 -rotate-[30deg] scale-150 opacity-[0.16]">
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-2 whitespace-nowrap">
+                      <img src={LOGO_WATERMARK} alt="" className="h-5 w-auto opacity-70" />
+                      <span
+                        className="text-white text-[15px] font-black tracking-wide"
+                        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.85)' }}
+                      >
+                        {viewerName}
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            {/* Canvas de anotações */}
-            <canvas
-              ref={canvasRef}
-              className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
-              onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp}
-            />
           </div>
           </div>
 
@@ -578,7 +809,7 @@ export default function RevisaoPublica() {
               <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
               <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
               {/* marcadores */}
-              {durationMs > 0 && data.comments.map(c => (
+              {durationMs > 0 && comentarios.map(c => (
                 <button key={c.id} onClick={e => { e.stopPropagation(); viewComment(c); }}
                   title={`${c.author_name} · ${timecode(c.timecode_ms, fps)}${c.body ? ` — ${c.body}` : ''}`}
                   className="absolute -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg hover:scale-150 transition-transform z-10"
@@ -636,6 +867,62 @@ export default function RevisaoPublica() {
                 )}
               </div>
             )}
+            {/* Guias, zoom e frame num menu só: são coisas de vez em quando,
+                não a cada play, e a barra já tem o que se usa sempre. */}
+            <div className="relative">
+              <button onClick={() => setMenuVisual(o => !o)} title="Guias, zoom e frame"
+                className={clsx('p-2 rounded-lumos transition-colors',
+                  guia || zoom > 1 ? 'text-lumos-yellow' : 'hover:bg-lumos-text-secondary/10')}>
+                <Frame className="w-4 h-4" />
+              </button>
+              {menuVisual && (
+                <>
+                  <div className="fixed inset-0 z-[300]" onClick={() => setMenuVisual(false)} />
+                  <div className="absolute bottom-full right-0 mb-2 z-[301] w-52 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
+                    <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Guias de enquadramento</p>
+                    <button type="button" onClick={() => setGuia(null)}
+                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                        !guia ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>Nenhuma</button>
+                    {PROPORCOES.map(pr => (
+                      <button key={pr.id} type="button" onClick={() => setGuia(pr.id)}
+                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                          guia === pr.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{pr.label}</button>
+                    ))}
+                    <button type="button" onClick={() => setMascara(m => !m)} disabled={!guia}
+                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10 disabled:opacity-40',
+                        mascara ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                      {mascara ? '✓ ' : ''}Escurecer o que fica de fora
+                    </button>
+                    <div className="h-px bg-lumos-border my-1" />
+                    <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Zoom</p>
+                    <div className="flex gap-1 px-1 pb-1">
+                      {([1, 1.5, 2, 4] as const).map(z => (
+                        <button key={z} type="button"
+                          onClick={() => { setZoom(z); if (z === 1) setPan({ x: 0, y: 0 }); }}
+                          className={clsx('flex-1 py-1.5 text-[11px] font-black rounded transition-colors',
+                            zoom === z ? 'bg-lumos-yellow/20 text-lumos-yellow' : 'text-lumos-text-primary hover:bg-lumos-text-secondary/10')}>
+                          {z === 1 ? 'Ajustar' : `${z}x`}
+                        </button>
+                      ))}
+                    </div>
+                    {zoom > 1 && (
+                      <p className="px-2 pb-1 text-[9.5px] text-lumos-text-secondary/60 leading-snug">
+                        Arraste a imagem pra navegar. A anotação continua caindo no mesmo ponto.
+                      </p>
+                    )}
+                    {data.link.allow_download && (
+                      <>
+                        <div className="h-px bg-lumos-border my-1" />
+                        <button type="button" onClick={baixarFrame}
+                          className="w-full text-left px-2 py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
+                          Baixar este frame
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
             {data.link.allow_download && (
               <a href={`${streamUrl}&download=1`} download className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar arquivo"><Download className="w-4 h-4" /></a>
             )}
@@ -646,9 +933,24 @@ export default function RevisaoPublica() {
         {/* Comentários */}
         <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:h-full lg:min-h-0', isFs && 'hidden')}>
 
+          {/* Versão antiga é só leitura. Comentar num corte que já foi
+              substituído (ou aprovar ele) é pedido que nasce perdido: a equipe
+              recebe um retorno que não bate com o vídeo que está na mão dela. */}
+          {vendoAntiga && atual && (
+            <div className="px-3 py-3 border-b border-lumos-border">
+              <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500">
+                <p>Você está vendo a v{String(atual.versao).padStart(2, '0')}, uma versão anterior. Aqui é só pra comparar.</p>
+                <button onClick={() => irPara(0)}
+                  className="mt-1 text-[11px] font-bold underline underline-offset-2 hover:text-lumos-text-primary">
+                  Voltar pra versão atual (v{String(versoes[0]?.versao ?? data.video.versao).padStart(2, '0')})
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Decisão do cliente. A fase interna nem chega aqui: o backend
               devolve "em_revisao_interna" e a página mostra o aviso. */}
-          {viewerId && (
+          {viewerId && !vendoAntiga && (
             <div className="px-3 py-3 border-b border-lumos-border">
               {data.video.status === 'ALTERACOES_INTERNAS' ? (
                 <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500 flex items-start gap-2">
@@ -699,17 +1001,84 @@ export default function RevisaoPublica() {
             </div>
           )}
 
-          <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">Comentários</span>
-            <span className="text-[10px] font-bold text-lumos-text-secondary/70">{data.comments.length}</span>
+          <div className="px-4 py-3 border-b border-lumos-border flex-shrink-0 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-widest text-lumos-text-secondary">
+                Comentários{vendoAntiga && atual ? ` da v${String(atual.versao).padStart(2, '0')}` : ''}
+              </span>
+              <span className="text-[10px] font-bold text-lumos-text-secondary/70">
+                {visiveis.length === comentarios.length ? comentarios.length : `${visiveis.length} de ${comentarios.length}`}
+              </span>
+            </div>
+
+            {(comentarios.length > 0 || !vendoAntiga) && (
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-lumos-text-secondary/60 pointer-events-none" />
+                  <input value={busca} onChange={e => setBusca(e.target.value)}
+                    placeholder="Buscar no texto ou por quem escreveu…"
+                    className="input-lumos w-full h-8 text-[11px] pl-7 pr-6" />
+                  {busca && (
+                    <button type="button" onClick={() => setBusca('')} title="Limpar"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary">
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Retorno que chegou por e-mail ou WhatsApp entra de uma vez,
+                    com o tempo de cada pedido, em vez de um a um na mão. */}
+                {!vendoAntiga && (
+                  <button type="button" onClick={() => setColando(true)}
+                    title="Colar uma lista de pedidos (e-mail, WhatsApp)"
+                    className="h-8 w-8 flex-shrink-0 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center">
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                <div className="relative flex-shrink-0">
+                  <button type="button" onClick={() => setPainelFiltro(o => !o)} title="Ordenar e filtrar"
+                    className={clsx('h-8 w-8 rounded-lumos border flex items-center justify-center transition-colors',
+                      filtro !== 'todos' || ordem !== 'timecode'
+                        ? 'border-lumos-yellow text-lumos-yellow'
+                        : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                  {painelFiltro && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setPainelFiltro(false)} />
+                      <div className="absolute right-0 top-9 z-50 w-52 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
+                        <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Ordenar por</p>
+                        {([['timecode','Tempo no vídeo'],['novos','Mais recentes'],['antigos','Mais antigos'],['autor','Quem escreveu']] as const).map(([v, l]) => (
+                          <button key={v} type="button" onClick={() => setOrdem(v)}
+                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                              ordem === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
+                        ))}
+                        <div className="h-px bg-lumos-border my-1" />
+                        <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Mostrar</p>
+                        {([['todos','Todos'],['pendentes','Só pendentes'],['resolvidos','Só resolvidos'],['anotados','Com desenho'],['meus','Só os meus']] as const).map(([v, l]) => (
+                          <button key={v} type="button" onClick={() => setFiltro(v)}
+                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                              filtro === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Lista */}
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 min-h-[120px]">
-            {data.comments.length === 0 ? (
-              <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.</p>
+            {comentarios.length === 0 ? (
+              <p className="text-xs text-lumos-text-secondary italic text-center py-8">
+                {vendoAntiga ? 'Nenhum comentário nesta versão.' : 'Nenhum comentário ainda. Pause no ponto que quiser e escreva abaixo.'}
+              </p>
+            ) : visiveis.length === 0 ? (
+              <p className="text-xs text-lumos-text-secondary italic text-center py-8">Nada encontrado com essa busca ou filtro.</p>
             ) : (
-              data.comments.map(c => (
+              visiveis.map(c => (
                 <div
                   key={c.id}
                   onClick={() => editingId !== c.id && viewComment(c)}
@@ -808,25 +1177,34 @@ export default function RevisaoPublica() {
                 Serve pra ele conferir se foi atendido, em vez de ter que
                 lembrar de cabeça ou repetir o pedido. Só leitura: o comentário
                 pertence a outro corte, e o tempo dele não bate com este. */}
-            {!!data.historico?.length && (
+            {!!outrasVersoes.length && (
               <div className="pt-3 mt-1 border-t border-lumos-border/60 space-y-1.5">
                 <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary/70 px-0.5">
                   O que você pediu antes
                 </p>
-                {data.historico.map(h => (
+                {outrasVersoes.map(h => (
                   <div key={h.versao} className="rounded-lumos border border-lumos-border/50 overflow-hidden">
-                    <button type="button"
-                      onClick={() => setVerHistorico(x => (x === h.versao ? null : h.versao))}
-                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-lumos-text-secondary/[0.04]">
-                      <span className="text-[11px] font-bold text-lumos-text-primary">
-                        v{String(h.versao).padStart(2, '0')}
-                        <span className="ml-1.5 font-normal text-lumos-text-secondary">
-                          {h.comments.length} {h.comments.length === 1 ? 'pedido' : 'pedidos'}
+                    <div className="w-full flex items-center gap-2 px-2.5 py-2">
+                      <button type="button"
+                        onClick={() => setVerHistorico(x => (x === h.versao ? null : h.versao))}
+                        className="flex-1 flex items-center justify-between gap-2 text-left">
+                        <span className="text-[11px] font-bold text-lumos-text-primary">
+                          v{String(h.versao).padStart(2, '0')}
+                          <span className="ml-1.5 font-normal text-lumos-text-secondary">
+                            {h.comments.length} {h.comments.length === 1 ? 'pedido' : 'pedidos'}
+                          </span>
                         </span>
-                      </span>
-                      <ChevronDown className={clsx('w-3.5 h-3.5 text-lumos-text-secondary transition-transform',
-                        verHistorico === h.versao && 'rotate-180')} />
-                    </button>
+                        <ChevronDown className={clsx('w-3.5 h-3.5 text-lumos-text-secondary transition-transform',
+                          verHistorico === h.versao && 'rotate-180')} />
+                      </button>
+                      {/* Ler o pedido antigo e não poder ver o vídeo dele era
+                          justamente a metade que faltava. */}
+                      <button type="button"
+                        onClick={() => irPara(versoes.findIndex(v => v.id === h.id))}
+                        className="flex-shrink-0 text-[10px] font-black uppercase tracking-widest text-lumos-yellow hover:underline">
+                        Assistir
+                      </button>
+                    </div>
                     {verHistorico === h.versao && (
                       <div className="px-2.5 pb-2.5 space-y-1.5">
                         {h.comments.map(c => (
@@ -846,7 +1224,7 @@ export default function RevisaoPublica() {
                           </div>
                         ))}
                         <p className="text-[9.5px] text-lumos-text-secondary/60 leading-snug pt-0.5">
-                          Tempos referentes à v{String(h.versao).padStart(2, '0')}, que era um corte diferente deste.
+                          Tempos referentes à v{String(h.versao).padStart(2, '0')}, que é um corte diferente do que está no player.
                         </p>
                       </div>
                     )}
@@ -856,7 +1234,10 @@ export default function RevisaoPublica() {
             )}
           </div>
 
-          {/* Compositor — mesma diagramação da revisão interna (InternalReviewModal) */}
+          {/* Compositor — mesma diagramação da revisão interna (InternalReviewModal).
+              Não aparece em versão antiga: o comentário nasceria preso a um corte
+              que a equipe já substituiu. */}
+          {!vendoAntiga && (
           <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1">
@@ -901,6 +1282,7 @@ export default function RevisaoPublica() {
             </div>
             <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">Enter envia · Shift+Enter quebra linha</p>
           </div>
+          )}
         </aside>
       </div>
     </div>

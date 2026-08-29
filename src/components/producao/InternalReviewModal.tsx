@@ -645,9 +645,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               onPlay={e => { setPlaying(true); if (!fpsMedido.current) { fpsMedido.current = true; estimarFps(e.currentTarget, setFps); } }} onPause={() => setPlaying(false)} onClick={togglePlay} playsInline />
             <canvas ref={canvasRef} className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
               onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp} />
-          </div>
-
+            {/* Dentro da transformação, junto do vídeo: com zoom, moldura parada
+                sobre imagem ampliada apontaria um corte que não existe. */}
             <GuiasDeEnquadramento guia={guia} mascara={mascara} larguraVideo={dimVideo.w} alturaVideo={dimVideo.h} />
+          </div>
 
             {!ready && !videoUnsupported && <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" /></div>}
 
