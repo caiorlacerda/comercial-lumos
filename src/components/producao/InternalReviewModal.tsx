@@ -547,7 +547,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           onConfirmar={criarColados} onClose={() => setColando(false)} />
       )}
       <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 flex-shrink-0">
-        <span className="text-sm font-black truncate flex items-center gap-2">
+        {/* O truncate vale só pro NOME DO ARQUIVO. Quando ele estava aqui no
+            contêiner, o overflow:hidden cortava o menu de versões, que abre pra
+            fora da caixa: o botão clicava e nada aparecia. */}
+        <span className="text-sm font-black flex items-center gap-2 min-w-0">
           {/* Antes este selo dizia "Revisão interna" FIXO, em qualquer vídeo — era
               o nome da tela, não o estado da peça. Deu no que tinha que dar:
               abrir um vídeo que já estava com o cliente e procurar o botão de
@@ -609,7 +612,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             <>v{String(versao).padStart(2, '0')}</>
           )}
 
-          <span className="text-lumos-text-secondary font-bold normal-case tracking-normal hidden md:inline">· {atual?.file_name ?? fileName}</span>
+          <span className="text-lumos-text-secondary font-bold normal-case tracking-normal hidden md:inline truncate min-w-0">· {atual?.file_name ?? fileName}</span>
         </span>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setRtheme(t => t === 'dark' ? 'light' : 'dark')} title="Tema claro/escuro"
