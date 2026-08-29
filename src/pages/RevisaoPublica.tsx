@@ -96,7 +96,14 @@ export default function RevisaoPublica() {
 
   const load = useCallback(async () => {
     const { data: res, error: err } = await supabase.rpc('get_public_review', { p_token: token });
-    if (err || !res || (res as any).error) { setError('Link inválido ou expirado.'); setLoading(false); return; }
+    if (err || !res || (res as any).error) {
+      // Fase interna não é erro de link: é o processo. O cliente merece saber
+      // que o vídeo existe e está em ajustes, sem ver o material cru.
+      setError((res as any)?.error === 'em_revisao_interna'
+        ? 'Este vídeo está em ajustes com a equipe da Lumos. Assim que estiver pronto, você é avisado e este mesmo link volta a funcionar.'
+        : 'Link inválido ou expirado.');
+      setLoading(false); return;
+    }
     setData(res as ReviewData);
     setDurationMs(prev => prev || (res as ReviewData).video.duration_ms || 0);
     setLoading(false);
@@ -120,12 +127,14 @@ export default function RevisaoPublica() {
   const decision = data?.video.client_decision ?? null;
 
   // Fase interna: o mesmo link serve à revisão do time, com a decisão certa.
-  const modoInterno = data?.video.status === 'EM_REVISAO_INTERNA' || data?.video.status === 'ALTERACOES_INTERNAS';
+  // A revisão interna acontece DENTRO da plataforma, com login e permissão.
+  // Esta página é do cliente e só do cliente: era daqui que saía o risco de um
+  // link repassado por engano virar aprovação interna feita por gente de fora.
 
   const decide = async (kind: 'aprovado' | 'ajustes') => {
     if (!viewerId || deciding) return;
     setDeciding(true);
-    const { data: res, error: err } = await supabase.rpc(modoInterno ? 'review_decide_interna' : 'review_decide', {
+    const { data: res, error: err } = await supabase.rpc('review_decide', {
       p_token: token, p_viewer_id: viewerId, p_decision: kind,
     });
     setDeciding(false);
@@ -538,14 +547,10 @@ export default function RevisaoPublica() {
         {/* Comentários */}
         <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:h-full lg:min-h-0', isFs && 'hidden')}>
 
-          {/* Decisão: fase interna decide "libera pro cliente"; fase cliente decide "aprova" */}
+          {/* Decisão do cliente. A fase interna nem chega aqui: o backend
+              devolve "em_revisao_interna" e a página mostra o aviso. */}
           {viewerId && (
             <div className="px-3 py-3 border-b border-lumos-border">
-              {modoInterno && (
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> Revisão interna da Lumos
-                </p>
-              )}
               {data.video.status === 'ALTERACOES_INTERNAS' ? (
                 <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500 flex items-start gap-2">
                   <RotateCcw className="w-4 h-4 flex-shrink-0 mt-px" />
@@ -584,11 +589,11 @@ export default function RevisaoPublica() {
                 <div className="flex gap-2">
                   <button onClick={() => decide('aprovado')} disabled={deciding}
                     className="flex-1 h-10 rounded-lumos bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
-                    <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : modoInterno ? 'Aprovar e liberar pro cliente' : 'Aprovar vídeo'}
+                    <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : 'Aprovar vídeo'}
                   </button>
                   <button onClick={() => setAskChanges(true)} disabled={deciding}
                     className="flex-1 h-10 rounded-lumos border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
-                    <RotateCcw className="w-4 h-4" /> {modoInterno ? 'Pedir alteração' : 'Pedir ajustes'}
+                    <RotateCcw className="w-4 h-4" /> Pedir ajustes
                   </button>
                 </div>
               )}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Film, ExternalLink, Check, AlertTriangle, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
+import { Lock, Film, ExternalLink, Check, AlertTriangle, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -55,6 +55,10 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
   const { isAdmin, profile, can } = useAuth();
   const toast = useToast();
   const canManage = isAdmin || can('ordem_do_dia');
+  // Quem dá o aval interno: admin, produção e quem receber 'revisao_interna'
+  // (é assim que o atendimento entra, sem precisar de papel novo). O editor
+  // sobe o vídeo, mas não aprova o próprio trabalho.
+  const podeAvalInterno = isAdmin || can('revisao_interna');
 
   const [versions, setVersions] = useState<VideoVersion[]>([]);
   const [linksByGroup, setLinksByGroup] = useState<Record<string, { id: string; token: string; watermark: boolean; allow_download: boolean }>>({});
@@ -551,13 +555,32 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
     fetchVersions();
   };
 
+  // O link é DO CLIENTE. Antes do aval interno ele não deve nem existir: foi
+  // exatamente daí que veio o erro humano de mandar material cru pra fora.
+  const FASE_INTERNA: string[] = ['EM_REVISAO_INTERNA', 'ALTERACOES_INTERNAS'];
+  const liberadoPraCliente = (st: string) => !FASE_INTERNA.includes(st);
+
   const transition = async (v: VideoVersion, next: ReviewStatus) => {
     try {
       setBusy(v.id); setMenuFor(null);
       const { error } = await supabase.from('video_versions').update({ status: next, updated_at: new Date().toISOString() }).eq('id', v.id);
       if (error) throw error;
       if (v.task_id) await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[next] }).eq('id', v.task_id);
-      toast.success(next === 'APROVADO' ? 'Aprovado! Gerando o vFINAL em 02_APROVADO…' : 'Status atualizado ✓');
+
+      // Passou pro cliente: já deixa o link pronto. Assim ninguém precisa
+      // lembrar de gerar, e não existe link solto antes da hora.
+      let avisoLink = '';
+      if (next === 'EM_REVISAO_CLIENTE') {
+        const grupo = v.group_id || v.id;
+        if (!linksByGroup[grupo]) {
+          const { error: eLink } = await supabase.from('review_links')
+            .insert([{ video_version_id: v.id, group_id: grupo, created_by: profile?.id }]);
+          avisoLink = eLink ? '' : ' Link do cliente criado.';
+        }
+      }
+      toast.success(next === 'APROVADO'
+        ? 'Aprovado! Gerando o vFINAL em 02_APROVADO…'
+        : `Status atualizado ✓${avisoLink}`);
       fetchVersions();
     } catch (err: any) { toast.error(`Erro: ${err.message}`); }
     finally { setBusy(null); }
@@ -609,16 +632,25 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
           </button>
         )}
 
-        {canManage && link ? (
+        {canManage && !liberadoPraCliente(v.status) ? (
+          // Em revisão interna não existe link pra copiar. O botão fica visível
+          // e travado, dizendo o porquê — some a chance de mandar material cru
+          // pro cliente, e a pessoa entende o processo em vez de só ser barrada.
+          <button type="button" disabled
+            title="O link é do cliente. Aprove internamente primeiro (menu ··· → Aprovado internamente)."
+            className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border/60 text-lumos-text-secondary/70 text-[11px] font-black flex items-center justify-center gap-1.5 cursor-not-allowed whitespace-nowrap')}>
+            <Lock className={iconSz} /> {compact ? '' : 'Só após aval interno'}
+          </button>
+        ) : canManage && link ? (
           <button type="button" onClick={() => copyLink(link.token)}
-            title="Copia o link de revisão — não muda o status do vídeo"
+            title="Copia o link do cliente — não muda o status do vídeo"
             className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 whitespace-nowrap')}>
-            <Copy className={iconSz} /> {compact ? '' : 'Copiar link'}
+            <Copy className={iconSz} /> {compact ? '' : 'Link do cliente'}
           </button>
         ) : canManage ? (
           <button type="button" onClick={() => generateLink(g)} disabled={isBusy}
             className={clsx(h, compact ? 'px-2.5' : 'flex-1', 'rounded-lumos border border-lumos-border text-lumos-text-primary text-[11px] font-black flex items-center justify-center gap-1.5 hover:border-lumos-yellow/50 disabled:opacity-50 whitespace-nowrap')}>
-            <Link2 className={iconSz} /> {compact ? '' : 'Gerar link'}
+            <Link2 className={iconSz} /> {compact ? '' : 'Gerar link do cliente'}
           </button>
         ) : null}
 
@@ -645,7 +677,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
               <div ref={fitMenu} style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
                 className="z-[301] w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 {/* Transições */}
-                {v.status === 'EM_REVISAO_INTERNA' && (<>
+                {v.status === 'EM_REVISAO_INTERNA' && podeAvalInterno && (<>
                   <MenuItem icon={Send} label="Aprovado internamente: enviar ao cliente" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} />
                   <MenuItem icon={RotateCcw} label="Pedir alteração (interna)" danger onClick={() => transition(v, 'ALTERACOES_INTERNAS')} />
                 </>)}
@@ -653,7 +685,7 @@ export default function VideoReviewPanel({ projectId, tasks }: Props) {
                   <MenuItem icon={CircleCheckBig} label="Marcar: cliente aprovou" onClick={() => transition(v, 'APROVADO')} />
                   <MenuItem icon={RotateCcw} label="Marcar: cliente pediu ajustes" danger onClick={() => transition(v, 'ALTERACOES_CLIENTE')} />
                 </>)}
-                {(v.status === 'ALTERACOES_INTERNAS' || v.status === 'ALTERACOES_CLIENTE') && (<>
+                {(v.status === 'ALTERACOES_INTERNAS' || v.status === 'ALTERACOES_CLIENTE') && podeAvalInterno && (<>
                   <MenuItem icon={Play} label="Voltar pra revisão interna" onClick={() => transition(v, 'EM_REVISAO_INTERNA')} />
                   <MenuItem icon={Send} label="Enviar ao cliente" onClick={() => transition(v, 'EM_REVISAO_CLIENTE')} />
                 </>)}
