@@ -88,25 +88,46 @@ export function drawShape(ctx: CanvasRenderingContext2D, sh: Shape, w: number, h
     if (sh.type === 'rect') {
       traçar(ctx, sh.color, lw, () => { ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y); });
     } else { // seta
+      /**
+       * Seta cheia, que ENGROSSA conforme você arrasta.
+       *
+       * Antes era uma linha de espessura fixa com um bico: setinha tímida, do
+       * mesmo peso pra marcar um detalhe ou para apontar do outro lado da tela.
+       * Aqui o corpo é uma forma só, preenchida, cuja largura vem do próprio
+       * comprimento — arrastou mais longe, seta mais forte. É o que dá o gesto
+       * de "olha ISSO aqui" sem precisar de contorno.
+       *
+       * Sem contorno de propósito: preenchida e grossa ela já se sustenta em
+       * cima da imagem, e a borda escura só sujava a silhueta.
+       */
       const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      const head = lw * 4.2;
-      // A haste para antes da ponta, senão o traço vaza por dentro da cabeça e
-      // engorda o bico.
-      const fim = { x: b.x - head * 0.55 * Math.cos(ang), y: b.y - head * 0.55 * Math.sin(ang) };
-      traçar(ctx, sh.color, lw, () => {
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(fim.x, fim.y); ctx.stroke();
-      });
-      const cabeça = () => {
-        ctx.beginPath(); ctx.moveTo(b.x, b.y);
-        ctx.lineTo(b.x - head * Math.cos(ang - Math.PI / 7), b.y - head * Math.sin(ang - Math.PI / 7));
-        ctx.lineTo(b.x - head * Math.cos(ang + Math.PI / 7), b.y - head * Math.sin(ang + Math.PI / 7));
-        ctx.closePath();
+      const comprimento = Math.hypot(b.x - a.x, b.y - a.y);
+
+      // Cresce com o arrasto, com piso (marcação curta ainda aparece) e teto
+      // (arrasto de ponta a ponta não vira uma mancha em cima da cena).
+      const corpo = Math.min(Math.max(comprimento * 0.055, lw * 1.2), w * 0.022);
+      const cabeçaL = corpo * 2.9;   // largura da cabeça
+      const cabeçaC = corpo * 3.2;   // comprimento da cabeça
+
+      const baseCabeça = {
+        x: b.x - cabeçaC * Math.cos(ang),
+        y: b.y - cabeçaC * Math.sin(ang),
       };
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-      ctx.lineWidth = Math.max(2, lw * 0.6);
-      cabeça(); ctx.stroke();
+      // Perpendicular ao eixo da seta, pra abrir as laterais.
+      const nx = -Math.sin(ang), ny = Math.cos(ang);
+      const rabo = corpo * 0.30;     // afina no início: dá direção sem precisar de outra cor
+
       ctx.fillStyle = sh.color;
-      cabeça(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(a.x + nx * rabo, a.y + ny * rabo);
+      ctx.lineTo(baseCabeça.x + nx * corpo * 0.5, baseCabeça.y + ny * corpo * 0.5);
+      ctx.lineTo(baseCabeça.x + nx * cabeçaL * 0.5, baseCabeça.y + ny * cabeçaL * 0.5);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(baseCabeça.x - nx * cabeçaL * 0.5, baseCabeça.y - ny * cabeçaL * 0.5);
+      ctx.lineTo(baseCabeça.x - nx * corpo * 0.5, baseCabeça.y - ny * corpo * 0.5);
+      ctx.lineTo(a.x - nx * rabo, a.y - ny * rabo);
+      ctx.closePath();
+      ctx.fill();
     }
   }
 }
