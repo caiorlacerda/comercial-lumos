@@ -34,6 +34,8 @@ interface VideoVersion {
   mime_type: string | null;
   uploaded_by: string | null;
   uploaded_at: string | null;
+  /** Muda quando a etapa muda — é a régua de "mexeu por último". */
+  updated_at: string | null;
   fps: number | null;
   thumb_url: string | null;
   client_decision: string | null;
@@ -111,6 +113,27 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   // Filtros da grade
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  /**
+   * ORDEM E FILTRO POR TAREFA.
+   *
+   * A lista vinha sempre na mesma ordem (envio mais recente primeiro) e só dava
+   * pra separar por etapa. Num projeto com dezenas de entregas isso vira rolagem:
+   * quem procura "o que mexeu hoje" e quem procura "as entregas daquela tarefa"
+   * precisavam do olho.
+   *
+   * A ordem fica guardada no navegador porque é jeito de trabalhar de cada um;
+   * o filtro por tarefa NÃO fica, porque é do projeto que está aberto agora —
+   * voltar num outro projeto com uma tarefa antiga selecionada esconderia
+   * entregas sem explicação.
+   */
+  type Ordem = 'recentes' | 'antigas' | 'mexidas' | 'nome' | 'tarefa' | 'etapa';
+  const [ordem, setOrdem] = useState<Ordem>(() => {
+    try { return (localStorage.getItem('lumos_entregas_ordem') as Ordem) || 'recentes'; } catch { return 'recentes'; }
+  });
+  useEffect(() => { try { localStorage.setItem('lumos_entregas_ordem', ordem); } catch { /* ignore */ } }, [ordem]);
+  const [taskFilter, setTaskFilter] = useState('all');   // 'all' | 'none' | id da tarefa
+  // Some quando troca de projeto: tarefa de outro projeto não filtra nada aqui.
+  useEffect(() => { setTaskFilter('all'); }, [projectId]);
   // Grade (cards) ou lista (linhas compactas) — preferência persiste por navegador.
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     try { return (localStorage.getItem('lumos_entregas_view') as 'grid' | 'list') || 'grid'; } catch { return 'grid'; }
@@ -467,13 +490,11 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, VideoVersion[]>();
     for (const v of versions) { const k = v.group_id || v.id; if (!map.has(k)) map.set(k, []); map.get(k)!.push(v); }
+    // A ordem da lista é escolhida em shownGroups: aqui só agrupamos.
     return [...map.entries()].map(([id, vs]) => {
       const sorted = [...vs].sort((a, b) => b.versao - a.versao);
       return { id, versions: sorted, current: sorted[0], count: sorted.length };
-    }).sort((a, b) =>
-      new Date(b.current.uploaded_at || b.current.created_at).getTime() -
-      new Date(a.current.uploaded_at || a.current.created_at).getTime()
-    );
+    });
   }, [versions]);
 
   // Veio de uma menção: abre o vídeo citado assim que a lista carregar. Uma vez
@@ -488,14 +509,56 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abrirVersao, groups, loading]);
 
-  const shownGroups = useMemo(() => groups.filter(g => {
-    if (statusFilter !== 'all' && g.current.status !== statusFilter) return false;
-    if (search.trim()) {
-      const t = tasks.find(x => x.id === g.current.task_id)?.titulo || '';
-      if (!normTxt(g.current.file_name).includes(normTxt(search)) && !normTxt(t).includes(normTxt(search))) return false;
-    }
-    return true;
-  }), [groups, statusFilter, search, tasks]);
+  // Ordem do fluxo, não alfabética: "onde a peça está" só faz sentido na
+  // sequência em que o trabalho acontece.
+  const ORDEM_FLUXO: ReviewStatus[] = ['EM_REVISAO_INTERNA', 'ALTERACOES_INTERNAS', 'EM_REVISAO_CLIENTE', 'ALTERACOES_CLIENTE', 'APROVADO'];
+
+  const tituloDaTarefa = useCallback(
+    (g: Group) => tasks.find(x => x.id === g.current.task_id)?.titulo || '',
+    [tasks],
+  );
+
+  const shownGroups = useMemo(() => {
+    const envio = (g: Group) => new Date(g.current.uploaded_at || g.current.created_at).getTime();
+    const mexeu = (g: Group) => new Date(g.current.updated_at || g.current.uploaded_at || g.current.created_at).getTime();
+    const recentesPrimeiro = (a: Group, b: Group) => envio(b) - envio(a);
+
+    const lista = groups.filter(g => {
+      if (statusFilter !== 'all' && g.current.status !== statusFilter) return false;
+      if (taskFilter === 'none' && g.current.task_id) return false;
+      if (taskFilter !== 'all' && taskFilter !== 'none' && g.current.task_id !== taskFilter) return false;
+      if (search.trim()) {
+        const t = tituloDaTarefa(g);
+        if (!normTxt(g.current.file_name).includes(normTxt(search)) && !normTxt(t).includes(normTxt(search))) return false;
+      }
+      return true;
+    });
+
+    const porOrdem: Record<Ordem, (a: Group, b: Group) => number> = {
+      recentes: recentesPrimeiro,
+      antigas: (a, b) => envio(a) - envio(b),
+      mexidas: (a, b) => mexeu(b) - mexeu(a),
+      nome: (a, b) => a.current.file_name.localeCompare(b.current.file_name, 'pt-BR', { numeric: true }),
+      // Entrega sem tarefa vai pro fim: ela é a exceção, não o começo da lista.
+      tarefa: (a, b) => {
+        const ta = tituloDaTarefa(a), tb = tituloDaTarefa(b);
+        if (!ta !== !tb) return ta ? -1 : 1;
+        return ta.localeCompare(tb, 'pt-BR') || recentesPrimeiro(a, b);
+      },
+      etapa: (a, b) =>
+        (ORDEM_FLUXO.indexOf(a.current.status) - ORDEM_FLUXO.indexOf(b.current.status)) || recentesPrimeiro(a, b),
+    };
+    return [...lista].sort(porOrdem[ordem] || recentesPrimeiro);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, statusFilter, taskFilter, search, ordem, tituloDaTarefa]);
+
+  // Quantas entregas cada tarefa tem — o número no filtro evita escolher uma
+  // tarefa que não tem entrega nenhuma e achar que a lista quebrou.
+  const taskCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    groups.forEach(g => { const k = g.current.task_id || '__sem__'; c[k] = (c[k] || 0) + 1; });
+    return c;
+  }, [groups]);
 
   const statusCounts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -1016,6 +1079,39 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
                   .map(s => ({ value: s, label: `${STATUS_UI[s].label} · ${statusCounts[s]}` }))]} />
           </div>
 
+          {/* Filtro por tarefa. Só aparece quando há tarefa em jogo: num projeto
+              sem tarefa nenhuma seria um controle que não faz nada. */}
+          {(tasks.length > 0 || taskCounts['__sem__'] !== groups.length) && (
+            <div className="w-52 flex-shrink-0">
+              <Select value={taskFilter} onChange={setTaskFilter} ariaLabel="Filtrar por tarefa" menuClassName="min-w-[240px]"
+                searchable={tasks.length > 6} searchPlaceholder="Buscar tarefa…"
+                className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
+                  taskFilter !== 'all' ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}
+                options={[
+                  { value: 'all', label: 'Todas as tarefas' },
+                  ...tasks
+                    .filter(t => (taskCounts[t.id] || 0) > 0)
+                    .map(t => ({ value: t.id, label: `${t.titulo} · ${taskCounts[t.id]}` })),
+                  ...(taskCounts['__sem__'] ? [{ value: 'none', label: `Sem tarefa · ${taskCounts['__sem__']}` }] : []),
+                ]} />
+            </div>
+          )}
+
+          {/* Ordem da lista */}
+          <div className="w-52 flex-shrink-0" title="Ordem da lista">
+            <Select value={ordem} onChange={v => setOrdem(v as Ordem)} ariaLabel="Ordenar as entregas" menuClassName="min-w-[210px]"
+              className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
+                ordem !== 'recentes' ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}
+              options={[
+                { value: 'recentes', label: 'Mais recentes primeiro' },
+                { value: 'antigas', label: 'Mais antigas primeiro' },
+                { value: 'mexidas', label: 'Mexidas por último' },
+                { value: 'nome', label: 'Nome do arquivo (A a Z)' },
+                { value: 'tarefa', label: 'Agrupadas por tarefa' },
+                { value: 'etapa', label: 'Etapa do fluxo' },
+              ]} />
+          </div>
+
           {/* Selecionar todos os visíveis (base pra ação em lote) */}
           {canManage && shownGroups.length > 0 && (
             <label className="flex items-center gap-2 h-9 px-3 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary cursor-pointer flex-shrink-0">
@@ -1025,7 +1121,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
                   setConfirmingDelete(false);
                   setSelected(e.target.checked ? new Set(shownGroups.map(g => g.id)) : new Set());
                 }} />
-              Selecionar {statusFilter !== 'all' || search.trim() ? 'filtrados' : 'todos'}
+              Selecionar {statusFilter !== 'all' || taskFilter !== 'all' || search.trim() ? 'filtrados' : 'todos'}
             </label>
           )}
 
