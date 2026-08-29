@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageSquare, Play, Link2, Unlink, Loader2, Upload } from 'lucide-react';
+import { MessageSquare, Play, Link2, Unlink, Loader2, Upload, MoreVertical, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,7 +19,7 @@ interface Version {
   status: ReviewStatus;
   thumb_url: string | null;
 }
-interface Group { id: string; current: Version; count: number }
+interface Group { id: string; current: Version; count: number; versions: Version[] }
 
 interface Props {
   projectId: string;
@@ -42,6 +42,8 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   const [busy, setBusy] = useState(false);
   const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number; version: Version } | null>(null);
   const [enviando, setEnviando] = useState<{ nome: string; pct: number } | null>(null);
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -62,6 +64,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
       id,
       current: [...versions].sort((a, b) => b.versao - a.versao)[0],
       count: versions.length,
+      versions,
     }));
     setGroups(gs);
 
@@ -111,6 +114,33 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     if (error) { toast.error('Não foi possível desvincular.'); return; }
     toast.success('Vídeo desvinculado.');
     load();
+  };
+
+  /**
+   * Excluir de vez: manda o arquivo (e o vFINAL, se houver) pra lixeira do Drive
+   * e apaga o registro. Some o grupo inteiro, todas as versões — apagar só a
+   * atual deixaria um vídeo meio vivo, com histórico órfão.
+   *
+   * Mesma função do painel de Entregas, pra não existirem dois jeitos de apagar
+   * a mesma coisa.
+   */
+  const excluir = async () => {
+    if (!linked) return;
+    const quantas = linked.versions.length;
+    const aviso = quantas > 1
+      ? `Excluir "${linked.current.file_name}" e as ${quantas} versões dele? O arquivo vai pra lixeira do Drive.`
+      : `Excluir "${linked.current.file_name}"? O arquivo vai pra lixeira do Drive.`;
+    if (!window.confirm(aviso)) return;
+    setMenuAberto(false); setExcluindo(true);
+    try {
+      const { error } = await supabase.functions.invoke('drive-delete', {
+        body: { version_ids: linked.versions.map(v => v.id) },
+      });
+      if (error) throw error;
+      toast.success('Vídeo excluído ✓');
+      await load();
+    } catch { toast.error('Não foi possível excluir.'); }
+    finally { setExcluindo(false); }
   };
 
   // Abre a revisão interna (mesmo caminho do painel: garante um token de stream).
@@ -230,15 +260,37 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} Revisar
             </button>
             {canManage && (
-              <button
-                type="button"
-                onClick={unlink}
-                disabled={busy}
-                title="Desvincular vídeo"
-                className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 hover:border-red-400/40 transition-colors disabled:opacity-50"
-              >
-                <Unlink className="w-3.5 h-3.5" />
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMenuAberto(o => !o)}
+                  disabled={busy || excluindo}
+                  title="Opções"
+                  className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors disabled:opacity-50"
+                >
+                  {excluindo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MoreVertical className="w-3.5 h-3.5" />}
+                </button>
+                {menuAberto && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setMenuAberto(false)} />
+                    <div className="absolute right-0 top-8 z-50 w-52 py-1 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl">
+                      <button type="button"
+                        onClick={() => { setMenuAberto(false); unlink(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10">
+                        <Unlink className="w-3.5 h-3.5" /> Desvincular da tarefa
+                      </button>
+                      {/* Desvincular solta o vínculo e o vídeo continua nas
+                          Entregas. Excluir tira do ar de vez. São coisas bem
+                          diferentes, então o texto diz o que cada uma faz. */}
+                      <button type="button"
+                        onClick={excluir}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-red-400 hover:bg-red-500/10">
+                        <Trash2 className="w-3.5 h-3.5" /> Excluir vídeo
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         ) : enviando ? (
