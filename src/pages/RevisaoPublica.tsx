@@ -80,6 +80,11 @@ export default function RevisaoPublica() {
   const [videoUnsupported, setVideoUnsupported] = useState(false);
   const [menuQualidade, setMenuQualidade] = useState(false);
   const [verHistorico, setVerHistorico] = useState<number | null>(null);
+  // Quem da Lumos abriu o link do cliente. A outra metade da confusão: o
+  // atendimento manda ESTE link pro time revisar internamente, e aí o comentário
+  // da equipe entra registrado como se fosse do cliente. Silencioso e chato de
+  // desfazer, então a página avisa em vez de deixar acontecer.
+  const [souDaLumos, setSouDaLumos] = useState<{ nome: string; projetoId: string | null } | null>(null);
 
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
@@ -113,6 +118,23 @@ export default function RevisaoPublica() {
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!data?.video?.id) return;
+    let vivo = true;
+    (async () => {
+      const { data: sess } = await supabase.auth.getSession();
+      const uid = sess?.session?.user?.id;
+      if (!uid) return;
+      const { data: perfil } = await supabase.from('app_users')
+        .select('full_name, status').eq('auth_user_id', uid).maybeSingle();
+      if (!vivo || perfil?.status !== 'ativo') return;
+      const { data: vv } = await supabase.from('video_versions')
+        .select('project_id').eq('id', data.video.id).maybeSingle();
+      if (vivo) setSouDaLumos({ nome: perfil.full_name || 'Equipe', projetoId: vv?.project_id ?? null });
+    })();
+    return () => { vivo = false; };
+  }, [data?.video?.id]);
 
   const identify = async () => {
     if (!nameInput.trim()) return;
@@ -381,6 +403,25 @@ export default function RevisaoPublica() {
   // normal, empilhado e rolável.
   return (
     <div className={clsx('min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-lumos-bg text-lumos-text-primary font-work-sans', themeClass)}>
+      {/* Alguém da Lumos abriu o link do cliente. Não é proibido — dá pra querer
+          conferir o que o cliente está vendo — mas precisa ficar explícito, senão
+          a equipe revisa por aqui e os comentários entram como se fossem do
+          cliente. Daí o atalho pra revisão interna do lado. */}
+      {souDaLumos && (
+        <div className="flex-shrink-0 px-4 py-2 bg-amber-500/15 border-b border-amber-500/40 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-[11.5px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {souDaLumos.nome}, esta é a <b>visão do cliente</b>. O que você comentar aqui entra como comentário <b>do cliente</b>.
+            </span>
+          </p>
+          <a href={souDaLumos.projetoId ? `/producao/projetos?projectId=${souDaLumos.projetoId}` : '/producao'}
+            className="h-7 px-3 rounded-lumos bg-amber-500 text-black text-[11px] font-black flex items-center gap-1.5 hover:brightness-95 flex-shrink-0">
+            Revisar internamente
+          </a>
+        </div>
+      )}
+
       {/* Header (sem logo) */}
       <header className="h-14 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
         <div className="flex items-center gap-3 min-w-0">
