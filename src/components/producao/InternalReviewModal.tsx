@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import UserAvatar from '@/components/common/UserAvatar';
 import { COLORS, SPEEDS, STREAM_BASE, timecode, estimarFps, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
+import { STATUS_UI, type ReviewStatus } from '@/lib/reviewStatus';
 import { captureVideoThumb } from '@/lib/videoThumb';
 import { useVideoFonte } from '@/hooks/useVideoFonte';
 import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
@@ -469,7 +470,18 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     <div className={clsx('fixed inset-0 z-50 bg-lumos-bg text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
       <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 flex-shrink-0">
         <span className="text-sm font-black truncate flex items-center gap-2">
-          <span className="text-[9px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-400 px-2 py-0.5 rounded-full">Revisão interna</span>
+          {/* Antes este selo dizia "Revisão interna" FIXO, em qualquer vídeo — era
+              o nome da tela, não o estado da peça. Deu no que tinha que dar:
+              abrir um vídeo que já estava com o cliente e procurar o botão de
+              aprovar que, corretamente, não existe nessa etapa. Agora o selo diz
+              onde a peça está. */}
+          {status && STATUS_UI[status as ReviewStatus] ? (
+            <span className={clsx('text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border', STATUS_UI[status as ReviewStatus].color)}>
+              {STATUS_UI[status as ReviewStatus].label}
+            </span>
+          ) : (
+            <span className="text-[9px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-400 px-2 py-0.5 rounded-full">Revisão interna</span>
+          )}
           {projectName ? `${projectName} · ` : ''}v{String(versao).padStart(2, '0')}
           <span className="text-lumos-text-secondary font-bold normal-case tracking-normal hidden md:inline">· {fileName}</span>
         </span>
@@ -722,6 +734,34 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               decisão longe de onde se decide é decisão que não se toma.
               A transição em si continua sendo a do painel: status do vídeo, da
               tarefa e link do cliente saem de um lugar só. */}
+          {/* Fora da fase interna não existe o que aprovar aqui — mas silêncio
+              vira "sumiu o botão". Então a área diz onde a peça está e o que
+              dá pra fazer. */}
+          {podeDecidir && onDecidir && status && status !== 'EM_REVISAO_INTERNA' && status !== 'ALTERACOES_INTERNAS' && (
+            <div className="px-3 py-2.5 border-b border-lumos-border flex-shrink-0">
+              <p className="text-[11.5px] text-lumos-text-secondary leading-snug">
+                {status === 'EM_REVISAO_CLIENTE' && 'Este vídeo já foi aprovado internamente e está com o cliente. A decisão agora é dele.'}
+                {status === 'ALTERACOES_CLIENTE' && 'O cliente pediu ajustes. Assim que a nova versão subir, ela volta para a revisão interna.'}
+                {status === 'APROVADO' && 'Vídeo aprovado pelo cliente. Nada a decidir por aqui.'}
+              </p>
+              {status === 'EM_REVISAO_CLIENTE' && (
+                <button type="button" disabled={decidindo}
+                  onClick={async () => {
+                    if (!await confirm({
+                      title: 'Voltar para revisão interna',
+                      message: 'O vídeo sai da mão do cliente e volta para a equipe. O link do cliente para de mostrar o vídeo até você liberar de novo.',
+                      confirmLabel: 'Voltar',
+                    })) return;
+                    setDecidindo(true);
+                    await onDecidir('ALTERACOES_INTERNAS');
+                  }}
+                  className="mt-2 h-8 px-3 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-primary hover:border-amber-500/60 disabled:opacity-60">
+                  Trazer de volta pra revisão interna
+                </button>
+              )}
+            </div>
+          )}
+
           {podeDecidir && onDecidir && (status === 'EM_REVISAO_INTERNA' || status === 'ALTERACOES_INTERNAS') && (
             <div className="px-3 py-3 border-b border-lumos-border flex-shrink-0">
               {pedindoAlteracao ? (
