@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw, Search, SlidersHorizontal, Frame } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw, Search, SlidersHorizontal, Frame, ClipboardPaste } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { supabase } from '@/lib/supabase';
@@ -11,6 +11,7 @@ import { STATUS_UI, type ReviewStatus } from '@/lib/reviewStatus';
 import { captureVideoThumb } from '@/lib/videoThumb';
 import { useVideoFonte } from '@/hooks/useVideoFonte';
 import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
+import ColarComentarios from '@/components/producao/ColarComentarios';
 
 interface TeamComment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number; body: string; created_at: string;
@@ -79,6 +80,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [versoes, setVersoes] = useState<{ id: string; versao: number; file_name: string; status: string; stream_hls: string | null; stream_status: string | null }[]>([]);
   const [versaoAtiva, setVersaoAtiva] = useState(versionId);
   const [menuVersao, setMenuVersao] = useState(false);
+  const [colando, setColando] = useState(false);
   const atual = versoes.find(v => v.id === versaoAtiva);
   const maisNova = versoes.length ? versoes[0].id : versionId;
   const vendoAntiga = versaoAtiva !== maisNova;
@@ -427,6 +429,21 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     resetComposer(); await load();
   };
 
+  /** Cria em lote o que veio colado. Uma inserção só: se falhar, falha inteiro,
+   *  em vez de deixar metade do feedback do cliente dentro e metade fora. */
+  const criarColados = async (itens: { ms: number; texto: string }[]) => {
+    const { error } = await supabase.from('review_comments').insert(
+      itens.map(i => ({
+        video_version_id: versaoAtiva, author_name: authorName,
+        author_user_id: profile?.id ?? null, is_team: true,
+        timecode_ms: Math.round(i.ms), body: i.texto,
+      })),
+    );
+    if (error) { toast.error('Não deu pra criar os comentários.'); return; }
+    toast.success(`${itens.length} comentário(s) criados ✓`);
+    await load();
+  };
+
   const viewComment = (c: TeamComment) => {
     seekTo(c.timecode_ms); setComposing(false);
     setViewingShapes(c.annotations.map(a => ({ type: (a.type as any) || 'draw', color: a.data?.color || COLORS[0], points: a.data?.points || [] })));
@@ -505,6 +522,13 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   return (
     <div className={clsx('fixed inset-0 z-50 bg-lumos-bg text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
+      {/* Sem isto o confirm() nunca aparecia e a promessa ficava pendurada:
+          excluir comentário simplesmente não acontecia, em silêncio. */}
+      {dialogoConfirmar}
+      {colando && (
+        <ColarComentarios fps={fps} duracaoMs={durationMs}
+          onConfirmar={criarColados} onClose={() => setColando(false)} />
+      )}
       <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 flex-shrink-0">
         <span className="text-sm font-black truncate flex items-center gap-2">
           {/* Antes este selo dizia "Revisão interna" FIXO, em qualquer vídeo — era
@@ -763,6 +787,12 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                     </button>
                   )}
                 </div>
+
+                <button type="button" onClick={() => setColando(true)} disabled={vendoAntiga}
+                  title="Colar retorno do cliente (e-mail, WhatsApp)"
+                  className="h-8 w-8 flex-shrink-0 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center disabled:opacity-40">
+                  <ClipboardPaste className="w-3.5 h-3.5" />
+                </button>
 
                 <div className="relative flex-shrink-0">
                   <button type="button" onClick={() => setPainelFiltro(o => !o)}
