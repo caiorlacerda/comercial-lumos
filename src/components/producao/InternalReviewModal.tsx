@@ -143,7 +143,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo')
+    supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo').order('full_name')
       .then(({ data }) => setTeam(data || []));
   }, []);
   useEffect(() => {
@@ -679,12 +679,24 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 {/* Lista de quem chamar. Só gente ativa do app — a menção existe
                     pra virar notificação, então nome solto não serve. */}
                 {mencao && (() => {
+                  // Sem corte de quantidade: cortar a lista escondia justamente
+                  // quem a pessoa procurava, e ela não tinha como saber que havia
+                  // mais. A caixa rola, então lista inteira e ordem alfabética.
                   const achados = team
                     .filter(u => u.full_name.toLowerCase().includes(mencao.busca))
-                    .slice(0, 6);
-                  if (!achados.length) return null;
+                    .sort((x, y) => x.full_name.localeCompare(y.full_name, 'pt-BR'));
+                  if (!achados.length) {
+                    return (
+                      <div className="absolute bottom-full left-0 mb-1 w-64 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl z-50 px-3 py-2">
+                        <p className="text-[11px] text-lumos-text-secondary">Ninguém com esse nome no app.</p>
+                      </div>
+                    );
+                  }
                   return (
-                    <div className="absolute bottom-full left-0 mb-1 w-60 max-h-56 overflow-y-auto custom-scrollbar rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl z-50 p-1">
+                    <div className="absolute bottom-full left-0 mb-1 w-64 max-h-72 overflow-y-auto custom-scrollbar rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl z-50 p-1">
+                      <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">
+                        {achados.length} {achados.length === 1 ? 'pessoa' : 'pessoas'}
+                      </p>
                       {achados.map(u => (
                         <button key={u.id} type="button" onClick={() => escolherMencao(u)}
                           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-lumos-text-secondary/10">
