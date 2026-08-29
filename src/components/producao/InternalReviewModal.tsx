@@ -65,6 +65,23 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [mascara, setMascara] = useState(false);
   const [menuVisual, setMenuVisual] = useState(false);
   const [dimVideo, setDimVideo] = useState({ w: 0, h: 0 });
+
+  /**
+   * COMPARAR VERSÕES sem sair do player.
+   *
+   * Ver o que mudou da v01 pra v02 exigia fechar, achar o outro card e abrir de
+   * novo — na prática ninguém comparava. Aqui a versão exibida é um estado, e o
+   * resto (comentários, anotações, decisão) segue ela.
+   *
+   * Versão ANTIGA entra em modo leitura: comentar ou aprovar sobre um corte que
+   * já foi substituído confunde mais do que ajuda. Para agir, volta pra atual.
+   */
+  const [versoes, setVersoes] = useState<{ id: string; versao: number; file_name: string; status: string; stream_hls: string | null; stream_status: string | null }[]>([]);
+  const [versaoAtiva, setVersaoAtiva] = useState(versionId);
+  const [menuVersao, setMenuVersao] = useState(false);
+  const atual = versoes.find(v => v.id === versaoAtiva);
+  const maisNova = versoes.length ? versoes[0].id : versionId;
+  const vendoAntiga = versaoAtiva !== maisNova;
   // Zoom pra conferir detalhe (legenda cortada, logo torto, ruído). Escala o
   // conjunto vídeo+canvas junto, então a anotação continua caindo no mesmo
   // ponto da imagem: as coordenadas são normalizadas sobre o retângulo, que a
@@ -146,7 +163,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const drawingRef = useRef<Shape | null>(null);
   const [sending, setSending] = useState(false);
 
-  const streamUrl = useMemo(() => `${STREAM_BASE}?token=${encodeURIComponent(token)}`, [token]);
+  const streamUrl = useMemo(
+    () => `${STREAM_BASE}?token=${encodeURIComponent(token)}${versaoAtiva !== versionId ? `&versao=${encodeURIComponent(versaoAtiva)}` : ''}`,
+    [token, versaoAtiva, versionId],
+  );
   const [poster, setPoster] = useState<string | null>(null);
   const [driveLink, setDriveLink] = useState<string | null>(null);
   // O navegador não conseguiu exibir a imagem do vídeo (codec não suportado, ex.:
@@ -181,12 +201,12 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     }));
 
     const { data } = await supabase.from('review_comments').select(campos)
-      .eq('video_version_id', versionId).order('timecode_ms', { ascending: true });
+      .eq('video_version_id', versaoAtiva).order('timecode_ms', { ascending: true });
     setComments(arrumar(data || []));
 
     // Versões anteriores do MESMO vídeo, com o que o cliente pediu em cada uma.
     const { data: essa } = await supabase.from('video_versions')
-      .select('group_id, versao').eq('id', versionId).maybeSingle();
+      .select('group_id, versao').eq('id', versaoAtiva).maybeSingle();
     if (!essa?.group_id) { setHistorico([]); return; }
     const { data: irmas } = await supabase.from('video_versions')
       .select('id, versao').eq('group_id', essa.group_id).neq('id', versionId);
@@ -207,9 +227,22 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     setHistorico(Object.entries(porVersao)
       .map(([n, cs]) => ({ versao: Number(n), comments: cs }))
       .sort((x, y) => y.versao - x.versao));
-  }, [versionId]);
+  }, [versaoAtiva]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const { data: essa } = await supabase.from('video_versions').select('group_id').eq('id', versionId).maybeSingle();
+      if (!essa?.group_id) return;
+      const { data } = await supabase.from('video_versions')
+        .select('id, versao, file_name, status, stream_hls, stream_status')
+        .eq('group_id', essa.group_id).order('versao', { ascending: false });
+      if (vivo && data) setVersoes(data as any);
+    })();
+    return () => { vivo = false; };
+  }, [versionId]);
   useEffect(() => {
     supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo').order('full_name')
       .then(({ data }) => setTeam(data || []));
@@ -223,8 +256,12 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   // --- Player ---
   // Fonte do vídeo: CDN quando a cópia existe, arquivo direto enquanto não.
+  // Cada versão tem a própria cópia na CDN; ao trocar, o player segue a dela.
+  const hlsDaVersao = atual
+    ? (atual.stream_status === 'pronto' ? atual.stream_hls : null)
+    : hlsUrl;
   const { qualidades, qualidadeAtual, trocarQualidade, viaCdn } =
-    useVideoFonte(videoRef, hlsUrl, streamUrl);
+    useVideoFonte(videoRef, hlsDaVersao, streamUrl);
 
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
   const changeSpeed = () => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(next); if (videoRef.current) videoRef.current.playbackRate = next; };
@@ -475,15 +512,47 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               abrir um vídeo que já estava com o cliente e procurar o botão de
               aprovar que, corretamente, não existe nessa etapa. Agora o selo diz
               onde a peça está. */}
-          {status && STATUS_UI[status as ReviewStatus] ? (
-            <span className={clsx('text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border', STATUS_UI[status as ReviewStatus].color)}>
-              {STATUS_UI[status as ReviewStatus].label}
+          {(atual?.status ?? status) && STATUS_UI[(atual?.status ?? status) as ReviewStatus] ? (
+            <span className={clsx('text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border', STATUS_UI[(atual?.status ?? status) as ReviewStatus].color)}>
+              {STATUS_UI[(atual?.status ?? status) as ReviewStatus].label}
             </span>
           ) : (
             <span className="text-[9px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-400 px-2 py-0.5 rounded-full">Revisão interna</span>
           )}
-          {projectName ? `${projectName} · ` : ''}v{String(versao).padStart(2, '0')}
-          <span className="text-lumos-text-secondary font-bold normal-case tracking-normal hidden md:inline">· {fileName}</span>
+          {projectName ? `${projectName} · ` : ''}
+
+          {versoes.length > 1 ? (
+            <span className="relative">
+              <button type="button" onClick={() => setMenuVersao(o => !o)}
+                title="Trocar de versão"
+                className={clsx('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lumos border text-sm font-black transition-colors',
+                  vendoAntiga ? 'border-amber-500 text-amber-500' : 'border-lumos-border hover:border-lumos-yellow/60')}>
+                v{String(atual?.versao ?? versao).padStart(2, '0')}
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {menuVersao && (
+                <>
+                  <div className="fixed inset-0 z-[300]" onClick={() => setMenuVersao(false)} />
+                  <div className="absolute left-0 top-8 z-[301] w-64 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
+                    {versoes.map((v, i) => (
+                      <button key={v.id} type="button"
+                        onClick={() => { setVersaoAtiva(v.id); setMenuVersao(false); setViewingShapes([]); resetComposer(); }}
+                        className={clsx('w-full text-left px-2 py-1.5 rounded hover:bg-lumos-text-secondary/10',
+                          v.id === versaoAtiva ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                        <span className="text-[11px] font-black">v{String(v.versao).padStart(2, '0')}</span>
+                        {i === 0 && <span className="ml-1.5 text-[9px] font-black uppercase text-green-500">atual</span>}
+                        <span className="block text-[10.5px] font-normal text-lumos-text-secondary truncate normal-case tracking-normal">{v.file_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </span>
+          ) : (
+            <>v{String(versao).padStart(2, '0')}</>
+          )}
+
+          <span className="text-lumos-text-secondary font-bold normal-case tracking-normal hidden md:inline">· {atual?.file_name ?? fileName}</span>
         </span>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setRtheme(t => t === 'dark' ? 'light' : 'dark')} title="Tema claro/escuro"
@@ -737,7 +806,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           {/* Fora da fase interna não existe o que aprovar aqui — mas silêncio
               vira "sumiu o botão". Então a área diz onde a peça está e o que
               dá pra fazer. */}
-          {podeDecidir && onDecidir && status && status !== 'EM_REVISAO_INTERNA' && status !== 'ALTERACOES_INTERNAS' && (
+          {!vendoAntiga && podeDecidir && onDecidir && status && status !== 'EM_REVISAO_INTERNA' && status !== 'ALTERACOES_INTERNAS' && (
             <div className="px-3 py-2.5 border-b border-lumos-border flex-shrink-0">
               <p className="text-[11.5px] text-lumos-text-secondary leading-snug">
                 {status === 'EM_REVISAO_CLIENTE' && 'Este vídeo já foi aprovado internamente e está com o cliente. A decisão agora é dele.'}
@@ -762,7 +831,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             </div>
           )}
 
-          {podeDecidir && onDecidir && (status === 'EM_REVISAO_INTERNA' || status === 'ALTERACOES_INTERNAS') && (
+          {!vendoAntiga && podeDecidir && onDecidir && (status === 'EM_REVISAO_INTERNA' || status === 'ALTERACOES_INTERNAS') && (
             <div className="px-3 py-3 border-b border-lumos-border flex-shrink-0">
               {pedindoAlteracao ? (
                 <div className="rounded-lumos border border-lumos-border px-3 py-2.5">
@@ -992,9 +1061,23 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
             </div>
 
-            <div className="flex items-end gap-2">
+            {vendoAntiga && (
+              <div className="mb-2 rounded-lumos border border-amber-500/40 bg-amber-500/10 px-2.5 py-2">
+                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                  Você está vendo a v{String(atual?.versao ?? 0).padStart(2, '0')}, uma versão antiga.
+                </p>
+                <p className="text-[10.5px] text-lumos-text-secondary mt-0.5">
+                  Dá pra assistir e ler o que foi pedido nela. Pra comentar ou aprovar, volte para a versão atual.
+                </p>
+                <button type="button" onClick={() => { setVersaoAtiva(maisNova); setViewingShapes([]); resetComposer(); }}
+                  className="mt-1.5 text-[11px] font-black text-amber-600 dark:text-amber-400 underline underline-offset-2">
+                  Voltar para a versão atual
+                </button>
+              </div>
+            )}
+            <div className={clsx('flex items-end gap-2', vendoAntiga && 'opacity-40 pointer-events-none')}>
               <div className="flex-1 relative">
-                <textarea ref={comentarioRef} value={commentText} onFocus={ensureComposing}
+                <textarea ref={comentarioRef} disabled={vendoAntiga} value={commentText} onFocus={ensureComposing}
                   onChange={e => aoDigitar(e.target.value, e.target.selectionStart ?? e.target.value.length)}
                   onKeyDown={onCommentKey}
                   rows={2} placeholder={`Comentar em ${timecode(currentMs, fps)}… use @ para chamar alguém`}

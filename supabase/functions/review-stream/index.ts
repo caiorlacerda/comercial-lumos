@@ -46,8 +46,8 @@ type Resolvido = { fileId: string; origId: string; mime: string; fileName: strin
 const TTL_MS = 15_000
 const cacheLink = new Map<string, { valor: Resolvido | null; exp: number }>()
 
-async function resolverToken(token: string, wantsDownload: boolean): Promise<Resolvido | null> {
-  const chave = `${token}|${wantsDownload ? 'dl' : 'st'}`
+async function resolverToken(token: string, wantsDownload: boolean, versaoPedida?: string | null): Promise<Resolvido | null> {
+  const chave = `${token}|${wantsDownload ? 'dl' : 'st'}|${versaoPedida ?? 'atual'}`
   const hit = cacheLink.get(chave)
   if (hit && hit.exp > Date.now()) return hit.valor
 
@@ -60,10 +60,22 @@ async function resolverToken(token: string, wantsDownload: boolean): Promise<Res
   const { data: link } = await db.from('review_links').select('video_version_id, group_id, allow_download').eq('token', token).eq('active', true).maybeSingle()
   if (!link) return guardar(null)
 
+  // Comparar versões: o player pode pedir uma versão ESPECÍFICA do mesmo grupo.
+  // Sem isso, o token resolveria sempre a mais nova e o seletor de versões
+  // mostraria o vídeo errado — pior que não ter o seletor.
+  let version: any = null
+  if (versaoPedida) {
+    const { data } = await db.from('video_versions')
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status, group_id')
+      .eq('id', versaoPedida).maybeSingle()
+    // Só serve se for do MESMO grupo que o token autoriza.
+    const grupoDoLink = link.group_id
+      ?? (await db.from('video_versions').select('group_id').eq('id', link.video_version_id).maybeSingle()).data?.group_id
+    if (data && data.group_id && data.group_id === grupoDoLink) version = data
+  }
   // O link segue o GRUPO: resolve sempre a versão mais recente (maior versão).
   // Uma consulta só resolve os dois casos — antes eram duas.
-  let version: any = null
-  if (link.group_id) {
+  if (!version && link.group_id) {
     const { data } = await db.from('video_versions')
       .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status')
       .eq('group_id', link.group_id).order('versao', { ascending: false }).limit(1).maybeSingle()
@@ -143,7 +155,7 @@ serve(async (req) => {
   const wantsDownload = url.searchParams.get('download') === '1'
 
   const t0 = Date.now()
-  const alvo = await resolverToken(token, wantsDownload)
+  const alvo = await resolverToken(token, wantsDownload, url.searchParams.get('versao'))
   const msResolver = Date.now() - t0
   if (!alvo) return new Response('invalid token', { status: 403, headers: CORS })
 
