@@ -63,6 +63,10 @@ serve(async (req) => {
   const projectId = url.searchParams.get('project_id') ?? ''
   const fileName = url.searchParams.get('file_name') ?? ''
   const mimeType = url.searchParams.get('mime_type') || 'video/mp4'
+  // Tarefa de origem, quando o vídeo é enviado de dentro dela. Viaja como
+  // propriedade DO ARQUIVO: o registro no banco só nasce depois, no scan, e
+  // amarrar por nome de arquivo seria frágil.
+  const taskId = url.searchParams.get('task_id') || ''
   // mode=init: não recebe o arquivo, só abre a sessão no Drive e devolve o
   // endereço dela. O navegador manda os bytes direto pro Google, sem atravessar
   // esta função — é o que permite arquivo grande e vários ao mesmo tempo sem
@@ -140,7 +144,13 @@ serve(async (req) => {
         'X-Upload-Content-Type': mimeType,
         ...(contentLength ? { 'X-Upload-Content-Length': contentLength } : {}),
       },
-      body: JSON.stringify({ name: fileName, parents: [folderId], ...(uploaderName ? { properties: { app_uploader: uploaderName } } : {}) }),
+      body: JSON.stringify({
+        name: fileName, parents: [folderId],
+        properties: {
+          ...(uploaderName ? { app_uploader: uploaderName } : {}),
+          ...(taskId ? { app_task_id: taskId } : {}),
+        },
+      }),
     })
     const session = initRes.headers.get('location')
     if (!session) return json({ error: `init falhou ${initRes.status}` }, 502)

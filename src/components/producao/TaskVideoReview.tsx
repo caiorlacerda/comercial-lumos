@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { MessageSquare, Play, Link2, Unlink, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MessageSquare, Play, Link2, Unlink, Loader2, Upload } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,6 +40,8 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number } | null>(null);
+  const [enviando, setEnviando] = useState<{ nome: string; pct: number } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -126,9 +128,72 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao });
   };
 
+  /**
+   * Envio direto pela tarefa. O vínculo com a tarefa viaja como propriedade DO
+   * ARQUIVO no Drive: o registro no banco só nasce depois, no scan, então
+   * amarrar por nome de arquivo seria frágil. Quando o scan cria a versão, ela
+   * já vem com task_id e a tarefa entra em revisão interna sozinha.
+   *
+   * Mesmo caminho do painel do projeto, inclusive a confirmação de upload que
+   * evita a cópia duplicada (o Google não devolve CORS e o navegador cega).
+   */
+  const enviarArquivos = async (arquivos: FileList | null) => {
+    const lista = Array.from(arquivos || []).filter(f => /^video\//.test(f.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name));
+    if (!lista.length) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    const token = session?.access_token || anon;
+
+    for (const file of lista) {
+      setEnviando({ nome: file.name, pct: 0 });
+      const base = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/drive-upload`
+        + `?project_id=${encodeURIComponent(projectId)}&file_name=${encodeURIComponent(file.name)}`
+        + `&mime_type=${encodeURIComponent(file.type || 'video/mp4')}&task_id=${encodeURIComponent(task.id)}`;
+      try {
+        const r = await fetch(`${base}&mode=init&size=${file.size}`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, apikey: anon },
+        });
+        const j = await r.json();
+        if (!r.ok || !j?.upload_url) throw new Error(j?.error || 'não deu pra iniciar');
+
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', j.upload_url);
+          xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+          xhr.upload.onprogress = e => { if (e.lengthComputable) setEnviando({ nome: file.name, pct: e.loaded / e.total }); };
+          xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`http ${xhr.status}`)));
+          xhr.onerror = () => reject(Object.assign(new Error('rede'), { status: 0 }));
+          xhr.send(file);
+        }).catch(async (e: any) => {
+          if (e?.status !== 0) throw e;
+          const p = await fetch(`${base}&mode=probe`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, apikey: anon, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ upload_url: j.upload_url, size: file.size }),
+          });
+          const pj = await p.json();
+          if (!p.ok || !pj?.complete) throw e;
+        });
+      } catch (e: any) {
+        setEnviando(null);
+        toast.error(`${file.name}: ${String(e?.message || 'falhou')}`);
+        return;
+      }
+    }
+
+    setEnviando(null);
+    toast.success(`${lista.length} vídeo(s) enviado(s) ✓ Vinculando à tarefa…`);
+    // O scan cria o registro já com a tarefa. Damos um tempo e recarregamos.
+    await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
+    await load();
+  };
+
   if (loading) return null;
-  // Nada para mostrar e nada para vincular: não polui a tarefa.
-  if (!linked && (!canManage || livres.length === 0)) return null;
+  // Some só pra quem não pode fazer nada aqui. Antes sumia quando não havia
+  // vídeo pra vincular — e era justamente o caso em que a pessoa precisa
+  // ENVIAR o dela.
+  if (!linked && !canManage) return null;
 
   return (
     <>
@@ -175,21 +240,49 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
               </button>
             )}
           </div>
+        ) : enviando ? (
+          <div className="p-2.5 rounded-lumos border border-lumos-border bg-lumos-bg/40">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow flex-shrink-0" />
+              <span className="text-[11px] font-bold text-lumos-text-primary truncate">{enviando.nome}</span>
+              <span className="text-[10px] font-bold tabular-nums text-lumos-text-secondary ml-auto">
+                {Math.round(enviando.pct * 100)}%
+              </span>
+            </div>
+            <div className="mt-2 h-1 rounded-full bg-lumos-text-secondary/15 overflow-hidden">
+              <div className="h-full bg-lumos-yellow rounded-full transition-all" style={{ width: `${enviando.pct * 100}%` }} />
+            </div>
+          </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <Link2 className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
-            <Select
-              value=""
-              onChange={link}
-              className="input-lumos h-8 text-[11px] py-0 flex-1"
-              options={[
-                { value: '', label: 'Vincular um vídeo em revisão…' },
-                ...livres.map(g => ({
-                  value: g.id,
-                  label: `v${String(g.current.versao).padStart(2, '0')} · ${g.current.file_name}`,
-                })),
-              ]}
-            />
+          <div className="space-y-2">
+            {/* Enviar direto daqui: o vídeo já nasce ligado a esta tarefa, e a
+                tarefa entra em revisão interna sozinha. */}
+            <input ref={inputRef} type="file" accept="video/*" multiple className="hidden"
+              onChange={e => { enviarArquivos(e.target.files); e.currentTarget.value = ''; }} />
+            <button type="button" onClick={() => inputRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); enviarArquivos(e.dataTransfer.files); }}
+              className="w-full h-9 rounded-lumos border border-dashed border-lumos-border hover:border-lumos-yellow/60 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center gap-2 transition-colors">
+              <Upload className="w-3.5 h-3.5" /> Enviar vídeo desta tarefa
+            </button>
+
+            {livres.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Link2 className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
+                <Select
+                  value=""
+                  onChange={link}
+                  className="input-lumos h-8 text-[11px] py-0 flex-1"
+                  options={[
+                    { value: '', label: 'ou vincular um vídeo já enviado…' },
+                    ...livres.map(g => ({
+                      value: g.id,
+                      label: `v${String(g.current.versao).padStart(2, '0')} · ${g.current.file_name}`,
+                    })),
+                  ]}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

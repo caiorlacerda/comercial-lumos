@@ -229,10 +229,26 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
           // uploads pela plataforma gravam o nome do usuário do app numa propriedade;
           // uploads direto no Drive usam o Google de quem subiu.
           uploaded_by: file.properties?.app_uploader ?? file.lastModifyingUser?.displayName ?? file.owners?.[0]?.displayName ?? null,
+          // Subiu de dentro de uma tarefa: já nasce vinculado, sem ninguém ter
+          // que lembrar de escolher no seletor depois.
+          task_id: file.properties?.app_task_id || null,
           uploaded_at: file.createdTime ?? null,
           fps: pm?.fps ?? null,
         }])
-        if (!error) { found++; knownIds.add(file.id); await log(proj.id, 'new_version', `Novo vídeo detectado: ${file.name}`) }
+        if (!error) {
+          found++; knownIds.add(file.id)
+          // Veio de uma tarefa: ela entra em revisão interna junto. É o "muda
+          // tudo automaticamente" — quem subiu não precisa lembrar de arrastar
+          // o cartão depois, e o vídeo e a tarefa nunca contam histórias
+          // diferentes. Mesmo mapa do painel (STATUS_TO_TASK).
+          const daTarefa = file.properties?.app_task_id
+          if (daTarefa) {
+            const { error: eT } = await db.from('project_tasks')
+              .update({ status: 'revisao_interna' }).eq('id', daTarefa)
+            if (eT) await log(proj.id, 'error', `Tarefa ${daTarefa} não mudou de etapa: ${eT.message}`, 'error')
+          }
+          await log(proj.id, 'new_version', `Novo vídeo detectado: ${file.name}${daTarefa ? ' (da tarefa)' : ''}`)
+        }
         else if (!String(error.message).includes('duplicate')) await log(proj.id, 'error', `Insert falhou p/ ${file.name}: ${error.message}`, 'error')
       }
     } catch (err: any) {
