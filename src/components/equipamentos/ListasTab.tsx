@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Select from '@/components/ui/Select';
+import { usePrompt } from '@/components/ui/useConfirm';
 
 interface Equip { id: string; name: string; }
 interface Proj { id: string; name: string; code?: string | null; }
@@ -11,6 +12,7 @@ interface Item { id: string; equipment_id: string; quantity: number; }
 interface Template { id: string; name: string; items: { equipment_id: string; quantity: number }[] }
 
 export default function ListasTab({ equipment, projects }: { equipment: Equip[]; projects: Proj[] }) {
+  const { prompt, dialog: dialogoPrompt } = usePrompt();
   const toast = useToast();
   const { profile } = useAuth();
   const [projectId, setProjectId] = useState('');
@@ -55,7 +57,7 @@ export default function ListasTab({ equipment, projects }: { equipment: Equip[];
 
   const saveAsTemplate = async () => {
     if (!items.length) { toast.error('A lista está vazia.'); return; }
-    const name = window.prompt('Nome do template:');
+    const name = await prompt({ title: 'Salvar como template', label: 'Nome do template', placeholder: 'Ex.: Kit de live externa', confirmLabel: 'Salvar' });
     if (!name?.trim()) return;
     const { error } = await supabase.from('equipment_list_templates').insert([{
       name: name.trim(), items: items.map(i => ({ equipment_id: i.equipment_id, quantity: i.quantity })), created_by: profile?.id,
@@ -84,6 +86,8 @@ export default function ListasTab({ equipment, projects }: { equipment: Equip[];
   };
 
   return (
+    <>
+    {dialogoPrompt}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Lista do projeto */}
       <div className="lg:col-span-2 space-y-4">
@@ -151,5 +155,6 @@ export default function ListasTab({ equipment, projects }: { equipment: Equip[];
         )}
       </div>
     </div>
+    </>
   );
 }

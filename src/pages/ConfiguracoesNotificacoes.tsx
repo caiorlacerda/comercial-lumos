@@ -7,8 +7,10 @@ import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import { ArrowLeft, RefreshCw, Trash2, CheckCircle2, BellRing, Smartphone } from 'lucide-react';
 import { clsx } from 'clsx';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 export default function ConfiguracoesNotificacoes() {
+  const { confirm: confirmar, dialog: dialogoConfirmar } = useConfirm();
   const { profile, isAdmin } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -94,7 +96,7 @@ export default function ConfiguracoesNotificacoes() {
 
   const handleRestoreDefaults = async () => {
     if (!userId) return;
-    const confirm = window.confirm('Deseja realmente restaurar as configurações padrão de fábrica para suas notificações?');
+    const confirm = await confirmar({ title: 'Restaurar padrão', message: 'Suas preferências de notificação voltam como vieram de fábrica.', confirmLabel: 'Restaurar' });
     if (!confirm) return;
 
     try {
@@ -115,7 +117,7 @@ export default function ConfiguracoesNotificacoes() {
 
   const handleClearOldNotifications = async () => {
     if (!userId) return;
-    const confirm = window.confirm('Deseja deletar permanentemente todas as suas notificações com mais de 30 dias?');
+    const confirm = await confirmar({ title: 'Limpar notificações antigas', message: 'Apaga de vez as suas notificações com mais de 30 dias.', confirmLabel: 'Limpar', danger: true });
     if (!confirm) return;
 
     try {
@@ -147,6 +149,8 @@ export default function ConfiguracoesNotificacoes() {
   ];
 
   return (
+    <>
+      {dialogoConfirmar}
     <div className="max-w-2xl mx-auto space-y-8 font-work-sans">
       {/* Header */}
       <div className="flex items-center gap-4">
@@ -310,5 +314,6 @@ export default function ConfiguracoesNotificacoes() {
         </div>
       )}
     </div>
+    </>
   );
 }

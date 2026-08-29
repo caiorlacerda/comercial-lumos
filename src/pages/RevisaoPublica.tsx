@@ -8,6 +8,7 @@ import {
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useVideoFonte } from '@/hooks/useVideoFonte';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 const LOGO = { dark: '/logo/Logotipo-Branco-Alpha.svg', light: '/logo/Logotipo-Preto-Alpha.svg' };
 
@@ -88,6 +89,16 @@ export default function RevisaoPublica() {
   const [videoUnsupported, setVideoUnsupported] = useState(false);
   const [menuQualidade, setMenuQualidade] = useState(false);
   const [verHistorico, setVerHistorico] = useState<number | null>(null);
+  const { confirm, dialog: dialogoConfirmar } = useConfirm();
+  // Erro passageiro (comentário que não foi). Não pode usar setError: aquele
+  // estado troca a página inteira por uma tela de erro, e perder o vídeo por
+  // causa de um comentário que falhou seria pior que o problema.
+  const [aviso, setAviso] = useState<string | null>(null);
+  useEffect(() => {
+    if (!aviso) return;
+    const t = setTimeout(() => setAviso(null), 5000);
+    return () => clearTimeout(t);
+  }, [aviso]);
   // Quem da Lumos abriu o link do cliente. A outra metade da confusão: o
   // atendimento manda ESTE link pro time revisar internamente, e aí o comentário
   // da equipe entra registrado como se fosse do cliente. Silencioso e chato de
@@ -330,7 +341,7 @@ export default function RevisaoPublica() {
       p_token: token, p_viewer_id: viewerId, p_timecode_ms: Math.round(currentMs), p_body: commentText.trim(), p_annotations: annotations,
     });
     setSending(false);
-    if (err) { alert('Erro ao enviar comentário. Tente de novo.'); return; }
+    if (err) { setAviso('Não deu pra enviar seu comentário. Tente de novo.'); return; }
     resetComposer();
     await load();
   };
@@ -361,18 +372,18 @@ export default function RevisaoPublica() {
       p_token: token, p_viewer_id: viewerId, p_comment_id: c.id, p_body: editText.trim(),
     });
     setSavingEdit(false);
-    if (err) { alert('Não foi possível editar o comentário.'); return; }
+    if (err) { setAviso('Não deu pra editar o comentário.'); return; }
     cancelEdit();
     await load();
   };
 
   const removeComment = async (c: Comment) => {
     setMenuFor(null);
-    if (!window.confirm('Excluir este comentário? Não dá para desfazer.')) return;
+    if (!await confirm({ title: 'Excluir comentário', message: 'Não dá para desfazer.', confirmLabel: 'Excluir', danger: true })) return;
     const { error: err } = await supabase.rpc('review_delete_comment', {
       p_token: token, p_viewer_id: viewerId, p_comment_id: c.id,
     });
-    if (err) { alert('Não foi possível excluir o comentário.'); return; }
+    if (err) { setAviso('Não deu pra excluir o comentário.'); return; }
     setViewingShapes([]);
     await load();
   };
@@ -423,6 +434,12 @@ export default function RevisaoPublica() {
   // normal, empilhado e rolável.
   return (
     <div className={clsx('min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-lumos-bg text-lumos-text-primary font-work-sans', themeClass)}>
+      {dialogoConfirmar}
+      {aviso && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[400] px-4 py-2.5 rounded-lumos bg-lumos-surface border border-red-500/40 shadow-2xl">
+          <p className="text-[12px] font-bold text-red-400">{aviso}</p>
+        </div>
+      )}
       {/* Alguém da Lumos abriu o link do cliente. Não é proibido — dá pra querer
           conferir o que o cliente está vendo — mas precisa ficar explícito, senão
           a equipe revisa por aqui e os comentários entram como se fossem do
@@ -456,8 +473,8 @@ export default function RevisaoPublica() {
               precisa ser óbvio em nome de quem o comentário vai sair. */}
           {viewerName && (
             <button type="button"
-              onClick={() => {
-                if (!window.confirm(`Você está comentando como "${viewerName}". Quer entrar com outro nome?`)) return;
+              onClick={async () => {
+                if (!await confirm({ title: 'Trocar de nome', message: `Você está comentando como "${viewerName}". Quer entrar com outro nome?`, confirmLabel: 'Trocar' })) return;
                 localStorage.removeItem(NOME_SALVO);
                 localStorage.removeItem(`rev_viewer_${token}`);
                 localStorage.removeItem(`rev_name_${token}`);
