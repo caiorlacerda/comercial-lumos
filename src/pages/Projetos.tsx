@@ -938,6 +938,12 @@ export default function Projetos() {
         setSelectedClientId(proj.client_id);
         setSelectedProjectId(proj.id);
       }
+      // ?review= vem da notificação de menção e aponta pra um vídeo. O painel de
+      // vídeos só existe dentro de Entregas, então sem forçar a aba o link
+      // abria o projeto e parava ali — que era justamente a caça ao tesouro
+      // que a menção queria evitar.
+      if (searchParams.get('review')) setTimeout(() => setProjTab('entregas'), 0);
+
       // ?tab= abre direto numa aba do hub (ex.: Visão Geral → Entregas).
       // Depois do reset do effect de troca de projeto, então usa timeout 0.
       const tab = searchParams.get('tab');
