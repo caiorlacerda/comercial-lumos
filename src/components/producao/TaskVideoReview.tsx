@@ -8,6 +8,7 @@ import Select from '@/components/ui/Select';
 import InternalReviewModal from './InternalReviewModal';
 import VideoThumb from './VideoThumb';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
+import { moverEtapa, mensagemDaEtapa } from '@/lib/reviewTransition';
 
 interface Version {
   id: string;
@@ -33,13 +34,13 @@ interface Props {
  * A TAREFA é a fonte da verdade: ao vincular, o vídeo assume o status da tarefa.
  */
 export default function TaskVideoReview({ projectId, task, canManage }: Props) {
-  const { profile } = useAuth();
+  const { profile, isAdmin, can } = useAuth();
   const toast = useToast();
   const [groups, setGroups] = useState<Group[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number } | null>(null);
+  const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number; version: Version } | null>(null);
   const [enviando, setEnviando] = useState<{ nome: string; pct: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -125,7 +126,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     }
     setBusy(false);
     if (!link) { toast.error('Não foi possível abrir a revisão.'); return; }
-    setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao });
+    setReviewModal({ versionId: g.current.id, token: link.token, fileName: g.current.file_name, versao: g.current.versao, version: g.current });
   };
 
   /**
@@ -293,6 +294,18 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
           token={reviewModal.token}
           fileName={reviewModal.fileName}
           versao={reviewModal.versao}
+          status={reviewModal.version.status}
+          podeDecidir={isAdmin || can('revisao_interna')}
+          // Abrir pela tarefa ou pelo painel tem que dar exatamente na mesma
+          // coisa: mesma regra de transição, mesmos botões. Duas portas para a
+          // mesma sala, não duas salas.
+          onDecidir={async (proximo) => {
+            const r = await moverEtapa(reviewModal.version, proximo, profile?.id);
+            if (!r.ok) { toast.error(`Erro: ${r.erro}`); return; }
+            toast.success(mensagemDaEtapa(proximo, r.criouLink));
+            setReviewModal(null);
+            await load();
+          }}
           onClose={() => { setReviewModal(null); load(); }}
         />
       )}

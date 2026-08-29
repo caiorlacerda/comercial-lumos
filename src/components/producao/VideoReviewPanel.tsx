@@ -9,6 +9,7 @@ import InternalReviewModal from './InternalReviewModal';
 import Select from '@/components/ui/Select';
 import { type ReviewStatus, STATUS_UI, STATUS_TO_TASK, taskStatusToVideo } from '@/lib/reviewStatus';
 import { captureVideoThumb } from '@/lib/videoThumb';
+import { moverEtapa, mensagemDaEtapa } from '@/lib/reviewTransition';
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 
@@ -577,30 +578,15 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   const FASE_INTERNA: string[] = ['EM_REVISAO_INTERNA', 'ALTERACOES_INTERNAS'];
   const liberadoPraCliente = (st: string) => !FASE_INTERNA.includes(st);
 
+  // A regra de mover etapa mora em lib/reviewTransition: é a mesma chamada do
+  // menu do card, do player aberto aqui e do player aberto pela tarefa.
   const transition = async (v: VideoVersion, next: ReviewStatus) => {
-    try {
-      setBusy(v.id); setMenuFor(null);
-      const { error } = await supabase.from('video_versions').update({ status: next, updated_at: new Date().toISOString() }).eq('id', v.id);
-      if (error) throw error;
-      if (v.task_id) await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[next] }).eq('id', v.task_id);
-
-      // Passou pro cliente: já deixa o link pronto. Assim ninguém precisa
-      // lembrar de gerar, e não existe link solto antes da hora.
-      let avisoLink = '';
-      if (next === 'EM_REVISAO_CLIENTE') {
-        const grupo = v.group_id || v.id;
-        if (!linksByGroup[grupo]) {
-          const { error: eLink } = await supabase.from('review_links')
-            .insert([{ video_version_id: v.id, group_id: grupo, created_by: profile?.id }]);
-          avisoLink = eLink ? '' : ' Link do cliente criado.';
-        }
-      }
-      toast.success(next === 'APROVADO'
-        ? 'Aprovado! Gerando o vFINAL em 02_APROVADO…'
-        : `Status atualizado ✓${avisoLink}`);
-      fetchVersions();
-    } catch (err: any) { toast.error(`Erro: ${err.message}`); }
-    finally { setBusy(null); }
+    setBusy(v.id); setMenuFor(null);
+    const r = await moverEtapa(v, next, profile?.id);
+    setBusy(null);
+    if (!r.ok) { toast.error(`Erro: ${r.erro}`); return; }
+    toast.success(mensagemDaEtapa(next, r.criouLink));
+    fetchVersions();
   };
 
   const stackInto = async (source: Group, target: Group) => {
