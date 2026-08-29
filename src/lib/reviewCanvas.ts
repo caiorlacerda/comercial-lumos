@@ -2,7 +2,9 @@
 export type Point = { x: number; y: number }; // normalizados 0–1
 export type Shape = { type: 'draw' | 'arrow' | 'rect'; color: string; points: Point[] };
 
-export const COLORS = ['#EFC700', '#ef4444', '#3b82f6', '#22c55e', '#ffffff'];
+// Vermelho primeiro: marcação em revisão é pedido de atenção, e o amarelo da
+// marca se confunde com legenda e com elemento gráfico amarelo no vídeo.
+export const COLORS = ['#ef4444', '#EFC700', '#3b82f6', '#22c55e', '#ffffff'];
 export const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 export const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 
@@ -43,24 +45,68 @@ export const fmtTime = (ms: number) => {
   return (h > 0 ? `${h}:` : '') + `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 };
 
+/**
+ * Espessura do traço em função do tamanho do canvas.
+ *
+ * Era 3px fixos, e 3px num canvas de 1920 é um fio de cabelo: a marcação
+ * sumia justamente no player grande, que é onde a revisão acontece. Agora
+ * acompanha a largura, então o traço tem o mesmo peso visual em qualquer
+ * tamanho de tela.
+ */
+const espessura = (w: number) => Math.max(3, Math.round(w * 0.0045));
+
+/**
+ * Desenha duas vezes: um contorno escuro embaixo e a cor por cima.
+ *
+ * Sem isso, traço vermelho sobre cena escura e traço branco sobre céu claro
+ * somem. O contorno garante que a marcação seja lida em qualquer imagem, que é
+ * o pulo do gato dos players de revisão bons.
+ */
+function traçar(ctx: CanvasRenderingContext2D, cor: string, largura: number, desenhar: () => void) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth = largura + Math.max(2, largura * 0.6);
+  desenhar();
+  ctx.strokeStyle = cor;
+  ctx.lineWidth = largura;
+  desenhar();
+}
+
 export function drawShape(ctx: CanvasRenderingContext2D, sh: Shape, w: number, h: number) {
-  ctx.strokeStyle = sh.color; ctx.fillStyle = sh.color; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const lw = espessura(w);
+  ctx.fillStyle = sh.color;
   const pts = sh.points.map(p => ({ x: p.x * w, y: p.y * h }));
   if (pts.length === 0) return;
+
   if (sh.type === 'draw') {
-    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-    pts.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
+    traçar(ctx, sh.color, lw, () => {
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+      pts.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
+    });
   } else if (pts.length >= 2) {
     const [a, b] = [pts[0], pts[1]];
     if (sh.type === 'rect') {
-      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    } else { // arrow
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      const ang = Math.atan2(b.y - a.y, b.x - a.x), head = 14;
-      ctx.beginPath(); ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - head * Math.cos(ang - Math.PI / 6), b.y - head * Math.sin(ang - Math.PI / 6));
-      ctx.lineTo(b.x - head * Math.cos(ang + Math.PI / 6), b.y - head * Math.sin(ang + Math.PI / 6));
-      ctx.closePath(); ctx.fill();
+      traçar(ctx, sh.color, lw, () => { ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y); });
+    } else { // seta
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const head = lw * 4.2;
+      // A haste para antes da ponta, senão o traço vaza por dentro da cabeça e
+      // engorda o bico.
+      const fim = { x: b.x - head * 0.55 * Math.cos(ang), y: b.y - head * 0.55 * Math.sin(ang) };
+      traçar(ctx, sh.color, lw, () => {
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(fim.x, fim.y); ctx.stroke();
+      });
+      const cabeça = () => {
+        ctx.beginPath(); ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x - head * Math.cos(ang - Math.PI / 7), b.y - head * Math.sin(ang - Math.PI / 7));
+        ctx.lineTo(b.x - head * Math.cos(ang + Math.PI / 7), b.y - head * Math.sin(ang + Math.PI / 7));
+        ctx.closePath();
+      };
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = Math.max(2, lw * 0.6);
+      cabeça(); ctx.stroke();
+      ctx.fillStyle = sh.color;
+      cabeça(); ctx.fill();
     }
   }
 }
