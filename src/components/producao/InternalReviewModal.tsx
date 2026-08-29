@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw, Search, SlidersHorizontal } from 'lucide-react';
+import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw, Search, SlidersHorizontal, Frame } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useConfirm } from '@/components/ui/useConfirm';
 import { supabase } from '@/lib/supabase';
@@ -9,6 +9,7 @@ import UserAvatar from '@/components/common/UserAvatar';
 import { COLORS, SPEEDS, STREAM_BASE, timecode, estimarFps, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
 import { captureVideoThumb } from '@/lib/videoThumb';
 import { useVideoFonte } from '@/hooks/useVideoFonte';
+import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
 
 interface TeamComment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number; body: string; created_at: string;
@@ -57,6 +58,19 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [ordem, setOrdem] = useState<'timecode' | 'novos' | 'antigos' | 'autor'>('timecode');
   const [filtro, setFiltro] = useState<'todos' | 'pendentes' | 'resolvidos' | 'anotados' | 'meus'>('todos');
   const [painelFiltro, setPainelFiltro] = useState(false);
+  // Ferramentas de enquadramento: a mesma peça sai em 16:9, 9:16 e 1:1, e sem
+  // guia a conferência do corte é no olho.
+  const [guia, setGuia] = useState<GuiaId>(null);
+  const [mascara, setMascara] = useState(false);
+  const [menuVisual, setMenuVisual] = useState(false);
+  const [dimVideo, setDimVideo] = useState({ w: 0, h: 0 });
+  // Zoom pra conferir detalhe (legenda cortada, logo torto, ruído). Escala o
+  // conjunto vídeo+canvas junto, então a anotação continua caindo no mesmo
+  // ponto da imagem: as coordenadas são normalizadas sobre o retângulo, que a
+  // transformação também escala.
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const arrastando = useRef<{ x: number; y: number } | null>(null);
 
   const meuNome = (profile?.full_name || '').toLowerCase();
   const visiveis = (() => {
@@ -411,6 +425,44 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     setViewingShapes([]); await load();
   };
 
+  /**
+   * Captura o frame atual, na resolução nativa do vídeo.
+   *
+   * Serve pra duas coisas: baixar o still (pra levar pra reunião, pro cliente,
+   * pro roteiro) e trocar a capa do vídeo. A capa hoje é o primeiro frame que
+   * o app conseguiu pegar, e primeiro frame costuma ser preto ou claquete.
+   */
+  const capturarFrame = (): string | null => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return null;
+    const cv = document.createElement('canvas');
+    cv.width = v.videoWidth; cv.height = v.videoHeight;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return null;
+    try { ctx.drawImage(v, 0, 0, cv.width, cv.height); } catch { return null; }
+    try { return cv.toDataURL('image/jpeg', 0.9); } catch { return null; }
+  };
+
+  const baixarFrame = () => {
+    const img = capturarFrame();
+    if (!img) { toast.error('Não deu pra capturar o frame.'); return; }
+    const a = document.createElement('a');
+    a.href = img;
+    a.download = `${fileName.replace(/\.[^.]+$/, '')} ${timecode(currentMs, fps).replace(/:/g, '-')}.jpg`;
+    a.click();
+    setMenuVisual(false);
+  };
+
+  const definirCapa = async () => {
+    const img = capturarFrame();
+    if (!img) { toast.error('Não deu pra capturar o frame.'); return; }
+    const { error } = await supabase.from('video_versions').update({ thumb_url: img }).eq('id', versionId);
+    if (error) { toast.error('Não deu pra salvar a capa.'); return; }
+    setPoster(img);
+    setMenuVisual(false);
+    toast.success('Capa do vídeo atualizada ✓');
+  };
+
   const pct = durationMs > 0 ? Math.min(100, (currentMs / durationMs) * 100) : 0;
 
   return (
@@ -433,18 +485,29 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         {/* Player */}
         <div className="flex-1 p-4 flex flex-col gap-2 min-w-0">
-          <div ref={wrapRef} className="relative w-full aspect-video bg-black rounded-lumos overflow-hidden select-none">
+          <div ref={wrapRef} className="relative w-full aspect-video bg-black rounded-lumos overflow-hidden select-none"
+            onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
+            onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
+            onPointerUp={() => { arrastando.current = null; }}
+            onPointerLeave={() => { arrastando.current = null; }}
+            style={{ cursor: zoom > 1 && !(composing && tool) ? 'grab' : undefined }}>
+          <div className="absolute inset-0 origin-center transition-transform duration-100"
+            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
             <video ref={videoRef} poster={poster || undefined} preload="metadata" className="w-full h-full object-contain block"
               onTimeUpdate={e => setCurrentMs(e.currentTarget.currentTime * 1000)}
-              onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); redraw(); }}
+              onLoadedMetadata={e => { setDurationMs(e.currentTarget.duration * 1000); setDimVideo({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight }); redraw(); }}
               // videoWidth 0 depois de carregar = o navegador não decodifica a trilha
               // de vídeo (codec, ex.: ProRes/.mov): toca o áudio mas não mostra imagem.
-              onLoadedData={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
+              onLoadedData={e => { setReady(true); setDimVideo({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight }); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onCanPlay={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onError={() => { setReady(true); setVideoUnsupported(true); }}
               onPlay={e => { setPlaying(true); if (!fpsMedido.current) { fpsMedido.current = true; estimarFps(e.currentTarget, setFps); } }} onPause={() => setPlaying(false)} onClick={togglePlay} playsInline />
             <canvas ref={canvasRef} className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
               onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp} />
+          </div>
+
+            <GuiasDeEnquadramento guia={guia} mascara={mascara} larguraVideo={dimVideo.w} alturaVideo={dimVideo.h} />
+
             {!ready && !videoUnsupported && <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow" /></div>}
 
             {/* Fallback: o navegador não conseguiu exibir o vídeo (codec). Some o
@@ -524,6 +587,64 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 )}
               </div>
             )}
+            {/* Ferramentas de enquadramento e frame. Ficam num menu só pra não
+                encher a barra: são coisas que se usa de vez em quando, não a
+                cada play. */}
+            <div className="relative">
+              <button onClick={() => setMenuVisual(o => !o)} title="Guias, máscara e frame"
+                className={clsx('p-2 rounded-lumos transition-colors',
+                  guia ? 'text-lumos-yellow' : 'hover:bg-lumos-text-secondary/10')}>
+                <Frame className="w-4 h-4" />
+              </button>
+              {menuVisual && (
+                <>
+                  <div className="fixed inset-0 z-[300]" onClick={() => setMenuVisual(false)} />
+                  <div className="absolute bottom-full right-0 mb-2 z-[301] w-52 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
+                    <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Guias de enquadramento</p>
+                    <button type="button" onClick={() => setGuia(null)}
+                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                        !guia ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>Nenhuma</button>
+                    {PROPORCOES.map(p => (
+                      <button key={p.id} type="button" onClick={() => setGuia(p.id)}
+                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                          guia === p.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{p.label}</button>
+                    ))}
+                    <button type="button" onClick={() => setMascara(m => !m)} disabled={!guia}
+                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10 disabled:opacity-40',
+                        mascara ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                      {mascara ? '✓ ' : ''}Escurecer o que fica de fora
+                    </button>
+                    <div className="h-px bg-lumos-border my-1" />
+                    <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Zoom</p>
+                    <div className="flex gap-1 px-1 pb-1">
+                      {([1, 1.5, 2, 4] as const).map(z => (
+                        <button key={z} type="button"
+                          onClick={() => { setZoom(z); if (z === 1) setPan({ x: 0, y: 0 }); }}
+                          className={clsx('flex-1 py-1.5 text-[11px] font-black rounded transition-colors',
+                            zoom === z ? 'bg-lumos-yellow/20 text-lumos-yellow' : 'text-lumos-text-primary hover:bg-lumos-text-secondary/10')}>
+                          {z === 1 ? 'Ajustar' : `${z}x`}
+                        </button>
+                      ))}
+                    </div>
+                    {zoom > 1 && (
+                      <p className="px-2 pb-1 text-[9.5px] text-lumos-text-secondary/60 leading-snug">
+                        Arraste a imagem pra navegar. A anotação continua caindo no mesmo ponto.
+                      </p>
+                    )}
+                    <div className="h-px bg-lumos-border my-1" />
+                    <button type="button" onClick={baixarFrame}
+                      className="w-full text-left px-2 py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
+                      Baixar este frame
+                    </button>
+                    <button type="button" onClick={definirCapa}
+                      className="w-full text-left px-2 py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
+                      Usar como capa do vídeo
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button onClick={fullscreen} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
           </div>
         </div>
