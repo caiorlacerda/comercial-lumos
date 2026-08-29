@@ -36,9 +36,8 @@ interface ReviewData {
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
-import { timecode, estimarFps } from '@/lib/reviewCanvas';
+import { timecode, estimarFps, COLORS, drawShape } from '@/lib/reviewCanvas';
 
-const COLORS = ['#EFC700', '#ef4444', '#3b82f6', '#22c55e', '#ffffff'];
 const LOGO_WATERMARK = '/logo/Logo-Branco-Alpha.svg';
 
 
@@ -913,24 +912,3 @@ function Centered({ children, className }: { children: React.ReactNode; classNam
   return <div className={clsx('min-h-screen bg-lumos-bg flex items-center justify-center p-4 font-work-sans', className)}>{children}</div>;
 }
 
-function drawShape(ctx: CanvasRenderingContext2D, sh: Shape, w: number, h: number) {
-  ctx.strokeStyle = sh.color; ctx.fillStyle = sh.color; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const pts = sh.points.map(p => ({ x: p.x * w, y: p.y * h }));
-  if (pts.length === 0) return;
-  if (sh.type === 'draw') {
-    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-    pts.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
-  } else if (pts.length >= 2) {
-    const [a, b] = [pts[0], pts[1]];
-    if (sh.type === 'rect') {
-      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
-    } else { // arrow
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      const ang = Math.atan2(b.y - a.y, b.x - a.x), head = 14;
-      ctx.beginPath(); ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - head * Math.cos(ang - Math.PI / 6), b.y - head * Math.sin(ang - Math.PI / 6));
-      ctx.lineTo(b.x - head * Math.cos(ang + Math.PI / 6), b.y - head * Math.sin(ang + Math.PI / 6));
-      ctx.closePath(); ctx.fill();
-    }
-  }
-}
