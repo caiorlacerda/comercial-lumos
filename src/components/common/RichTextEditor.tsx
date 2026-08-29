@@ -11,6 +11,7 @@ import {
   List, ListOrdered, Quote, Minus, Undo2, Redo2, Link2, Link2Off, FileText,
 } from 'lucide-react';
 import Select from '@/components/ui/Select';
+import { usePrompt } from '@/components/ui/useConfirm';
 
 const HEADING_OPTS = [
   { value: 'p', label: 'Texto' }, { value: '1', label: 'Título 1' }, { value: '2', label: 'Título 2' },
@@ -167,19 +168,23 @@ export default function RichTextEditor({ value, onChange, editable = true, class
 
   const curLevel = ([1, 2, 3, 4, 5] as const).find(l => editor.isActive('heading', { level: l }));
   const headingValue = curLevel ? String(curLevel) : 'p';
+  const { prompt, dialog: dialogoPrompt } = usePrompt();
+
   const setHeading = (v: string) => {
     if (v === 'p') editor.chain().focus().setParagraph().run();
     else editor.chain().focus().setHeading({ level: Number(v) as 1 | 2 | 3 | 4 | 5 }).run();
   };
-  const setLink = () => {
+  const setLink = async () => {
     const prev = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('Endereço do link (URL):', prev || 'https://');
+    const url = await prompt({ title: 'Link', label: 'Endereço (URL)', value: prev || 'https://', placeholder: 'https://…', confirmLabel: 'Aplicar' });
     if (url === null) return;                    // cancelou
     if (url.trim() === '') { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
     editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
   };
 
   return (
+    <>
+    {dialogoPrompt}
     <div className={clsx('border border-lumos-border rounded-lumos bg-lumos-surface overflow-hidden', className)}>
       {editable && (
         <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 border-b border-lumos-border/60 bg-lumos-bg/30">
@@ -211,5 +216,6 @@ export default function RichTextEditor({ value, onChange, editable = true, class
         <EditorContent editor={editor} />
       </div>
     </div>
+    </>
   );
 }

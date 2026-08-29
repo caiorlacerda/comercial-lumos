@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Maximize, Pencil, MoveUpRight, Square, Eraser, Send, Clock, X, Volume2, VolumeX, Sun, Moon, MoreVertical, Trash2, AlertTriangle, ChevronDown, Check, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useConfirm } from '@/components/ui/useConfirm';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -47,6 +48,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [historico, setHistorico] = useState<{ versao: number; comments: TeamComment[] }[]>([]);
   const [verHistorico, setVerHistorico] = useState<number | null>(null);
   const [decidindo, setDecidindo] = useState(false);
+  const { confirm, dialog: dialogoConfirmar } = useConfirm();
   const [pedindoAlteracao, setPedindoAlteracao] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
@@ -360,7 +362,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   const removeComment = async (c: TeamComment) => {
     setMenuFor(null);
-    if (!window.confirm('Excluir este comentário? Não dá para desfazer.')) return;
+    if (!await confirm({ title: 'Excluir comentário', message: 'Não dá para desfazer.', confirmLabel: 'Excluir', danger: true })) return;
     const { error } = await supabase.from('review_comments').delete().eq('id', c.id);
     if (error) { toast.error('Não foi possível excluir o comentário.'); return; }
     setViewingShapes([]); await load();

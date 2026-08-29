@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, Play, Link2, Unlink, Loader2, Upload, MoreVertical, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useConfirm } from '@/components/ui/useConfirm';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -43,6 +44,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number; version: Version } | null>(null);
   const [enviando, setEnviando] = useState<{ nome: string; pct: number } | null>(null);
   const [menuAberto, setMenuAberto] = useState(false);
+  const { confirm, dialog: dialogoConfirmar } = useConfirm();
   const [excluindo, setExcluindo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -130,7 +132,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     const aviso = quantas > 1
       ? `Excluir "${linked.current.file_name}" e as ${quantas} versões dele? O arquivo vai pra lixeira do Drive.`
       : `Excluir "${linked.current.file_name}"? O arquivo vai pra lixeira do Drive.`;
-    if (!window.confirm(aviso)) return;
+    if (!await confirm({ title: 'Excluir vídeo', message: aviso, confirmLabel: 'Excluir', danger: true })) return;
     setMenuAberto(false); setExcluindo(true);
     try {
       const { error } = await supabase.functions.invoke('drive-delete', {
@@ -228,6 +230,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
 
   return (
     <>
+      {dialogoConfirmar}
       <div className="space-y-2">
         <span className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Revisão de vídeo</span>
 

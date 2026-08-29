@@ -6,6 +6,7 @@ import { Pin, PinOff, Pencil, Trash2, Megaphone, ExternalLink } from 'lucide-rea
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
+import { useConfirm } from '@/components/ui/useConfirm';
 import { getVideoEmbed } from '@/lib/videoEmbed';
 import DOMPurify from 'dompurify';
 
@@ -46,6 +47,7 @@ export function MuralFeed({
   emptyHint?: string;
 }) {
   const toast = useToast();
+  const { confirm, dialog: dialogoConfirmar } = useConfirm();
   const [posts, setPosts] = useState<MuralPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -71,7 +73,7 @@ export function MuralFeed({
   }, [fetchPosts]);
 
   const handleDelete = async (post: MuralPost) => {
-    if (!window.confirm('Remover este recado do mural?')) return;
+    if (!await confirm({ title: 'Remover recado', message: 'Ele sai do mural para todo mundo.', confirmLabel: 'Remover', danger: true })) return;
     const { error } = await supabase.from('mural_posts').delete().eq('id', post.id);
     if (error) { toast.error('Erro ao remover.'); return; }
     setPosts(prev => prev.filter(p => p.id !== post.id));
@@ -112,6 +114,8 @@ export function MuralFeed({
   }
 
   return (
+    <>
+      {dialogoConfirmar}
     <div className="space-y-3">
       {posts.map(post => (
         <article
@@ -204,5 +208,6 @@ export function MuralFeed({
         </article>
       ))}
     </div>
+    </>
   );
 }

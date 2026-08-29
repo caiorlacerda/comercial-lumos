@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import UserAvatar from '@/components/common/UserAvatar';
 import type { Notification } from '@/hooks/useNotifications';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 type Cat = Notification['category'];
 const CAT: Record<Cat, { label: string; icon: any; color: string }> = {
@@ -55,6 +56,7 @@ interface Props {
 export default function NotificationPanel({
   items, unreadCount, onMarkAllRead, onMarkRead, onRemove, onClearAll, onItemClick, onOpenSettings, onViewAll, variant = 'popover',
 }: Props) {
+  const { confirm: confirmar, dialog: dialogoConfirmar } = useConfirm();
   const [tab, setTab] = useState<TabKey>('all');
   const teamCount = items.filter(n => n.scope === 'team').length;
 
@@ -91,6 +93,8 @@ export default function NotificationPanel({
   );
 
   return (
+    <>
+      {dialogoConfirmar}
     <div className="flex flex-col h-full">
       {/* Cabeçalho */}
       <div className="flex-shrink-0 px-1">
@@ -107,7 +111,7 @@ export default function NotificationPanel({
             )}
             {items.length > 0 && (
               <button
-                onClick={() => { if (window.confirm('Limpar todas as notificações? Isso remove todas da sua lista.')) onClearAll(); }}
+                onClick={async () => { if (await confirmar({ title: 'Limpar notificações', message: 'Remove todas da sua lista.', confirmLabel: 'Limpar', danger: true })) onClearAll(); }}
                 title="Limpar todas"
                 className="w-8 h-8 rounded-lumos flex items-center justify-center text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 transition-colors">
                 <Trash2 className="w-[18px] h-[18px]" />
@@ -155,6 +159,7 @@ export default function NotificationPanel({
         </div>
       )}
     </div>
+    </>
   );
 }
 

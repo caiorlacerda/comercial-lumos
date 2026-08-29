@@ -13,7 +13,7 @@ import ProjectOrdens from '@/components/producao/ProjectOrdens';
 import ProjectEquipe from '@/components/producao/ProjectEquipe';
 import ProjectRoteiros from '@/components/producao/ProjectRoteiros';
 import Select from '@/components/ui/Select';
-import { useConfirm } from '@/components/ui/useConfirm';
+import { useConfirm, usePrompt } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
 import { supabase } from '@/lib/supabase';
@@ -514,6 +514,7 @@ const HEADING_OPTS = [
 ];
 
 function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
+  const { prompt: perguntarLink, dialog: dialogoLink } = usePrompt();
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number; text: string; range: { from: number; to: number } } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -657,9 +658,9 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
 
   if (!editor) return null;
 
-  const addLink = () => {
+  const addLink = async () => {
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Inserir URL:', previousUrl);
+    const url = await perguntarLink({ title: 'Link', label: 'Endereço (URL)', value: previousUrl || 'https://', placeholder: 'https://…', confirmLabel: 'Aplicar' });
     if (url === null) return;
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
@@ -670,6 +671,7 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
 
   return (
     <div className="relative border border-lumos-border rounded-lumos overflow-visible bg-lumos-bg/30">
+      {dialogoLink}
       {editable && (
         <div className="flex flex-wrap items-center gap-0.5 p-1.5 bg-lumos-surface border-b border-lumos-border rounded-t-lumos">
           <Select
@@ -761,6 +763,7 @@ export default function Projetos() {
   const { can, isAdmin, profile } = useAuth();
   const toast = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const { prompt: perguntar, dialog: promptDialog } = usePrompt();
   
   // Permissions
   const canManage = isAdmin || can('ordem_do_dia');
@@ -1371,7 +1374,7 @@ export default function Projetos() {
 
   // Editar comentário
   const handleEditComment = async (comment: TaskComment) => {
-    const newContent = window.prompt('Editar comentário:', comment.content);
+    const newContent = await perguntar({ title: 'Editar comentário', value: comment.content, multiline: true, confirmLabel: 'Salvar' });
     if (newContent === null) return;
     if (!newContent.trim()) {
       toast.error('O comentário não pode ficar vazio.');
@@ -3752,6 +3755,7 @@ export default function Projetos() {
       )}
 
       {confirmDialog}
+      {promptDialog}
     </div>
   );
 }

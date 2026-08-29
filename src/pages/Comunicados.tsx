@@ -7,6 +7,7 @@ import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import UserAvatar from '@/components/common/UserAvatar';
 import { Megaphone, Send, Users, Check, Search, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 type Member = {
   id: string;
@@ -17,6 +18,7 @@ type Member = {
 };
 
 export default function Comunicados() {
+  const { confirm: confirmar, dialog: dialogoConfirmar } = useConfirm();
   const { profile } = useAuth();
   const toast = useToast();
 
@@ -69,7 +71,7 @@ export default function Comunicados() {
   const handleSend = async () => {
     if (!canSend) return;
     const count = recipientIds.length;
-    if (!window.confirm(`Enviar este comunicado para ${count} ${count === 1 ? 'pessoa' : 'pessoas'}? Elas recebem no sino e como notificação push.`)) return;
+    if (!await confirmar({ title: 'Enviar comunicado', message: `Vai para ${count} ${count === 1 ? 'pessoa' : 'pessoas'}, no sino e como notificação push.`, confirmLabel: 'Enviar' })) return;
 
     setSending(true);
     try {
@@ -97,6 +99,8 @@ export default function Comunicados() {
   };
 
   return (
+    <>
+      {dialogoConfirmar}
     <div className="max-w-2xl mx-auto space-y-6 font-work-sans">
       {/* Header */}
       <div className="flex items-start gap-3">
@@ -262,5 +266,6 @@ export default function Comunicados() {
         Enviado por {profile?.full_name}. Todos recebem no sino; quem ativou o push no celular recebe também como notificação.
       </p>
     </div>
+    </>
   );
 }
