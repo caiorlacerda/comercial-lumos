@@ -61,8 +61,10 @@ estimada. Se o mês já passou do pacote, o formulário avisa **antes de enviar*
 decide seguir ou desistir; nada é bloqueado.
 
 Regras: antecedência mínima de 7 dias, guardada no portal do cliente e
-ajustável no modal do portal; um pedido pendente por dia; dia ocupado ou
-bloqueado não aceita pedido.
+ajustável no modal do portal; **um pedido pendente por dia por cliente** (o
+mesmo cliente não pede duas vezes o mesmo dia; clientes diferentes podem
+disputar a mesma data, e é a Lumos que decide); dia ocupado ou bloqueado não
+aceita pedido.
 
 **Quem pediu:** com login por pessoa ligado, o pedido sai com o nome e o e-mail
 de quem está logado. Sem login, o formulário pede nome e e-mail, do mesmo jeito
@@ -139,9 +141,10 @@ transação só — duas escritas que não podem ficar pela metade.
 
 ## Erros e casos de borda
 
-- **Dois clientes pedem o mesmo dia:** o dia só fica ocupado quando existe
-  diária marcada. Dois pedidos pendentes no mesmo dia são possíveis e corretos;
-  quem aceitar primeiro ocupa o dia, e o segundo pedido passa a mostrar, na
+- **Dois clientes pedem o mesmo dia:** permitido de propósito. O dia só fica
+  ocupado quando existe diária MARCADA, não quando existe pedido — senão o
+  primeiro a clicar reservaria a agenda sem ninguém da Lumos ter decidido nada.
+  Quem for aceito primeiro ocupa o dia, e o outro pedido passa a mostrar, na
   fila interna, que a data ficou ocupada.
 - **Aceitar um pedido de data que ficou ocupada:** a função avisa e pede
   confirmação em vez de recusar sozinha — pode haver duas equipes no mesmo dia.
