@@ -13,7 +13,7 @@ interface Blocks {
 interface Portal {
   id: string; token: string; active: boolean; show_financeiro: boolean;
   contact_user_ids: string[]; blocks: Blocks; exige_login: boolean;
-  last_opened_at: string | null; opened_count: number;
+  last_opened_at: string | null; opened_count: number; antecedencia_dias: number;
 }
 /** Pessoa do lado do cliente, com o que ela alcança. */
 interface Pessoa {
@@ -374,6 +374,18 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                     className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', portal.exige_login ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
                     <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.exige_login ? 'left-5' : 'left-0.5')} />
                   </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-t border-lumos-border/60">
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-lumos-text-primary">Antecedência para pedir diária</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary">
+                      Dias de folga entre hoje e a data que o cliente consegue pedir.
+                    </span>
+                  </span>
+                  <input type="number" min={0} max={60} defaultValue={portal.antecedencia_dias ?? 7}
+                    onBlur={e => patch({ antecedencia_dias: Number(e.target.value) } as any, 'Antecedência salva.')}
+                    className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />
                 </div>
 
                 <div className="divide-y divide-lumos-border/60">
