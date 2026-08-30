@@ -40,14 +40,16 @@ deploy Vercel a partir da `main`.
 | Arquivo | Responsabilidade |
 |---|---|
 | `supabase/migrations/2026093329_pedido_de_diaria.sql` (criar) | tabelas, coluna nova, RLS, trigger de notificação |
-| `supabase/migrations/2026093330_portal_agenda.sql` (criar) | RPCs do portal: agenda, pedir, cancelar |
-| `supabase/migrations/2026093331_aceitar_pedido.sql` (criar) | `aceitar_pedido_diaria`, do lado de dentro |
+| `supabase/migrations/2026093330_portal_agenda.sql` (criar) | RPC do calendário que o cliente vê |
+| `supabase/migrations/2026093331_pedir_diaria.sql` (criar) | `portal_pedir_diaria`, `portal_cancelar_pedido` |
+| `supabase/migrations/2026093332_aceitar_pedido.sql` (criar) | `aceitar_pedido_diaria`, do lado de dentro |
 | `src/lib/notifications/events.ts` (editar) | evento `diaria_solicitada` no catálogo |
 | `src/pages/PortalCliente.tsx` (editar) | abas do projeto e a aba Diárias |
 | `src/pages/portalCliente.css.ts` (editar) | estilo das abas, do calendário e do formulário |
 | `src/components/producao/PedidosDeDiaria.tsx` (criar) | fila de pedidos, aceitar/recusar, dentro da aba Diárias |
 | `src/components/producao/ProjectDiarias.tsx` (editar) | monta a fila no topo |
 | `src/components/producao/BloqueiosDeAgenda.tsx` (criar) | datas que a Lumos fecha na mão |
+| `src/components/producao/PortalModal.tsx` (editar) | antecedência mínima do pedido |
 
 ---
 
@@ -318,8 +320,11 @@ git commit -m "feat(portal): o cliente enxerga os dias livres, sem saber de quem
 ### Tarefa 3: RPCs de pedir e cancelar
 
 **Arquivos:**
-- Editar: `supabase/migrations/2026093330_portal_agenda.sql` (mesma migração, se
-  o Caio ainda não rodou; senão criar `2026093330b_pedir_diaria.sql`)
+- Criar: `supabase/migrations/2026093331_pedir_diaria.sql`
+
+Arquivo próprio, sempre. Editar uma migração que já rodou é como o Caio acabou
+rodando SQL velho colado no editor uma vez: o arquivo dizia uma coisa e o banco
+tinha outra.
 
 **Interfaces:**
 - Consome: `portal_agenda` (Tarefa 2).
@@ -603,14 +608,77 @@ clicável.
 
     <section className="secao">
       <span className="rotulo">Pedir uma data</span>
-      {carregandoAgenda ? <span className="farol" /> : <Calendario agenda={agenda} onEscolher={setDataEscolhida} />}
+      {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
     </section>
   </>
 )}
 ```
 
-`Calendario` fica no mesmo arquivo, como componente pequeno logo antes de
-`PortalCliente`, porque só ele usa.
+`Calendario` fica no mesmo arquivo, logo antes de `PortalCliente`, porque só ele
+usa. O componente inteiro:
+
+```tsx
+const SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
+  'julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function Calendario({ dias, escolhido, onEscolher }: {
+  dias: { data: string; estado: string }[];
+  escolhido: string | null;
+  onEscolher: (d: string) => void;
+}) {
+  // Agrupa por mês na ordem em que vieram: o banco já mandou ordenado, e
+  // reordenar aqui só criaria uma segunda fonte da mesma verdade.
+  const meses: { chave: string; titulo: string; dias: typeof dias }[] = [];
+  dias.forEach(d => {
+    const chave = d.data.slice(0, 7);
+    let m = meses.find(x => x.chave === chave);
+    if (!m) {
+      const [ano, mes] = chave.split('-');
+      m = { chave, titulo: `${MES_NOME[Number(mes) - 1]} de ${ano}`, dias: [] };
+      meses.push(m);
+    }
+    m.dias.push(d);
+  });
+
+  return (
+    <>
+      {meses.map(m => {
+        // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
+        // anterior, e o calendário inteiro anda uma casa.
+        const vazios = new Date(m.dias[0].data + 'T12:00:00').getDay();
+        return (
+          <div key={m.chave} className="mes">
+            <span className="rotulo">{m.titulo}</span>
+            <div className="calend">
+              {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
+              {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
+              {m.dias.map(d => {
+                const livre = d.estado === 'livre';
+                return (
+                  <button key={d.data} type="button" disabled={!livre}
+                    className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
+                    title={livre ? 'Pedir esta data'
+                      : d.estado === 'cedo' ? 'Cedo demais para pedir' : 'Indisponível'}
+                    onClick={() => onEscolher(d.data)}>
+                    {Number(d.data.slice(8, 10))}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+```
+
+E no corpo da aba, o estado que ele usa:
+
+```tsx
+  const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
+```
 
 - [ ] **Passo 3: o formulário do pedido**
 
@@ -685,7 +753,7 @@ npm run build && git commit -am "feat(portal): o cliente vê os dias livres e pe
 **Arquivos:**
 - Criar: `src/components/producao/PedidosDeDiaria.tsx`
 - Editar: `src/components/producao/ProjectDiarias.tsx` (montar a fila no topo)
-- Criar: `supabase/migrations/2026093331_aceitar_pedido.sql`
+- Criar: `supabase/migrations/2026093332_aceitar_pedido.sql`
 
 **Interfaces:**
 - Consome: `diaria_pedidos` (Tarefa 1).
@@ -697,7 +765,7 @@ npm run build && git commit -am "feat(portal): o cliente vê os dias livres e pe
 - [ ] **Passo 1: a função que aceita**
 
 ```sql
--- 2026093331_aceitar_pedido.sql
+-- 2026093332_aceitar_pedido.sql
 -- Aceitar cria a diária E fecha o pedido. Duas escritas que não podem ficar
 -- pela metade: pedido aceito sem diária vira gravação que ninguém marcou.
 CREATE OR REPLACE FUNCTION public.aceitar_pedido_diaria(p_pedido_id uuid, p_confirmar boolean DEFAULT false)
@@ -790,7 +858,7 @@ npm run build && git commit -am "feat(diárias): a fila de pedidos vive junto da
 
 ---
 
-### Tarefa 7: Datas que a Lumos fecha
+### Tarefa 7: O que a Lumos controla — datas fechadas e antecedência
 
 **Arquivos:**
 - Criar: `src/components/producao/BloqueiosDeAgenda.tsx`
@@ -812,15 +880,40 @@ Lista as datas bloqueadas futuras, com motivo, e um formulário de uma linha
 
 Botão discreto "Datas bloqueadas" no cabeçalho da aba, que abre em `Modal`.
 
-- [ ] **Passo 3: conferir**
+- [ ] **Passo 3: a antecedência mínima, no modal do portal**
+
+A spec promete que os 7 dias são ajustáveis, e `client_portals.antecedencia_dias`
+já existe desde a Tarefa 1. Falta o controle. Em
+`src/components/producao/PortalModal.tsx`, dentro do bloco "Quem entra no
+portal", logo abaixo do interruptor de login:
+
+```tsx
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-t border-lumos-border/60">
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-lumos-text-primary">Antecedência para pedir diária</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary">
+                      Dias de folga entre hoje e a data que o cliente consegue pedir.
+                    </span>
+                  </span>
+                  <input type="number" min={0} max={60} defaultValue={portal.antecedencia_dias ?? 7}
+                    onBlur={e => patch({ antecedencia_dias: Number(e.target.value) } as any, 'Antecedência salva.')}
+                    className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />
+                </div>
+```
+
+E `antecedencia_dias: number` entra na interface `Portal` do mesmo arquivo.
+
+- [ ] **Passo 4: conferir**
 
 Bloquear uma data, recarregar o portal, e conferir que o dia aparece
-indisponível e não aceita pedido. Desbloquear e conferir que volta.
+indisponível e não aceita pedido. Desbloquear e conferir que volta. Mudar a
+antecedência para 30 e conferir que o calendário do cliente escurece o primeiro
+mês inteiro.
 
-- [ ] **Passo 4: build e commit**
+- [ ] **Passo 5: build e commit**
 
 ```bash
-npm run build && git commit -am "feat(agenda): a Lumos fecha as datas que não estão de pé"
+npm run build && git commit -am "feat(agenda): a Lumos fecha datas e escolhe a antecedência do pedido"
 ```
 
 ---
