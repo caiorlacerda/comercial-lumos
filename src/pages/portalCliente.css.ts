@@ -336,17 +336,16 @@ export const PORTAL_CSS = String.raw`
   }
 
   /* ── Alinhamento do cabeçalho ─────────────────────────────────
-     A barra atravessa a tela, mas o miolo dela usa a MESMA largura do
-     conteúdo: assim a marca começa onde o texto começa e o perfil termina
-     onde o texto termina. E as três colunas iguais deixam a navegação no
-     centro de verdade — com "auto" nas laterais, o lado mais largo empurrava
-     o meio pro lado. */
+     Marca e perfil ficam nas pontas da tela, como estavam. O que precisava
+     de conserto era só o meio: as três colunas com as laterais de peso igual
+     põem a navegação no centro da TELA — antes ela era empurrada pelo lado
+     mais largo, e a marca com o nome do cliente é bem maior que o perfil. */
   /* O .topo era flex e o miolo, como filho, encolhia pro tamanho do conteúdo:
      o cabeçalho ficava estreito e desalinhado do texto. Aqui ele volta a ser
      uma faixa simples, e quem organiza as três colunas é o miolo. */
   .topo { display: block; padding: 0; }
   .topo-dentro {
-    max-width: 1180px; margin: 0 auto; padding: 13px 26px;
+    padding: 13px 26px;
     display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px;
   }
   .topo-dentro > .marca { justify-self: start; }
