@@ -27,6 +27,7 @@ export const NOTIFICATION_EVENTS = {
   VIDEO_NOVO: { key: 'video_novo', category: 'producao', label: 'Vídeo novo (ou nova versão) entrou na revisão', defaultEnabled: true },
   TAREFA_MUDOU_ETAPA: { key: 'tarefa_mudou_etapa', category: 'producao', label: 'Uma tarefa sua mudou de etapa', defaultEnabled: true },
   CLIENTE_ABRIU_LINK: { key: 'cliente_abriu_link', category: 'producao', label: 'Cliente abriu o link de revisão', defaultEnabled: true },
+  DIARIA_SOLICITADA: { key: 'diaria_solicitada', category: 'producao', label: 'Cliente pediu uma diária pelo portal', defaultEnabled: true, priority: 'high' },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },
