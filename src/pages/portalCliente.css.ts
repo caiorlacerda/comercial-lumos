@@ -278,6 +278,18 @@ export const PORTAL_CSS = String.raw`
 
   /* ── Diárias: calendário e pedido ─────────────────────────── */
   .mes + .mes { margin-top: 26px; }
+  /* Cabeçalho do mês: seta, nome do mês, seta. Um mês por vez, com as pontas
+     travadas no primeiro e no último mês que o servidor mandou. */
+  .mes-cabeca { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 4px; }
+  .mes-cabeca .rotulo { min-width: 15ch; text-align: center; }
+  .seta-mes {
+    appearance: none; background: none; border: 1px solid var(--fio); border-radius: 999px;
+    width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer;
+    color: var(--gesso); flex: 0 0 auto; transition: color .16s, border-color .16s, opacity .16s;
+  }
+  .seta-mes svg { width: 13px; height: 13px; }
+  .seta-mes:hover:not(:disabled) { color: var(--luz); border-color: rgba(239,199,0,.4); }
+  .seta-mes:disabled { opacity: .3; cursor: default; }
   .calend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
   .calend .dia { aspect-ratio: 1; display: grid; place-items: center; border-radius: 8px;
     font-family: "DM Mono", monospace; font-size: 12px; border: 1px solid transparent; }
@@ -288,12 +300,40 @@ export const PORTAL_CSS = String.raw`
   .calend .dia.cedo { color: var(--meia-luz); opacity: .22; }
   .calend .cab { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--meia-luz); }
 
+  /* Janela de pedido: por cima do calendário, no estilo da sala (sem nada
+     do Tailwind do app, que aqui não existe). */
+  .pedido-modal-fora {
+    position: fixed; inset: 0; z-index: 90; display: flex; align-items: center;
+    justify-content: center; padding: 20px; overflow-y: auto;
+    background: color-mix(in srgb, var(--sala) 78%, transparent);
+    backdrop-filter: blur(4px);
+  }
+  .pedido-modal {
+    position: relative; width: 100%; max-width: 480px; max-height: calc(100dvh - 40px);
+    overflow-y: auto; background: var(--mesa); border: 1px solid var(--fio);
+    border-radius: 12px; padding: 26px 24px 24px;
+    box-shadow: 0 30px 70px -20px rgba(0,0,0,.85);
+  }
+  .pedido-modal .fechar {
+    position: absolute; top: 14px; right: 14px; appearance: none; background: none;
+    border: 0; cursor: pointer; color: var(--meia-luz); padding: 6px; border-radius: 999px;
+    transition: color .16s, background-color .16s;
+  }
+  .pedido-modal .fechar:hover { color: var(--gesso); background: rgba(255,247,230,.08); }
+  .pedido-modal .fechar svg { width: 17px; height: 17px; display: block; }
+  .pedido-titulo {
+    font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
+    font-size: clamp(21px, 4vw, 27px); line-height: 1.05; margin: 6px 26px 0 0;
+  }
+  .pedido-modal .pedido-form { margin-top: 20px; max-width: none; }
+
   .pedido-form { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; max-width: 480px; }
   .pedido-form label { display: block; }
   .pedido-form label > .rotulo { display: block; margin-bottom: 6px; }
   .pedido-linha { display: grid; grid-template-columns: 1fr; gap: 14px; }
   @media (min-width: 480px) { .pedido-linha { grid-template-columns: 1fr 1fr; } }
   .campo.area { height: auto; padding: 10px 14px; resize: vertical; font-family: inherit; }
+  .campo:disabled { opacity: .55; cursor: not-allowed; }
   select.campo { cursor: pointer; }
   /* Aba de projeto tem nome comprido: não deixa a fita virar parede de texto. */
   .aba { max-width: 210px; overflow: hidden; }

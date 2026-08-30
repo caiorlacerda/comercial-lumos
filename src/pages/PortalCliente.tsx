@@ -45,7 +45,11 @@ interface Portal {
  *  do mês e os pedidos em aberto. Vem inteira de `portal_agenda`. */
 interface Agenda {
   antecedencia_dias: number;
-  dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo' }[];
+  /** `motivo` é null quando não há motivo, e sempre null em dia ocupado (isso
+   *  não é "fechado", é "já tem gravação"). Só existe depois da migração
+   *  2026093334: sem ela, a chave nem vem, e o dia bloqueado mostra o texto
+   *  genérico de sempre. */
+  dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo'; motivo?: string | null }[];
   agendadas: { nome: string; data: string; hora_inicio: string | null; hora_fim: string | null; local: string | null }[];
   /** O pacote do MÊS CORRENTE, do bloco "Suas diárias neste mês". */
   pacote: { meta: number; realizado: number } | null;
@@ -92,6 +96,7 @@ const MOTIVOS: Record<string, string> = {
   cedo: 'Esta data é cedo demais. Escolha um dia com mais folga.',
   dia_ocupado: 'Este dia acabou de ser ocupado. Escolha outro.',
   dia_bloqueado: 'Este dia não está disponível.',
+  dia_semana_fechado: 'Não gravamos neste dia da semana. Escolha outro dia.',
   repetido: 'Você já tem um pedido em aberto para este dia.',
   sem_descricao: 'Conte o que precisa gravar.',
   sem_nome: 'Diga seu nome e seu e-mail.',
@@ -163,6 +168,19 @@ const ChevronDown = ({ aberto }: { aberto: boolean }) => (
   </svg>
 );
 
+const IconeFechar = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
+/** Seta do cabeçalho do calendário: o mesmo chevron do menu, deitado. */
+const SetaMes = ({ dir }: { dir: 'esq' | 'dir' }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    style={{ transform: dir === 'esq' ? 'rotate(90deg)' : 'rotate(-90deg)' }}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
 /**
  * DE ONDE A PESSOA VEIO.
  *
@@ -182,6 +200,15 @@ const dia = (s?: string | null) =>
  *  que não é o de hoje. */
 const mesPorExtenso = (s: string) =>
   new Date(`${s.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' });
+
+/** A data por extenso, pro título da janela de pedido: "Terça-feira, 3 de
+ *  setembro de 2026". */
+const dataPorExtenso = (s: string) => {
+  const t = new Date(`${s.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 /** O mês de hoje em 'AAAA-MM', pelo relógio local. `toISOString()` é UTC e
  *  viraria o mês cedo demais na virada do dia, aqui no fuso do Brasil. */
@@ -215,53 +242,76 @@ const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
   'julho','agosto','setembro','outubro','novembro','dezembro'];
 
 function Calendario({ dias, escolhido, onEscolher }: {
-  dias: { data: string; estado: string }[];
+  dias: { data: string; estado: string; motivo?: string | null }[];
   escolhido: string | null;
   onEscolher: (d: string) => void;
 }) {
   // Agrupa por mês na ordem em que vieram: o banco já mandou ordenado, e
   // reordenar aqui só criaria uma segunda fonte da mesma verdade.
-  const meses: { chave: string; titulo: string; dias: typeof dias }[] = [];
-  dias.forEach(d => {
-    const chave = d.data.slice(0, 7);
-    let m = meses.find(x => x.chave === chave);
-    if (!m) {
-      const [ano, mes] = chave.split('-');
-      m = { chave, titulo: `${MES_NOME[Number(mes) - 1]} de ${ano}`, dias: [] };
-      meses.push(m);
-    }
-    m.dias.push(d);
+  const meses = useMemo(() => {
+    const lista: { chave: string; titulo: string; dias: typeof dias }[] = [];
+    dias.forEach(d => {
+      const chave = d.data.slice(0, 7);
+      let m = lista.find(x => x.chave === chave);
+      if (!m) {
+        const [ano, mes] = chave.split('-');
+        m = { chave, titulo: `${MES_NOME[Number(mes) - 1]} de ${ano}`, dias: [] };
+        lista.push(m);
+      }
+      m.dias.push(d);
+    });
+    return lista;
+  }, [dias]);
+
+  // Um mês por vez, abrindo no mês corrente. Se o mês de hoje não estiver
+  // entre os que o servidor mandou (não devia acontecer: a agenda começa em
+  // current_date), cai no primeiro mês disponível.
+  const [indice, setIndice] = useState(() => {
+    const i = meses.findIndex(m => m.chave === mesDeHoje());
+    return i >= 0 ? i : 0;
   });
+  // Guarda contra o mês sumir de baixo da pessoa se `dias` encolher.
+  useEffect(() => {
+    setIndice(i => Math.min(i, Math.max(0, meses.length - 1)));
+  }, [meses.length]);
+
+  const mes = meses[indice];
+  if (!mes) return null;
+
+  // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
+  // anterior, e o calendário inteiro anda uma casa.
+  const vazios = new Date(mes.dias[0].data + 'T12:00:00').getDay();
 
   return (
-    <>
-      {meses.map(m => {
-        // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
-        // anterior, e o calendário inteiro anda uma casa.
-        const vazios = new Date(m.dias[0].data + 'T12:00:00').getDay();
-        return (
-          <div key={m.chave} className="mes">
-            <span className="rotulo">{m.titulo}</span>
-            <div className="calend">
-              {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
-              {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
-              {m.dias.map(d => {
-                const livre = d.estado === 'livre';
-                return (
-                  <button key={d.data} type="button" disabled={!livre}
-                    className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
-                    title={livre ? 'Pedir esta data'
-                      : d.estado === 'cedo' ? 'Cedo demais para pedir' : 'Indisponível'}
-                    onClick={() => onEscolher(d.data)}>
-                    {Number(d.data.slice(8, 10))}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </>
+    <div className="mes">
+      <div className="mes-cabeca">
+        <button type="button" className="seta-mes" disabled={indice === 0}
+          onClick={() => setIndice(i => i - 1)} aria-label="Mês anterior">
+          <SetaMes dir="esq" />
+        </button>
+        <span className="rotulo">{mes.titulo}</span>
+        <button type="button" className="seta-mes" disabled={indice === meses.length - 1}
+          onClick={() => setIndice(i => i + 1)} aria-label="Próximo mês">
+          <SetaMes dir="dir" />
+        </button>
+      </div>
+      <div className="calend">
+        {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
+        {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
+        {mes.dias.map(d => {
+          const livre = d.estado === 'livre';
+          return (
+            <button key={d.data} type="button" disabled={!livre}
+              className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
+              title={livre ? 'Pedir esta data'
+                : d.estado === 'cedo' ? 'Cedo demais para pedir' : (d.motivo || 'Indisponível')}
+              onClick={() => onEscolher(d.data)}>
+              {Number(d.data.slice(8, 10))}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -520,6 +570,20 @@ export default function PortalCliente() {
   // vale mais.
   useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
   useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
+
+  // A janela de pedido (aberta quando há data escolhida) fecha pelo Esc, e
+  // trava a rolagem de trás enquanto está aberta.
+  useEffect(() => {
+    if (!dataEscolhida) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDataEscolhida(null); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [dataEscolhida]);
 
   const enviarPedido = useCallback(async () => {
     if (!projetoAberto || !dataEscolhida || enviandoRef.current) return;
@@ -1090,66 +1154,88 @@ export default function PortalCliente() {
                   <section className="secao">
                     <span className="rotulo">Pedir uma data</span>
                     {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
+                  </section>
 
-                    {!carregandoAgenda && dataEscolhida && (
-                      <div className="pedido-form">
-                        <p className="rotulo" style={{ marginTop: 22 }}>Pedido para {dia(dataEscolhida)}</p>
+                  {!carregandoAgenda && dataEscolhida && (
+                    <div className="pedido-modal-fora" onClick={e => { if (e.target === e.currentTarget) setDataEscolhida(null); }}>
+                      <div className="pedido-modal" role="dialog" aria-modal="true" aria-labelledby="pedido-titulo">
+                        <button type="button" className="fechar" onClick={() => setDataEscolhida(null)} aria-label="Fechar">
+                          <IconeFechar />
+                        </button>
+                        <p className="rotulo">Pedir uma data</p>
+                        <h3 id="pedido-titulo" className="pedido-titulo">{dataPorExtenso(dataEscolhida)}</h3>
 
-                        <label>
-                          <span className="rotulo">O que precisa gravar</span>
-                          <textarea className="campo area" rows={3} value={pedDescricao}
-                            onChange={e => setPedDescricao(e.target.value)}
-                            placeholder="Ex.: depoimento do cliente X, sala de reunião" />
-                        </label>
-
-                        <div className="pedido-linha">
+                        <div className="pedido-form">
                           <label>
-                            <span className="rotulo">Onde</span>
-                            <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
-                              placeholder="Endereço ou local (opcional)" />
+                            <span className="rotulo">O que precisa gravar</span>
+                            <textarea className="campo area" rows={3} value={pedDescricao}
+                              onChange={e => setPedDescricao(e.target.value)}
+                              placeholder="Ex.: depoimento do cliente X, sala de reunião" />
                           </label>
-                          <label>
-                            <span className="rotulo">Duração</span>
-                            <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
-                              <option value={6}>6 horas</option>
-                              <option value={10}>10 horas</option>
-                              <option value={12}>12 horas</option>
-                            </select>
-                          </label>
-                        </div>
 
-                        {!exigeLogin && (
                           <div className="pedido-linha">
                             <label>
-                              <span className="rotulo">Seu nome</span>
-                              <input className="campo" value={pedNome}
-                                onChange={e => { pedNomeTocado.current = true; setPedNome(e.target.value); }}
-                                placeholder="Seu nome" />
+                              <span className="rotulo">Onde</span>
+                              <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
+                                placeholder="Endereço ou local (opcional)" />
                             </label>
                             <label>
-                              <span className="rotulo">Seu e-mail</span>
-                              <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
+                              <span className="rotulo">Duração</span>
+                              <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
+                                <option value={6}>6 horas</option>
+                                <option value={10}>10 horas</option>
+                                <option value={12}>12 horas</option>
+                              </select>
                             </label>
                           </div>
-                        )}
 
-                        {pacoteDaData && pacoteDaData.meta > 0 && pacoteDaData.realizado >= pacoteDaData.meta && (
-                          <p className="nota alerta">
-                            Esta seria a {pacoteDaData.realizado + 1}ª diária de {pacoteDaData.meta} em {mesPorExtenso(dataEscolhida)}.
-                            Ela entra como extra, e a Lumos vai orçar antes de confirmar.
-                          </p>
-                        )}
+                          {exigeLogin ? (
+                            <>
+                              <div className="pedido-linha">
+                                <label>
+                                  <span className="rotulo">Seu nome</span>
+                                  <input className="campo" value={dados.voce?.nome || nome} disabled />
+                                </label>
+                                <label>
+                                  <span className="rotulo">Seu e-mail</span>
+                                  <input className="campo" value={dados.voce?.email || ''} disabled />
+                                </label>
+                              </div>
+                              <p className="nota">Entrando como {dados.voce?.nome || nome}.</p>
+                            </>
+                          ) : (
+                            <div className="pedido-linha">
+                              <label>
+                                <span className="rotulo">Seu nome</span>
+                                <input className="campo" value={pedNome}
+                                  onChange={e => { pedNomeTocado.current = true; setPedNome(e.target.value); }}
+                                  placeholder="Seu nome" />
+                              </label>
+                              <label>
+                                <span className="rotulo">Seu e-mail</span>
+                                <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
+                              </label>
+                            </div>
+                          )}
 
-                        {erroPedido && <p className="nota alerta">{erroPedido}</p>}
+                          {pacoteDaData && pacoteDaData.meta > 0 && pacoteDaData.realizado >= pacoteDaData.meta && (
+                            <p className="nota alerta">
+                              Esta seria a {pacoteDaData.realizado + 1}ª diária de {pacoteDaData.meta} em {mesPorExtenso(dataEscolhida)}.
+                              Ela entra como extra, e a Lumos vai orçar antes de confirmar.
+                            </p>
+                          )}
 
-                        <button type="button" className="botao" style={{ marginTop: 4 }}
-                          disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
-                          onClick={enviarPedido}>
-                          {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
-                        </button>
+                          {erroPedido && <p className="nota alerta">{erroPedido}</p>}
+
+                          <button type="button" className="botao" style={{ marginTop: 4 }}
+                            disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
+                            onClick={enviarPedido}>
+                            {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </section>
+                    </div>
+                  )}
 
                   <section className="secao">
                     <span className="rotulo">Seus pedidos</span>
