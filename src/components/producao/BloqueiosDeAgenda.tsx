@@ -88,6 +88,16 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
 
   useEffect(() => { if (isOpen) { load(); loadSemana(); } }, [isOpen, load, loadSemana]);
 
+  // O Modal comum (compartilhado por outras telas) fecha pelo X e pelo
+  // clique fora, mas não trata Esc. A janela do cliente fecha pelos três:
+  // aqui fica igual, só nesta tela, sem mexer no componente compartilhado.
+  useEffect(() => {
+    if (!isOpen) return;
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [isOpen, onClose]);
+
   const alternarDiaSemana = async (diaSemana: number, fechadoAgora: boolean) => {
     if (!canManage || salvandoDia !== null) return;
     setSalvandoDia(diaSemana);
@@ -102,7 +112,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
         .insert({ dia_semana: diaSemana, criado_por: profile?.id || null });
       setSalvandoDia(null);
       if (error) { toast.error(`Não foi possível fechar ${NOME_DIA_SEMANA[diaSemana]}.`); return; }
-      toast.success(`${NOME_DIA_SEMANA[diaSemana]} fechado, para a produtora inteira, todo santo dia.`);
+      toast.success(`${NOME_DIA_SEMANA[diaSemana]} fechado, para a produtora inteira, toda semana.`);
       loadSemana();
     }
   };

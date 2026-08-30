@@ -213,7 +213,10 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
    * ficar mostrando o número recusado até o modal fechar.
    */
   const [antecedenciaInput, setAntecedenciaInput] = useState('7');
-  useEffect(() => { setAntecedenciaInput(String(portal?.antecedencia_dias ?? 7)); }, [portal?.antecedencia_dias]);
+  // Portal salvo antigamente com 0 ou 1 (antes do piso de 2 dias existir):
+  // o servidor já aplica o piso na hora de calcular a data mais cedo pedível,
+  // então o campo mostra o valor que vale de verdade, não o número cru salvo.
+  useEffect(() => { setAntecedenciaInput(String(Math.max(2, portal?.antecedencia_dias ?? 7))); }, [portal?.antecedencia_dias]);
 
   const salvarAntecedencia = () => {
     if (!portal) return;
@@ -404,7 +407,7 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                   <span className="min-w-0">
                     <span className="block text-xs font-bold text-lumos-text-primary">Antecedência para pedir diária</span>
                     <span className="block text-[10.5px] text-lumos-text-secondary">
-                      Dias de folga entre hoje e a data que o cliente consegue pedir. O servidor nunca deixa menos de 2.
+                      Dias de folga entre hoje e a data que o cliente consegue pedir, no mínimo dois, mesmo que você escolha menos.
                     </span>
                   </span>
                   <input type="number" min={2} max={60} value={antecedenciaInput}

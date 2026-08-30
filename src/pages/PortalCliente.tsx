@@ -240,11 +240,15 @@ const formato = (l: number | null, a: number | null) => {
 const SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
   'julho','agosto','setembro','outubro','novembro','dezembro'];
+/** Plural do dia da semana, pra legenda de motivos ("Domingos: ..."). Mesmo
+ *  índice do `Date#getDay()` (0 = domingo). */
+const DIA_SEMANA_PLURAL = ['Domingos', 'Segundas-feiras', 'Terças-feiras',
+  'Quartas-feiras', 'Quintas-feiras', 'Sextas-feiras', 'Sábados'];
 
 function Calendario({ dias, escolhido, onEscolher }: {
   dias: { data: string; estado: string; motivo?: string | null }[];
   escolhido: string | null;
-  onEscolher: (d: string) => void;
+  onEscolher: (d: string, gatilho?: HTMLButtonElement) => void;
 }) {
   // Agrupa por mês na ordem em que vieram: o banco já mandou ordenado, e
   // reordenar aqui só criaria uma segunda fonte da mesma verdade.
@@ -276,6 +280,33 @@ function Calendario({ dias, escolhido, onEscolher }: {
   }, [meses.length]);
 
   const mes = meses[indice];
+
+  /** Legenda dos motivos de indisponibilidade do mês em tela: o `title` do
+   *  dia só existe pra quem passa o mouse, e no celular não tem hover — sem
+   *  isto, o motivo de um dia bloqueado nunca chega ao cliente no celular.
+   *  Agrupa por texto do motivo (sem repetir a mesma frase duas vezes): mais
+   *  de um dia com o mesmo motivo, todos no mesmo dia da semana, vira
+   *  "Domingos" (fechamento semanal); senão vira a(s) data(s) específica(s),
+   *  tipo "21/09". Só dias com motivo escrito entram — 'ocupado' e 'cedo'
+   *  não têm motivo de texto. */
+  const legenda = useMemo(() => {
+    if (!mes) return [];
+    const porMotivo = new Map<string, string[]>();
+    mes.dias.forEach(d => {
+      if (d.estado !== 'bloqueado' || !d.motivo) return;
+      const lista = porMotivo.get(d.motivo) || [];
+      lista.push(d.data);
+      porMotivo.set(d.motivo, lista);
+    });
+    return Array.from(porMotivo.entries()).map(([motivo, datas]) => {
+      const semanas = new Set(datas.map(dt => new Date(`${dt}T12:00:00`).getDay()));
+      const rotulo = datas.length > 1 && semanas.size === 1
+        ? DIA_SEMANA_PLURAL[[...semanas][0]]
+        : datas.map(dt => `${dt.slice(8, 10)}/${dt.slice(5, 7)}`).join(', ');
+      return { rotulo, motivo };
+    });
+  }, [mes]);
+
   if (!mes) return null;
 
   // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
@@ -305,12 +336,19 @@ function Calendario({ dias, escolhido, onEscolher }: {
               className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
               title={livre ? 'Pedir esta data'
                 : d.estado === 'cedo' ? 'Cedo demais para pedir' : (d.motivo || 'Indisponível')}
-              onClick={() => onEscolher(d.data)}>
+              onClick={e => onEscolher(d.data, e.currentTarget)}>
               {Number(d.data.slice(8, 10))}
             </button>
           );
         })}
       </div>
+      {!!legenda.length && (
+        <div className="legenda-dias">
+          {legenda.map((l, i) => (
+            <p key={i}><b>{l.rotulo}:</b> {l.motivo}</p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -521,6 +559,15 @@ export default function PortalCliente() {
   }, [abaProj, projetoAberto?.id, token, exigeLogin]);
 
   const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
+  /** O botão do dia que abriu a janela de pedido, pra devolver o foco a ele
+   *  quando ela fechar (Esc, X ou clique fora) — sem isto, quem navega por
+   *  teclado ou leitor de tela perde o lugar onde estava. */
+  const gatilhoPedidoRef = useRef<HTMLButtonElement | null>(null);
+  const pedidoModalRef = useRef<HTMLDivElement>(null);
+  const abrirPedido = useCallback((data: string, gatilho?: HTMLButtonElement) => {
+    gatilhoPedidoRef.current = gatilho || null;
+    setDataEscolhida(data);
+  }, []);
 
   /** O pacote do mês DA DATA ESCOLHIDA, que é o único que responde a pergunta
    *  do formulário: "esta diária vai entrar como extra?". `portal_pedir_diaria`
@@ -571,17 +618,40 @@ export default function PortalCliente() {
   useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
   useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
 
-  // A janela de pedido (aberta quando há data escolhida) fecha pelo Esc, e
-  // trava a rolagem de trás enquanto está aberta.
+  // A janela de pedido (aberta quando há data escolhida) fecha pelo Esc, trava
+  // a rolagem de trás enquanto está aberta, prende o foco lá dentro (Tab não
+  // escapa pro conteúdo atrás) e devolve o foco pro dia que a abriu quando ela
+  // fecha — sem isto, quem usa teclado ou leitor de tela continua "atrás" da
+  // janela, mesmo com aria-modal="true".
   useEffect(() => {
     if (!dataEscolhida) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDataEscolhida(null); };
+    const modal = pedidoModalRef.current;
+    modal?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setDataEscolhida(null); return; }
+      if (e.key === 'Tab' && modal) {
+        const focaveis = Array.from(modal.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+        if (!focaveis.length) return;
+        const primeiro = focaveis[0];
+        const ultimo = focaveis[focaveis.length - 1];
+        if (e.shiftKey && document.activeElement === primeiro) {
+          e.preventDefault();
+          ultimo.focus();
+        } else if (!e.shiftKey && document.activeElement === ultimo) {
+          e.preventDefault();
+          primeiro.focus();
+        }
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener('keydown', onKey);
+      gatilhoPedidoRef.current?.focus();
     };
   }, [dataEscolhida]);
 
@@ -1153,12 +1223,12 @@ export default function PortalCliente() {
 
                   <section className="secao">
                     <span className="rotulo">Pedir uma data</span>
-                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
+                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={abrirPedido} />}
                   </section>
 
                   {!carregandoAgenda && dataEscolhida && (
                     <div className="pedido-modal-fora" onClick={e => { if (e.target === e.currentTarget) setDataEscolhida(null); }}>
-                      <div className="pedido-modal" role="dialog" aria-modal="true" aria-labelledby="pedido-titulo">
+                      <div className="pedido-modal" ref={pedidoModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="pedido-titulo">
                         <button type="button" className="fechar" onClick={() => setDataEscolhida(null)} aria-label="Fechar">
                           <IconeFechar />
                         </button>

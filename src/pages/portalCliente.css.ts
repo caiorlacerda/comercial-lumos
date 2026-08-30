@@ -299,6 +299,11 @@ export const PORTAL_CSS = String.raw`
   .calend .dia.ocupado, .calend .dia.bloqueado { color: var(--meia-luz); opacity: .38; }
   .calend .dia.cedo { color: var(--meia-luz); opacity: .22; }
   .calend .cab { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--meia-luz); }
+  /* Legenda dos motivos de dia indisponível no mês em tela: o atributo title
+     do dia só existe pra quem passa o mouse, e no celular não tem hover. */
+  .legenda-dias { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; }
+  .legenda-dias p { margin: 0; font-size: 12px; line-height: 1.4; color: var(--meia-luz); }
+  .legenda-dias b { color: var(--gesso); font-weight: 700; }
 
   /* Janela de pedido: por cima do calendário, no estilo da sala (sem nada
      do Tailwind do app, que aqui não existe). */
@@ -314,6 +319,9 @@ export const PORTAL_CSS = String.raw`
     border-radius: 12px; padding: 26px 24px 24px;
     box-shadow: 0 30px 70px -20px rgba(0,0,0,.85);
   }
+  /* Recebe o foco por script ao abrir (prende o foco lá dentro): sem anel de
+     foco no container em si, só nos controles de verdade. */
+  .pedido-modal:focus { outline: none; }
   .pedido-modal .fechar {
     position: absolute; top: 14px; right: 14px; appearance: none; background: none;
     border: 0; cursor: pointer; color: var(--meia-luz); padding: 6px; border-radius: 999px;
