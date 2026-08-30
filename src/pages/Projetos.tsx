@@ -1639,17 +1639,24 @@ export default function Projetos() {
   };
 
   // ── Listas de tarefas ──────────────────────────────────────────────────────
-  // Quantas tarefas EM ABERTO cada lista tem. O número na aba é o que faz a
-  // pessoa saber onde está o trabalho sem precisar clicar em cada mês.
-  const listCounts = (() => {
-    const c: Record<string, number> = {};
+  /**
+   * A conta de cada lista: quantas estão em aberto e quantas já fecharam.
+   *
+   * A tarefa concluída NÃO sai da lista — ela fecha dentro do mês em que foi
+   * feita, que é o que permite olhar pra trás e dizer quanto agosto rendeu. O
+   * número da aba mostra o que falta (é o que decide onde trabalhar hoje), e a
+   * conta cheia aparece na lista aberta e no tooltip da aba.
+   */
+  const listStats = (() => {
+    const c: Record<string, { abertas: number; feitas: number }> = {};
     projectTasks.forEach(t => {
-      if (isTaskDone(t)) return;
       const k = t.list_id || '__sem__';
-      c[k] = (c[k] || 0) + 1;
+      const alvo = (c[k] ||= { abertas: 0, feitas: 0 });
+      if (isTaskDone(t)) alvo.feitas++; else alvo.abertas++;
     });
     return c;
   })();
+  const statsDe = (k: string) => listStats[k] || { abertas: 0, feitas: 0 };
 
   const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -2504,6 +2511,7 @@ export default function Projetos() {
                     <div className="flex items-center gap-1 flex-wrap border-b border-lumos-border/60 -mt-1 pb-2">
                       {taskLists.length > 0 && (
                         <button type="button" onClick={() => setListFilter('all')}
+                          title={`${projectTasks.filter(t => !isTaskDone(t)).length} em aberto · ${projectTasks.filter(isTaskDone).length} concluídas`}
                           className={clsx('h-8 px-3 rounded-lumos text-[11px] font-black uppercase tracking-wide transition-colors',
                             listFilter === 'all' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
                           Todas
@@ -2514,10 +2522,17 @@ export default function Projetos() {
                       {taskLists.map(l => (
                         <div key={l.id} className="relative flex items-center">
                           <button type="button" onClick={() => setListFilter(l.id)}
+                            title={`${statsDe(l.id).abertas} em aberto · ${statsDe(l.id).feitas} concluídas`}
                             className={clsx('h-8 pl-3 pr-2 rounded-lumos text-[11px] font-black uppercase tracking-wide transition-colors flex items-center gap-1.5',
                               listFilter === l.id ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
                             {l.nome}
-                            <span className="font-bold normal-case tracking-normal opacity-70">{listCounts[l.id] || 0}</span>
+                            {/* Lista inteira concluída mostra o certo em vez de um zero
+                                seco: mês fechado e mês vazio não são a mesma coisa. */}
+                            {statsDe(l.id).abertas === 0 && statsDe(l.id).feitas > 0 ? (
+                              <Check className="w-3.5 h-3.5 text-green-500" />
+                            ) : (
+                              <span className="font-bold normal-case tracking-normal opacity-70">{statsDe(l.id).abertas}</span>
+                            )}
                           </button>
                           {canManage && listFilter === l.id && (
                             <button type="button" onClick={() => setListMenu(m => (m === l.id ? null : l.id))}
@@ -2546,12 +2561,13 @@ export default function Projetos() {
 
                       {/* "Sem lista" só existe quando há lista E tarefa fora dela:
                           é o lugar onde a tarefa esquecida aparece, em vez de sumir. */}
-                      {taskLists.length > 0 && (listCounts['__sem__'] || 0) > 0 && (
+                      {taskLists.length > 0 && (statsDe('__sem__').abertas + statsDe('__sem__').feitas) > 0 && (
                         <button type="button" onClick={() => setListFilter('none')}
+                          title={`${statsDe('__sem__').abertas} em aberto · ${statsDe('__sem__').feitas} concluídas`}
                           className={clsx('h-8 px-3 rounded-lumos text-[11px] font-black uppercase tracking-wide transition-colors',
                             listFilter === 'none' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
                           Sem lista
-                          <span className="ml-1.5 font-bold normal-case tracking-normal opacity-70">{listCounts['__sem__']}</span>
+                          <span className="ml-1.5 font-bold normal-case tracking-normal opacity-70">{statsDe('__sem__').abertas}</span>
                         </button>
                       )}
 
@@ -2564,6 +2580,32 @@ export default function Projetos() {
                       )}
                     </div>
                   )}
+
+                  {/* A CONTA DA LISTA ABERTA.
+                      A tarefa concluída fica na lista em que foi feita, então o
+                      mês fechado continua contável depois — que é justamente o
+                      que se quer olhar no fim de agosto. O número da aba mostra
+                      o que falta; aqui mostra o total. */}
+                  {(() => {
+                    if (!listaAberta && listFilter !== 'none') return null;
+                    const { abertas, feitas } = statsDe(listaAberta ? listaAberta.id : '__sem__');
+                    const total = abertas + feitas;
+                    if (!total) return null;
+                    return (
+                      <div className="flex items-center gap-3 flex-wrap -mt-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
+                          {listaAberta ? listaAberta.nome : 'Sem lista'}
+                        </span>
+                        <div className="h-1.5 flex-1 min-w-[80px] max-w-[220px] rounded-full bg-lumos-text-secondary/15 overflow-hidden">
+                          <div className="h-full bg-lumos-yellow transition-all" style={{ width: `${Math.round((feitas / total) * 100)}%` }} />
+                        </div>
+                        <span className="text-[11px] font-bold text-lumos-text-secondary tabular-nums">
+                          {feitas} de {total} concluída{total > 1 ? 's' : ''}
+                          {abertas > 0 && <span className="opacity-60"> · {abertas} em aberto</span>}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Toolbar em linha única: busca + chips de filtro (estilo do mockup) */}
                   <div className="flex items-center gap-2 flex-wrap">
@@ -2643,7 +2685,13 @@ export default function Projetos() {
                                 // Lista vazia não é "tudo em dia": é lista nova. E o
                                 // que a pessoa precisa saber aqui é que a tarefa que
                                 // ela digitar abaixo já nasce nesta lista.
-                                ? `Nenhuma tarefa em "${listaAberta.nome}" ainda. O que você digitar abaixo já nasce aqui.`
+                                //
+                                // Lista com tudo concluído é outra coisa ainda: dizer
+                                // "nenhuma tarefa ainda" num mês fechado apagaria
+                                // justamente o trabalho que foi feito.
+                                ? (statsDe(listaAberta.id).feitas > 0
+                                    ? `Tudo concluído em "${listaAberta.nome}". As ${statsDe(listaAberta.id).feitas} tarefas estão logo abaixo, em "Mostrar concluídas".`
+                                    : `Nenhuma tarefa em "${listaAberta.nome}" ainda. O que você digitar abaixo já nasce aqui.`)
                                 : listFilter === 'none'
                                   ? 'Todas as tarefas já estão em alguma lista.'
                                   : 'Tudo em dia por aqui, nenhuma tarefa ativa. 🎉'}
