@@ -13,7 +13,7 @@ interface Blocks {
 interface Portal {
   id: string; token: string; active: boolean; show_financeiro: boolean;
   contact_user_ids: string[]; blocks: Blocks; exige_login: boolean;
-  last_opened_at: string | null; opened_count: number;
+  last_opened_at: string | null; opened_count: number; antecedencia_dias: number;
 }
 /** Pessoa do lado do cliente, com o que ela alcança. */
 interface Pessoa {
@@ -206,6 +206,29 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     toast.success(okMsg);
   };
 
+  /**
+   * Antecedência: input controlado, não `defaultValue`. Assim, se o `patch`
+   * falhar, o campo volta sozinho pro valor de verdade (o `useEffect` segue
+   * `portal.antecedencia_dias`, que o `patch` já reverte no erro) em vez de
+   * ficar mostrando o número recusado até o modal fechar.
+   */
+  const [antecedenciaInput, setAntecedenciaInput] = useState('7');
+  useEffect(() => { setAntecedenciaInput(String(portal?.antecedencia_dias ?? 7)); }, [portal?.antecedencia_dias]);
+
+  const salvarAntecedencia = () => {
+    if (!portal) return;
+    const atual = portal.antecedencia_dias ?? 7;
+    const n = Number(antecedenciaInput);
+    // Texto ou campo vazio não é "0 dias", é "não digitei nada direito":
+    // volta pro valor de verdade sem gravar lixo. Número válido é travado na
+    // faixa de 0 a 60, porque `min`/`max` do <input> são só dica visual.
+    const valido = antecedenciaInput.trim() !== '' && Number.isFinite(n);
+    const novo = valido ? Math.min(60, Math.max(0, Math.round(n))) : atual;
+    setAntecedenciaInput(String(novo));
+    if (novo === atual) return; // nada mudou: sem toast, sem chamada à toa
+    patch({ antecedencia_dias: novo } as any, 'Antecedência salva.');
+  };
+
   // Revogar = desativa o link atual; gerar de novo cria token novo.
   const revoke = async () => {
     if (!portal) return;
@@ -374,6 +397,19 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                     className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', portal.exige_login ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
                     <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.exige_login ? 'left-5' : 'left-0.5')} />
                   </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-t border-lumos-border/60">
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-lumos-text-primary">Antecedência para pedir diária</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary">
+                      Dias de folga entre hoje e a data que o cliente consegue pedir.
+                    </span>
+                  </span>
+                  <input type="number" min={0} max={60} value={antecedenciaInput}
+                    onChange={e => setAntecedenciaInput(e.target.value)}
+                    onBlur={salvarAntecedencia}
+                    className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />
                 </div>
 
                 <div className="divide-y divide-lumos-border/60">

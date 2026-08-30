@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
@@ -41,6 +41,27 @@ interface Portal {
   atividade: { tipo: string; projeto: string; file_name: string; decisao?: string; quem?: string; versao?: number; quando: string }[];
 }
 
+/** A agenda de diárias de um projeto: calendário, gravações marcadas, pacote
+ *  do mês e os pedidos em aberto. Vem inteira de `portal_agenda`. */
+interface Agenda {
+  antecedencia_dias: number;
+  dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo' }[];
+  agendadas: { nome: string; data: string; hora_inicio: string | null; hora_fim: string | null; local: string | null }[];
+  /** O pacote do MÊS CORRENTE, do bloco "Suas diárias neste mês". */
+  pacote: { meta: number; realizado: number } | null;
+  /** O pacote de cada mês que o calendário alcança, com a chave em 'AAAA-MM'.
+   *  O aviso de diária extra tem que ler o mês da data escolhida, que é o mesmo
+   *  mês que `portal_pedir_diaria` usa pra gravar `fora_do_pacote`. Mês sem
+   *  contrato por volume não entra no mapa. Opcional porque só existe depois da
+   *  migração 2026093333. */
+  pacotes?: Record<string, { meta: number; realizado: number }>;
+  pedidos: { id: string; data_desejada: string; estado: string; motivo_recusa: string | null; fora_do_pacote: boolean; descricao: string }[];
+}
+
+/** As quatro abas de dentro de um projeto. */
+type AbaProjeto = 'geral' | 'entregas' | 'diarias' | 'arquivos';
+const ABAS_PROJETO: readonly AbaProjeto[] = ['geral', 'entregas', 'diarias', 'arquivos'];
+
 /** Como o cliente lê o estado de um vídeo. Etapa interna nunca chega aqui. */
 const ESTADO: Record<string, { label: string; classe: string }> = {
   EM_REVISAO_CLIENTE: { label: 'Esperando você', classe: 's-voce' },
@@ -56,7 +77,48 @@ const MARCOS = [
   { chave: 'entrega', label: 'Entrega final', status: ['concluido', 'entregue'] },
 ];
 
+/** Como o cliente lê o estado de um pedido de diária. */
+const ESTADO_PEDIDO: Record<string, { label: string; classe: string }> = {
+  pendente: { label: 'Esperando a Lumos', classe: 's-prod' },
+  aceito: { label: 'Aceito', classe: 's-ok' },
+  recusado: { label: 'Recusado', classe: 's-aj' },
+  cancelado: { label: 'Cancelado', classe: 's-prod' },
+};
+
+/** Motivo de recusa de `portal_pedir_diaria` e `portal_cancelar_pedido`, em
+ *  português direto. Código que a função não devolve nunca (ou que a IA não
+ *  previu) cai no genérico: botão que não responde é pior que aviso vago. */
+const MOTIVOS: Record<string, string> = {
+  cedo: 'Esta data é cedo demais. Escolha um dia com mais folga.',
+  dia_ocupado: 'Este dia acabou de ser ocupado. Escolha outro.',
+  dia_bloqueado: 'Este dia não está disponível.',
+  repetido: 'Você já tem um pedido em aberto para este dia.',
+  sem_descricao: 'Conte o que precisa gravar.',
+  sem_nome: 'Diga seu nome e seu e-mail.',
+  sem_acesso: 'Este projeto não está disponível para você.',
+};
+const MOTIVO_GENERICO = 'Não foi possível fazer isso agora. Tente de novo em instantes.';
+const motivoPedido = (erro: string) => MOTIVOS[erro] || MOTIVO_GENERICO;
+/** Cancelar tem seu próprio `sem_acesso`: aqui não é "projeto indisponível",
+ *  é "este pedido não é seu" (portal com login, pedido de outra pessoa). */
+const motivoCancelar = (erro: string) =>
+  erro === 'sem_acesso' ? 'Este pedido é de outra pessoa.' : (MOTIVOS[erro] || MOTIVO_GENERICO);
+
+/** `portal_agenda` também devolve `error`, e não tem as chaves de `Agenda`
+ *  quando devolve: sem tratar, `agenda?.dias` etc. quebram o render (tela
+ *  branca). O caso mais comum é sessão vencida num portal com login. */
+const motivoAgenda = (erro: string, exigeLogin: boolean) => {
+  if (erro === 'invalid') return 'Este link não está mais ativo. Fale com quem te mandou o link.';
+  if (erro === 'sem_acesso') {
+    return exigeLogin
+      ? 'Sua sessão expirou. Entre de novo para ver as diárias deste projeto.'
+      : 'Este projeto não está disponível para diárias agora.';
+  }
+  return MOTIVO_GENERICO;
+};
+
 const NOME_SALVO = 'rev_nome';
+const EMAIL_SALVO = 'rev_email';
 
 const Sol = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -115,6 +177,19 @@ const BILHETE = 'lumos_voltar';
 const dia = (s?: string | null) =>
   s ? new Date(s.length <= 10 ? `${s}T12:00:00` : s).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : null;
 
+/** O mês de uma data 'AAAA-MM-DD' por extenso, pro aviso dizer de que mês está
+ *  falando: o calendário vai a 90 dias, e quase toda data escolhida cai num mês
+ *  que não é o de hoje. */
+const mesPorExtenso = (s: string) =>
+  new Date(`${s.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' });
+
+/** O mês de hoje em 'AAAA-MM', pelo relógio local. `toISOString()` é UTC e
+ *  viraria o mês cedo demais na virada do dia, aqui no fuso do Brasil. */
+const mesDeHoje = () => {
+  const h = new Date();
+  return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const quandoRelativo = (s: string) => {
   const d = Math.floor((Date.now() - new Date(s).getTime()) / 86400000);
   if (d <= 0) return 'hoje';
@@ -135,6 +210,61 @@ const formato = (l: number | null, a: number | null) => {
   return { classe: 'f169', rotulo: '16:9' };
 };
 
+const SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
+  'julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function Calendario({ dias, escolhido, onEscolher }: {
+  dias: { data: string; estado: string }[];
+  escolhido: string | null;
+  onEscolher: (d: string) => void;
+}) {
+  // Agrupa por mês na ordem em que vieram: o banco já mandou ordenado, e
+  // reordenar aqui só criaria uma segunda fonte da mesma verdade.
+  const meses: { chave: string; titulo: string; dias: typeof dias }[] = [];
+  dias.forEach(d => {
+    const chave = d.data.slice(0, 7);
+    let m = meses.find(x => x.chave === chave);
+    if (!m) {
+      const [ano, mes] = chave.split('-');
+      m = { chave, titulo: `${MES_NOME[Number(mes) - 1]} de ${ano}`, dias: [] };
+      meses.push(m);
+    }
+    m.dias.push(d);
+  });
+
+  return (
+    <>
+      {meses.map(m => {
+        // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
+        // anterior, e o calendário inteiro anda uma casa.
+        const vazios = new Date(m.dias[0].data + 'T12:00:00').getDay();
+        return (
+          <div key={m.chave} className="mes">
+            <span className="rotulo">{m.titulo}</span>
+            <div className="calend">
+              {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
+              {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
+              {m.dias.map(d => {
+                const livre = d.estado === 'livre';
+                return (
+                  <button key={d.data} type="button" disabled={!livre}
+                    className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
+                    title={livre ? 'Pedir esta data'
+                      : d.estado === 'cedo' ? 'Cedo demais para pedir' : 'Indisponível'}
+                    onClick={() => onEscolher(d.data)}>
+                    {Number(d.data.slice(8, 10))}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export default function PortalCliente() {
   const { token = '' } = useParams();
   const [dados, setDados] = useState<Portal | null>(null);
@@ -145,6 +275,25 @@ export default function PortalCliente() {
   const [enviandoLink, setEnviandoLink] = useState(false);
   const [linkEnviado, setLinkEnviado] = useState(false);
   const [aba, setAba] = useState<string>('inicio');
+  /** Aba de dentro do projeto. Volta pra "geral" ao trocar de projeto: manter
+   *  "diarias" ao pular pra outro projeto mostraria o calendário de um projeto
+   *  que a pessoa nem olhou ainda. */
+  const [abaProj, setAbaProj] = useState<AbaProjeto>('geral');
+  /**
+   * Sub-aba que `carregar` leu da URL de volta, esperando ser aplicada.
+   * O efeito abaixo reseta `abaProj` toda vez que `aba` muda — inclusive
+   * quando é a própria restauração quem muda `aba` — então ele confere esta
+   * ref antes de resetar, em vez de sempre voltar pra "geral".
+   */
+  const subRestaurada = useRef<AbaProjeto | null>(null);
+  useEffect(() => {
+    if (subRestaurada.current) {
+      setAbaProj(subRestaurada.current);
+      subRestaurada.current = null;
+      return;
+    }
+    setAbaProj('geral');
+  }, [aba]);
   const [nome, setNome] = useState(() => localStorage.getItem(NOME_SALVO) || '');
   /**
    * Capas dos quadros, buscadas DEPOIS e só das que estão na tela.
@@ -185,9 +334,18 @@ export default function PortalCliente() {
       try { localStorage.setItem(NOME_SALVO, d.voce.nome); } catch { /* ignore */ }
     }
     setDados(d);
-    // Voltando do player: reabre na aba de onde a pessoa saiu.
-    const pedida = new URLSearchParams(window.location.search).get('aba');
-    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || d.projetos.some(p => p.id === pedida))) {
+    // Voltando do player: reabre na aba de onde a pessoa saiu — e, se era de
+    // dentro de um projeto, na aba interna também (`sub`).
+    const params = new URLSearchParams(window.location.search);
+    const pedida = params.get('aba');
+    const ehProjeto = !!pedida && d.projetos.some(p => p.id === pedida);
+    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || ehProjeto)) {
+      if (ehProjeto) {
+        const subPedida = params.get('sub');
+        if (subPedida && (ABAS_PROJETO as readonly string[]).includes(subPedida)) {
+          subRestaurada.current = subPedida as AbaProjeto;
+        }
+      }
       setAba(pedida);
     } else if (d.abrir_projeto) {
       // Link antigo, de projeto: abre já na aba daquele projeto.
@@ -230,12 +388,16 @@ export default function PortalCliente() {
   /** Deixa o bilhete de volta antes de sair pro player. */
   const marcarVolta = useCallback(() => {
     try {
+      // Dentro de um projeto, o bilhete leva também a aba interna (`sub`):
+      // sem ela, quem saiu de Entregas voltava sempre em Visão geral.
+      const dentroProjeto = dados?.projetos.some(p => p.id === aba) ?? false;
+      const sub = dentroProjeto ? `&sub=${abaProj}` : '';
       sessionStorage.setItem(BILHETE, JSON.stringify({
-        url: `/portal/${token}${aba !== 'inicio' ? `?aba=${aba}` : ''}`,
+        url: `/portal/${token}${aba !== 'inicio' ? `?aba=${aba}${sub}` : ''}`,
         rotulo: dados ? `Portal de ${dados.cliente.nome}` : 'Portal',
       }));
     } catch { /* navegador sem sessão: só não tem botão de voltar */ }
-  }, [token, aba, dados]);
+  }, [token, aba, dados, abaProj]);
 
   // Aba trocou: volta pro topo e pede as capas dos quadros que ela mostra.
   // Sem o topo, trocar de aba caía no meio da página anterior.
@@ -262,6 +424,177 @@ export default function PortalCliente() {
       projetos: (dados?.projetos || []).filter(p => p.status !== 'concluido').length,
     };
   }, [dados]);
+
+  // Calculado aqui (e não perto do JSX) porque a aba Diárias precisa dele
+  // pra buscar a agenda, e hook não pode vir depois de um retorno condicional.
+  const projetoAberto = dados?.projetos.find(p => p.id === aba) || null;
+
+  const exigeLogin = !!dados?.portal.exige_login;
+
+  // ── Diárias: agenda do projeto aberto ──────────────────────────────
+  const [agenda, setAgenda] = useState<Agenda | null>(null);
+  const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+  const [erroAgenda, setErroAgenda] = useState<string | null>(null);
+  /** Geração da busca de agenda: cada troca de projeto/aba soma um. Uma busca
+   *  (a inicial ou um refetch pós-envio/cancelamento) só aplica o resultado
+   *  se a geração ainda for a mesma — senão a pessoa já saiu dali, e um
+   *  resultado tardio de outro projeto sobrescreveria a tela atual. */
+  const geracaoAgenda = useRef(0);
+
+  // Só quando a aba abre: a maioria das visitas não vai ao calendário, e ele
+  // custa 90 dias de consulta.
+  useEffect(() => {
+    if (abaProj !== 'diarias' || !projetoAberto) return;
+    const minhaGeracao = ++geracaoAgenda.current;
+    setCarregandoAgenda(true);
+    // Limpa o que sobrou do projeto anterior: sem isso, pacote/gravações/
+    // pedidos de um projeto ficavam visíveis embaixo do nome do próximo
+    // enquanto a busca nova ainda não voltou.
+    setAgenda(null);
+    setErroAgenda(null);
+    supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id })
+      .then(({ data, error }) => {
+        if (geracaoAgenda.current !== minhaGeracao) return;
+        const falha = error ? 'erro' : (data as any)?.error;
+        if (falha) {
+          // `portal_agenda` devolve um objeto sem as chaves de Agenda quando
+          // dá erro: nunca guardar isso como se fosse a agenda, ou o render
+          // quebra (agenda?.dias etc. não protegem contra objeto sem a
+          // chave — só contra agenda nula).
+          setAgenda(null);
+          setErroAgenda(error ? MOTIVO_GENERICO : motivoAgenda(falha, exigeLogin));
+        } else {
+          setAgenda(data as Agenda);
+        }
+        setCarregandoAgenda(false);
+      });
+  }, [abaProj, projetoAberto?.id, token, exigeLogin]);
+
+  const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
+
+  /** O pacote do mês DA DATA ESCOLHIDA, que é o único que responde a pergunta
+   *  do formulário: "esta diária vai entrar como extra?". `portal_pedir_diaria`
+   *  decide `fora_do_pacote` pelo mês da data pedida, e a tela lia o mês
+   *  corrente, então a maioria das datas do calendário (90 dias, quase sempre
+   *  outro mês) dava aviso errado, nos dois sentidos: aviso de cobrança à parte
+   *  sem motivo, ou nenhum aviso e o pedido chegando marcado como extra.
+   *  Sem data escolhida, não há aviso nenhum.
+   *  Enquanto a migração 2026093333 não roda, `pacotes` não vem: aí o pacote do
+   *  mês corrente ainda vale, mas só para datas do mês corrente. */
+  const pacoteDaData = useMemo(() => {
+    if (!dataEscolhida || !agenda) return null;
+    const mes = dataEscolhida.slice(0, 7);
+    if (agenda.pacotes) return agenda.pacotes[mes] || null;
+    return mes === mesDeHoje() ? agenda.pacote : null;
+  }, [agenda, dataEscolhida]);
+
+  const [pedDescricao, setPedDescricao] = useState('');
+  const [pedLocal, setPedLocal] = useState('');
+  const [pedDuracao, setPedDuracao] = useState(10);
+  const [pedNome, setPedNome] = useState(nome);
+  const pedNomeTocado = useRef(false);
+  const [pedEmail, setPedEmail] = useState(() => {
+    try { return localStorage.getItem(EMAIL_SALVO) || ''; } catch { return ''; }
+  });
+  const [enviandoPedido, setEnviandoPedido] = useState(false);
+  /** A mesma trava, mas síncrona. `enviandoPedido` é estado: dois cliques no
+   *  mesmo tique do navegador leem os dois `false` (o React ainda não
+   *  re-renderizou o botão desabilitado) e saem os dois pedidos ao mesmo tempo.
+   *  Um vence, o outro bate no índice único de pedido pendente. O ref muda na
+   *  hora, então o segundo clique nem chega a sair. */
+  const enviandoRef = useRef(false);
+  const [erroPedido, setErroPedido] = useState<string | null>(null);
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
+  const [erroCancelar, setErroCancelar] = useState<string | null>(null);
+
+  // `nome` só existe depois da tela "Como te chamamos?", que roda DEPOIS do
+  // primeiro render deste componente — então `useState(nome)` acima só pega
+  // o nome a tempo se ele já estava salvo. Sem isto, quem digita o nome ali
+  // encontrava o campo do pedido vazio. Só sincroniza enquanto a pessoa não
+  // tiver mexido no campo com a mão.
+  useEffect(() => {
+    if (!pedNomeTocado.current) setPedNome(nome);
+  }, [nome]);
+
+  // Trocou de data, de aba ou de projeto: o aviso da tentativa anterior não
+  // vale mais.
+  useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
+  useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
+
+  const enviarPedido = useCallback(async () => {
+    if (!projetoAberto || !dataEscolhida || enviandoRef.current) return;
+    const minhaGeracao = geracaoAgenda.current;
+    enviandoRef.current = true;
+    setEnviandoPedido(true);
+    setErroPedido(null);
+    const { data, error } = await supabase.rpc('portal_pedir_diaria', {
+      p_token: token,
+      p_project_id: projetoAberto.id,
+      p_data: dataEscolhida,
+      p_duracao: pedDuracao,
+      p_local: pedLocal.trim() || null,
+      p_descricao: pedDescricao,
+      p_nome: exigeLogin ? null : pedNome,
+      p_email: exigeLogin ? null : pedEmail,
+    });
+    // Erro de transporte (rede, RLS) não é "sem resposta": sem tratar aqui,
+    // `data` vem nulo, `falha` fica undefined, e o código seguia pro
+    // caminho de sucesso como se o pedido tivesse sido criado de verdade.
+    if (error) {
+      setErroPedido(MOTIVO_GENERICO);
+      enviandoRef.current = false;
+      setEnviandoPedido(false);
+      return;
+    }
+    const falha = (data as any)?.error;
+    if (falha) {
+      setErroPedido(motivoPedido(falha));
+      enviandoRef.current = false;
+      setEnviandoPedido(false);
+      return;
+    }
+    if (!exigeLogin) {
+      try {
+        localStorage.setItem(NOME_SALVO, pedNome.trim());
+        localStorage.setItem(EMAIL_SALVO, pedEmail.trim());
+      } catch { /* ignore */ }
+    }
+    setPedDescricao('');
+    setPedLocal('');
+    setDataEscolhida(null);
+    enviandoRef.current = false;
+    setEnviandoPedido(false);
+    const { data: nova, error: erroNova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
+    // Mesma guarda do efeito principal: se a pessoa já trocou de projeto
+    // enquanto isto rodava, este resultado é velho e não vale mais nada.
+    if (geracaoAgenda.current === minhaGeracao && !erroNova && !(nova as any)?.error) {
+      setAgenda(nova as Agenda);
+    }
+  }, [token, projetoAberto, dataEscolhida, pedDuracao, pedLocal, pedDescricao, exigeLogin, pedNome, pedEmail]);
+
+  const cancelarPedido = useCallback(async (id: string) => {
+    if (!projetoAberto || cancelandoId) return;
+    const minhaGeracao = geracaoAgenda.current;
+    setCancelandoId(id);
+    setErroCancelar(null);
+    const { data, error } = await supabase.rpc('portal_cancelar_pedido', { p_token: token, p_pedido_id: id });
+    if (error) {
+      setErroCancelar(MOTIVO_GENERICO);
+      setCancelandoId(null);
+      return;
+    }
+    const falha = (data as any)?.error;
+    if (falha) {
+      setErroCancelar(motivoCancelar(falha));
+      setCancelandoId(null);
+      return;
+    }
+    setCancelandoId(null);
+    const { data: nova, error: erroNova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
+    if (geracaoAgenda.current === minhaGeracao && !erroNova && !(nova as any)?.error) {
+      setAgenda(nova as Agenda);
+    }
+  }, [token, projetoAberto, cancelandoId]);
 
   if (erro) {
     return (
@@ -383,7 +716,6 @@ export default function PortalCliente() {
     );
   }
 
-  const projetoAberto = dados.projetos.find(p => p.id === aba) || null;
   const blocos = dados.portal.blocks || {};
 
   return (
@@ -596,99 +928,261 @@ export default function PortalCliente() {
               </div>
             </div>
 
-            {blocos.escopo !== false && projetoAberto.escopo.length > 0 && (
-              <section className="secao">
-                <span className="rotulo">Seu pacote neste mês</span>
-                {projetoAberto.escopo.map((it, i) => (
-                  <div key={i} className="proj" style={{ cursor: 'default' }}>
-                    <span><span className="nome">{it.rotulo}</span></span>
-                    <span className="barra">
-                      <i className={it.realizado >= it.meta ? 'b-ok' : 'b-voce'}
-                        style={{ width: `${Math.min(100, (it.realizado / it.meta) * 100)}%` }} />
-                    </span>
-                    <span className="contagem">{it.realizado} de {it.meta}</span>
-                  </div>
-                ))}
-              </section>
-            )}
+            <nav className="fita fita-proj" aria-label="Seções do projeto">
+              {([
+                ['geral', 'Visão geral'],
+                ['entregas', 'Entregas'],
+                ['diarias', 'Diárias'],
+                ['arquivos', 'Arquivos'],
+              ] as const).map(([chave, rotulo]) => (
+                (chave !== 'arquivos' || projetoAberto.arquivos.length > 0) && (
+                  <button key={chave} type="button" className="link"
+                    aria-current={abaProj === chave}
+                    onClick={() => setAbaProj(chave)}>
+                    {rotulo}
+                    {chave === 'entregas' && projetoAberto.entregas.length > 0 && (
+                      <span className="n">{projetoAberto.entregas.length}</span>
+                    )}
+                  </button>
+                )
+              ))}
+            </nav>
 
-            {blocos.cronograma !== false && (
-              <section className="secao">
-                <span className="rotulo">Onde o projeto está</span>
-                <ul className="etapas">
-                  {(() => {
-                    const st = projetoAberto.stages || {};
-                    const temAgora = MARCOS.map(m => m.status.some(s => (st[s] || 0) > 0));
-                    const iAtual = temAgora.findIndex(Boolean);
-                    return MARCOS.map((m, i) => {
-                      const fase = projetoAberto.cronograma.find(c => m.status.includes(c.etapa));
-                      const classe = iAtual === -1 ? 'pendente' : i < iAtual ? 'feita' : i === iAtual ? 'agora' : 'pendente';
-                      return (
-                        <li key={m.chave} className={`etapa ${classe}`}>
-                          <span className="q">{m.label}</span>
-                          <span className="d">
-                            {classe === 'agora' ? 'agora'
-                              : fase?.fim ? dia(fase.fim)
-                              : fase?.prazo_cliente ? `previsto ${dia(fase.prazo_cliente)}`
-                              : classe === 'feita' ? 'concluído' : '—'}
-                          </span>
-                        </li>
-                      );
-                    });
-                  })()}
-                </ul>
-              </section>
-            )}
-
-            <section className="secao">
-              <span className="rotulo">Entregas</span>
-              {!projetoAberto.entregas.length ? (
-                <p className="nota">
-                  Nada para ver ainda. Assim que o primeiro corte sair da edição, ele aparece aqui.
-                </p>
-              ) : (
-                ['EM_REVISAO_CLIENTE', 'ALTERACOES_CLIENTE', 'APROVADO'].map(st => {
-                  const lista = projetoAberto.entregas.filter(e => e.status === st);
-                  if (!lista.length) return null;
-                  return (
-                    <div key={st} className="peca-bloco">
-                      <div>
-                        <h3>{ESTADO[st]?.label}</h3>
-                        <span className="estado">{lista.length} {lista.length === 1 ? 'peça' : 'peças'}</span>
-                        <span className={`selo ${ESTADO[st]?.classe}`}>{ESTADO[st]?.label}</span>
+            {abaProj === 'geral' && (
+              <>
+                {blocos.escopo !== false && projetoAberto.escopo.length > 0 && (
+                  <section className="secao">
+                    <span className="rotulo">Seu pacote neste mês</span>
+                    {projetoAberto.escopo.map((it, i) => (
+                      <div key={i} className="proj" style={{ cursor: 'default' }}>
+                        <span><span className="nome">{it.rotulo}</span></span>
+                        <span className="barra">
+                          <i className={it.realizado >= it.meta ? 'b-ok' : 'b-voce'}
+                            style={{ width: `${Math.min(100, (it.realizado / it.meta) * 100)}%` }} />
+                        </span>
+                        <span className="contagem">{it.realizado} de {it.meta}</span>
                       </div>
-                      <div className="quadros">
-                        {lista.map((e, i) => {
-                          const f = formato(e.largura, e.altura);
+                    ))}
+                  </section>
+                )}
+
+                {blocos.cronograma !== false && (
+                  <section className="secao">
+                    <span className="rotulo">Onde o projeto está</span>
+                    <ul className="etapas">
+                      {(() => {
+                        const st = projetoAberto.stages || {};
+                        const temAgora = MARCOS.map(m => m.status.some(s => (st[s] || 0) > 0));
+                        const iAtual = temAgora.findIndex(Boolean);
+                        return MARCOS.map((m, i) => {
+                          const fase = projetoAberto.cronograma.find(c => m.status.includes(c.etapa));
+                          const classe = iAtual === -1 ? 'pendente' : i < iAtual ? 'feita' : i === iAtual ? 'agora' : 'pendente';
                           return (
-                            <a key={`${e.file_name}${i}`} className={`quadro ${f.classe}`}
-                              onClick={() => marcarVolta()}
-                              href={e.review_token ? `/revisao/${e.review_token}` : undefined}
-                              title={`${nomeBonito(e.file_name)} · v${String(e.versao).padStart(2, '0')}`}>
-                              <span className="still">
-                                {e.review_token && capas[e.review_token] && (
-                                  <img className="foto" src={capas[e.review_token]!} alt="" loading="lazy" />
-                                )}
-                                <span className="fmt">{f.rotulo}</span>
-                                <span className="legenda">
-                                  <span className="peca">{nomeBonito(e.file_name)}</span>
-                                  <span className="meta">
-                                    v{String(e.versao).padStart(2, '0')}
-                                    {e.client_decided_by ? ` · ${e.client_decided_by}` : ''}
+                            <li key={m.chave} className={`etapa ${classe}`}>
+                              <span className="q">{m.label}</span>
+                              <span className="d">
+                                {classe === 'agora' ? 'agora'
+                                  : fase?.fim ? dia(fase.fim)
+                                  : fase?.prazo_cliente ? `previsto ${dia(fase.prazo_cliente)}`
+                                  : classe === 'feita' ? 'concluído' : '—'}
+                              </span>
+                            </li>
+                          );
+                        });
+                      })()}
+                    </ul>
+                  </section>
+                )}
+              </>
+            )}
+
+            {abaProj === 'entregas' && (
+              <section className="secao">
+                <span className="rotulo">Entregas</span>
+                {!projetoAberto.entregas.length ? (
+                  <p className="nota">
+                    Nada para ver ainda. Assim que o primeiro corte sair da edição, ele aparece aqui.
+                  </p>
+                ) : (
+                  ['EM_REVISAO_CLIENTE', 'ALTERACOES_CLIENTE', 'APROVADO'].map(st => {
+                    const lista = projetoAberto.entregas.filter(e => e.status === st);
+                    if (!lista.length) return null;
+                    return (
+                      <div key={st} className="peca-bloco">
+                        <div>
+                          <h3>{ESTADO[st]?.label}</h3>
+                          <span className="estado">{lista.length} {lista.length === 1 ? 'peça' : 'peças'}</span>
+                          <span className={`selo ${ESTADO[st]?.classe}`}>{ESTADO[st]?.label}</span>
+                        </div>
+                        <div className="quadros">
+                          {lista.map((e, i) => {
+                            const f = formato(e.largura, e.altura);
+                            return (
+                              <a key={`${e.file_name}${i}`} className={`quadro ${f.classe}`}
+                                onClick={() => marcarVolta()}
+                                href={e.review_token ? `/revisao/${e.review_token}` : undefined}
+                                title={`${nomeBonito(e.file_name)} · v${String(e.versao).padStart(2, '0')}`}>
+                                <span className="still">
+                                  {e.review_token && capas[e.review_token] && (
+                                    <img className="foto" src={capas[e.review_token]!} alt="" loading="lazy" />
+                                  )}
+                                  <span className="fmt">{f.rotulo}</span>
+                                  <span className="legenda">
+                                    <span className="peca">{nomeBonito(e.file_name)}</span>
+                                    <span className="meta">
+                                      v{String(e.versao).padStart(2, '0')}
+                                      {e.client_decided_by ? ` · ${e.client_decided_by}` : ''}
+                                    </span>
                                   </span>
                                 </span>
-                              </span>
-                            </a>
-                          );
-                        })}
+                              </a>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </section>
+                    );
+                  })
+                )}
+              </section>
+            )}
 
-            {blocos.arquivos !== false && projetoAberto.arquivos.length > 0 && (
+            {abaProj === 'diarias' && (
+              erroAgenda ? (
+                <section className="secao">
+                  <p className="nota alerta">{erroAgenda}</p>
+                  {exigeLogin && (
+                    <button type="button" className="botao" style={{ marginTop: 12 }}
+                      onClick={async () => { await supabase.auth.signOut(); location.reload(); }}>
+                      Entrar de novo
+                    </button>
+                  )}
+                </section>
+              ) : (
+                <>
+                  {/* Meta zero não é pacote: seria barra de largura NaN% e
+                      "3 de 0" escrito na tela. Sem meta, o bloco não aparece,
+                      igual a projeto sem contrato por volume. */}
+                  {agenda?.pacote && agenda.pacote.meta > 0 && (
+                    <section className="secao">
+                      <span className="rotulo">Suas diárias neste mês</span>
+                      <div className="proj" style={{ cursor: 'default' }}>
+                        <span><span className="nome">Diárias do pacote</span></span>
+                        <span className="barra">
+                          <i className={agenda.pacote.realizado >= agenda.pacote.meta ? 'b-ok' : 'b-voce'}
+                            style={{ width: `${Math.min(100, (agenda.pacote.realizado / agenda.pacote.meta) * 100)}%` }} />
+                        </span>
+                        <span className="contagem">{agenda.pacote.realizado} de {agenda.pacote.meta}</span>
+                      </div>
+                    </section>
+                  )}
+
+                  <section className="secao">
+                    <span className="rotulo">Gravações marcadas</span>
+                    {!agenda?.agendadas.length ? (
+                      <p className="nota">Nenhuma gravação marcada por enquanto.</p>
+                    ) : agenda.agendadas.map((g, i) => (
+                      <div key={i} className="arquivo">
+                        <span className="nm">{g.nome}<span>{dia(g.data)}{g.hora_inicio ? `, ${g.hora_inicio.slice(0,5)}` : ''}{g.local ? `, ${g.local}` : ''}</span></span>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="secao">
+                    <span className="rotulo">Pedir uma data</span>
+                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
+
+                    {!carregandoAgenda && dataEscolhida && (
+                      <div className="pedido-form">
+                        <p className="rotulo" style={{ marginTop: 22 }}>Pedido para {dia(dataEscolhida)}</p>
+
+                        <label>
+                          <span className="rotulo">O que precisa gravar</span>
+                          <textarea className="campo area" rows={3} value={pedDescricao}
+                            onChange={e => setPedDescricao(e.target.value)}
+                            placeholder="Ex.: depoimento do cliente X, sala de reunião" />
+                        </label>
+
+                        <div className="pedido-linha">
+                          <label>
+                            <span className="rotulo">Onde</span>
+                            <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
+                              placeholder="Endereço ou local (opcional)" />
+                          </label>
+                          <label>
+                            <span className="rotulo">Duração</span>
+                            <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
+                              <option value={6}>6 horas</option>
+                              <option value={10}>10 horas</option>
+                              <option value={12}>12 horas</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        {!exigeLogin && (
+                          <div className="pedido-linha">
+                            <label>
+                              <span className="rotulo">Seu nome</span>
+                              <input className="campo" value={pedNome}
+                                onChange={e => { pedNomeTocado.current = true; setPedNome(e.target.value); }}
+                                placeholder="Seu nome" />
+                            </label>
+                            <label>
+                              <span className="rotulo">Seu e-mail</span>
+                              <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
+                            </label>
+                          </div>
+                        )}
+
+                        {pacoteDaData && pacoteDaData.meta > 0 && pacoteDaData.realizado >= pacoteDaData.meta && (
+                          <p className="nota alerta">
+                            Esta seria a {pacoteDaData.realizado + 1}ª diária de {pacoteDaData.meta} em {mesPorExtenso(dataEscolhida)}.
+                            Ela entra como extra, e a Lumos vai orçar antes de confirmar.
+                          </p>
+                        )}
+
+                        {erroPedido && <p className="nota alerta">{erroPedido}</p>}
+
+                        <button type="button" className="botao" style={{ marginTop: 4 }}
+                          disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
+                          onClick={enviarPedido}>
+                          {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
+                        </button>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="secao">
+                    <span className="rotulo">Seus pedidos</span>
+                    {!agenda?.pedidos.length ? (
+                      <p className="nota">Nenhum pedido feito por aqui ainda.</p>
+                    ) : agenda.pedidos.map(p => {
+                      const est = ESTADO_PEDIDO[p.estado] || { label: p.estado, classe: 's-prod' };
+                      return (
+                        <div key={p.id} className="arquivo">
+                          <span className="nm">
+                            {p.descricao}
+                            <span>
+                              {dia(p.data_desejada)}
+                              {p.estado === 'recusado' && p.motivo_recusa ? `, ${p.motivo_recusa}` : ''}
+                            </span>
+                          </span>
+                          <span className={`selo ${est.classe}`} style={{ margin: 0 }}>{est.label}</span>
+                          {p.estado === 'pendente' && (
+                            <button type="button" className="baixar" disabled={cancelandoId === p.id}
+                              onClick={() => cancelarPedido(p.id)}>
+                              {cancelandoId === p.id ? 'Cancelando…' : 'Cancelar'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {erroCancelar && <p className="nota alerta">{erroCancelar}</p>}
+                  </section>
+                </>
+              )
+            )}
+
+            {abaProj === 'arquivos' && blocos.arquivos !== false && projetoAberto.arquivos.length > 0 && (
               <section className="secao">
                 <span className="rotulo">Arquivos liberados</span>
                 {projetoAberto.arquivos.map((a, i) => (

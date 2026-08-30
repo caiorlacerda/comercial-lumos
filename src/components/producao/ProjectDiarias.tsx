@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, Clock, CloudRain, Copy, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
+import { CalendarDays, CalendarOff, Clock, CloudRain, Copy, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import QuickForm from '@/components/common/QuickForm';
+import PedidosDeDiaria from '@/components/producao/PedidosDeDiaria';
+import BloqueiosDeAgenda from '@/components/producao/BloqueiosDeAgenda';
 import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 
 /**
@@ -59,6 +61,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [escalando, setEscalando] = useState<Diaria | null>(null);
   const [catalogo, setCatalogo] = useState<PessoaCatalogo[]>([]);
   const [editandoFuncao, setEditandoFuncao] = useState<MembroDiaria | null>(null);
+  const [bloqueiosAbertos, setBloqueiosAbertos] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('project_diarias')
@@ -217,14 +220,23 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <p className="text-xs font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2">
-          <CalendarDays className="w-4 h-4 text-lumos-yellow" /> Diárias de gravação
-          {diarias.length > 0 && <span className="text-lumos-text-secondary font-bold normal-case tracking-normal">· {diarias.length}</span>}
+      <PedidosDeDiaria projectId={projectId} canManage={canManage} onMudou={load} />
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="min-w-0 flex-1 text-xs font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-lumos-yellow flex-shrink-0" />
+          <span className="truncate">Diárias de gravação</span>
+          {diarias.length > 0 && <span className="text-lumos-text-secondary font-bold normal-case tracking-normal flex-shrink-0">· {diarias.length}</span>}
         </p>
         {canManage && (
+          <button type="button" onClick={() => setBloqueiosAbertos(true)}
+            className="text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 flex-shrink-0">
+            <CalendarOff className="w-3.5 h-3.5" /> Datas bloqueadas
+          </button>
+        )}
+        {canManage && (
           <button type="button" onClick={() => setEditando({ duracao_horas: 10 })}
-            className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5">
+            className="btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5 flex-shrink-0">
             <Plus className="w-3.5 h-3.5" /> Nova diária
           </button>
         )}
@@ -437,6 +449,8 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           onClose={() => setEditandoFuncao(null)}
         />
       )}
+
+      <BloqueiosDeAgenda isOpen={bloqueiosAbertos} onClose={() => setBloqueiosAbertos(false)} canManage={canManage} />
     </div>
   );
 }
