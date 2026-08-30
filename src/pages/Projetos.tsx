@@ -7,7 +7,6 @@ import TaskRoteiros, { prefetchRoteirosDoProjeto } from '@/components/producao/T
 import ProjectEscopo from '@/components/producao/ProjectEscopo';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
-import PortalModal from '@/components/producao/PortalModal';
 import ProjectStatusPipeline from '@/components/producao/ProjectStatusPipeline';
 import ProjectBriefing from '@/components/producao/ProjectBriefing';
 import ProjectDiarias from '@/components/producao/ProjectDiarias';
@@ -875,7 +874,6 @@ export default function Projetos() {
   const [onlyMine, setOnlyMine] = useState(false);
   const [showDone, setShowDone] = useState(false); // grupo "Concluídas" visível?
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
-  const [portalOpen, setPortalOpen] = useState(false);
   // Contadores das abas Entregas/Arquivos (consultas leves ao trocar de projeto).
   const [entregasCount, setEntregasCount] = useState<number | null>(null);
   const [docsCount, setDocsCount] = useState<number | null>(null);
@@ -2383,9 +2381,6 @@ export default function Projetos() {
                           <div className="absolute right-0 top-full mt-1 w-60 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[61] py-1">
                             <button onClick={() => { setHeaderMenuOpen(false); navigate(`/producao/board?projectId=${selectedProjectId}`); }} className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5">Ver no Board (Kanban)</button>
                             <button onClick={() => { setHeaderMenuOpen(false); navigate(`/producao/schedule?projectId=${selectedProjectId}`); }} className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5">Ver na Timeline (Gantt)</button>
-                            {canManage && (
-                              <button onClick={() => { setHeaderMenuOpen(false); setPortalOpen(true); }} className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-yellow hover:bg-lumos-yellow/10">🤝 Portal do cliente</button>
-                            )}
                             {canManage && <div className="h-px bg-lumos-border my-1" />}
                             {canManage && (
                               <button onClick={() => { setHeaderMenuOpen(false); handleApplyTemplateTrigger(); }} className="w-full text-left px-3 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5 flex items-center gap-2">
@@ -4139,19 +4134,6 @@ export default function Projetos() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Portal do cliente (gestão do link) */}
-      {selectedProject && (
-        <PortalModal
-          projectId={selectedProject.id}
-          projectName={selectedProject.name}
-          clientId={selectedProject.client_id ?? null}
-          clientName={clients.find(c => c.id === selectedProject.client_id)?.name || ''}
-          open={portalOpen}
-          onClose={() => setPortalOpen(false)}
-          teamUsers={teamUsers}
-        />
       )}
 
       {confirmDialog}

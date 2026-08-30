@@ -33,24 +33,24 @@ const BLOCOS: { key: keyof Blocks; label: string; desc: string }[] = [
 const BLOCKS_PADRAO: Blocks = { escopo: true, cronograma: true, arquivos: true, atividade: true };
 
 interface Props {
-  projectId: string;
-  projectName: string;
+  /** Só para marcar "aberto" na lista, quando o modal vem de dentro de um projeto. */
+  projectId?: string | null;
   clientId: string | null;
   clientName: string;
   open: boolean;
   onClose: () => void;
-  teamUsers: { id: string; full_name: string }[];
+  /** Quem pode virar contato de atendimento. Sem isto, o modal busca sozinho. */
+  teamUsers?: { id: string; full_name: string }[];
 }
 
 /**
  * O PORTAL É DO CLIENTE, NÃO DO PROJETO.
  *
  * Cliente com seis projetos recebia seis links. Agora é um só, com uma aba por
- * projeto — e este modal, aberto de dentro de um projeto, cuida do link do
- * cliente daquele projeto e do interruptor que decide se ESTE projeto aparece
- * lá dentro.
+ * projeto. Por isso o modal se abre pelo cliente na sidebar, e não de dentro de
+ * um projeto: tudo aqui vale para o cliente inteiro.
  */
-export default function PortalModal({ projectId, projectName, clientId, clientName, open, onClose, teamUsers }: Props) {
+export default function PortalModal({ projectId, clientId, clientName, open, onClose, teamUsers }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
@@ -67,6 +67,17 @@ export default function PortalModal({ projectId, projectName, clientId, clientNa
    * vê exigia abrir projeto por projeto. Agora a escolha inteira é feita daqui.
    */
   const [projetos, setProjetos] = useState<{ id: string; name: string; status: string; portal_visivel: boolean; updated_at: string }[]>([]);
+
+  /** Aberto pela sidebar não há lista de gente à mão, então busca aqui. */
+  const [equipe, setEquipe] = useState<{ id: string; full_name: string }[]>(teamUsers || []);
+  useEffect(() => {
+    if (!open || teamUsers?.length) return;
+    (async () => {
+      const { data } = await supabase.from('app_users')
+        .select('id, full_name, hidden').eq('status', 'ativo').order('full_name');
+      setEquipe(((data as any[]) || []).filter(u => !u.hidden));
+    })();
+  }, [open, teamUsers]);
 
   const carregarProjetos = useCallback(async () => {
     if (!clientId) { setProjetos([]); return; }
@@ -159,7 +170,7 @@ export default function PortalModal({ projectId, projectName, clientId, clientNa
   useEffect(() => { if (open) load(); }, [open, load]);
 
   const create = async () => {
-    if (!clientId) { toast.error('Este projeto está sem cliente.'); return; }
+    if (!clientId) { toast.error('Sem cliente, não dá para gerar o portal.'); return; }
     setBusy(true);
     const { data, error } = await supabase.from('client_portals')
       .insert([{ client_id: clientId, created_by: profile?.id, contact_user_ids: profile?.id ? [profile.id] : [] }])
@@ -211,7 +222,7 @@ export default function PortalModal({ projectId, projectName, clientId, clientNa
         ) : !portal ? (
           <div className="border border-dashed border-lumos-border rounded-lumos p-6 text-center">
             <p className="text-sm font-bold text-lumos-text-primary">
-              {clientId ? `${clientName} ainda não tem portal.` : 'Este projeto está sem cliente.'}
+              {clientId ? `${clientName} ainda não tem portal.` : 'Este cliente ainda não existe por aqui.'}
             </p>
             <p className="text-xs text-lumos-text-secondary mt-1">O link é secreto e pode ser revogado a qualquer momento.</p>
             <button onClick={create} disabled={busy}
@@ -402,7 +413,7 @@ export default function PortalModal({ projectId, projectName, clientId, clientNa
             <div>
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Atendimento (quem o cliente pode chamar)</label>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {teamUsers.map(u => {
+                {equipe.map(u => {
                   const sel = (portal.contact_user_ids || []).includes(u.id);
                   return (
                     <button key={u.id} type="button"
