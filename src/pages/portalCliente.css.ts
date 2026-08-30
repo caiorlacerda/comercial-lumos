@@ -290,15 +290,50 @@ export const PORTAL_CSS = String.raw`
   .seta-mes svg { width: 13px; height: 13px; }
   .seta-mes:hover:not(:disabled) { color: var(--luz); border-color: rgba(239,199,0,.4); }
   .seta-mes:disabled { opacity: .3; cursor: default; }
-  .calend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
-  .calend .dia { aspect-ratio: 1; display: grid; place-items: center; border-radius: 8px;
-    font-family: "DM Mono", monospace; font-size: 12px; border: 1px solid transparent; }
-  .calend .dia.livre { background: rgba(255,247,230,.05); color: var(--gesso); cursor: pointer; }
-  .calend .dia.livre:hover { border-color: var(--luz); color: var(--luz); }
-  .calend .dia.escolhido { background: var(--luz); color: #14110b; font-weight: 700; }
-  .calend .dia.ocupado, .calend .dia.bloqueado { color: var(--meia-luz); opacity: .38; }
-  .calend .dia.cedo { color: var(--meia-luz); opacity: .22; }
-  .calend .cab { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--meia-luz); }
+  /* O calendário é uma grade de verdade, com célula visível nos DOIS temas.
+     Antes o dia livre era um branco translúcido de 5%, que no tema claro
+     desaparecia contra o papel: a pessoa via números soltos, sem grade e sem
+     conseguir diferenciar um dia do outro. Agora toda célula tem fundo e fio,
+     e o que muda entre os estados é a cor, não a existência da célula.
+     Largura travada: com sete colunas em 1fr num painel largo, cada dia virava
+     um quadrado gigante e o mês parecia um tabuleiro. */
+  .calend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+    margin: 12px auto 0; max-width: 420px; }
+  .calend .dia { aspect-ratio: 1; display: grid; place-items: center; border-radius: 9px;
+    font-family: "DM Mono", monospace; font-size: 12.5px; position: relative;
+    background: var(--mesa-alta); border: 1px solid var(--fio); color: var(--meia-luz);
+    transition: border-color .12s, background .12s, color .12s; }
+  .calend .dia.livre { color: var(--gesso); cursor: pointer; }
+  .calend .dia.livre:hover { border-color: var(--luz); color: var(--luz);
+    background: rgba(239,199,0,.10); }
+  .calend .dia.livre:focus-visible { outline: 2px solid var(--luz); outline-offset: 2px; }
+  /* Ocupado por outro trabalho, bloqueado, ou cedo demais: a célula continua
+     existindo, o número recua. Bloqueado leva risco, que se lê sem cor. */
+  .calend .dia.ocupado { background: transparent; color: var(--meia-luz); }
+  .calend .dia.bloqueado { background: transparent; color: var(--meia-luz);
+    text-decoration: line-through; text-decoration-thickness: 1px; }
+  .calend .dia.cedo { background: transparent; border-color: transparent;
+    color: var(--meia-luz); opacity: .45; }
+  /* Gravação do próprio cliente. Vem depois de 'ocupado' de propósito: o dia
+     dele também chega marcado como ocupado, e as duas regras têm o mesmo peso,
+     então quem vem por último é quem pinta. */
+  .calend .dia.sua { background: rgba(239,199,0,.14); border-color: rgba(239,199,0,.45);
+    color: var(--luz); font-weight: 700; opacity: 1; }
+  .calend .dia.sua::after { content: ""; position: absolute; bottom: 6px;
+    width: 4px; height: 4px; border-radius: 50%; background: var(--luz); }
+  .calend .dia.escolhido { background: var(--luz); border-color: var(--luz);
+    color: #14110b; font-weight: 700; }
+  .calend .dia.escolhido::after { background: #14110b; }
+  .calend .cab { font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--meia-luz); text-align: center; padding-bottom: 2px; }
+  /* O que cada cor quer dizer. Sem isto o cinza é adivinhação. */
+  .legenda-cores { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
+    margin: 12px auto 0; max-width: 420px; font-size: 11px; color: var(--meia-luz); }
+  .legenda-cores span { display: inline-flex; align-items: center; gap: 6px; }
+  .legenda-cores i { width: 11px; height: 11px; border-radius: 4px; flex: 0 0 auto;
+    border: 1px solid var(--fio); background: var(--mesa-alta); }
+  .legenda-cores i.am-sua { background: rgba(239,199,0,.35); border-color: rgba(239,199,0,.55); }
+  .legenda-cores i.am-fora { background: transparent; }
   /* Legenda dos motivos de dia indisponível no mês em tela: o atributo title
      do dia só existe pra quem passa o mouse, e no celular não tem hover. */
   .legenda-dias { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; }
@@ -472,6 +507,16 @@ export const PORTAL_CSS = String.raw`
   .portal-lumos.claro .botao { background: #EFC700; color: #241D00; }
   .portal-lumos.claro .baixar:hover,
   .portal-lumos.claro .pessoa a { color: #8A6D00; border-color: rgba(239,199,0,.55); }
+  .portal-lumos.claro .calend .dia.livre { background: var(--mesa); }
+  .portal-lumos.claro .calend .dia.livre:hover { color: #8A6D00; background: rgba(239,199,0,.16);
+    border-color: #C79E00; }
+  .portal-lumos.claro .calend .dia.sua { background: rgba(239,199,0,.22);
+    border-color: #C79E00; color: #7A6000; }
+  .portal-lumos.claro .calend .dia.sua::after { background: #B08C00; }
+  .portal-lumos.claro .calend .dia.escolhido { background: #EFC700; border-color: #C79E00;
+    color: #241D00; }
+  .portal-lumos.claro .legenda-cores i.am-sua { background: rgba(239,199,0,.45);
+    border-color: #C79E00; }
   .portal-lumos.claro .farol { box-shadow: 0 0 0 4px rgba(239,199,0,.18), 0 0 18px 3px rgba(239,199,0,.35); }
 
   /* Botão de tema, ao lado do perfil. */

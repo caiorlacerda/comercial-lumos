@@ -245,8 +245,14 @@ const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
 const DIA_SEMANA_PLURAL = ['Domingos', 'Segundas-feiras', 'Terças-feiras',
   'Quartas-feiras', 'Quintas-feiras', 'Sextas-feiras', 'Sábados'];
 
-function Calendario({ dias, escolhido, onEscolher }: {
+function Calendario({ dias, suas, escolhido, onEscolher }: {
   dias: { data: string; estado: string; motivo?: string | null }[];
+  /** Datas em que ESTE projeto tem gravação marcada, pelo nome. O servidor já
+   *  manda isso em `agendadas`, e sem cruzar aqui um dia do próprio cliente
+   *  aparecia com o mesmo cinza de um dia ocupado por outro: "indisponível",
+   *  sem dizer que a gravação é dele. A lista de cima e o calendário passam a
+   *  contar a mesma história. */
+  suas: Record<string, string>;
   escolhido: string | null;
   onEscolher: (d: string, gatilho?: HTMLButtonElement) => void;
 }) {
@@ -271,6 +277,12 @@ function Calendario({ dias, escolhido, onEscolher }: {
   // entre os que o servidor mandou (não devia acontecer: a agenda começa em
   // current_date), cai no primeiro mês disponível.
   const [indice, setIndice] = useState(() => {
+    // Abre no primeiro mês que tem dia pedível, não no mês corrente. Pedindo
+    // no fim do mês, com a antecedência mínima, o mês de hoje aparecia sem
+    // nenhum dia clicável: um calendário vazio como primeira impressão, e a
+    // pessoa tendo que adivinhar que precisa avançar.
+    const comLivre = meses.findIndex(m => m.dias.some(d => d.estado === 'livre'));
+    if (comLivre >= 0) return comLivre;
     const i = meses.findIndex(m => m.chave === mesDeHoje());
     return i >= 0 ? i : 0;
   });
@@ -331,16 +343,23 @@ function Calendario({ dias, escolhido, onEscolher }: {
         {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
         {mes.dias.map(d => {
           const livre = d.estado === 'livre';
+          const sua = suas[d.data];
           return (
             <button key={d.data} type="button" disabled={!livre}
-              className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
-              title={livre ? 'Pedir esta data'
+              className={`dia ${d.estado}${sua ? ' sua' : ''}${escolhido === d.data ? ' escolhido' : ''}`}
+              title={sua ? `Sua gravação, ${sua}`
+                : livre ? 'Pedir esta data'
                 : d.estado === 'cedo' ? 'Cedo demais para pedir' : (d.motivo || 'Indisponível')}
               onClick={e => onEscolher(d.data, e.currentTarget)}>
               {Number(d.data.slice(8, 10))}
             </button>
           );
         })}
+      </div>
+      <div className="legenda-cores">
+        <span><i className="am-livre" /> livre para pedir</span>
+        <span><i className="am-sua" /> sua gravação</span>
+        <span><i className="am-fora" /> indisponível</span>
       </div>
       {!!legenda.length && (
         <div className="legenda-dias">
@@ -559,6 +578,15 @@ export default function PortalCliente() {
   }, [abaProj, projetoAberto?.id, token, exigeLogin]);
 
   const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
+
+  /** Data da gravação -> nome dela, pra marcar no calendário os dias que já
+   *  são do próprio cliente. Sai de `agendadas`, a mesma lista do bloco
+   *  "Gravações marcadas": uma fonte só, contada em dois lugares. */
+  const suasGravacoes = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    (agenda?.agendadas || []).forEach(g => { if (g.data) mapa[g.data] = g.nome; });
+    return mapa;
+  }, [agenda]);
   /** O botão do dia que abriu a janela de pedido, pra devolver o foco a ele
    *  quando ela fechar (Esc, X ou clique fora) — sem isto, quem navega por
    *  teclado ou leitor de tela perde o lugar onde estava. */
@@ -1223,7 +1251,7 @@ export default function PortalCliente() {
 
                   <section className="secao">
                     <span className="rotulo">Pedir uma data</span>
-                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={abrirPedido} />}
+                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} suas={suasGravacoes} escolhido={dataEscolhida} onEscolher={abrirPedido} />}
                   </section>
 
                   {!carregandoAgenda && dataEscolhida && (
