@@ -21,6 +21,11 @@ interface Version {
 }
 interface Group { id: string; current: Version; count: number; versions: Version[] }
 
+/** Na sequência do processo, não em ordem alfabética. */
+const ORDEM_DO_FLUXO: ReviewStatus[] = [
+  'EM_REVISAO_INTERNA', 'ALTERACOES_INTERNAS', 'EM_REVISAO_CLIENTE', 'ALTERACOES_CLIENTE', 'APROVADO',
+];
+
 /**
  * POR QUE ESTE CACHE E POR QUE SEM thumb_url.
  *
@@ -88,6 +93,9 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
   const [excluindo, setExcluindo] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({});
+  // Mesma régua do painel de Entregas: o editor sobe o vídeo, mas quem dá o
+  // aval interno é admin, produção ou quem recebeu 'revisao_interna'.
+  const podeAvalInterno = isAdmin || can('revisao_interna');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const agrupar = useCallback((vs: Version[]) => {
@@ -199,6 +207,26 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     await sincronizarTarefa(task.id);
     setBusy(false);
     recarregar();
+  };
+
+  /**
+   * Trocar a etapa direto na pílula do vídeo.
+   *
+   * Antes a pílula era só um selo: pra mover um formato era preciso abrir a
+   * revisão. Com três formatos na mesma tarefa, cada um andando no seu ritmo,
+   * isso virava três aberturas pra dizer três coisas simples.
+   *
+   * Passa pela MESMA transição do resto do app (moverEtapa): o link do cliente
+   * nasce na hora certa e a tarefa recalcula pelo conjunto dos formatos.
+   */
+  const mudarEtapa = async (g: Group, proximo: ReviewStatus) => {
+    if (proximo === g.current.status) return;
+    setBusy(true);
+    const r = await moverEtapa(g.current, proximo, profile?.id);
+    setBusy(false);
+    if (!r.ok) { toast.error('Não foi possível mudar a etapa.'); return; }
+    toast.success(mensagemDaEtapa(proximo, r.criouLink));
+    await recarregar();
   };
 
   const unlink = async (g: Group) => {
@@ -340,9 +368,24 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
                 <span className="text-xs font-bold text-lumos-text-primary truncate">{g.current.file_name}</span>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={clsx('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', STATUS_UI[g.current.status].color)}>
-                  {STATUS_UI[g.current.status].label}
-                </span>
+                {canManage && podeAvalInterno ? (
+                  // Largura própria: o gatilho do Select é w-full, e solto aqui
+                  // dentro ele esticava a pílula de ponta a ponta do card.
+                  <div className="w-[170px] flex-shrink-0">
+                  <Select
+                    value={g.current.status}
+                    onChange={v => void mudarEtapa(g, v as ReviewStatus)}
+                    ariaLabel={`Etapa de ${g.current.file_name}`}
+                    menuClassName="min-w-[190px]"
+                    className={clsx('h-6 pl-2.5 pr-1.5 rounded-full border text-[9px] font-black uppercase tracking-wider whitespace-nowrap', STATUS_UI[g.current.status].color)}
+                    options={ORDEM_DO_FLUXO.map(st => ({ value: st, label: STATUS_UI[st].label }))}
+                  />
+                  </div>
+                ) : (
+                  <span className={clsx('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', STATUS_UI[g.current.status].color)}>
+                    {STATUS_UI[g.current.status].label}
+                  </span>
+                )}
                 {(counts[g.current.id] || 0) > 0 && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-lumos-text-secondary">
                     <MessageSquare className="w-3 h-3" />{counts[g.current.id]}
