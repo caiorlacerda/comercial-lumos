@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import QuickForm from '@/components/common/QuickForm';
+import PedidosDeDiaria from '@/components/producao/PedidosDeDiaria';
 import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 
 /**
@@ -217,6 +218,8 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
 
   return (
     <div className="space-y-3">
+      <PedidosDeDiaria projectId={projectId} canManage={canManage} onMudou={load} />
+
       <div className="flex items-center gap-3">
         <p className="text-xs font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-lumos-yellow" /> Diárias de gravação
