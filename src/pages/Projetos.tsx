@@ -221,6 +221,20 @@ export const getStatusDetails = (statusVal: string) => {
   return { value: statusVal, label: statusVal, color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20' };
 };
 
+/**
+ * LISTA DE TAREFAS — a aba dentro de Tarefas.
+ *
+ * Serve pro cliente que a gente atende por mês ("Agosto", "Setembro"), mas
+ * também pra qualquer outro corte do projeto ("Institucional", "Fase 2"). É
+ * opcional: projeto que não cria lista nenhuma continua igual ao que era.
+ */
+interface TaskList {
+  id: string;
+  project_id: string;
+  nome: string;
+  ordem: number;
+}
+
 interface Task {
   id: string;
   project_id: string;
@@ -235,6 +249,8 @@ interface Task {
   data_entrega_cliente: string | null;
   responsavel_id: string | null;
   responsavel_freela_id: string | null;
+  /** Lista a que a tarefa pertence. Nulo = "Sem lista". */
+  list_id?: string | null;
 }
 
 interface TeamUser {
@@ -805,6 +821,15 @@ export default function Projetos() {
   const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'roteiros' | 'arquivos'>('status');
   // Sub-abas do Briefing: o briefing em si, o Resumo (antiga visão geral) e os Arquivos.
   const [briefingSub, setBriefingSub] = useState<'geral' | 'resumo' | 'arquivos'>('geral');
+  /**
+   * Listas de tarefas do projeto (as abas de dentro da aba Tarefas).
+   *
+   * 'all' mostra tudo, que é o padrão ao abrir: aba nenhuma esconde tarefa sem
+   * a pessoa ter pedido. 'none' são as que ainda não foram pra lista nenhuma.
+   */
+  const [taskLists, setTaskLists] = useState<TaskList[]>([]);
+  const [listFilter, setListFilter] = useState<string>('all');
+  const [listMenu, setListMenu] = useState<string | null>(null);
   const [taskSearch, setTaskSearch] = useState('');
   const [taskStatusFilter, setTaskStatusFilter] = useState('all');
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all');
@@ -988,6 +1013,10 @@ export default function Projetos() {
     }
   }, [projectTasks, tasksLoading]);
 
+  // Trocou de projeto: a aba de lista volta pra "Todas". Lista é de um projeto
+  // só, e manter a escolha antiga esconderia tarefas do projeto novo.
+  useEffect(() => { setListFilter('all'); setListMenu(null); }, [selectedProjectId]);
+
   // "+ Novo projeto" da sidebar (?new=1) → abre o modal de criação direto
   useEffect(() => {
     if (searchParams.get('new') === '1') {
@@ -1132,6 +1161,15 @@ export default function Projetos() {
   const fetchProjectTasks = async (projectId: string, silent = false) => {
     if (!silent) setTasksLoading(true);
     try {
+      // As listas do projeto. Se a migration ainda não rodou, a consulta falha
+      // e a aba segue funcionando sem listas — ninguém fica sem ver tarefa.
+      const { data: listasData, error: listasErr } = await supabase
+        .from('project_task_lists')
+        .select('id, project_id, nome, ordem')
+        .eq('project_id', projectId)
+        .order('ordem', { ascending: true });
+      setTaskLists(listasErr ? [] : ((listasData as TaskList[]) || []));
+
       const { data, error } = await supabase
         .from('project_tasks')
         .select('*')
@@ -1223,6 +1261,8 @@ export default function Projetos() {
   const isTaskDone = (t: any) => t.status === 'concluido' || t.status === 'entregue';
   const normTxt = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const filteredTasks = projectTasks.filter(t => {
+    if (listFilter === 'none' && t.list_id) return false;
+    if (listFilter !== 'all' && listFilter !== 'none' && t.list_id !== listFilter) return false;
     if (tagFilter.length && !(taskTags[t.id] || []).some(id => tagFilter.includes(id))) return false;
     if (taskSearch.trim() && !normTxt(t.titulo).includes(normTxt(taskSearch))) return false;
     if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
@@ -1250,6 +1290,7 @@ export default function Projetos() {
     .filter(g => g.tasks.length > 0);
   const visibleTasks = taskGroups.flatMap(g => g.tasks);
   const hasActiveFilters = !!taskSearch.trim() || taskStatusFilter !== 'all' || taskAssigneeFilter !== 'all' || onlyMine || tagFilter.length > 0;
+  const listaAberta = taskLists.find(l => l.id === listFilter) || null;
 
   // ── Lixeira ────────────────────────────────────────────────────────────────
   const openTrash = async () => {
@@ -1597,6 +1638,82 @@ export default function Projetos() {
     }
   };
 
+  // ── Listas de tarefas ──────────────────────────────────────────────────────
+  // Quantas tarefas EM ABERTO cada lista tem. O número na aba é o que faz a
+  // pessoa saber onde está o trabalho sem precisar clicar em cada mês.
+  const listCounts = (() => {
+    const c: Record<string, number> = {};
+    projectTasks.forEach(t => {
+      if (isTaskDone(t)) return;
+      const k = t.list_id || '__sem__';
+      c[k] = (c[k] || 0) + 1;
+    });
+    return c;
+  })();
+
+  const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+  const criarLista = async () => {
+    if (!selectedProjectId) return;
+    // Vem preenchido com o mês atual porque é o caso que motivou a lista. Quem
+    // usa pra outra coisa ("Institucional", "Fase 2") só apaga e escreve.
+    const hoje = new Date();
+    const sugestao = `${MESES[hoje.getMonth()]} ${hoje.getFullYear()}`;
+    const nome = await perguntar({
+      title: 'Nova lista de tarefas',
+      message: 'A lista vira uma aba aqui dentro. Serve pro mês, mas também pra qualquer outro corte do projeto.',
+      label: 'Nome da lista', value: sugestao, confirmLabel: 'Criar',
+    });
+    if (!nome?.trim()) return;
+    const ordem = taskLists.length ? Math.max(...taskLists.map(l => l.ordem)) + 10 : 10;
+    const { data, error } = await supabase.from('project_task_lists')
+      .insert({ project_id: selectedProjectId, nome: nome.trim(), ordem, created_by: profile?.id ?? null })
+      .select('id, project_id, nome, ordem').single();
+    if (error) {
+      toast.error(/relation|schema|does not exist/i.test(error.message)
+        ? 'Falta rodar a migration 2026093319.' : 'Não deu pra criar a lista.');
+      return;
+    }
+    setTaskLists(prev => [...prev, data as TaskList]);
+    setListFilter((data as TaskList).id);   // já abre na lista nova
+  };
+
+  const renomearLista = async (l: TaskList) => {
+    const nome = await perguntar({ title: 'Renomear lista', label: 'Nome da lista', value: l.nome, confirmLabel: 'Salvar' });
+    if (!nome?.trim() || nome.trim() === l.nome) return;
+    const { error } = await supabase.from('project_task_lists').update({ nome: nome.trim() }).eq('id', l.id);
+    if (error) { toast.error('Não deu pra renomear.'); return; }
+    setTaskLists(prev => prev.map(x => (x.id === l.id ? { ...x, nome: nome.trim() } : x)));
+  };
+
+  const excluirLista = async (l: TaskList) => {
+    const quantas = projectTasks.filter(t => t.list_id === l.id).length;
+    if (!await confirm({
+      title: `Excluir a lista "${l.nome}"`,
+      message: quantas
+        ? `As ${quantas} tarefa${quantas > 1 ? 's' : ''} desta lista NÃO são excluídas: elas voltam para "Sem lista".`
+        : 'A lista está vazia.',
+      confirmLabel: 'Excluir lista', danger: true,
+    })) return;
+    const { error } = await supabase.from('project_task_lists').delete().eq('id', l.id);
+    if (error) { toast.error('Não deu pra excluir a lista.'); return; }
+    setTaskLists(prev => prev.filter(x => x.id !== l.id));
+    setProjectTasks(prev => prev.map(t => (t.list_id === l.id ? { ...t, list_id: null } : t)));
+    setListFilter('all');
+  };
+
+  /** Move tarefas pra uma lista (ou pra fora, com listId = null). */
+  const moverParaLista = async (ids: string[], listId: string | null) => {
+    if (!ids.length) return;
+    const { error } = await supabase.from('project_tasks')
+      .update({ list_id: listId, updated_at: new Date().toISOString() }).in('id', ids);
+    if (error) { toast.error('Não deu pra mover.'); return; }
+    setProjectTasks(prev => prev.map(t => (ids.includes(t.id) ? { ...t, list_id: listId } : t)));
+    const destino = listId ? taskLists.find(l => l.id === listId)?.nome : 'Sem lista';
+    toast.success(ids.length > 1 ? `${ids.length} tarefas em "${destino}"` : `Tarefa em "${destino}"`);
+  };
+
   // Quick Task Creation (input + enter)
   const handleQuickAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1617,7 +1734,11 @@ export default function Projetos() {
           prioridade: 'media',
           ordem: nextOrder,
           data_inicio: null,
-          data_fim: null
+          data_fim: null,
+          // Nasce na lista que está aberta. Sem isso, criar tarefa dentro de
+          // "Setembro" jogaria ela em "Sem lista" e a pessoa teria que mover
+          // toda vez — o caminho mais curto seria o errado.
+          ...(listFilter !== 'all' && listFilter !== 'none' ? { list_id: listFilter } : {}),
         })
         .select()
         .single();
@@ -2374,6 +2495,76 @@ export default function Projetos() {
                 {projTab === 'tarefas' && (
                 <div className="card p-5 md:p-6 space-y-4">
 
+                  {/* LISTAS DO PROJETO (abas de dentro).
+                      Só aparecem depois que alguém cria a primeira: projeto que
+                      não trabalha por mês continua com a aba Tarefas do jeito
+                      que sempre foi. "Todas" fica sempre à mão pra ninguém
+                      perder de vista o que está em outra lista. */}
+                  {(taskLists.length > 0 || canManage) && (
+                    <div className="flex items-center gap-1 flex-wrap border-b border-lumos-border/60 -mt-1 pb-2">
+                      {taskLists.length > 0 && (
+                        <button type="button" onClick={() => setListFilter('all')}
+                          className={clsx('h-8 px-3 rounded-lumos text-[11px] font-black uppercase tracking-wide transition-colors',
+                            listFilter === 'all' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                          Todas
+                          <span className="ml-1.5 font-bold normal-case tracking-normal opacity-70">{projectTasks.filter(t => !isTaskDone(t)).length}</span>
+                        </button>
+                      )}
+
+                      {taskLists.map(l => (
+                        <div key={l.id} className="relative flex items-center">
+                          <button type="button" onClick={() => setListFilter(l.id)}
+                            className={clsx('h-8 pl-3 pr-2 rounded-lumos text-[11px] font-black uppercase tracking-wide transition-colors flex items-center gap-1.5',
+                              listFilter === l.id ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                            {l.nome}
+                            <span className="font-bold normal-case tracking-normal opacity-70">{listCounts[l.id] || 0}</span>
+                          </button>
+                          {canManage && listFilter === l.id && (
+                            <button type="button" onClick={() => setListMenu(m => (m === l.id ? null : l.id))}
+                              title="Opções da lista"
+                              className="p-1 -ml-1 rounded text-lumos-yellow/70 hover:text-lumos-yellow">
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {listMenu === l.id && (
+                            <>
+                              <div className="fixed inset-0 z-[190]" onClick={() => setListMenu(null)} />
+                              <div className="absolute left-0 top-9 z-[200] w-40 py-1 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl">
+                                <button type="button" onClick={() => { setListMenu(null); renomearLista(l); }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-lumos-text-primary hover:bg-lumos-bg">
+                                  <Edit2 className="w-3.5 h-3.5 text-lumos-yellow" /> Renomear
+                                </button>
+                                <button type="button" onClick={() => { setListMenu(null); excluirLista(l); }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-red-400 hover:bg-red-500/10">
+                                  <Trash2 className="w-3.5 h-3.5" /> Excluir lista
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* "Sem lista" só existe quando há lista E tarefa fora dela:
+                          é o lugar onde a tarefa esquecida aparece, em vez de sumir. */}
+                      {taskLists.length > 0 && (listCounts['__sem__'] || 0) > 0 && (
+                        <button type="button" onClick={() => setListFilter('none')}
+                          className={clsx('h-8 px-3 rounded-lumos text-[11px] font-black uppercase tracking-wide transition-colors',
+                            listFilter === 'none' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                          Sem lista
+                          <span className="ml-1.5 font-bold normal-case tracking-normal opacity-70">{listCounts['__sem__']}</span>
+                        </button>
+                      )}
+
+                      {canManage && (
+                        <button type="button" onClick={criarLista}
+                          title="Separar as tarefas em listas (por mês, por fase, por frente)"
+                          className="h-8 px-3 rounded-lumos text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5">
+                          <Plus className="w-3.5 h-3.5" /> {taskLists.length ? 'Nova lista' : 'Separar em listas'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Toolbar em linha única: busca + chips de filtro (estilo do mockup) */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative flex-1 min-w-[170px] max-w-md">
@@ -2446,7 +2637,16 @@ export default function Projetos() {
                         <>
                         {visibleTasks.length === 0 && (
                           <div className="text-center py-10 text-xs text-lumos-text-secondary/70">
-                            {hasActiveFilters ? 'Nenhuma tarefa bate com a busca e os filtros.' : 'Tudo em dia por aqui, nenhuma tarefa ativa. 🎉'}
+                            {hasActiveFilters
+                              ? 'Nenhuma tarefa bate com a busca e os filtros.'
+                              : listaAberta
+                                // Lista vazia não é "tudo em dia": é lista nova. E o
+                                // que a pessoa precisa saber aqui é que a tarefa que
+                                // ela digitar abaixo já nasce nesta lista.
+                                ? `Nenhuma tarefa em "${listaAberta.nome}" ainda. O que você digitar abaixo já nasce aqui.`
+                                : listFilter === 'none'
+                                  ? 'Todas as tarefas já estão em alguma lista.'
+                                  : 'Tudo em dia por aqui, nenhuma tarefa ativa. 🎉'}
                           </div>
                         )}
                         {visibleTasks.length > 0 && (<>
@@ -2861,6 +3061,12 @@ export default function Projetos() {
                             <Select value="" onChange={handleBatchAssign} placeholder="Atribuir" ariaLabel="Atribuir responsável em lote" menuClassName="min-w-[170px]" searchable searchPlaceholder="Filtrar pessoa…"
                               className="px-3 py-1.5 rounded-full bg-lumos-text-secondary/10 text-[10px] font-black uppercase text-lumos-text-primary hover:bg-lumos-text-secondary/20"
                               options={teamUsers.map(u => ({ value: u.id, label: u.full_name }))} />
+                            {taskLists.length > 0 && (
+                              <Select value="" onChange={v => { moverParaLista([...selTaskIds], v === '__none__' ? null : v); setSelTaskIds(new Set()); }}
+                                placeholder="Mover pra lista" ariaLabel="Mover para uma lista" menuClassName="min-w-[170px]"
+                                className="px-3 py-1.5 rounded-full bg-lumos-text-secondary/10 text-[10px] font-black uppercase text-lumos-text-primary hover:bg-lumos-text-secondary/20"
+                                options={[...taskLists.map(l => ({ value: l.id, label: l.nome })), { value: '__none__', label: 'Tirar da lista' }]} />
+                            )}
                             <label className="relative px-3 py-1.5 rounded-full bg-lumos-text-secondary/10 text-[10px] font-black uppercase text-lumos-text-primary hover:bg-lumos-text-secondary/20 cursor-pointer" title="Mudar o prazo de edição">
                               Prazo
                               <input type="date" onChange={e => { if (e.target.value) handleBatchDue(e.target.value); e.target.value = ''; }} className="absolute inset-0 opacity-0 cursor-pointer" />
@@ -3496,6 +3702,32 @@ export default function Projetos() {
             Renomear
           </button>
           
+          {/* Mover pra lista, só quando o projeto tem lista. Fica aqui porque é
+              onde a pessoa já vai quando quer mexer numa tarefa só. */}
+          {canManage && taskLists.length > 0 && (
+            <div className="border-t border-lumos-border/10 mt-0.5 pt-0.5">
+              <p className="px-3 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Mover para</p>
+              {taskLists.map(l => {
+                const atual = projectTasks.find(t => t.id === contextMenu.taskId)?.list_id === l.id;
+                return (
+                  <button key={l.id}
+                    onClick={() => { moverParaLista([contextMenu.taskId], l.id); setContextMenu(null); }}
+                    className={clsx('w-full px-3 py-1.5 text-[11px] font-semibold text-left rounded transition-all hover:bg-lumos-bg',
+                      atual ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+                    {l.nome}
+                  </button>
+                );
+              })}
+              {!!projectTasks.find(t => t.id === contextMenu.taskId)?.list_id && (
+                <button
+                  onClick={() => { moverParaLista([contextMenu.taskId], null); setContextMenu(null); }}
+                  className="w-full px-3 py-1.5 text-[11px] font-semibold text-left text-lumos-text-secondary hover:bg-lumos-bg rounded transition-all">
+                  Tirar da lista
+                </button>
+              )}
+            </div>
+          )}
+
           {canManage && (
             <button
               onClick={() => {
