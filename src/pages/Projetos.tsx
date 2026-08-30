@@ -2805,6 +2805,10 @@ export default function Projetos() {
                                   </th>
                                 )}
                                 <th className="py-2.5 px-2 min-w-[250px]">Título da Tarefa</th>
+                                {/* Coluna estreita e alinhada: é o que deixa varrer a
+                                    lista de cima a baixo e achar as tarefas de vários
+                                    formatos sem ler linha por linha. */}
+                                <th className="py-2.5 px-2 w-16 text-center">Vídeos</th>
                                 <th className="py-2.5 px-2 w-36">Status</th>
                                 <th className="py-2.5 px-2 w-28">Prioridade</th>
                                 <th className="py-2.5 px-2 w-44">Responsável</th>
@@ -2817,7 +2821,7 @@ export default function Projetos() {
                               {taskGroups.map(group => (<React.Fragment key={group.status}>
                               {/* Cabeçalho do grupo (etapa do fluxo): barra + label coloridos */}
                               <tr className="bg-lumos-bg/40">
-                                <td colSpan={6 + (canManage ? 1 : 0) + (canSeeClientDeadline ? 1 : 0)} className="pt-3 pb-2 px-2">
+                                <td colSpan={7 + (canManage ? 1 : 0) + (canSeeClientDeadline ? 1 : 0)} className="pt-3 pb-2 px-2">
                                   <div className="flex items-center gap-2">
                                     <span className={clsx('w-1 h-3.5 rounded-full flex-shrink-0', stageTheme(group.status).bar)} />
                                     <span className={clsx('text-[10px] font-black uppercase tracking-widest', stageTheme(group.status).text)}>{getStatusDetails(group.status).label}</span>
@@ -2917,15 +2921,22 @@ export default function Projetos() {
                                           {task.titulo}
                                         </span>
                                       )}
-                                      {/* Linha de metadados: quantos vídeos e as tags. */}
-                                      {((taskTags[task.id]?.length ?? 0) > 0 || videosPorTarefa[task.id]) && (
+                                      {(taskTags[task.id]?.length ?? 0) > 0 && (
                                         <div className="flex flex-wrap items-center gap-1 mt-1">
-                                          <ContagemDeVideos conta={videosPorTarefa[task.id]} />
                                           {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR')).map(t => <TagChip key={t!.id} tag={t!} small />)}
                                         </div>
                                       )}
                                         </div>
                                       </div>
+                                    </td>
+
+                                    {/* Quantos vídeos (formatos) esta tarefa entrega */}
+                                    <td className="py-2 px-2 text-center">
+                                      {videosPorTarefa[task.id]
+                                        ? <ContagemDeVideos conta={videosPorTarefa[task.id]} />
+                                        // Tarefa que não é de vídeo precisa de um "vazio"
+                                        // visível: coluna em branco parece dado faltando.
+                                        : <span className="text-[11px] text-lumos-text-secondary/30">—</span>}
                                     </td>
 
                                     {/* Status Badge Dropdown */}
