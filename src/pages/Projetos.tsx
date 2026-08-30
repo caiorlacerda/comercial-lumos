@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import TaskVideoReview, { prefetchEntregasDoProjeto } from '@/components/producao/TaskVideoReview';
 import TaskRoteiros, { prefetchRoteirosDoProjeto } from '@/components/producao/TaskRoteiros';
+import ProjectEscopo from '@/components/producao/ProjectEscopo';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
 import PortalModal from '@/components/producao/PortalModal';
@@ -2489,6 +2490,10 @@ export default function Projetos() {
                 {/* ================= ABA: RESUMO (é onde o projeto abre) ================= */}
                 {projTab === 'resumo' && (
                 <div className="space-y-5">
+                  {/* O combinado do mês fica junto do resumo porque é a mesma
+                      pergunta: como este projeto está indo. Só aparece quando
+                      existe contrato por volume. */}
+                  <ProjectEscopo key={'es' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
 
                   {/* Resumo rápido */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
