@@ -2,6 +2,29 @@ import { supabase } from '@/lib/supabase';
 import { type ReviewStatus, STATUS_TO_TASK } from '@/lib/reviewStatus';
 
 /**
+ * A TAREFA SEGUE O CONJUNTO DOS FORMATOS DELA.
+ *
+ * Uma tarefa costuma ter 16:9, 9:16 e 1:1, e eles andam em ritmos diferentes:
+ * o 16:9 aprovado enquanto o 1:1 voltou com ajuste. Antes, qualquer vídeo que
+ * se movia carimbava a tarefa inteira — o último a se mexer ganhava, e a tarefa
+ * passava a mentir sobre os outros dois.
+ *
+ * Agora a tarefa mostra a etapa do formato MAIS ATRASADO: ainda há trabalho
+ * enquanto o último não fechar. A conta vive no banco (sincronizar_status_tarefa),
+ * porque a página do cliente também move vídeo e duas cópias da mesma regra
+ * viram duas regras diferentes na primeira mudança.
+ */
+export async function sincronizarTarefa(taskId: string | null, fallback?: ReviewStatus) {
+  if (!taskId) return;
+  const { error } = await supabase.rpc('sincronizar_status_tarefa', { p_task_id: taskId });
+  // Banco sem a função (migration não rodada): mantém o comportamento antigo,
+  // pra ninguém ficar com o cartão parado numa etapa que já passou.
+  if (error && fallback) {
+    await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[fallback] }).eq('id', taskId);
+  }
+}
+
+/**
  * MOVER UM VÍDEO DE ETAPA — regra única.
  *
  * Mudar a etapa nunca é só mudar o status do vídeo: a tarefa vinculada
@@ -21,11 +44,10 @@ export async function moverEtapa(
     .eq('id', v.id);
   if (error) return { ok: false, erro: error.message };
 
-  // A tarefa segue o vídeo. Sem isso, o cartão fica numa etapa e o vídeo em
-  // outra, e o time passa a confiar em nenhum dos dois.
-  if (v.task_id) {
-    await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[proximo] }).eq('id', v.task_id);
-  }
+  // A tarefa acompanha, mas pelo conjunto: com vários formatos, ela mostra o
+  // mais atrasado. Sem isso, o cartão fica numa etapa e os vídeos em outra, e o
+  // time passa a não confiar em nenhum dos dois.
+  await sincronizarTarefa(v.task_id, proximo);
 
   // Passou pro cliente: o link já nasce aqui. Ninguém precisa lembrar de gerar,
   // e não existe link solto antes da hora.
