@@ -28,7 +28,7 @@ function isSessionStale(u?: User | null): boolean {
 export const ROLE_DEFAULTS: Record<string, string[]> = {
   admin: ['*'],
   // Gestão de Produção: produção completa + custos de projeto + RH + reembolso + cofre.
-  producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados', 'equipamentos', 'revisao_interna'],
+  producao: ['reembolso', 'custos_projeto', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipe_dados', 'equipamentos', 'revisao_interna', 'fechar_agenda'],
   // Time de Produção: produção do dia a dia + reembolso (todo mundo pede reembolso).
   time: ['reembolso', 'ordem_do_dia', 'fornecedores', 'cronograma_edicao', 'acessos', 'equipamentos'],
   // Legado — Atendimento/Editor/Social/Básico foram unificados em 'time' (migração

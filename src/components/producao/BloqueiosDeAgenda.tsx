@@ -33,7 +33,7 @@ interface DiaFechado {
   created_at: string;
 }
 
-interface Props { isOpen: boolean; onClose: () => void; canManage: boolean }
+interface Props { isOpen: boolean; onClose: () => void }
 
 const fmtData = (d: string) => {
   const s = new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -44,8 +44,12 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 /** 0 = domingo, igual ao `dia_semana` da tabela (EXTRACT(DOW)). */
 const NOME_DIA_SEMANA = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
-export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props) {
-  const { profile } = useAuth();
+export default function BloqueiosDeAgenda({ isOpen, onClose }: Props) {
+  const { profile, can } = useAuth();
+  // Fechar dia vale pra produtora inteira e pra todos os portais de cliente,
+  // então quem fecha é permissão nominal, não quem gere o projeto. Sem ela a
+  // pessoa continua vendo o que está fechado, só não mexe.
+  const podeFechar = can('fechar_agenda');
   const toast = useToast();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [loading, setLoading] = useState(true);
@@ -99,7 +103,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
   }, [isOpen, onClose]);
 
   const alternarDiaSemana = async (diaSemana: number, fechadoAgora: boolean) => {
-    if (!canManage || salvandoDia !== null) return;
+    if (!podeFechar || salvandoDia !== null) return;
     setSalvandoDia(diaSemana);
     if (fechadoAgora) {
       const { error } = await supabase.from('agenda_semana_fechada').delete().eq('dia_semana', diaSemana);
@@ -187,7 +191,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
                 return (
                   <div key={i} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                     <span className="text-xs font-bold text-lumos-text-primary">{nomeDia}</span>
-                    {canManage ? (
+                    {podeFechar ? (
                       <button type="button" disabled={salvandoDia !== null}
                         onClick={() => alternarDiaSemana(i, fechado)}
                         title={fechado ? `Reabrir ${nomeDia}` : `Fechar ${nomeDia}`}
@@ -220,7 +224,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
           </p>
         </div>
 
-        {canManage && (
+        {podeFechar && (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-shrink-0">
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Data</label>
@@ -265,7 +269,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
                   <span className="block text-xs font-bold text-lumos-text-primary truncate">{fmtData(b.data)}</span>
                   {b.motivo && <span className="block text-[10.5px] text-lumos-text-secondary truncate">{b.motivo}</span>}
                 </span>
-                {canManage && (
+                {podeFechar && (
                   <button type="button" onClick={() => remover(b)} title="Reabrir data"
                     className="p-1.5 text-lumos-text-secondary hover:text-red-400 flex-shrink-0">
                     <Trash2 className="w-3.5 h-3.5" />

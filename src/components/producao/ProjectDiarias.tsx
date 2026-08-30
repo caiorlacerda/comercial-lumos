@@ -49,7 +49,11 @@ const fmtData = (d?: string | null) => {
 };
 
 export default function ProjectDiarias({ projectId, canManage }: Props) {
-  const { profile } = useAuth();
+  const { profile, can } = useAuth();
+  // A agenda bloqueada é da produtora inteira: quem fecha dia é permissão
+  // nominal. Quem só gere o projeto continua abrindo a tela pra ver o que
+  // está fechado, sem os controles.
+  const podeFechar = can('fechar_agenda');
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [diarias, setDiarias] = useState<Diaria[]>([]);
@@ -228,7 +232,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           <span className="truncate">Diárias de gravação</span>
           {diarias.length > 0 && <span className="text-lumos-text-secondary font-bold normal-case tracking-normal flex-shrink-0">· {diarias.length}</span>}
         </p>
-        {canManage && (
+        {(canManage || podeFechar) && (
           <button type="button" onClick={() => setBloqueiosAbertos(true)}
             className="text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 flex-shrink-0">
             <CalendarOff className="w-3.5 h-3.5" /> Agenda bloqueada
@@ -450,7 +454,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
         />
       )}
 
-      <BloqueiosDeAgenda isOpen={bloqueiosAbertos} onClose={() => setBloqueiosAbertos(false)} canManage={canManage} />
+      <BloqueiosDeAgenda isOpen={bloqueiosAbertos} onClose={() => setBloqueiosAbertos(false)} />
     </div>
   );
 }
