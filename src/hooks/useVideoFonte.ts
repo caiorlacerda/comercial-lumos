@@ -37,12 +37,11 @@ export function useVideoFonte(
   const [viaCdn, setViaCdn] = useState(false);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
     let vivo = true;
     let guarda: number | undefined;
+    let ronda: number | undefined;
 
-    const usarArquivoDireto = () => {
+    const usarArquivoDireto = (video: HTMLVideoElement) => {
       if (!vivo) return;
       window.clearTimeout(guarda);
       hlsRef.current?.destroy();
@@ -52,103 +51,130 @@ export function useVideoFonte(
       if (video.src !== fallbackUrl) video.src = fallbackUrl;
     };
 
-    if (!hlsUrl) { usarArquivoDireto(); return; }
+    const montar = (video: HTMLVideoElement) => {
+      if (!hlsUrl) { usarArquivoDireto(video); return; }
+
+      /**
+       * REDE DE SEGURANÇA do caminho da CDN.
+       *
+       * Cada etapa daqui pra frente pode falhar sem avisar ninguém: o pedaço do
+       * hls.js pode não chegar (chunk velho logo depois de um deploy, rede da
+       * empresa barrando), o navegador pode dizer que toca HLS nativo e não tocar
+       * (o Chrome responde "maybe" e depois não decodifica), a CDN pode não
+       * responder. Em qualquer um desses casos o vídeo simplesmente não recebia
+       * fonte nenhuma: girava pra sempre, sem mensagem e sem botão de qualidade
+       * — que foi exatamente a tela que apareceu num teste.
+       *
+       * Então: se em alguns segundos nada tiver começado a carregar, cai pro
+       * arquivo direto. Ele é mais lento, mas toca. Player parado pra sempre é
+       * pior que vídeo lento.
+       */
+      guarda = window.setTimeout(() => {
+        if (!vivo || video.readyState !== 0) return;
+        console.warn('[lumos] a CDN não respondeu a tempo; tocando o arquivo direto.');
+        usarArquivoDireto(video);
+      }, 8000);
+
+      (async () => {
+        let HlsCtor: typeof import('hls.js').default;
+        try {
+          HlsCtor = (await import('hls.js')).default;
+        } catch {
+          // Sem o hls.js não existe caminho de CDN: vai direto pro arquivo, em
+          // vez de deixar a promessa morrer no silêncio.
+          usarArquivoDireto(video);
+          return;
+        }
+        if (!vivo) { window.clearTimeout(guarda); return; }
+
+        // O hls.js vem PRIMEIRO. O Chrome responde "maybe" para o tipo do HLS,
+        // que é um valor verdadeiro, então testar canPlayType antes fazia todo
+        // mundo cair no player nativo: o vídeo até tocava, mas sem lista de
+        // qualidades (o menu sumia) e sem controle nenhum de adaptação — abria
+        // no nível mais baixo e demorava pra subir. Nativo só quando o hls.js
+        // não roda mesmo, que é o caso do Safari e do iOS.
+        if (!HlsCtor.isSupported()) {
+          if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            setViaCdn(true);
+            video.src = hlsUrl;
+          } else {
+            usarArquivoDireto(video);
+          }
+          return;
+        }
+
+        const hls = new HlsCtor({
+          // Buffer generoso: a CDN entrega rápido, então vale adiantar. Antes não
+          // adiantava nada, porque cada pedaço custava quase dois segundos.
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
+          startLevel: -1,
+          capLevelToPlayerSize: true,
+          // Sem isso o hls.js supõe uma banda pessimista, abre na pior qualidade
+          // e leva um tempão pra subir — foi exatamente a queixa. Partindo de uma
+          // estimativa realista, ele já entra numa qualidade decente e corrige
+          // pra baixo se a internet não acompanhar.
+          abrEwmaDefaultEstimate: 5_000_000,
+        });
+        hlsRef.current = hls;
+
+        hls.on(HlsCtor.Events.MANIFEST_PARSED, (_e, dados: any) => {
+          if (!vivo) return;
+          setViaCdn(true);
+          setQualidades(
+            (dados.levels || [])
+              .map((n: any, i: number) => {
+                // Em vídeo vertical a altura é o lado GRANDE: 1080x1920 apareceria
+                // como "1920p". O nome da qualidade sempre segue o lado menor, que
+                // é o que a equipe e o cliente reconhecem.
+                const lado = n.width && n.height ? Math.min(n.width, n.height) : (n.height || 0);
+                return { id: i, altura: lado, rotulo: lado ? `${lado}p` : `Nível ${i + 1}` };
+              })
+              .sort((x: Qualidade, y: Qualidade) => y.altura - x.altura),
+          );
+        });
+        hls.on(HlsCtor.Events.LEVEL_SWITCHED, (_e, dados: any) => {
+          if (vivo) setQualidadeAtual(hls.autoLevelEnabled ? -1 : dados.level);
+        });
+        hls.on(HlsCtor.Events.ERROR, (_e, dados: any) => {
+          if (!dados?.fatal) return;
+          // Falhou de vez: melhor cair no arquivo direto do que deixar tela preta.
+          usarArquivoDireto(video);
+        });
+
+        hls.loadSource(hlsUrl);
+        hls.attachMedia(video);
+      })();
+    };
 
     /**
-     * REDE DE SEGURANÇA do caminho da CDN.
+     * O <video> pode entrar no DOM DEPOIS deste efeito.
      *
-     * Cada etapa daqui pra frente pode falhar sem avisar ninguém: o pedaço do
-     * hls.js pode não chegar (chunk velho logo depois de um deploy, rede da
-     * empresa barrando), o navegador pode dizer que toca HLS nativo e não tocar
-     * (o Chrome responde "maybe" e depois não decodifica), a CDN pode não
-     * responder. Em qualquer um desses casos o vídeo simplesmente não recebia
-     * fonte nenhuma: girava pra sempre, sem mensagem e sem botão de qualidade
-     * — que foi exatamente a tela que apareceu num teste.
+     * Na revisão do cliente o player só é montado quando a pessoa diz o nome,
+     * e nesse instante NENHUMA dependência daqui muda: nem o ref, nem o
+     * endereço da CDN, nem o do arquivo. O efeito não rodava de novo, o vídeo
+     * ficava sem fonte nenhuma e a tela girava pra sempre — na segunda visita
+     * funcionava, porque aí o nome já estava guardado e o player nascia junto
+     * com os dados. Era exatamente o "às vezes não abre" do cliente.
      *
-     * Então: se em alguns segundos nada tiver começado a carregar, cai pro
-     * arquivo direto. Ele é mais lento, mas toca. Player parado pra sempre é
-     * pior que vídeo lento.
+     * Então, em vez de desistir quando o elemento ainda não existe, esperamos
+     * ele aparecer.
      */
-    guarda = window.setTimeout(() => {
-      if (!vivo || video.readyState !== 0) return;
-      console.warn('[lumos] a CDN não respondeu a tempo; tocando o arquivo direto.');
-      usarArquivoDireto();
-    }, 8000);
-
-    (async () => {
-      let HlsCtor: typeof import('hls.js').default;
-      try {
-        HlsCtor = (await import('hls.js')).default;
-      } catch {
-        // Sem o hls.js não existe caminho de CDN: vai direto pro arquivo, em
-        // vez de deixar a promessa morrer no silêncio.
-        usarArquivoDireto();
-        return;
-      }
-      if (!vivo) { window.clearTimeout(guarda); return; }
-
-      // O hls.js vem PRIMEIRO. O Chrome responde "maybe" para o tipo do HLS,
-      // que é um valor verdadeiro, então testar canPlayType antes fazia todo
-      // mundo cair no player nativo: o vídeo até tocava, mas sem lista de
-      // qualidades (o menu sumia) e sem controle nenhum de adaptação — abria
-      // no nível mais baixo e demorava pra subir. Nativo só quando o hls.js
-      // não roda mesmo, que é o caso do Safari e do iOS.
-      if (!HlsCtor.isSupported()) {
-        if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          setViaCdn(true);
-          video.src = hlsUrl;
-        } else {
-          usarArquivoDireto();
-        }
-        return;
-      }
-
-      const hls = new HlsCtor({
-        // Buffer generoso: a CDN entrega rápido, então vale adiantar. Antes não
-        // adiantava nada, porque cada pedaço custava quase dois segundos.
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        startLevel: -1,
-        capLevelToPlayerSize: true,
-        // Sem isso o hls.js supõe uma banda pessimista, abre na pior qualidade
-        // e leva um tempão pra subir — foi exatamente a queixa. Partindo de uma
-        // estimativa realista, ele já entra numa qualidade decente e corrige
-        // pra baixo se a internet não acompanhar.
-        abrEwmaDefaultEstimate: 5_000_000,
-      });
-      hlsRef.current = hls;
-
-      hls.on(HlsCtor.Events.MANIFEST_PARSED, (_e, dados: any) => {
-        if (!vivo) return;
-        setViaCdn(true);
-        setQualidades(
-          (dados.levels || [])
-            .map((n: any, i: number) => {
-              // Em vídeo vertical a altura é o lado GRANDE: 1080x1920 apareceria
-              // como "1920p". O nome da qualidade sempre segue o lado menor, que
-              // é o que a equipe e o cliente reconhecem.
-              const lado = n.width && n.height ? Math.min(n.width, n.height) : (n.height || 0);
-              return { id: i, altura: lado, rotulo: lado ? `${lado}p` : `Nível ${i + 1}` };
-            })
-            .sort((x: Qualidade, y: Qualidade) => y.altura - x.altura),
-        );
-      });
-      hls.on(HlsCtor.Events.LEVEL_SWITCHED, (_e, dados: any) => {
-        if (vivo) setQualidadeAtual(hls.autoLevelEnabled ? -1 : dados.level);
-      });
-      hls.on(HlsCtor.Events.ERROR, (_e, dados: any) => {
-        if (!dados?.fatal) return;
-        // Falhou de vez: melhor cair no arquivo direto do que deixar tela preta.
-        usarArquivoDireto();
-      });
-
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(video);
-    })();
+    const comOElemento = () => {
+      if (!vivo) return;
+      const video = videoRef.current;
+      if (!video) return;
+      window.clearInterval(ronda);
+      ronda = undefined;
+      montar(video);
+    };
+    if (videoRef.current) comOElemento();
+    else ronda = window.setInterval(comOElemento, 100);
 
     return () => {
       vivo = false;
       window.clearTimeout(guarda);
+      window.clearInterval(ronda);
       hlsRef.current?.destroy();
       hlsRef.current = null;
     };
