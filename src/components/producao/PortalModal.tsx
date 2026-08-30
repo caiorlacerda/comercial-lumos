@@ -221,9 +221,10 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     const n = Number(antecedenciaInput);
     // Texto ou campo vazio não é "0 dias", é "não digitei nada direito":
     // volta pro valor de verdade sem gravar lixo. Número válido é travado na
-    // faixa de 0 a 60, porque `min`/`max` do <input> são só dica visual.
+    // faixa de 2 a 60, porque `min`/`max` do <input> são só dica visual, e o
+    // servidor tem piso de 2 dias mesmo que o portal peça menos.
     const valido = antecedenciaInput.trim() !== '' && Number.isFinite(n);
-    const novo = valido ? Math.min(60, Math.max(0, Math.round(n))) : atual;
+    const novo = valido ? Math.min(60, Math.max(2, Math.round(n))) : atual;
     setAntecedenciaInput(String(novo));
     if (novo === atual) return; // nada mudou: sem toast, sem chamada à toa
     patch({ antecedencia_dias: novo } as any, 'Antecedência salva.');
@@ -403,10 +404,10 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                   <span className="min-w-0">
                     <span className="block text-xs font-bold text-lumos-text-primary">Antecedência para pedir diária</span>
                     <span className="block text-[10.5px] text-lumos-text-secondary">
-                      Dias de folga entre hoje e a data que o cliente consegue pedir.
+                      Dias de folga entre hoje e a data que o cliente consegue pedir. O servidor nunca deixa menos de 2.
                     </span>
                   </span>
-                  <input type="number" min={0} max={60} value={antecedenciaInput}
+                  <input type="number" min={2} max={60} value={antecedenciaInput}
                     onChange={e => setAntecedenciaInput(e.target.value)}
                     onBlur={salvarAntecedencia}
                     className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />

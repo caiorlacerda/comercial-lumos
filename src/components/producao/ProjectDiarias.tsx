@@ -231,7 +231,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
         {canManage && (
           <button type="button" onClick={() => setBloqueiosAbertos(true)}
             className="text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 flex-shrink-0">
-            <CalendarOff className="w-3.5 h-3.5" /> Datas bloqueadas
+            <CalendarOff className="w-3.5 h-3.5" /> Agenda bloqueada
           </button>
         )}
         {canManage && (

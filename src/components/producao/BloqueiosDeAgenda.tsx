@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import clsx from 'clsx';
 import { AlertTriangle, CalendarOff, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,15 +8,26 @@ import Modal from '@/components/common/Modal';
 import { useConfirm } from '@/components/ui/useConfirm';
 
 /**
- * Datas fechadas para gravação. ATENÇÃO: isto é GLOBAL, vale para a produtora
- * inteira, não para um projeto. Uma data bloqueada aqui some do calendário de
- * TODOS os clientes em TODOS os portais (estado `bloqueado` em
- * `portal_agenda`). Por isso mora num modal à parte, aberto de dentro de um
- * projeto só por conveniência, e a copy deixa isso explícito.
+ * A agenda de diárias que a produtora fecha por conta própria, GLOBAL: vale
+ * para a produtora inteira, não para um projeto. Duas formas, as duas somem
+ * do calendário de TODOS os clientes em TODOS os portais:
+ * - Datas pontuais (`agenda_bloqueios`, estado `bloqueado` em `portal_agenda`).
+ * - Dias da semana inteiros (`agenda_semana_fechada`, ex.: fechar todo
+ *   domingo) — regra PERMANENTE, ao contrário da data avulsa. Existe desde a
+ *   migração 2026093334; sem ela a tabela não existe e a leitura dá erro.
+ * Por isso mora num modal à parte, aberto de dentro de um projeto só por
+ * conveniência, e a copy deixa isso explícito nas duas seções.
  */
 
 interface Bloqueio {
   data: string;
+  motivo: string | null;
+  criado_por: string | null;
+  created_at: string;
+}
+
+interface DiaFechado {
+  dia_semana: number;
   motivo: string | null;
   criado_por: string | null;
   created_at: string;
@@ -29,6 +41,9 @@ const fmtData = (d: string) => {
 };
 const hoje = () => new Date().toISOString().slice(0, 10);
 
+/** 0 = domingo, igual ao `dia_semana` da tabela (EXTRACT(DOW)). */
+const NOME_DIA_SEMANA = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
 export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
@@ -39,6 +54,11 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
   const [data, setData] = useState('');
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
+
+  const [loadingSemana, setLoadingSemana] = useState(true);
+  const [diasFechados, setDiasFechados] = useState<DiaFechado[]>([]);
+  const [erroSemana, setErroSemana] = useState(false);
+  const [salvandoDia, setSalvandoDia] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,7 +72,40 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
     setBloqueios(error ? [] : (rows as Bloqueio[]) || []);
     setLoading(false);
   }, []);
-  useEffect(() => { if (isOpen) load(); }, [isOpen, load]);
+
+  const loadSemana = useCallback(async () => {
+    setLoadingSemana(true);
+    const { data: rows, error } = await supabase.from('agenda_semana_fechada')
+      .select('dia_semana, motivo, criado_por, created_at')
+      .order('dia_semana', { ascending: true });
+    // Mesma regra da leitura de datas: erro (inclusive tabela que ainda não
+    // existe, antes da migração 2026093334 rodar) não pode virar "nenhum dia
+    // fechado" — isso é o pior desfecho possível aqui.
+    setErroSemana(!!error);
+    setDiasFechados(error ? [] : (rows as DiaFechado[]) || []);
+    setLoadingSemana(false);
+  }, []);
+
+  useEffect(() => { if (isOpen) { load(); loadSemana(); } }, [isOpen, load, loadSemana]);
+
+  const alternarDiaSemana = async (diaSemana: number, fechadoAgora: boolean) => {
+    if (!canManage || salvandoDia !== null) return;
+    setSalvandoDia(diaSemana);
+    if (fechadoAgora) {
+      const { error } = await supabase.from('agenda_semana_fechada').delete().eq('dia_semana', diaSemana);
+      setSalvandoDia(null);
+      if (error) { toast.error(`Não foi possível reabrir ${NOME_DIA_SEMANA[diaSemana]}.`); return; }
+      toast.success(`${NOME_DIA_SEMANA[diaSemana]} reaberto, para a produtora inteira.`);
+      loadSemana();
+    } else {
+      const { error } = await supabase.from('agenda_semana_fechada')
+        .insert({ dia_semana: diaSemana, criado_por: profile?.id || null });
+      setSalvandoDia(null);
+      if (error) { toast.error(`Não foi possível fechar ${NOME_DIA_SEMANA[diaSemana]}.`); return; }
+      toast.success(`${NOME_DIA_SEMANA[diaSemana]} fechado, para a produtora inteira, todo santo dia.`);
+      loadSemana();
+    }
+  };
 
   const adicionar = async () => {
     if (!data) { toast.error('Escolha uma data.'); return; }
@@ -83,9 +136,72 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Datas bloqueadas" maxWidth="max-w-lg">
-      <div className="space-y-4">
+    <Modal isOpen={isOpen} onClose={onClose} title="Agenda bloqueada" maxWidth="max-w-lg">
+      <div className="space-y-6">
         {confirmDialog}
+
+        {/* ── Dias da semana fechados: regra permanente, pra produtora
+            inteira, diferente da data avulsa aqui embaixo. ──────────── */}
+        <div className="space-y-3">
+          <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">
+            Dias da semana fechados
+          </label>
+          <div className="rounded-lumos border border-amber-500/40 bg-amber-500/[0.07] px-3.5 py-3 flex items-start gap-2.5">
+            <CalendarOff className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-[11.5px] leading-snug text-lumos-text-primary">
+              Fechar um dia aqui vale para a produtora inteira, em todos os portais, e é regra
+              permanente: toda semana, sem data de volta. Diferente de bloquear uma data avulsa,
+              que é só aquele dia.
+            </p>
+          </div>
+
+          {loadingSemana ? (
+            <div className="py-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>
+          ) : erroSemana ? (
+            <div className="rounded-lumos border border-red-500/40 bg-red-500/[0.06] px-3.5 py-3 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-lumos-text-primary">Não foi possível carregar os dias fechados.</p>
+                <p className="text-[11px] text-lumos-text-secondary mt-0.5">
+                  Pode ter dia fechado que não está aparecendo aqui. Tente de novo antes de confiar na lista.
+                </p>
+                <button type="button" onClick={loadSemana} className="text-[11px] font-bold text-lumos-yellow hover:underline mt-1.5">
+                  Tentar de novo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-lumos-border rounded-lumos divide-y divide-lumos-border/60">
+              {NOME_DIA_SEMANA.map((nomeDia, i) => {
+                const fechado = diasFechados.some(d => d.dia_semana === i);
+                return (
+                  <div key={i} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                    <span className="text-xs font-bold text-lumos-text-primary">{nomeDia}</span>
+                    {canManage ? (
+                      <button type="button" disabled={salvandoDia !== null}
+                        onClick={() => alternarDiaSemana(i, fechado)}
+                        title={fechado ? `Reabrir ${nomeDia}` : `Fechar ${nomeDia}`}
+                        className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0 disabled:opacity-60',
+                          fechado ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                        <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', fechado ? 'left-5' : 'left-0.5')} />
+                      </button>
+                    ) : (
+                      <span className={clsx('text-[10.5px] font-bold', fechado ? 'text-amber-500' : 'text-lumos-text-secondary')}>
+                        {fechado ? 'fechado' : 'aberto'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Datas pontuais bloqueadas ────────────────────────────── */}
+        <div className="space-y-3">
+        <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">
+          Datas pontuais bloqueadas
+        </label>
         <div className="rounded-lumos border border-amber-500/40 bg-amber-500/[0.07] px-3.5 py-3 flex items-start gap-2.5">
           <CalendarOff className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
           <p className="text-[11.5px] leading-snug text-lumos-text-primary">
@@ -149,6 +265,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
             ))}
           </div>
         )}
+        </div>
       </div>
     </Modal>
   );
