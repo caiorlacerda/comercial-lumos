@@ -12,7 +12,9 @@ BEGIN
   SELECT id INTO v_eu FROM app_users WHERE auth_user_id = auth.uid() AND status = 'ativo';
   IF v_eu IS NULL THEN RETURN jsonb_build_object('error','sem_permissao'); END IF;
 
-  SELECT * INTO v_p FROM diaria_pedidos WHERE id = p_pedido_id AND estado = 'pendente';
+  -- Trava a linha: dois cliques simultâneos não podem os dois passar pelo
+  -- IF abaixo e criar duas diárias pro mesmo pedido.
+  SELECT * INTO v_p FROM diaria_pedidos WHERE id = p_pedido_id AND estado = 'pendente' FOR UPDATE;
   IF v_p IS NULL THEN RETURN jsonb_build_object('error','nao_encontrado'); END IF;
 
   -- Dia que ficou ocupado entre o pedido e a resposta: avisa em vez de recusar
@@ -32,7 +34,7 @@ BEGIN
 
   UPDATE diaria_pedidos
   SET estado = 'aceito', diaria_id = v_diaria, respondido_por = v_eu, respondido_em = now()
-  WHERE id = p_pedido_id;
+  WHERE id = p_pedido_id AND estado = 'pendente';
 
   RETURN jsonb_build_object('ok', true, 'diaria_id', v_diaria);
 END; $$;
