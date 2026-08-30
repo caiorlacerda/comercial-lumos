@@ -31,7 +31,9 @@ interface Projeto {
 }
 interface Portal {
   cliente: { nome: string };
-  portal: { show_financeiro: boolean; blocks: Record<string, boolean> };
+  portal: { show_financeiro: boolean; blocks: Record<string, boolean>; exige_login?: boolean };
+  /** Quem entrou, quando o portal exige login. Nome verificado, não digitado. */
+  voce?: { nome: string; email: string } | null;
   abrir_projeto: string | null;
   projetos: Projeto[];
   contatos: { nome: string; email: string; cargo: string | null; foto: string | null; whatsapp: string | null; slack: string | null }[];
@@ -137,6 +139,11 @@ export default function PortalCliente() {
   const { token = '' } = useParams();
   const [dados, setDados] = useState<Portal | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /** 'precisa_login' abre a tela de entrada; 'sem_acesso' explica e para por aí. */
+  const [porta, setPorta] = useState<{ tipo: 'precisa_login' | 'sem_acesso'; cliente: string } | null>(null);
+  const [emailLogin, setEmailLogin] = useState('');
+  const [enviandoLink, setEnviandoLink] = useState(false);
+  const [linkEnviado, setLinkEnviado] = useState(false);
   const [aba, setAba] = useState<string>('inicio');
   const [nome, setNome] = useState(() => localStorage.getItem(NOME_SALVO) || '');
   /**
@@ -164,8 +171,19 @@ export default function PortalCliente() {
 
   const carregar = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_client_portal_v2', { p_token: token });
-    if (error || !data || (data as any).error) { setErro('Link inválido ou desativado.'); return; }
+    const falha = (data as any)?.error;
+    if (falha === 'precisa_login' || falha === 'sem_acesso') {
+      setPorta({ tipo: falha, cliente: (data as any)?.cliente?.nome || '' });
+      return;
+    }
+    if (error || !data || falha) { setErro('Link inválido ou desativado.'); return; }
     const d = data as Portal;
+    setPorta(null);
+    // Nome verificado manda no digitado: é ele que assina as aprovações.
+    if (d.voce?.nome) {
+      setNome(d.voce.nome);
+      try { localStorage.setItem(NOME_SALVO, d.voce.nome); } catch { /* ignore */ }
+    }
     setDados(d);
     // Voltando do player: reabre na aba de onde a pessoa saiu.
     const pedida = new URLSearchParams(window.location.search).get('aba');
@@ -177,6 +195,16 @@ export default function PortalCliente() {
     }
   }, [token]);
   useEffect(() => { carregar(); }, [carregar]);
+
+  // O link de entrada volta com a sessão na URL: quando ela é criada, recarrega
+  // os dados. Sem isso a pessoa clicava no e-mail e caía na tela de entrada de
+  // novo, já logada.
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((evento) => {
+      if (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED') carregar();
+    });
+    return () => data.subscription.unsubscribe();
+  }, [carregar]);
 
   /** Pede as capas dos quadros que a aba atual mostra, em blocos pequenos. */
   const pedirCapas = useCallback(async (tokens: string[]) => {
@@ -248,6 +276,76 @@ export default function PortalCliente() {
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
         <style>{PORTAL_CSS}</style>
         <span className="farol" />
+      </div>
+    );
+  }
+
+  // Porta fechada: portal com login ligado.
+  if (porta) {
+    const enviar = async () => {
+      const email = emailLogin.trim().toLowerCase();
+      if (!email || enviandoLink) return;
+      setEnviandoLink(true);
+      // Confere antes de mandar, mas a tela responde a mesma coisa nos dois
+      // casos: o portal não vira jeito de descobrir quem trabalha no cliente.
+      const { data: pode } = await supabase.rpc('portal_pode_entrar', { p_token: token, p_email: email });
+      if (pode) {
+        await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+      }
+      setEnviandoLink(false);
+      setLinkEnviado(true);
+    };
+    return (
+      <div className={`portal-lumos ${tema === 'claro' ? 'claro' : ''}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <style>{PORTAL_CSS}</style>
+        <div style={{ width: '100%', maxWidth: 400 }}>
+          <img className="logotipo" src={tema === 'claro' ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
+          <p className="rotulo">Portal de {porta.cliente}</p>
+          {porta.tipo === 'sem_acesso' ? (
+            <>
+              <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 32, lineHeight: 1.02, margin: '8px 0 14px' }}>
+                Esta conta<br />não tem acesso
+              </h1>
+              <p className="nota">
+                O e-mail com que você entrou não está liberado neste portal. Fale com quem te
+                mandou o link que a gente libera na hora.
+              </p>
+              <button className="botao" style={{ marginTop: 16 }}
+                onClick={async () => { await supabase.auth.signOut(); setPorta(null); setLinkEnviado(false); carregar(); }}>
+                Entrar com outro e-mail
+              </button>
+            </>
+          ) : linkEnviado ? (
+            <>
+              <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 32, lineHeight: 1.02, margin: '8px 0 14px' }}>
+                Olha<br />seu e-mail
+              </h1>
+              <p className="nota">
+                Se <b>{emailLogin.trim()}</b> tiver acesso a este portal, o link de entrada acabou de
+                chegar. Ele abre direto aqui, sem senha.
+              </p>
+              <button className="botao" style={{ marginTop: 16 }} onClick={() => setLinkEnviado(false)}>
+                Usar outro e-mail
+              </button>
+            </>
+          ) : (
+            <>
+              <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 32, lineHeight: 1.02, margin: '8px 0 14px' }}>
+                Entre com<br />seu e-mail
+              </h1>
+              <input autoFocus type="email" className="campo" placeholder="voce@empresa.com.br"
+                value={emailLogin} onChange={e => setEmailLogin(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') enviar(); }} />
+              <button className="botao" style={{ marginTop: 12, width: '100%' }}
+                disabled={!emailLogin.trim() || enviandoLink} onClick={enviar}>
+                {enviandoLink ? 'Enviando…' : 'Receber link de entrada'}
+              </button>
+              <p className="nota" style={{ marginTop: 14 }}>
+                Sem senha: a gente manda um link que abre o portal direto. Ele vale só pra você.
+              </p>
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -355,7 +453,10 @@ export default function PortalCliente() {
           </button>
           <span className="rosto">{nome.trim().charAt(0).toUpperCase()}</span>
           <span className="so-grande">Você é <b>{nome}</b></span>
-          <button className="trocar" onClick={() => { localStorage.removeItem(NOME_SALVO); setNome(''); setDigitando(''); }}>trocar</button>
+          <button className="trocar" onClick={async () => {
+            if (dados.portal.exige_login) { await supabase.auth.signOut(); location.reload(); return; }
+            localStorage.removeItem(NOME_SALVO); setNome(''); setDigitando('');
+          }}>{dados.portal.exige_login ? 'sair' : 'trocar'}</button>
         </span>
         </div>
       </header>
