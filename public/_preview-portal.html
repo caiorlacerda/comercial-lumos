@@ -1,0 +1,534 @@
+<title>Portal Lumos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Mono:wght@400;500&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     PORTAL LUMOS — sala de projeção
+     A tela é escura porque se assiste filme no escuro. A luz é
+     amarela porque é a marca e porque é literal: ela cai sobre o
+     que espera pelo cliente. Tema único, deliberado.
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --sala:      #131211;   /* preto quente, marrom no fundo */
+    --mesa:      #1c1a18;   /* superfície: a mesa de corte */
+    --mesa-alta: #232120;
+    --fio:       rgba(255,247,230,.10);
+    --luz:       #EFC700;   /* amarelo Lumos */
+    --luz-alta:  #FFDE59;
+    --gesso:     #F2EDE3;   /* branco quente, luz projetada */
+    --meia-luz:  #9a938a;
+    --aprovado:  #74C98A;
+    --ajuste:    #E8705F;
+    --producao:  #7FA9CE;
+
+    --grao: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--sala);
+    color: var(--gesso);
+    font-family: "Work Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Grão de filme: quase invisível, tira o plástico da tela cheia. */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100;
+    background-image: var(--grao); opacity: .035; mix-blend-mode: overlay;
+  }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--luz); outline-offset: 3px; border-radius: 3px; }
+
+  .mono { font-family: "DM Mono", ui-monospace, SFMono-Regular, monospace; font-feature-settings: "tnum"; }
+  .rotulo {
+    font-family: "DM Mono", monospace; font-size: 10.5px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--meia-luz);
+  }
+
+  /* ── Cabeçalho ───────────────────────────────────────────── */
+  .topo {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 16px 26px; border-bottom: 1px solid var(--fio);
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--sala) 92%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  .marca { display: flex; align-items: center; }
+  /* O logotipo é a marca: entra no arquivo real, não numa bolinha desenhada. */
+  .logotipo { height: 21px; width: auto; display: block; }
+  .farol {
+    width: 13px; height: 13px; border-radius: 999px; background: var(--luz);
+    box-shadow: 0 0 0 4px rgba(239,199,0,.14), 0 0 22px 4px rgba(239,199,0,.4);
+  }
+  .cliente { color: var(--meia-luz); font-size: 13px; padding-left: 14px; border-left: 1px solid var(--fio); }
+  .cliente b { color: var(--gesso); font-weight: 600; }
+  .quem { margin-left: auto; display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--meia-luz); }
+  .quem b { color: var(--gesso); font-weight: 600; }
+  .quem .trocar { background: none; border: 0; color: var(--meia-luz); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 12px; padding: 0; }
+  .rosto { width: 26px; height: 26px; border-radius: 999px; background: linear-gradient(150deg,#4a443c,#2a2724); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--gesso); }
+
+  /* ── Fita de projetos ─────────────────────────────────────── */
+  .fita { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid var(--fio); overflow-x: auto; scrollbar-width: none; }
+  .fita::-webkit-scrollbar { display: none; }
+  .aba {
+    appearance: none; background: none; border: 0; cursor: pointer; white-space: nowrap;
+    padding: 14px 12px 12px; border-bottom: 2px solid transparent;
+    color: var(--meia-luz); font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px; transition: color .18s;
+  }
+  .aba:hover { color: var(--gesso); }
+  .aba[aria-selected="true"] { color: var(--luz); border-bottom-color: var(--luz); }
+  .aba .n {
+    font-family: "DM Mono", monospace; font-size: 10.5px; font-weight: 500;
+    background: var(--luz); color: #171310; border-radius: 999px; padding: 1px 7px;
+  }
+  .aba[aria-selected="true"] .n { background: var(--luz); }
+
+  .painel[hidden] { display: none; }
+  .folha { max-width: 1180px; margin: 0 auto; padding: 0 26px 90px; }
+
+  /* ── O anúncio: o que espera por você ─────────────────────── */
+  .chamada {
+    position: relative; padding: 54px 0 40px;
+    display: grid; gap: 34px; align-items: start;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 900px) { .chamada { grid-template-columns: minmax(240px, 300px) 1fr; gap: 46px; } }
+  /* A luz vem do alto, à esquerda, e cai sobre os quadros. */
+  .chamada::before {
+    content: ""; position: absolute; left: -18%; top: -30%; width: 90%; height: 150%;
+    background: radial-gradient(60% 50% at 30% 35%, rgba(239,199,0,.16), transparent 70%);
+    pointer-events: none; filter: blur(6px);
+  }
+  .chamada > * { position: relative; }
+  .conta { font-family: "Anton", Impact, sans-serif; font-size: clamp(78px, 13vw, 148px); line-height: .82; letter-spacing: -.02em; color: var(--luz); }
+  .chamada h1 { font-family: "Anton", Impact, sans-serif; font-weight: 400; font-size: clamp(26px, 3.6vw, 38px); line-height: 1.02; letter-spacing: .005em; margin: 10px 0 12px; text-transform: uppercase; }
+  .chamada p { color: var(--meia-luz); font-size: 14px; margin: 0; max-width: 34ch; }
+  .desde { margin-top: 14px; }
+
+  /* Quadros no formato real: é assim que a Lumos e o cliente pensam. */
+  .quadros { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .quadro {
+    position: relative; border: 0; padding: 0; cursor: pointer; background: none;
+    display: block; text-align: left; width: max-content;
+    animation: entra .5s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .quadro .still {
+    /* span vira bloco: sem isso a proporção e a largura não valem. */
+    display: block;
+    position: relative; overflow: hidden; border-radius: 4px;
+    background: linear-gradient(160deg, #4b4239, #211e1c 70%);
+    box-shadow: 0 12px 30px -14px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,247,230,.09);
+    transition: transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .22s;
+  }
+  .quadro { transition: transform .22s cubic-bezier(.2,.7,.3,1); }
+  .quadro:hover { transform: translateY(-5px); }
+  .quadro:hover .still { box-shadow: 0 20px 40px -16px rgba(0,0,0,.85), 0 0 0 1px rgba(239,199,0,.5), 0 0 28px -6px rgba(239,199,0,.35); }
+  .quadro .still::after {
+    content: "▶"; position: absolute; inset: 0; display: grid; place-items: center;
+    color: rgba(255,247,230,.55); font-size: 13px; transition: color .2s;
+  }
+  .quadro:hover .still::after { color: var(--luz); }
+  /* Todos com a MESMA ALTURA: aí a largura sozinha conta o formato, e a
+     fileira fica alinhada em cima e embaixo, como fotograma em mesa de luz. */
+  .quadros { --h: 150px; }
+  .peca-bloco .quadros { --h: 104px; }
+  .f169 .still { height: var(--h); width: calc(var(--h) * 16 / 9); }
+  .f916 .still { height: var(--h); width: calc(var(--h) * 9 / 16); }
+  .f11  .still { height: var(--h); width: var(--h); }
+  .quadro .fmt {
+    position: absolute; top: 7px; left: 7px; z-index: 2;
+    font-family: "DM Mono", monospace; font-size: 9.5px; letter-spacing: .06em;
+    background: rgba(10,9,8,.7); color: var(--gesso); padding: 2px 6px; border-radius: 3px;
+  }
+  /* Nome dentro do quadro, sobre um véu: texto embaixo em larguras
+     diferentes quebrava o ritmo da fileira. */
+  /* A parede fica limpa: o nome aparece quando a pessoa mira o quadro.
+     Legenda fixa em quadro estreito virava quatro linhas de texto. */
+  .quadro .legenda {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+    padding: 26px 9px 9px; text-align: left;
+    background: linear-gradient(to top, rgba(10,9,8,.94), rgba(10,9,8,.65) 50%, transparent);
+    border-radius: 0 0 4px 4px;
+    opacity: 0; transform: translateY(4px); transition: opacity .18s, transform .18s;
+  }
+  .quadro:hover .legenda, .quadro:focus-visible .legenda { opacity: 1; transform: none; }
+  .quadro .peca { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.2; }
+  .quadro .meta { display: block; font-family: "DM Mono", monospace; font-size: 9.5px; color: #cfc7bb; margin-top: 1px; }
+  @media (prefers-reduced-motion: reduce) { .quadro .legenda { transition: none; } }
+  .mais {
+    align-self: stretch; min-height: var(--h, 150px); display: grid; place-items: center;
+    font-family: "DM Mono", monospace; font-size: 12px; color: var(--meia-luz);
+    background: none; border: 1px dashed var(--fio); border-radius: 4px; padding: 0 16px; cursor: pointer;
+  }
+  .mais:hover { color: var(--luz); border-color: rgba(239,199,0,.4); }
+
+  @keyframes entra { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .quadro { animation: none; }
+    .quadro .still, .quadro:hover .still { transition: none; transform: none; }
+  }
+
+  /* ── Seções ──────────────────────────────────────────────── */
+  .secao { padding-top: 34px; border-top: 1px solid var(--fio); }
+  .secao > .rotulo { display: block; margin-bottom: 16px; }
+  .duas { display: grid; gap: 34px; grid-template-columns: 1fr; }
+  @media (min-width: 920px) { .duas { grid-template-columns: 1.5fr 1fr; gap: 44px; } }
+
+  /* Linha de projeto: barra tripartida = onde está o trabalho. */
+  .proj { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 15px 0; border-bottom: 1px solid var(--fio); text-decoration: none; color: inherit; cursor: pointer; }
+  @media (min-width: 620px) { .proj { grid-template-columns: 1fr 210px 96px; align-items: center; gap: 18px; } }
+  .proj:hover .nome { color: var(--luz); }
+  .proj .nome { display: block; font-size: 15px; font-weight: 600; transition: color .16s; }
+  .proj .sub { display: block; font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); margin-top: 1px; }
+  .barra { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: rgba(255,247,230,.07); }
+  .barra i { display: block; }
+  .barra .b-ok { background: var(--aprovado); }
+  .barra .b-voce { background: var(--luz); }
+  .barra .b-prod { background: var(--producao); }
+  .proj .contagem { font-family: "DM Mono", monospace; font-size: 11.5px; color: var(--meia-luz); text-align: left; }
+  @media (min-width: 620px) { .proj .contagem { text-align: right; } }
+  .chaves { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+  .chave { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--meia-luz); }
+  .chave i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+
+  /* Diário: o que aconteceu, em ordem. */
+  .diario { list-style: none; margin: 0; padding: 0; }
+  .diario li { display: grid; grid-template-columns: 62px 1fr; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--fio); align-items: baseline; }
+  .diario .dia { font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); }
+  .diario .fato { font-size: 13.5px; line-height: 1.45; }
+  .diario .fato b { font-weight: 600; }
+  .diario .onde { display: block; font-family: "DM Mono", monospace; font-size: 10.5px; color: var(--meia-luz); margin-top: 1px; }
+
+  /* ── Aba de projeto ───────────────────────────────────────── */
+  .cabeca-proj { padding: 44px 0 26px; }
+  .cabeca-proj h2 { font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: clamp(30px, 5vw, 52px); line-height: 1; letter-spacing: .01em; margin: 8px 0 14px; }
+  .resumo-linha { display: flex; gap: 26px; flex-wrap: wrap; }
+  .resumo-linha div { display: flex; align-items: baseline; gap: 7px; }
+  .resumo-linha .v { font-family: "DM Mono", monospace; font-size: 19px; color: var(--gesso); }
+  .resumo-linha .v.destaque { color: var(--luz); }
+  .resumo-linha .k { font-size: 12px; color: var(--meia-luz); }
+
+  .peca-bloco { padding: 20px 0; border-top: 1px solid var(--fio); display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 780px) { .peca-bloco { grid-template-columns: 210px 1fr; gap: 26px; align-items: start; } }
+  .peca-bloco h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .peca-bloco .estado { display: block; font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); }
+  .selo { display: inline-block; font-family: "DM Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; margin-top: 8px; }
+  .s-voce { background: var(--luz); color: #171310; }
+  .s-ok { background: rgba(116,201,138,.16); color: var(--aprovado); }
+  .s-aj { background: rgba(232,112,95,.16); color: var(--ajuste); }
+  .s-prod { background: rgba(127,169,206,.16); color: var(--producao); }
+
+  /* Etapas como fita de filme: é uma sequência de verdade. */
+  .etapas { display: flex; gap: 0; margin: 6px 0 0; padding: 0; list-style: none; flex-wrap: wrap; }
+  .etapa { flex: 1 1 96px; padding: 12px 12px 12px 0; border-top: 2px solid var(--fio); position: relative; }
+  .etapa.feita { border-top-color: var(--aprovado); }
+  .etapa.agora { border-top-color: var(--luz); }
+  .etapa .q { display: block; font-size: 13px; font-weight: 600; }
+  .etapa.pendente .q { color: var(--meia-luz); font-weight: 500; }
+  .etapa .d { display: block; font-family: "DM Mono", monospace; font-size: 10.5px; color: var(--meia-luz); margin-top: 2px; }
+  .etapa.agora .d { color: var(--luz); }
+
+  .arquivo { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--fio); }
+  .arquivo .nm { flex: 1; font-size: 13.5px; }
+  .arquivo .nm span { display: block; font-family: "DM Mono", monospace; font-size: 10.5px; color: var(--meia-luz); }
+  .baixar { background: none; border: 1px solid var(--fio); border-radius: 6px; padding: 6px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+  .baixar:hover { border-color: var(--luz); color: var(--luz); }
+
+  /* ── Atendimento ─────────────────────────────────────────── */
+  .pessoa { display: flex; align-items: center; gap: 13px; padding: 14px 0; border-bottom: 1px solid var(--fio); }
+  .pessoa .rosto { width: 40px; height: 40px; font-size: 14px; }
+  .pessoa .nm { display: block; font-size: 14.5px; font-weight: 600; }
+  .pessoa .fn { display: block; font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); }
+  .pessoa a { margin-left: auto; color: var(--luz); text-decoration: none; font-size: 12.5px; border: 1px solid rgba(239,199,0,.35); border-radius: 6px; padding: 6px 12px; }
+  .pessoa a:hover { background: rgba(239,199,0,.1); }
+  .nota { font-size: 12.5px; color: var(--meia-luz); max-width: 60ch; }
+
+  .rodape { border-top: 1px solid var(--fio); margin-top: 46px; padding: 22px 0 0; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .rodape .rotulo { margin: 0; }
+</style>
+
+<header class="topo">
+  <span class="marca"><img class="logotipo" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMiIgZGF0YS1uYW1lPSJMYXllciAyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2aWV3Qm94PSIwIDAgOTE5Ljg3IDE3NS45Ij4KICA8ZGVmcz4KICAgIDxzdHlsZT4KICAgICAgLmNscy0xIHsKICAgICAgICBmaWxsOiBub25lOwogICAgICB9CgogICAgICAuY2xzLTIgewogICAgICAgIGZpbGw6IHVybCgjbGluZWFyLWdyYWRpZW50KTsKICAgICAgfQoKICAgICAgLmNscy0zIHsKICAgICAgICBmaWxsOiAjZmZmOwogICAgICB9CgogICAgICAuY2xzLTQgewogICAgICAgIGZpbGw6ICNlZmM3MDA7CiAgICAgIH0KCiAgICAgIC5jbHMtNSB7CiAgICAgICAgY2xpcC1wYXRoOiB1cmwoI2NsaXBwYXRoKTsKICAgICAgfQogICAgPC9zdHlsZT4KICAgIDxjbGlwUGF0aCBpZD0iY2xpcHBhdGgiPgogICAgICA8cmVjdCBjbGFzcz0iY2xzLTEiIHk9Ii4wNyIgd2lkdGg9IjE3NS43NiIgaGVpZ2h0PSIxNzUuNzYiIHJ4PSIyOC40NiIgcnk9IjI4LjQ2Ii8+CiAgICA8L2NsaXBQYXRoPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJsaW5lYXItZ3JhZGllbnQiIHgxPSItMTUzLjM5IiB5MT0iMTMwLjU3IiB4Mj0iMTY2Ljc3IiB5Mj0iMTMwLjU3IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZmZiIgc3RvcC1vcGFjaXR5PSIwIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2ZmZiIgc3RvcC1vcGFjaXR5PSIuOSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPGcgaWQ9IkxheWVyXzMiIGRhdGEtbmFtZT0iTGF5ZXIgMyI+CiAgICA8ZyBpZD0iTGF5ZXJfNSIgZGF0YS1uYW1lPSJMYXllciA1Ij4KICAgICAgPGc+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0zIiBkPSJNMjQwLjgxLDE3NS4xN2MtMS4yNS44NC0yLjI0LS4xNi0yLjI0LTEuNGwxLjI1LTg0LjkzLTEuMjUtODYuNmMwLTEuMjUsMS0yLjI0LDIuMjQtMi4yNGgzNC4xMmMxLjI1LDAsMi4yNCwxLDIuMjQsMi4yNGwtMSw4NC4zNiwxLDYxLjI3aDEwMS43YzEuMjUsMCwyLjI0LDEsMi4yNCwyLjI0djIzLjY2YzAsMS4yNC0xLDIuMjQtMi4yNCwxLjRoLTEzOC4wNloiLz4KICAgICAgICA8cGF0aCBjbGFzcz0iY2xzLTMiIGQ9Ik0zNzYuMiwxNzUuNjVjLTI3LjE1LDAtNDQuODMtMTguNDMtNDQuODMtNDkuODF2LTI2LjlsLS41LTUyLjNjMC0xLjI1LDEtMi4yNCwyLjI0LTIuMjRoMzMuMzdjMS4yNSwwLDIuMjQsMSwyLjI0LDIuMjRsLS43NSw1Mi4zdjI2LjRjMCwxMy45NSw4LjQ3LDIyLjkxLDE5LjY4LDIyLjkxLDEzLjQ1LDAsMjcuODktMTIuNDUsMjcuODktMzkuODV2LTkuNDZsLS41LTUyLjNjMC0xLjI1LDEtMi4yNCwyLjI0LTIuMjRoMzMuODdjMS4yNSwwLDIuMjQsMSwyLjI0LDIuMjRsLS43NSw1OS4yNy4yNSw2NC41YzAsMS4yNC0xLDIuMjQtMi4yNCwyLjI0aC0zMS42M2MtMS4yNSwwLTIuMjQtMS0yLjI0LTIuMjRsLjc1LTEzLjk1Yy04LjcyLDExLjIxLTIzLjQxLDE5LjE4LTQxLjM0LDE5LjE4WiIvPgogICAgICAgIDxwYXRoIGNsYXNzPSJjbHMtMyIgZD0iTTUwMi43MSwxMjYuNTlsLjc1LDQzLjgzYzAsMS4yNC0xLDIuMjQtMi4yNCwyLjI0aC0zNC4xMmMtMS4yNSwwLTIuMjQtMS0yLjI0LTIuMjRsLjc1LTQzLjgzLS4yNS03OS45NWMwLTEuMjUsMS0yLjI0LDIuMjQtMi4yNGgzMS44OGMxLjI1LDAsMi4yNCwxLDIuMjQsMi4yNGwtLjc1LDEzLjk1YzguOTctMTIuNDUsMjAuNDItMTkuMTgsMzYuODYtMTkuMTgsMTcuOTMsMCwzMC42Myw3LjcyLDM2LjYxLDI0LjE2LDEwLjk2LTE5LjQzLDIzLjkxLTI0LjE2LDM5LjEtMjQuMTYsMjUuOSwwLDQwLjg0LDE1LjY5LDQwLjg0LDQ5LjgxdjM1LjM3bC41LDQzLjgzYzAsMS4yNC0xLDIuMjQtMi4yNCwyLjI0aC0zMy42MmMtMS4yNCwwLTIuMjQtMS0yLjI0LTIuMjRsLjc1LTQzLjgzdi0zNC44N2MwLTE1LjQ0LTYuMjMtMjIuOTEtMTYuNDQtMjIuOTFzLTIyLjY2LDEzLjctMjIuNjYsMzkuODV2MTcuOTNsLjc1LDQzLjgzYzAsMS4yNC0xLDIuMjQtMi4yNCwyLjI0aC0zMy42MmMtMS4yNSwwLTIuMjQtMS0yLjI0LTIuMjRsLjc1LTQzLjgzdi0zNC44N2MwLTE1LjQ0LTUuOTgtMjIuOTEtMTYuNDQtMjIuOTFzLTIyLjY2LDEzLjctMjIuNjYsMzkuODV2MTcuOTNaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0zIiBkPSJNNzI4LjM1LDE3NS45Yy00MS44NCwwLTY2LTI2LjE1LTY2LTY3czI0LjE2LTY3Ljc0LDY2LTY3Ljc0LDY1LjUsMjYuMTUsNjUuNSw2Ny0yMy42Niw2Ny43NC02NS41LDY3Ljc0Wk03MjguMzUsMTUwLjk5YzE4LjQzLDAsMjcuMTUtMTIuNywyNy4xNS00Mi4wOXMtOC45Ny00Mi44NC0yNy40LTQyLjg0Yy0xOC45My4yNS0yNy42NCwxNC4yLTI3LjY0LDQzLjA5czkuMjEsNDEuODQsMjcuODksNDEuODRaIi8+CiAgICAgICAgPHBhdGggY2xhc3M9ImNscy0zIiBkPSJNODU5Ljg1LDE3NS42NWMtMzcuMzYsMC02MS4yNy0xNS4xOS02Mi41MS00My44MywwLTEuMjQsMS0yLjI0LDIuMjQtMi4yNGgzMS44OGMxLjI1LDAsMi4yNCwxLDIuMjQsMi4yNCwxLDE0LjQ1LDEwLjQ2LDIwLjY3LDI3Ljg5LDIwLjY3LDE0LjY5LDAsMjIuNjYtNS43MywyMi42Ni0xNS42OSwwLTI0LjQxLTgzLjkzLS43NS04My45My01NC41NCwwLTI2LjY1LDIxLjQyLTQwLjg0LDU2LjA0LTQwLjg0czU2LjI5LDEzLjQ1LDU4LjUzLDQwLjM1Yy4yNSwxLjI1LS43NSwyLjI0LTEuOTksMi4yNGgtMzAuMzhjLTEuMjQsMC0yLjI0LTEtMi40OS0yLjI0LTEuOTktMTAuOTYtOC45Ny0xNy42OC0yNC4xNi0xNy42OC0xMi4yLDAtMTkuOTMsNC40OC0xOS45MywxNS40NCwwLDI0LjQxLDgzLjkzLS41LDgzLjkzLDU0LjA0LDAsMjYuOS0yNS40LDQyLjA5LTYwLjAyLDQyLjA5WiIvPgogICAgICAgIDxnPgogICAgICAgICAgPHJlY3QgY2xhc3M9ImNscy00IiB5PSIuMDciIHdpZHRoPSIxNzUuNzYiIGhlaWdodD0iMTc1Ljc2IiByeD0iMjguNDYiIHJ5PSIyOC40NiIvPgogICAgICAgICAgPGcgY2xhc3M9ImNscy01Ij4KICAgICAgICAgICAgPHBhdGggY2xhc3M9ImNscy0yIiBkPSJNMTY2Ljc3LDYuMjdsLTM2LjQ4LDIwNS4xOWMtNS4wOSwyOC42LTMyLjQsNDcuNjctNjEsNDIuNThsLTIyMi42OC0zOS41OSIvPgogICAgICAgICAgPC9nPgogICAgICAgIDwvZz4KICAgICAgPC9nPgogICAgPC9nPgogIDwvZz4KPC9zdmc+" alt="Produtora Lumos"></span>
+  <span class="cliente">Portal de <b>Vitru</b></span>
+  <span class="quem"><span class="rosto">P</span> <span>Você é <b>Patrícia</b></span> <button class="trocar">trocar</button></span>
+</header>
+
+<nav class="fita" role="tablist" aria-label="Projetos">
+  <button class="aba" role="tab" aria-selected="true" data-p="inicio">Início <span class="n">14</span></button>
+  <button class="aba" role="tab" aria-selected="false" data-p="uniasselvi">Uniasselvi <span class="n">14</span></button>
+  <button class="aba" role="tab" aria-selected="false" data-p="resultados">Divulgação de resultados</button>
+  <button class="aba" role="tab" aria-selected="false" data-p="evento">Cobertura de evento</button>
+  <button class="aba" role="tab" aria-selected="false" data-p="mensal">Educação · agosto</button>
+  <button class="aba" role="tab" aria-selected="false" data-p="convencao">Convenção</button>
+  <button class="aba" role="tab" aria-selected="false" data-p="atendimento">Atendimento</button>
+</nav>
+
+<!-- ══ INÍCIO ══ -->
+<main class="painel" id="inicio">
+  <div class="folha">
+    <section class="chamada">
+      <div>
+        <p class="rotulo">Esperando você</p>
+        <div class="conta mono">14</div>
+        <h1>Vídeos<br>para aprovar</h1>
+        <p>Todos do Uniasselvi. Abra, comente no ponto exato do vídeo e aprove, ou peça ajuste.</p>
+        <p class="rotulo desde">O primeiro chegou em 27/08</p>
+      </div>
+
+      <div class="quadros" aria-label="Vídeos esperando sua aprovação">
+        <button class="quadro f916" style="animation-delay:.02s" title="Polo Sempre Perto de Você · v06 · vertical">
+          <span class="still"><span class="fmt">9:16</span>
+            <span class="legenda"><span class="peca">Polo Sempre Perto de Você</span><span class="meta">v06</span></span>
+          </span>
+        </button>
+        <button class="quadro f169" style="animation-delay:.08s" title="Aulas Práticas no Polo · v03 · horizontal">
+          <span class="still"><span class="fmt">16:9</span>
+            <span class="legenda"><span class="peca">Aulas Práticas no Polo</span><span class="meta">v03</span></span>
+          </span>
+        </button>
+        <button class="quadro f11" style="animation-delay:.14s" title="Nota Máxima no MEC · v02 · quadrado">
+          <span class="still"><span class="fmt">1:1</span>
+            <span class="legenda"><span class="peca">Nota Máxima no MEC</span><span class="meta">v02</span></span>
+          </span>
+        </button>
+        <button class="quadro f916" style="animation-delay:.2s" title="Flexibilidade: Super App · v04 · vertical">
+          <span class="still"><span class="fmt">9:16</span>
+            <span class="legenda"><span class="peca">Flexibilidade: Super App</span><span class="meta">v04</span></span>
+          </span>
+        </button>
+        <button class="quadro f169" style="animation-delay:.26s" title="Dublando os áudios · v02 · horizontal">
+          <span class="still"><span class="fmt">16:9</span>
+            <span class="legenda"><span class="peca">Dublando os áudios</span><span class="meta">v02</span></span>
+          </span>
+        </button>
+        <button class="mais">+ 9</button>
+      </div>
+    </section>
+
+    <div class="duas">
+      <section class="secao">
+        <span class="rotulo">Seus projetos</span>
+
+        <a class="proj" data-ir="uniasselvi">
+          <span><span class="nome">Uniasselvi</span><span class="sub">25 peças · entrega 12/08</span></span>
+          <span class="barra"><i class="b-ok" style="width:36%"></i><i class="b-voce" style="width:56%"></i><i class="b-prod" style="width:8%"></i></span>
+          <span class="contagem">14 com você</span>
+        </a>
+        <a class="proj" data-ir="resultados">
+          <span><span class="nome">Divulgação de resultados</span><span class="sub">3 peças · entrega 10/08</span></span>
+          <span class="barra"><i class="b-ok" style="width:100%"></i></span>
+          <span class="contagem">tudo aprovado</span>
+        </a>
+        <a class="proj" data-ir="evento">
+          <span><span class="nome">Cobertura de evento</span><span class="sub">captação concluída</span></span>
+          <span class="barra"><i class="b-prod" style="width:100%"></i></span>
+          <span class="contagem">com a Lumos</span>
+        </a>
+        <a class="proj" data-ir="mensal">
+          <span><span class="nome">Educação · mensal agosto</span><span class="sub">9 tarefas · entrega 06/08</span></span>
+          <span class="barra"><i class="b-prod" style="width:70%"></i></span>
+          <span class="contagem">com a Lumos</span>
+        </a>
+        <a class="proj" data-ir="convencao">
+          <span><span class="nome">Convenção Uniasselvi</span><span class="sub">começou esta semana</span></span>
+          <span class="barra"></span>
+          <span class="contagem">—</span>
+        </a>
+
+        <div class="chaves">
+          <span class="chave"><i style="background:var(--aprovado)"></i> Aprovado por você</span>
+          <span class="chave"><i style="background:var(--luz)"></i> Esperando você</span>
+          <span class="chave"><i style="background:var(--producao)"></i> Com a Lumos</span>
+        </div>
+      </section>
+
+      <section class="secao">
+        <span class="rotulo">Últimos dias</span>
+        <ul class="diario">
+          <li><span class="dia">ontem</span><span class="fato">Você aprovou <b>Frases que todo aluno escuta</b><span class="onde">Uniasselvi</span></span></li>
+          <li><span class="dia">28/08</span><span class="fato">Nova versão de <b>Explicando o ENADE</b>, a v04<span class="onde">Uniasselvi · depois do seu pedido</span></span></li>
+          <li><span class="dia">28/08</span><span class="fato">Chegaram <b>3 vídeos</b> para sua revisão<span class="onde">Uniasselvi</span></span></li>
+          <li><span class="dia">26/08</span><span class="fato">Você pediu ajustes em <b>Carreiras em E-sports</b><span class="onde">Uniasselvi</span></span></li>
+          <li><span class="dia">22/08</span><span class="fato"><b>Divulgação de resultados</b> foi entregue<span class="onde">3 peças aprovadas</span></span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ══ PROJETO ══ -->
+<main class="painel" id="uniasselvi" hidden>
+  <div class="folha">
+    <div class="cabeca-proj">
+      <p class="rotulo">Projeto</p>
+      <h2>Uniasselvi</h2>
+      <div class="resumo-linha">
+        <div><span class="v destaque mono">14</span><span class="k">esperando você</span></div>
+        <div><span class="v mono">09</span><span class="k">aprovadas</span></div>
+        <div><span class="v mono">02</span><span class="k">com a Lumos</span></div>
+        <div><span class="v mono">12/08</span><span class="k">próxima entrega</span></div>
+      </div>
+    </div>
+
+    <section class="secao">
+      <span class="rotulo">Onde o projeto está</span>
+      <ul class="etapas">
+        <li class="etapa feita"><span class="q">Roteiro</span><span class="d">aprovado 14/07</span></li>
+        <li class="etapa feita"><span class="q">Captação</span><span class="d">21/07</span></li>
+        <li class="etapa feita"><span class="q">Edição</span><span class="d">25/08</span></li>
+        <li class="etapa agora"><span class="q">Sua revisão</span><span class="d">agora · 14 peças</span></li>
+        <li class="etapa pendente"><span class="q">Entrega final</span><span class="d">prevista 12/08</span></li>
+      </ul>
+    </section>
+
+    <section class="secao">
+      <span class="rotulo">Entregas · uma peça por linha, nos formatos que ela tem</span>
+
+      <div class="peca-bloco">
+        <div>
+          <h3>Polo Sempre Perto de Você</h3>
+          <span class="estado">3 formatos · v06</span>
+          <span class="selo s-voce">Esperando você</span>
+        </div>
+        <div class="quadros">
+          <button class="quadro f916"><span class="still"><span class="fmt">9:16</span></span></button>
+          <button class="quadro f169"><span class="still"><span class="fmt">16:9</span></span></button>
+          <button class="quadro f11"><span class="still"><span class="fmt">1:1</span></span></button>
+        </div>
+      </div>
+
+      <div class="peca-bloco">
+        <div>
+          <h3>Aulas Práticas no Polo</h3>
+          <span class="estado">3 formatos · v03</span>
+          <span class="selo s-voce">Esperando você</span>
+        </div>
+        <div class="quadros">
+          <button class="quadro f916"><span class="still"><span class="fmt">9:16</span></span></button>
+          <button class="quadro f169"><span class="still"><span class="fmt">16:9</span></span></button>
+          <button class="quadro f11"><span class="still"><span class="fmt">1:1</span></span></button>
+        </div>
+      </div>
+
+      <div class="peca-bloco">
+        <div>
+          <h3>Dublando os áudios</h3>
+          <span class="estado">1 formato · v02</span>
+          <span class="selo s-ok">Aprovado por você</span>
+        </div>
+        <div class="quadros">
+          <button class="quadro f916"><span class="still"><span class="fmt">9:16</span></span></button>
+        </div>
+      </div>
+
+      <div class="peca-bloco">
+        <div>
+          <h3>Carreiras em E-sports</h3>
+          <span class="estado">1 formato · v03</span>
+          <span class="selo s-aj">Ajustes pedidos</span>
+        </div>
+        <div class="quadros">
+          <button class="quadro f916"><span class="still"><span class="fmt">9:16</span></span></button>
+          <span class="mais" style="border-style:solid">nova versão chega até 02/09</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="secao">
+      <span class="rotulo">Arquivos liberados</span>
+      <div class="arquivo"><span class="nm">Vídeos aprovados<span>9 arquivos · mp4</span></span><button class="baixar">Baixar tudo</button></div>
+      <div class="arquivo"><span class="nm">Roteiros<span>3 documentos</span></span><button class="baixar">Abrir</button></div>
+    </section>
+  </div>
+</main>
+
+<!-- ══ Projetos curtos ══ -->
+<main class="painel" id="resultados" hidden>
+  <div class="folha"><div class="cabeca-proj"><p class="rotulo">Projeto</p><h2>Divulgação de resultados</h2>
+    <div class="resumo-linha"><div><span class="v mono">03</span><span class="k">peças, todas aprovadas</span></div><div><span class="v mono">10/08</span><span class="k">entregue</span></div></div></div>
+    <section class="secao"><span class="rotulo">Entregas</span>
+      <div class="peca-bloco"><div><h3>Resultados 2º trimestre</h3><span class="estado">3 formatos · vFINAL</span><br><span class="selo s-ok">Aprovado por você</span></div>
+        <div class="quadros"><button class="quadro f169"><span class="still"><span class="fmt">16:9</span></span></button><button class="quadro f916"><span class="still"><span class="fmt">9:16</span></span></button><button class="quadro f11"><span class="still"><span class="fmt">1:1</span></span></button></div></div>
+    </section>
+    <section class="secao"><span class="rotulo">Arquivos liberados</span>
+      <div class="arquivo"><span class="nm">Vídeos aprovados<span>3 arquivos · mp4</span></span><button class="baixar">Baixar tudo</button></div></section>
+  </div>
+</main>
+
+<main class="painel" id="evento" hidden>
+  <div class="folha"><div class="cabeca-proj"><p class="rotulo">Projeto</p><h2>Cobertura de evento</h2>
+    <div class="resumo-linha"><div><span class="v mono">08</span><span class="k">etapas concluídas</span></div><div><span class="v mono">—</span><span class="k">nada para aprovar ainda</span></div></div></div>
+    <section class="secao"><span class="rotulo">Onde o projeto está</span>
+      <ul class="etapas">
+        <li class="etapa feita"><span class="q">Roteiro</span><span class="d">aprovado</span></li>
+        <li class="etapa feita"><span class="q">Captação</span><span class="d">07/08</span></li>
+        <li class="etapa agora"><span class="q">Edição</span><span class="d">em andamento</span></li>
+        <li class="etapa pendente"><span class="q">Sua revisão</span><span class="d">a seguir</span></li>
+        <li class="etapa pendente"><span class="q">Entrega final</span><span class="d">—</span></li>
+      </ul>
+    </section>
+    <section class="secao"><span class="rotulo">Entregas</span>
+      <p class="nota">Nada para ver ainda. Assim que o primeiro corte sair da edição, ele aparece aqui e você recebe um e-mail.</p></section>
+  </div>
+</main>
+
+<main class="painel" id="mensal" hidden>
+  <div class="folha"><div class="cabeca-proj"><p class="rotulo">Projeto mensal</p><h2>Educação · agosto</h2>
+    <div class="resumo-linha"><div><span class="v mono">06</span><span class="k">tarefas concluídas de 9</span></div><div><span class="v mono">06/08</span><span class="k">próxima entrega</span></div></div></div>
+    <section class="secao"><span class="rotulo">Onde o projeto está</span>
+      <ul class="etapas">
+        <li class="etapa feita"><span class="q">Pauta</span><span class="d">01/08</span></li>
+        <li class="etapa feita"><span class="q">Roteiro</span><span class="d">03/08</span></li>
+        <li class="etapa agora"><span class="q">Edição</span><span class="d">em andamento</span></li>
+        <li class="etapa pendente"><span class="q">Sua revisão</span><span class="d">a seguir</span></li>
+        <li class="etapa pendente"><span class="q">Entrega final</span><span class="d">06/08</span></li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<main class="painel" id="convencao" hidden>
+  <div class="folha"><div class="cabeca-proj"><p class="rotulo">Projeto</p><h2>Convenção Uniasselvi</h2>
+    <div class="resumo-linha"><div><span class="v mono">—</span><span class="k">começou esta semana</span></div></div></div>
+    <section class="secao"><p class="nota">O projeto acabou de abrir. Quando o roteiro estiver pronto para sua leitura, ele aparece aqui.</p></section>
+  </div>
+</main>
+
+<!-- ══ ATENDIMENTO ══ -->
+<main class="painel" id="atendimento" hidden>
+  <div class="folha">
+    <div class="cabeca-proj"><p class="rotulo">Atendimento</p><h2>Quem cuida<br>da sua conta</h2></div>
+    <section class="secao">
+      <div class="pessoa"><span class="rosto">A</span><span><span class="nm">Ariella</span><span class="fn">atendimento</span></span><a href="#">Escrever</a></div>
+      <div class="pessoa"><span class="rosto">C</span><span><span class="nm">Caio Rizzutti</span><span class="fn">direção</span></span><a href="#">Escrever</a></div>
+      <div class="pessoa"><span class="rosto">V</span><span><span class="nm">Vinícius Gimenez</span><span class="fn">produção</span></span><a href="#">Escrever</a></div>
+    </section>
+    <section class="secao">
+      <span class="rotulo">Financeiro</span>
+      <div class="arquivo"><span class="nm">Pagamentos em dia<span>próximo vencimento 05/09 · Uniasselvi</span></span><span class="selo s-ok" style="margin:0">Em dia</span></div>
+      <p class="nota" style="margin-top:12px">Sem valores por aqui: só a situação e a data. Para nota fiscal ou boleto, fale com a Ariella.</p>
+    </section>
+    <div class="rodape">
+      <span class="farol" style="width:9px;height:9px"></span>
+      <span class="rotulo">Produtora Lumos · portal de Vitru</span>
+    </div>
+  </div>
+</main>
+
+<script>
+  const abas = [...document.querySelectorAll('.aba')];
+  const mostrar = id => {
+    abas.forEach(a => a.setAttribute('aria-selected', String(a.dataset.p === id)));
+    document.querySelectorAll('.painel').forEach(p => { p.hidden = p.id !== id; });
+    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+  abas.forEach(a => a.addEventListener('click', () => mostrar(a.dataset.p)));
+  document.querySelectorAll('[data-ir]').forEach(l => l.addEventListener('click', () => mostrar(l.dataset.ir)));
+</script>
