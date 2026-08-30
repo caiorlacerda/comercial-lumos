@@ -127,6 +127,7 @@ import {
   Trash2,
   Columns,
   Layers,
+  Film,
   MoreVertical,
   User,
   PlusCircle,
@@ -213,6 +214,30 @@ export const STAGE_THEME: Record<string, { bar: string; text: string }> = {
   concluido: { bar: 'bg-green-500', text: 'text-green-500' },
 };
 export const stageTheme = (s: string) => STAGE_THEME[s] || { bar: 'bg-neutral-400', text: 'text-neutral-400' };
+
+/**
+ * Quantos vídeos a tarefa tem, ao lado do título.
+ *
+ * O número é de VÍDEOS (formatos): é isso que a tarefa entrega. As versões de
+ * cada formato são o histórico dele, e vão no tooltip — quem precisa dessa
+ * conta está olhando pra quantas idas e vindas aquilo teve, não pra quanto
+ * falta.
+ *
+ * Sem vídeo, não mostra nada: um "0" em toda tarefa que não é de vídeo (e são
+ * muitas) viraria ruído em cima do que importa.
+ */
+function ContagemDeVideos({ conta }: { conta?: { videos: number; versoes: number } }) {
+  if (!conta?.videos) return null;
+  const { videos, versoes } = conta;
+  return (
+    <span
+      title={`${videos} ${videos === 1 ? 'vídeo' : 'vídeos'} · ${versoes} ${versoes === 1 ? 'versão' : 'versões'} no total`}
+      className="inline-flex items-center gap-1 text-[9.5px] font-black text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-1.5 py-0.5 align-middle"
+    >
+      <Film className="w-2.5 h-2.5" />{videos}
+    </span>
+  );
+}
 
 export const getStatusDetails = (statusVal: string) => {
   for (const group of Object.values(TASK_STATUS_GROUPS)) {
@@ -839,6 +864,7 @@ export default function Projetos() {
    * 'all' mostra tudo, que é o padrão ao abrir: aba nenhuma esconde tarefa sem
    * a pessoa ter pedido. 'none' são as que ainda não foram pra lista nenhuma.
    */
+  const [videosPorTarefa, setVideosPorTarefa] = useState<Record<string, { videos: number; versoes: number }>>({});
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [listFilter, setListFilter] = useState<string>('all');
   const [listMenu, setListMenu] = useState<string | null>(null);
@@ -1195,8 +1221,34 @@ export default function Projetos() {
     }
   }
 
+  /**
+   * Quantos vídeos cada tarefa tem — o número que aparece ao lado do título.
+   *
+   * Conta VÍDEOS (formatos), não versões: a tarefa entrega o 16:9, o 9:16 e o
+   * 1:1, e as versões de cada um são o histórico dele. As duas contas ficam
+   * guardadas porque a segunda vira o tooltip, pra quem quiser saber quantas
+   * idas e vindas houve.
+   *
+   * Consulta de três colunas, sem miniatura: são poucos KB.
+   */
+  const contarVideosDoProjeto = async (projectId: string) => {
+    const { data, error } = await supabase.from('video_versions')
+      .select('id, group_id, task_id').eq('project_id', projectId).not('task_id', 'is', null);
+    if (error) { setVideosPorTarefa({}); return; }
+    const mapa: Record<string, { videos: Set<string>; versoes: number }> = {};
+    (data || []).forEach((v: any) => {
+      const alvo = (mapa[v.task_id] ||= { videos: new Set(), versoes: 0 });
+      alvo.videos.add(v.group_id || v.id);
+      alvo.versoes++;
+    });
+    setVideosPorTarefa(Object.fromEntries(
+      Object.entries(mapa).map(([id, x]) => [id, { videos: x.videos.size, versoes: x.versoes }]),
+    ));
+  };
+
   const fetchProjectTasks = async (projectId: string, silent = false) => {
     if (!silent) setTasksLoading(true);
+    void contarVideosDoProjeto(projectId);
     try {
       // As listas do projeto. Se a migration ainda não rodou, a consulta falha
       // e a aba segue funcionando sem listas — ninguém fica sem ver tarefa.
@@ -2865,8 +2917,10 @@ export default function Projetos() {
                                           {task.titulo}
                                         </span>
                                       )}
-                                      {(taskTags[task.id]?.length ?? 0) > 0 && (
-                                        <div className="flex flex-wrap gap-1 mt-1">
+                                      {/* Linha de metadados: quantos vídeos e as tags. */}
+                                      {((taskTags[task.id]?.length ?? 0) > 0 || videosPorTarefa[task.id]) && (
+                                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                                          <ContagemDeVideos conta={videosPorTarefa[task.id]} />
                                           {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR')).map(t => <TagChip key={t!.id} tag={t!} small />)}
                                         </div>
                                       )}
@@ -3033,8 +3087,9 @@ export default function Projetos() {
                                     <span className={clsx('font-semibold text-sm text-lumos-text-primary', isTaskCompleted && 'line-through text-lumos-text-secondary/50')}>
                                       {task.titulo}
                                     </span>
-                                    {tags.length > 0 && (
-                                      <div className="flex flex-wrap gap-1 mt-1">
+                                    {(tags.length > 0 || videosPorTarefa[task.id]) && (
+                                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                                        <ContagemDeVideos conta={videosPorTarefa[task.id]} />
                                         {tags.map(t => <TagChip key={t!.id} tag={t!} small />)}
                                       </div>
                                     )}
