@@ -84,10 +84,10 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   const [busy, setBusy] = useState(false);
   const [reviewModal, setReviewModal] = useState<{ versionId: string; token: string; fileName: string; versao: number; version: Version } | null>(null);
   const [enviando, setEnviando] = useState<{ nome: string; pct: number } | null>(null);
-  const [menuAberto, setMenuAberto] = useState(false);
+  const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
   const [excluindo, setExcluindo] = useState(false);
-  const [thumb, setThumb] = useState<string | null>(null);
+  const [thumbs, setThumbs] = useState<Record<string, string | null>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const agrupar = useCallback((vs: Version[]) => {
@@ -114,20 +114,28 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
    * card, não motivo pra tela ficar vazia.
    */
   const completar = useCallback(async (gs: Group[]) => {
-    const meu = gs.find(g => g.current.task_id === task.id);
-    if (!meu) return;
-    const ids = meu.versions.map(v => v.id);
+    const meus = gs.filter(g => g.current.task_id === task.id);
+    if (!meus.length) return;
+    const ids = meus.flatMap(g => g.versions.map(v => v.id));
     supabase.from('review_comments').select('video_version_id').in('video_version_id', ids)
       .then(({ data: cs }) => {
         const map: Record<string, number> = {};
         (cs || []).forEach((c: any) => { map[c.video_version_id] = (map[c.video_version_id] || 0) + 1; });
         setCounts(map);
       });
-    const alvo = meu.current.id;
-    if (cacheThumb.has(alvo)) { setThumb(cacheThumb.get(alvo) ?? null); return; }
-    const { data: t } = await supabase.from('video_versions').select('thumb_url').eq('id', alvo).maybeSingle();
-    cacheThumb.set(alvo, (t as any)?.thumb_url ?? null);
-    setThumb((t as any)?.thumb_url ?? null);
+    const alvos = meus.map(g => g.current.id);
+    const doCache = alvos.filter(id => cacheThumb.has(id));
+    if (doCache.length) {
+      setThumbs(prev => ({ ...prev, ...Object.fromEntries(doCache.map(id => [id, cacheThumb.get(id) ?? null])) }));
+    }
+    const faltando = alvos.filter(id => !cacheThumb.has(id));
+    if (!faltando.length) return;
+    const { data: ts } = await supabase.from('video_versions').select('id, thumb_url').in('id', faltando);
+    const novo: Record<string, string | null> = {};
+    faltando.forEach(id => { novo[id] = null; });
+    (ts || []).forEach((t: any) => { novo[t.id] = t.thumb_url ?? null; });
+    Object.entries(novo).forEach(([id, url]) => cacheThumb.set(id, url));
+    setThumbs(prev => ({ ...prev, ...novo }));
   }, [task.id]);
 
   const load = useCallback(async (forcar = false) => {
@@ -153,8 +161,16 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  const linked = groups.find(g => g.current.task_id === task.id);
-  const livres = groups.filter(g => !g.current.task_id || g.current.task_id === task.id);
+  /**
+   * TODOS os vídeos desta tarefa, não só o primeiro.
+   *
+   * A mesma peça costuma sair em 16:9, 9:16 e 1:1, e às vezes em mais formatos.
+   * O banco já aceitava vários (cada vídeo guarda o task_id dele); era a tela
+   * que mostrava um só — então o segundo formato ficava invisível aqui, mesmo
+   * vinculado, e a pessoa achava que não tinha subido.
+   */
+  const vinculados = groups.filter(g => g.current.task_id === task.id);
+  const livres = groups.filter(g => !g.current.task_id);
 
   const link = async (groupId: string) => {
     if (!groupId) return;
@@ -179,10 +195,9 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     recarregar();
   };
 
-  const unlink = async () => {
-    if (!linked) return;
+  const unlink = async (g: Group) => {
     setBusy(true);
-    const { error } = await supabase.from('video_versions').update({ task_id: null }).eq('group_id', linked.id);
+    const { error } = await supabase.from('video_versions').update({ task_id: null }).eq('group_id', g.id);
     setBusy(false);
     if (error) { toast.error('Não foi possível desvincular.'); return; }
     toast.success('Vídeo desvinculado.');
@@ -197,17 +212,16 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
    * Mesma função do painel de Entregas, pra não existirem dois jeitos de apagar
    * a mesma coisa.
    */
-  const excluir = async () => {
-    if (!linked) return;
-    const quantas = linked.versions.length;
+  const excluir = async (g: Group) => {
+    const quantas = g.versions.length;
     const aviso = quantas > 1
-      ? `Excluir "${linked.current.file_name}" e as ${quantas} versões dele? O arquivo vai pra lixeira do Drive.`
-      : `Excluir "${linked.current.file_name}"? O arquivo vai pra lixeira do Drive.`;
+      ? `Excluir "${g.current.file_name}" e as ${quantas} versões dele? O arquivo vai pra lixeira do Drive.`
+      : `Excluir "${g.current.file_name}"? O arquivo vai pra lixeira do Drive.`;
     if (!await confirm({ title: 'Excluir vídeo', message: aviso, confirmLabel: 'Excluir', danger: true })) return;
-    setMenuAberto(false); setExcluindo(true);
+    setMenuAberto(null); setExcluindo(true);
     try {
       const { error } = await supabase.functions.invoke('drive-delete', {
-        body: { version_ids: linked.versions.map(v => v.id) },
+        body: { version_ids: g.versions.map(v => v.id) },
       });
       if (error) throw error;
       toast.success('Vídeo excluído ✓');
@@ -297,7 +311,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   // Some só pra quem não pode fazer nada aqui. Antes sumia quando não havia
   // vídeo pra vincular — e era justamente o caso em que a pessoa precisa
   // ENVIAR o dela.
-  if (!linked && !canManage) return null;
+  if (!vinculados.length && !canManage) return null;
 
   return (
     <>
@@ -305,28 +319,32 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
       <div className="space-y-2">
         <span className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Revisão de vídeo</span>
 
-        {linked ? (
-          <div className="flex items-center gap-2 p-2.5 rounded-lumos border border-lumos-border bg-lumos-bg/40">
-            <VideoThumb src={thumb} className="w-16 aspect-video rounded flex-shrink-0" iconSize="w-6 h-6" />
+        {/* Um card por vídeo da tarefa. A mesma peça sai em 16:9, 9:16 e 1:1,
+            e cada formato é um vídeo com a própria revisão e os próprios
+            comentários — juntar tudo num card só esconderia dois terços do
+            trabalho. */}
+        {vinculados.map(g => (
+          <div key={g.id} className="flex items-center gap-2 p-2.5 rounded-lumos border border-lumos-border bg-lumos-bg/40">
+            <VideoThumb src={thumbs[g.current.id]} className="w-16 aspect-video rounded flex-shrink-0" iconSize="w-6 h-6" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-mono font-black text-lumos-text-secondary">v{String(linked.current.versao).padStart(2, '0')}</span>
-                <span className="text-xs font-bold text-lumos-text-primary truncate">{linked.current.file_name}</span>
+                <span className="text-[11px] font-mono font-black text-lumos-text-secondary">v{String(g.current.versao).padStart(2, '0')}</span>
+                <span className="text-xs font-bold text-lumos-text-primary truncate">{g.current.file_name}</span>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={clsx('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', STATUS_UI[linked.current.status].color)}>
-                  {STATUS_UI[linked.current.status].label}
+                <span className={clsx('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', STATUS_UI[g.current.status].color)}>
+                  {STATUS_UI[g.current.status].label}
                 </span>
-                {(counts[linked.current.id] || 0) > 0 && (
+                {(counts[g.current.id] || 0) > 0 && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-lumos-text-secondary">
-                    <MessageSquare className="w-3 h-3" />{counts[linked.current.id]}
+                    <MessageSquare className="w-3 h-3" />{counts[g.current.id]}
                   </span>
                 )}
               </div>
             </div>
             <button
               type="button"
-              onClick={() => openReview(linked)}
+              onClick={() => openReview(g)}
               disabled={busy}
               title="Abrir revisão"
               className="btn-primary h-8 px-3 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest rounded-lumos disabled:opacity-50"
@@ -337,19 +355,19 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setMenuAberto(o => !o)}
+                  onClick={() => setMenuAberto(m => (m === g.id ? null : g.id))}
                   disabled={busy || excluindo}
                   title="Opções"
                   className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors disabled:opacity-50"
                 >
                   {excluindo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MoreVertical className="w-3.5 h-3.5" />}
                 </button>
-                {menuAberto && (
+                {menuAberto === g.id && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setMenuAberto(false)} />
+                    <div className="fixed inset-0 z-40" onClick={() => setMenuAberto(null)} />
                     <div className="absolute right-0 top-8 z-50 w-52 py-1 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl">
                       <button type="button"
-                        onClick={() => { setMenuAberto(false); unlink(); }}
+                        onClick={() => { setMenuAberto(null); unlink(g); }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10">
                         <Unlink className="w-3.5 h-3.5" /> Desvincular da tarefa
                       </button>
@@ -357,7 +375,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
                           Entregas. Excluir tira do ar de vez. São coisas bem
                           diferentes, então o texto diz o que cada uma faz. */}
                       <button type="button"
-                        onClick={excluir}
+                        onClick={() => excluir(g)}
                         className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-red-400 hover:bg-red-500/10">
                         <Trash2 className="w-3.5 h-3.5" /> Excluir vídeo
                       </button>
@@ -367,7 +385,10 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
               </div>
             )}
           </div>
-        ) : enviando ? (
+        ))}
+
+        {enviando ? (
+
           <div className="p-2.5 rounded-lumos border border-lumos-border bg-lumos-bg/40">
             <div className="flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow flex-shrink-0" />
@@ -383,14 +404,16 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
         ) : (
           <div className="space-y-2">
             {/* Enviar direto daqui: o vídeo já nasce ligado a esta tarefa, e a
-                tarefa entra em revisão interna sozinha. */}
+                tarefa entra em revisão interna sozinha. Continua à mão mesmo
+                com vídeo vinculado — é assim que entram o 9:16 e o 1:1 depois
+                do 16:9. Aceita vários arquivos de uma vez. */}
             <input ref={inputRef} type="file" accept="video/*" multiple className="hidden"
               onChange={e => { enviarArquivos(e.target.files); e.currentTarget.value = ''; }} />
             <button type="button" onClick={() => inputRef.current?.click()}
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); enviarArquivos(e.dataTransfer.files); }}
               className="w-full h-9 rounded-lumos border border-dashed border-lumos-border hover:border-lumos-yellow/60 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center gap-2 transition-colors">
-              <Upload className="w-3.5 h-3.5" /> Enviar vídeo desta tarefa
+              <Upload className="w-3.5 h-3.5" /> {vinculados.length ? 'Enviar outro formato' : 'Enviar vídeo desta tarefa'}
             </button>
 
             {livres.length > 0 && (
@@ -401,7 +424,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
                   onChange={link}
                   className="input-lumos h-8 text-[11px] py-0 flex-1"
                   options={[
-                    { value: '', label: 'ou vincular um vídeo já enviado…' },
+                    { value: '', label: vinculados.length ? 'ou vincular outro já enviado…' : 'ou vincular um vídeo já enviado…' },
                     ...livres.map(g => ({
                       value: g.id,
                       label: `v${String(g.current.versao).padStart(2, '0')} · ${g.current.file_name}`,
