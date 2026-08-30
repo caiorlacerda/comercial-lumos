@@ -41,6 +41,16 @@ interface Portal {
   atividade: { tipo: string; projeto: string; file_name: string; decisao?: string; quem?: string; versao?: number; quando: string }[];
 }
 
+/** A agenda de diárias de um projeto: calendário, gravações marcadas, pacote
+ *  do mês e os pedidos em aberto. Vem inteira de `portal_agenda`. */
+interface Agenda {
+  antecedencia_dias: number;
+  dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo' }[];
+  agendadas: { nome: string; data: string; hora_inicio: string | null; hora_fim: string | null; local: string | null }[];
+  pacote: { meta: number; realizado: number } | null;
+  pedidos: { id: string; data_desejada: string; estado: string; motivo_recusa: string | null; fora_do_pacote: boolean; descricao: string }[];
+}
+
 /** As quatro abas de dentro de um projeto. */
 type AbaProjeto = 'geral' | 'entregas' | 'diarias' | 'arquivos';
 const ABAS_PROJETO: readonly AbaProjeto[] = ['geral', 'entregas', 'diarias', 'arquivos'];
@@ -60,7 +70,35 @@ const MARCOS = [
   { chave: 'entrega', label: 'Entrega final', status: ['concluido', 'entregue'] },
 ];
 
+/** Como o cliente lê o estado de um pedido de diária. */
+const ESTADO_PEDIDO: Record<string, { label: string; classe: string }> = {
+  pendente: { label: 'Esperando a Lumos', classe: 's-prod' },
+  aceito: { label: 'Aceito', classe: 's-ok' },
+  recusado: { label: 'Recusado', classe: 's-aj' },
+  cancelado: { label: 'Cancelado', classe: 's-prod' },
+};
+
+/** Motivo de recusa de `portal_pedir_diaria` e `portal_cancelar_pedido`, em
+ *  português direto. Código que a função não devolve nunca (ou que a IA não
+ *  previu) cai no genérico: botão que não responde é pior que aviso vago. */
+const MOTIVOS: Record<string, string> = {
+  cedo: 'Esta data é cedo demais. Escolha um dia com mais folga.',
+  dia_ocupado: 'Este dia acabou de ser ocupado. Escolha outro.',
+  dia_bloqueado: 'Este dia não está disponível.',
+  repetido: 'Você já tem um pedido em aberto para este dia.',
+  sem_descricao: 'Conte o que precisa gravar.',
+  sem_nome: 'Diga seu nome e seu e-mail.',
+  sem_acesso: 'Este projeto não está disponível para você.',
+};
+const MOTIVO_GENERICO = 'Não foi possível fazer isso agora. Tente de novo em instantes.';
+const motivoPedido = (erro: string) => MOTIVOS[erro] || MOTIVO_GENERICO;
+/** Cancelar tem seu próprio `sem_acesso`: aqui não é "projeto indisponível",
+ *  é "este pedido não é seu" (portal com login, pedido de outra pessoa). */
+const motivoCancelar = (erro: string) =>
+  erro === 'sem_acesso' ? 'Este pedido é de outra pessoa.' : (MOTIVOS[erro] || MOTIVO_GENERICO);
+
 const NOME_SALVO = 'rev_nome';
+const EMAIL_SALVO = 'rev_email';
 
 const Sol = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -138,6 +176,61 @@ const formato = (l: number | null, a: number | null) => {
   if (r < 1.2) return { classe: 'f11', rotulo: '1:1' };
   return { classe: 'f169', rotulo: '16:9' };
 };
+
+const SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
+  'julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function Calendario({ dias, escolhido, onEscolher }: {
+  dias: { data: string; estado: string }[];
+  escolhido: string | null;
+  onEscolher: (d: string) => void;
+}) {
+  // Agrupa por mês na ordem em que vieram: o banco já mandou ordenado, e
+  // reordenar aqui só criaria uma segunda fonte da mesma verdade.
+  const meses: { chave: string; titulo: string; dias: typeof dias }[] = [];
+  dias.forEach(d => {
+    const chave = d.data.slice(0, 7);
+    let m = meses.find(x => x.chave === chave);
+    if (!m) {
+      const [ano, mes] = chave.split('-');
+      m = { chave, titulo: `${MES_NOME[Number(mes) - 1]} de ${ano}`, dias: [] };
+      meses.push(m);
+    }
+    m.dias.push(d);
+  });
+
+  return (
+    <>
+      {meses.map(m => {
+        // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
+        // anterior, e o calendário inteiro anda uma casa.
+        const vazios = new Date(m.dias[0].data + 'T12:00:00').getDay();
+        return (
+          <div key={m.chave} className="mes">
+            <span className="rotulo">{m.titulo}</span>
+            <div className="calend">
+              {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
+              {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
+              {m.dias.map(d => {
+                const livre = d.estado === 'livre';
+                return (
+                  <button key={d.data} type="button" disabled={!livre}
+                    className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
+                    title={livre ? 'Pedir esta data'
+                      : d.estado === 'cedo' ? 'Cedo demais para pedir' : 'Indisponível'}
+                    onClick={() => onEscolher(d.data)}>
+                    {Number(d.data.slice(8, 10))}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 export default function PortalCliente() {
   const { token = '' } = useParams();
@@ -299,6 +392,95 @@ export default function PortalCliente() {
     };
   }, [dados]);
 
+  // Calculado aqui (e não perto do JSX) porque a aba Diárias precisa dele
+  // pra buscar a agenda, e hook não pode vir depois de um retorno condicional.
+  const projetoAberto = dados?.projetos.find(p => p.id === aba) || null;
+
+  // ── Diárias: agenda do projeto aberto ──────────────────────────────
+  const [agenda, setAgenda] = useState<Agenda | null>(null);
+  const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+
+  // Só quando a aba abre: a maioria das visitas não vai ao calendário, e ele
+  // custa 90 dias de consulta.
+  useEffect(() => {
+    if (abaProj !== 'diarias' || !projetoAberto) return;
+    let vivo = true;
+    setCarregandoAgenda(true);
+    supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id })
+      .then(({ data }) => { if (vivo) { setAgenda(data as Agenda); setCarregandoAgenda(false); } });
+    return () => { vivo = false; };
+  }, [abaProj, projetoAberto?.id, token]);
+
+  const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
+  const [pedDescricao, setPedDescricao] = useState('');
+  const [pedLocal, setPedLocal] = useState('');
+  const [pedDuracao, setPedDuracao] = useState(10);
+  const [pedNome, setPedNome] = useState(nome);
+  const [pedEmail, setPedEmail] = useState(() => {
+    try { return localStorage.getItem(EMAIL_SALVO) || ''; } catch { return ''; }
+  });
+  const [enviandoPedido, setEnviandoPedido] = useState(false);
+  const [erroPedido, setErroPedido] = useState<string | null>(null);
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
+  const [erroCancelar, setErroCancelar] = useState<string | null>(null);
+
+  // Trocou de data, de aba ou de projeto: o aviso da tentativa anterior não
+  // vale mais.
+  useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
+  useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
+
+  const exigeLogin = !!dados?.portal.exige_login;
+
+  const enviarPedido = useCallback(async () => {
+    if (!projetoAberto || !dataEscolhida || enviandoPedido) return;
+    setEnviandoPedido(true);
+    setErroPedido(null);
+    const { data } = await supabase.rpc('portal_pedir_diaria', {
+      p_token: token,
+      p_project_id: projetoAberto.id,
+      p_data: dataEscolhida,
+      p_duracao: pedDuracao,
+      p_local: pedLocal.trim() || null,
+      p_descricao: pedDescricao,
+      p_nome: exigeLogin ? null : pedNome,
+      p_email: exigeLogin ? null : pedEmail,
+    });
+    const falha = (data as any)?.error;
+    if (falha) {
+      setErroPedido(motivoPedido(falha));
+      setEnviandoPedido(false);
+      return;
+    }
+    if (!exigeLogin) {
+      try {
+        localStorage.setItem(NOME_SALVO, pedNome.trim());
+        localStorage.setItem(EMAIL_SALVO, pedEmail.trim());
+      } catch { /* ignore */ }
+    }
+    setPedDescricao('');
+    setPedLocal('');
+    setDataEscolhida(null);
+    setEnviandoPedido(false);
+    const { data: nova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
+    setAgenda(nova as Agenda);
+  }, [token, projetoAberto, dataEscolhida, enviandoPedido, pedDuracao, pedLocal, pedDescricao, exigeLogin, pedNome, pedEmail]);
+
+  const cancelarPedido = useCallback(async (id: string) => {
+    if (!projetoAberto || cancelandoId) return;
+    setCancelandoId(id);
+    setErroCancelar(null);
+    const { data } = await supabase.rpc('portal_cancelar_pedido', { p_token: token, p_pedido_id: id });
+    const falha = (data as any)?.error;
+    if (falha) {
+      setErroCancelar(motivoCancelar(falha));
+      setCancelandoId(null);
+      return;
+    }
+    setCancelandoId(null);
+    const { data: nova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
+    setAgenda(nova as Agenda);
+  }, [token, projetoAberto, cancelandoId]);
+
   if (erro) {
     return (
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
@@ -419,7 +601,6 @@ export default function PortalCliente() {
     );
   }
 
-  const projetoAberto = dados.projetos.find(p => p.id === aba) || null;
   const blocos = dados.portal.blocks || {};
 
   return (
@@ -751,9 +932,122 @@ export default function PortalCliente() {
             )}
 
             {abaProj === 'diarias' && (
-              <section className="secao">
-                <p className="nota">O calendário de diárias chega em seguida.</p>
-              </section>
+              <>
+                {agenda?.pacote && (
+                  <section className="secao">
+                    <span className="rotulo">Suas diárias neste mês</span>
+                    <div className="proj" style={{ cursor: 'default' }}>
+                      <span><span className="nome">Diárias do pacote</span></span>
+                      <span className="barra">
+                        <i className={agenda.pacote.realizado >= agenda.pacote.meta ? 'b-ok' : 'b-voce'}
+                          style={{ width: `${Math.min(100, (agenda.pacote.realizado / agenda.pacote.meta) * 100)}%` }} />
+                      </span>
+                      <span className="contagem">{agenda.pacote.realizado} de {agenda.pacote.meta}</span>
+                    </div>
+                  </section>
+                )}
+
+                <section className="secao">
+                  <span className="rotulo">Gravações marcadas</span>
+                  {!agenda?.agendadas.length ? (
+                    <p className="nota">Nenhuma gravação marcada por enquanto.</p>
+                  ) : agenda.agendadas.map((g, i) => (
+                    <div key={i} className="arquivo">
+                      <span className="nm">{g.nome}<span>{dia(g.data)}{g.hora_inicio ? `, ${g.hora_inicio.slice(0,5)}` : ''}{g.local ? `, ${g.local}` : ''}</span></span>
+                    </div>
+                  ))}
+                </section>
+
+                <section className="secao">
+                  <span className="rotulo">Pedir uma data</span>
+                  {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
+
+                  {!carregandoAgenda && dataEscolhida && (
+                    <div className="pedido-form">
+                      <p className="rotulo" style={{ marginTop: 22 }}>Pedido para {dia(dataEscolhida)}</p>
+
+                      <label>
+                        <span className="rotulo">O que precisa gravar</span>
+                        <textarea className="campo area" rows={3} value={pedDescricao}
+                          onChange={e => setPedDescricao(e.target.value)}
+                          placeholder="Ex.: depoimento do cliente X, sala de reunião" />
+                      </label>
+
+                      <div className="pedido-linha">
+                        <label>
+                          <span className="rotulo">Onde</span>
+                          <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
+                            placeholder="Endereço ou local (opcional)" />
+                        </label>
+                        <label>
+                          <span className="rotulo">Duração</span>
+                          <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
+                            <option value={6}>6 horas</option>
+                            <option value={10}>10 horas</option>
+                            <option value={12}>12 horas</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      {!exigeLogin && (
+                        <div className="pedido-linha">
+                          <label>
+                            <span className="rotulo">Seu nome</span>
+                            <input className="campo" value={pedNome} onChange={e => setPedNome(e.target.value)} placeholder="Seu nome" />
+                          </label>
+                          <label>
+                            <span className="rotulo">Seu e-mail</span>
+                            <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
+                          </label>
+                        </div>
+                      )}
+
+                      {agenda?.pacote && agenda.pacote.realizado >= agenda.pacote.meta && (
+                        <p className="nota alerta">
+                          Esta seria a {agenda.pacote.realizado + 1}ª diária de {agenda.pacote.meta} no mês.
+                          Ela entra como extra, e a Lumos vai orçar antes de confirmar.
+                        </p>
+                      )}
+
+                      {erroPedido && <p className="nota alerta">{erroPedido}</p>}
+
+                      <button type="button" className="botao" style={{ marginTop: 4 }}
+                        disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
+                        onClick={enviarPedido}>
+                        {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
+                      </button>
+                    </div>
+                  )}
+                </section>
+
+                <section className="secao">
+                  <span className="rotulo">Seus pedidos</span>
+                  {!agenda?.pedidos.length ? (
+                    <p className="nota">Nenhum pedido feito por aqui ainda.</p>
+                  ) : agenda.pedidos.map(p => {
+                    const est = ESTADO_PEDIDO[p.estado] || { label: p.estado, classe: 's-prod' };
+                    return (
+                      <div key={p.id} className="arquivo">
+                        <span className="nm">
+                          {p.descricao}
+                          <span>
+                            {dia(p.data_desejada)}
+                            {p.estado === 'recusado' && p.motivo_recusa ? `, ${p.motivo_recusa}` : ''}
+                          </span>
+                        </span>
+                        <span className={`selo ${est.classe}`} style={{ margin: 0 }}>{est.label}</span>
+                        {p.estado === 'pendente' && (
+                          <button type="button" className="baixar" disabled={cancelandoId === p.id}
+                            onClick={() => cancelarPedido(p.id)}>
+                            {cancelandoId === p.id ? 'Cancelando…' : 'Cancelar'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {erroCancelar && <p className="nota alerta">{erroCancelar}</p>}
+                </section>
+              </>
             )}
 
             {abaProj === 'arquivos' && blocos.arquivos !== false && projetoAberto.arquivos.length > 0 && (

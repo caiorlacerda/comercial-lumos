@@ -274,6 +274,27 @@ export const PORTAL_CSS = String.raw`
     font-size: 13px; letter-spacing: .04em; text-transform: uppercase;
   }
   .botao:disabled { opacity: .4; cursor: default; }
+  .nota.alerta { color: var(--ajuste); }
+
+  /* ── Diárias: calendário e pedido ─────────────────────────── */
+  .mes + .mes { margin-top: 26px; }
+  .calend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
+  .calend .dia { aspect-ratio: 1; display: grid; place-items: center; border-radius: 8px;
+    font-family: "DM Mono", monospace; font-size: 12px; border: 1px solid transparent; }
+  .calend .dia.livre { background: rgba(255,247,230,.05); color: var(--gesso); cursor: pointer; }
+  .calend .dia.livre:hover { border-color: var(--luz); color: var(--luz); }
+  .calend .dia.escolhido { background: var(--luz); color: #14110b; font-weight: 700; }
+  .calend .dia.ocupado, .calend .dia.bloqueado { color: var(--meia-luz); opacity: .38; }
+  .calend .dia.cedo { color: var(--meia-luz); opacity: .22; }
+  .calend .cab { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--meia-luz); }
+
+  .pedido-form { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; max-width: 480px; }
+  .pedido-form label { display: block; }
+  .pedido-form label > .rotulo { display: block; margin-bottom: 6px; }
+  .pedido-linha { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 480px) { .pedido-linha { grid-template-columns: 1fr 1fr; } }
+  .campo.area { height: auto; padding: 10px 14px; resize: vertical; font-family: inherit; }
+  select.campo { cursor: pointer; }
   /* Aba de projeto tem nome comprido: não deixa a fita virar parede de texto. */
   .aba { max-width: 210px; overflow: hidden; }
   .aba > :first-child { overflow: hidden; text-overflow: ellipsis; }
