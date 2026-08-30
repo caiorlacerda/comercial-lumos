@@ -56,6 +56,14 @@ const MARCOS = [
 
 const NOME_SALVO = 'rev_nome';
 
+/** Setinha do menu, virada quando ele está aberto. */
+const ChevronDown = ({ aberto }: { aberto: boolean }) => (
+  <svg className={aberto ? 'seta virada' : 'seta'} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
 /**
  * DE ONDE A PESSOA VEIO.
  *
@@ -103,6 +111,7 @@ export default function PortalCliente() {
    */
   const [capas, setCapas] = useState<Record<string, string | null>>({});
   const [digitando, setDigitando] = useState('');
+  const [menuProjetos, setMenuProjetos] = useState(false);
 
   // As fontes do portal não são as do app: entram só aqui.
   useEffect(() => {
@@ -241,32 +250,63 @@ export default function PortalCliente() {
     <div className="portal-lumos">
       <style>{PORTAL_CSS}</style>
 
+      {/* Cabeçalho em uma linha só: marca à esquerda, navegação no meio,
+          quem está vendo à direita. Os projetos saíram da fita e viraram um
+          menu — com sete abas abertas, a fita virava parede de texto e o
+          Atendimento sumia no fim da rolagem. */}
       <header className="topo">
-        <span className="marca"><img className="logotipo" src={LOGO_LUMOS} alt="Produtora Lumos" /></span>
-        <span className="cliente">Portal de <b>{dados.cliente.nome}</b></span>
+        <span className="marca">
+          <img className="logotipo" src={LOGO_LUMOS} alt="Produtora Lumos" />
+          <span className="cliente">Portal de <b>{dados.cliente.nome}</b></span>
+        </span>
+
+        <nav className="navegacao" aria-label="Seções">
+          <button type="button" className="link" aria-current={aba === 'inicio'}
+            onClick={() => setAba('inicio')}>
+            Início {esperando.length > 0 && <span className="n">{esperando.length}</span>}
+          </button>
+
+          <span className="menu-abre">
+            <button type="button" className="link" aria-haspopup="menu" aria-expanded={menuProjetos}
+              aria-current={!!projetoAberto}
+              onClick={() => setMenuProjetos(o => !o)}>
+              {projetoAberto ? projetoAberto.nome.trim() : 'Projetos'}
+              <ChevronDown aberto={menuProjetos} />
+            </button>
+            {menuProjetos && (
+              <>
+                <span className="fora" onClick={() => setMenuProjetos(false)} />
+                <span className="menu" role="menu">
+                  {dados.projetos.map(p => {
+                    const n = p.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE').length;
+                    return (
+                      <button key={p.id} role="menuitem" type="button"
+                        className={p.id === aba ? 'item atual' : 'item'}
+                        onClick={() => { setAba(p.id); setMenuProjetos(false); }}>
+                        <span className="rot">{p.nome.trim()}</span>
+                        {n > 0 ? <span className="n">{n}</span>
+                          : <span className="calmo">{p.entregas.length ? 'em dia' : '—'}</span>}
+                      </button>
+                    );
+                  })}
+                  {!dados.projetos.length && <span className="item calmo">Nenhum projeto por aqui ainda.</span>}
+                </span>
+              </>
+            )}
+          </span>
+
+          <button type="button" className="link" aria-current={aba === 'atendimento'}
+            onClick={() => setAba('atendimento')}>
+            Atendimento
+          </button>
+        </nav>
+
         <span className="quem">
           <span className="rosto">{nome.trim().charAt(0).toUpperCase()}</span>
-          <span>Você é <b>{nome}</b></span>
+          <span className="so-grande">Você é <b>{nome}</b></span>
           <button className="trocar" onClick={() => { localStorage.removeItem(NOME_SALVO); setNome(''); setDigitando(''); }}>trocar</button>
         </span>
       </header>
-
-      <nav className="fita" role="tablist" aria-label="Projetos">
-        <button className="aba" role="tab" aria-selected={aba === 'inicio'} onClick={() => setAba('inicio')}>
-          Início {esperando.length > 0 && <span className="n">{esperando.length}</span>}
-        </button>
-        {dados.projetos.map(p => {
-          const n = p.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE').length;
-          return (
-            <button key={p.id} className="aba" role="tab" aria-selected={aba === p.id} onClick={() => setAba(p.id)}>
-              {p.nome.trim()} {n > 0 && <span className="n">{n}</span>}
-            </button>
-          );
-        })}
-        <button className="aba" role="tab" aria-selected={aba === 'atendimento'} onClick={() => setAba('atendimento')}>
-          Atendimento
-        </button>
-      </nav>
 
       {/* ── INÍCIO ─────────────────────────────────────────────── */}
       {aba === 'inicio' && (
