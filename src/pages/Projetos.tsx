@@ -4148,7 +4148,6 @@ export default function Projetos() {
           projectName={selectedProject.name}
           clientId={selectedProject.client_id ?? null}
           clientName={clients.find(c => c.id === selectedProject.client_id)?.name || ''}
-          portalVisivel={(selectedProject as any).portal_visivel !== false}
           open={portalOpen}
           onClose={() => setPortalOpen(false)}
           teamUsers={teamUsers}

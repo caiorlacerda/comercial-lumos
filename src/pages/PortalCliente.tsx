@@ -85,6 +85,12 @@ export default function PortalCliente() {
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<string>('inicio');
   const [nome, setNome] = useState(() => localStorage.getItem(NOME_SALVO) || '');
+  /**
+   * Capas dos quadros, buscadas DEPOIS e só das que estão na tela.
+   * A imagem mora dentro da linha do vídeo: mandar todas junto seriam 3,3 MB
+   * antes de a tela aparecer.
+   */
+  const [capas, setCapas] = useState<Record<string, string | null>>({});
   const [digitando, setDigitando] = useState('');
 
   // As fontes do portal não são as do app: entram só aqui.
@@ -106,11 +112,43 @@ export default function PortalCliente() {
   }, [token]);
   useEffect(() => { carregar(); }, [carregar]);
 
+  /** Pede as capas dos quadros que a aba atual mostra, em blocos pequenos. */
+  const pedirCapas = useCallback(async (tokens: string[]) => {
+    const faltando = [...new Set(tokens.filter(t => t && !(t in capas)))];
+    if (!faltando.length) return;
+    // Marca como pedidas antes de ir, pra não pedir duas vezes o mesmo quadro.
+    setCapas(prev => ({ ...prev, ...Object.fromEntries(faltando.map(t => [t, null])) }));
+    for (let i = 0; i < faltando.length; i += 6) {
+      const lote = faltando.slice(i, i + 6);
+      const { data } = await supabase.rpc('portal_capas', { p_token: token, p_review_tokens: lote });
+      if (data?.length) {
+        setCapas(prev => ({ ...prev, ...Object.fromEntries((data as any[]).map(r => [r.review_token, r.capa])) }));
+      }
+    }
+  }, [token, capas]);
+
   const esperando = useMemo(() => {
     if (!dados) return [];
     return dados.projetos.flatMap(p =>
       p.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE').map(e => ({ ...e, projeto: p.nome })));
   }, [dados]);
+
+  // Aba trocou: volta pro topo e pede as capas dos quadros que ela mostra.
+  // Sem o topo, trocar de aba caía no meio da página anterior.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }, [aba]);
+
+  useEffect(() => {
+    if (!dados) return;
+    if (aba === 'inicio') {
+      pedirCapas(esperando.slice(0, 5).map(e => e.review_token || ''));
+      return;
+    }
+    const p = dados.projetos.find(x => x.id === aba);
+    if (p) pedirCapas(p.entregas.map(e => e.review_token || ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, dados]);
 
   const total = useMemo(() => {
     const todas = (dados?.projetos || []).flatMap(p => p.entregas);
@@ -230,6 +268,9 @@ export default function PortalCliente() {
                       href={e.review_token ? `/revisao/${e.review_token}` : undefined}
                       title={`${nomeBonito(e.file_name)} · v${String(e.versao).padStart(2, '0')} · ${e.projeto}`}>
                       <span className="still">
+                        {e.review_token && capas[e.review_token] && (
+                          <img className="foto" src={capas[e.review_token]!} alt="" loading="lazy" />
+                        )}
                         <span className="fmt">{f.rotulo}</span>
                         <span className="legenda">
                           <span className="peca">{nomeBonito(e.file_name)}</span>
@@ -401,6 +442,9 @@ export default function PortalCliente() {
                               href={e.review_token ? `/revisao/${e.review_token}` : undefined}
                               title={`${nomeBonito(e.file_name)} · v${String(e.versao).padStart(2, '0')}`}>
                               <span className="still">
+                                {e.review_token && capas[e.review_token] && (
+                                  <img className="foto" src={capas[e.review_token]!} alt="" loading="lazy" />
+                                )}
                                 <span className="fmt">{f.rotulo}</span>
                                 <span className="legenda">
                                   <span className="peca">{nomeBonito(e.file_name)}</span>

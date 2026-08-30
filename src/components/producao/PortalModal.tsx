@@ -31,7 +31,6 @@ interface Props {
   projectName: string;
   clientId: string | null;
   clientName: string;
-  portalVisivel: boolean;
   open: boolean;
   onClose: () => void;
   teamUsers: { id: string; full_name: string }[];
@@ -45,7 +44,7 @@ interface Props {
  * cliente daquele projeto e do interruptor que decide se ESTE projeto aparece
  * lá dentro.
  */
-export default function PortalModal({ projectId, projectName, clientId, clientName, portalVisivel, open, onClose, teamUsers }: Props) {
+export default function PortalModal({ projectId, projectName, clientId, clientName, open, onClose, teamUsers }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
   const [portal, setPortal] = useState<Portal | null>(null);
@@ -54,8 +53,34 @@ export default function PortalModal({ projectId, projectName, clientId, clientNa
 
   const portalUrl = (t: string) => `${window.location.origin}/portal/${t}`;
 
-  const [visivel, setVisivel] = useState(portalVisivel);
-  useEffect(() => { setVisivel(portalVisivel); }, [portalVisivel]);
+  /**
+   * Os projetos do cliente e o que entra no portal.
+   *
+   * O interruptor existia só pro projeto aberto, então escolher o que o cliente
+   * vê exigia abrir projeto por projeto. Agora a escolha inteira é feita daqui.
+   */
+  const [projetos, setProjetos] = useState<{ id: string; name: string; status: string; portal_visivel: boolean; updated_at: string }[]>([]);
+
+  const carregarProjetos = useCallback(async () => {
+    if (!clientId) { setProjetos([]); return; }
+    const { data } = await supabase.from('projects')
+      .select('id, name, status, portal_visivel, updated_at')
+      .eq('client_id', clientId)
+      .order('status')
+      .order('created_at', { ascending: false });
+    setProjetos((data as any[]) || []);
+  }, [clientId]);
+  useEffect(() => { if (open) carregarProjetos(); }, [open, carregarProjetos]);
+
+  const trocarVisivel = async (id: string, novo: boolean) => {
+    setProjetos(prev => prev.map(p => (p.id === id ? { ...p, portal_visivel: novo } : p)));
+    const { error } = await supabase.from('projects').update({ portal_visivel: novo }).eq('id', id);
+    if (error) { carregarProjetos(); toast.error('Não foi possível salvar.'); return; }
+  };
+
+  /** Encerrado há mais de 90 dias sai do portal sozinho, mesmo ligado. */
+  const foraPorTempo = (p: { status: string; updated_at: string }) =>
+    p.status === 'concluido' && Date.now() - new Date(p.updated_at).getTime() > 90 * 86400000;
 
   const load = useCallback(async () => {
     if (!clientId) { setPortal(null); setLoading(false); return; }
@@ -184,32 +209,45 @@ export default function PortalModal({ projectId, projectName, clientId, clientNa
               </div>
             </div>
 
-            {/* Este projeto entra no portal do cliente? */}
+            {/* O que aparece dentro do portal */}
             <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Este projeto no portal</label>
-              <div className="mt-1.5 border border-lumos-border rounded-lumos">
-                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                  <span className="min-w-0">
-                    <span className="block text-xs font-bold text-lumos-text-primary">{projectName} aparece pro cliente</span>
-                    <span className="block text-[10.5px] text-lumos-text-secondary">
-                      Desligado, ele some da lista de abas. Nada é apagado, e o resto do portal continua igual.
-                    </span>
-                  </span>
-                  <button type="button"
-                    onClick={async () => {
-                      const novoValor = !visivel;
-                      setVisivel(novoValor);
-                      const { error } = await supabase.from('projects').update({ portal_visivel: novoValor }).eq('id', projectId);
-                      if (error) { setVisivel(!novoValor); toast.error('Não foi possível salvar.'); return; }
-                      toast.success(novoValor ? 'Projeto visível no portal.' : 'Projeto oculto no portal.');
-                    }}
-                    className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', visivel ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
-                    <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', visivel ? 'left-5' : 'left-0.5')} />
-                  </button>
-                </div>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">
+                Projetos que o cliente vê
+              </label>
+              <div className="mt-1.5 border border-lumos-border rounded-lumos divide-y divide-lumos-border/60 max-h-64 overflow-y-auto custom-scrollbar">
+                {projetos.map(p => {
+                  const fora = foraPorTempo(p);
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                      <span className="min-w-0">
+                        <span className="block text-xs font-bold text-lumos-text-primary truncate">
+                          {p.name.trim()}
+                          {p.id === projectId && <span className="ml-1.5 text-[9px] font-black uppercase text-lumos-yellow">aberto</span>}
+                        </span>
+                        <span className="block text-[10.5px] text-lumos-text-secondary">
+                          {p.status === 'concluido'
+                            ? (fora ? 'encerrado há mais de 90 dias, já não aparece' : 'encerrado, ainda aparece por 90 dias')
+                            : 'ativo'}
+                        </span>
+                      </span>
+                      <button type="button" disabled={fora}
+                        onClick={() => trocarVisivel(p.id, !p.portal_visivel)}
+                        title={fora ? 'Encerrado há mais de 90 dias: já saiu do portal' : undefined}
+                        className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0',
+                          fora ? 'bg-lumos-text-secondary/15 cursor-not-allowed'
+                            : p.portal_visivel ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                        <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all',
+                          p.portal_visivel && !fora ? 'left-5' : 'left-0.5')} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {!projetos.length && (
+                  <p className="px-3.5 py-3 text-[11.5px] text-lumos-text-secondary">Este cliente não tem projeto nenhum.</p>
+                )}
               </div>
               <p className="text-[10.5px] text-lumos-text-secondary mt-1.5">
-                Entram os projetos ativos do cliente e os encerrados nos últimos 90 dias.
+                Desligado, o projeto some da lista de abas do cliente. Nada é apagado.
               </p>
             </div>
 

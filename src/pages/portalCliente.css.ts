@@ -270,4 +270,12 @@ export const PORTAL_CSS = String.raw`
   /* Aba de projeto tem nome comprido: não deixa a fita virar parede de texto. */
   .aba { max-width: 210px; overflow: hidden; }
   .aba > :first-child { overflow: hidden; text-overflow: ellipsis; }
+
+  /* A capa preenche o quadro. Sem ela, fica o still escuro do desenho. */
+  .quadro .still .foto {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  .quadro .still::after { z-index: 1; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+  .quadro .fmt, .quadro .legenda { z-index: 2; }
 `;
