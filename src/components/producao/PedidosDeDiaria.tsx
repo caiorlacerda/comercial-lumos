@@ -72,18 +72,34 @@ export default function PedidosDeDiaria({ projectId, canManage, onMudou }: Props
       toast.success('Pedido aceito, diária criada ✓');
       load();
       onMudou();
+      return;
     }
+    // RPC não devolveu nem erro reconhecido nem `ok`, o que não deveria
+    // acontecer, mas o botão não pode ficar mudo, sem toast, sem recarregar.
+    toast.error('Não deu pra saber se o pedido foi aceito, confira a fila.');
+    load();
   };
 
   const recusar = async (motivo: string) => {
     if (!recusando) return;
-    const { error } = await supabase.from('diaria_pedidos').update({
+    // Mesma guarda que o aceitar tem no SQL (FOR UPDATE + WHERE estado =
+    // 'pendente'): sem o filtro por estado aqui, um pedido aceito por outra
+    // pessoa entre a fila carregar e o motivo ser enviado vira 'recusado' por
+    // cima do 'aceito', mantendo a diária já criada, um estado que engana o
+    // cliente no portal. `select()` devolve as linhas afetadas, então dá pra
+    // distinguir "recusou" de "não achou nada pendente pra recusar".
+    const { data, error } = await supabase.from('diaria_pedidos').update({
       estado: 'recusado',
       motivo_recusa: motivo.trim(),
       respondido_por: profile?.id || null,
       respondido_em: new Date().toISOString(),
-    }).eq('id', recusando.id);
+    }).eq('id', recusando.id).eq('estado', 'pendente').select('id');
     if (error) { toast.error('Não foi possível recusar o pedido.'); return; }
+    if (!data || data.length === 0) {
+      toast.error('Esse pedido não está mais pendente, alguém já respondeu.');
+      load();
+      return;
+    }
     toast.success('Pedido recusado.');
     load();
   };
