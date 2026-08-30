@@ -13,30 +13,56 @@ import QuickForm, { type QFField } from '@/components/common/QuickForm';
  * alimenta a aba Roteiros das Ordens do Dia e a etapa de roteiro do Status.
  */
 
-interface Roteiro { id: string; nome: string; url: string; status: string; created_at: string }
+interface Roteiro { id: string; nome: string; url: string; status: string; created_at: string; task_id: string | null }
 
+/**
+ * 'revisao' é "alguém está lendo agora". 'ajustes' é "voltou com pedido,
+ * precisa de uma nova versão" — que é a situação que faz alguém sentar e
+ * escrever de novo. Estavam as duas no mesmo chip, e a diferença entre elas é
+ * justamente a que muda o que acontece a seguir.
+ */
 const STATUS: Record<string, { label: string; chip: string }> = {
   em_criacao: { label: 'Em criação', chip: 'bg-purple-500/15 text-purple-500 border-purple-500/40' },
   revisao: { label: 'Em revisão', chip: 'bg-sky-500/15 text-sky-500 border-sky-500/40' },
+  ajustes: { label: 'Precisa de ajustes', chip: 'bg-red-500/15 text-red-400 border-red-500/40' },
   aprovado: { label: 'Aprovado', chip: 'bg-green-600/15 text-green-500 border-green-600/40' },
 };
 
-interface Props { projectId: string; canManage: boolean }
+interface Props {
+  projectId: string;
+  canManage: boolean;
+  /** Tarefas do projeto, pra ligar o roteiro à tarefa que ele atende. */
+  tasks?: { id: string; titulo: string }[];
+}
 
-export default function ProjectRoteiros({ projectId, canManage }: Props) {
+export default function ProjectRoteiros({ projectId, canManage, tasks = [] }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [roteiros, setRoteiros] = useState<Roteiro[]>([]);
   const [faltaMigracao, setFaltaMigracao] = useState(false);
+  /** Banco ainda sem a coluna task_id: a lista funciona, só não vincula. */
+  const [semVinculo, setSemVinculo] = useState(false);
   const [qf, setQf] = useState<null | { title: string; fields: QFField[]; submitLabel?: string; onSubmit: (v: Record<string, string>) => void }>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('project_roteiros')
+      .select('id, nome, url, status, created_at, task_id')
+      .eq('project_id', projectId).order('ordem').order('created_at');
+    if (!error) {
+      setRoteiros((data as Roteiro[]) || []);
+      setLoading(false);
+      return;
+    }
+    // A coluna task_id pode ainda não existir (migration não rodada). Sem esta
+    // segunda tentativa, a lista inteira sumiria da tela por causa de UM campo
+    // novo — e roteiro que some assusta muito mais do que vínculo que falta.
+    const { data: antigo, error: erroAntigo } = await supabase.from('project_roteiros')
       .select('id, nome, url, status, created_at')
       .eq('project_id', projectId).order('ordem').order('created_at');
-    if (error) setFaltaMigracao(true);
-    setRoteiros((data as Roteiro[]) || []);
+    if (erroAntigo) setFaltaMigracao(true);
+    else setSemVinculo(true);
+    setRoteiros(((antigo as any[]) || []).map(r => ({ ...r, task_id: null })));
     setLoading(false);
   }, [projectId]);
   useEffect(() => { load(); }, [load]);
@@ -80,6 +106,18 @@ export default function ProjectRoteiros({ projectId, canManage }: Props) {
     const { error } = await supabase.from('project_roteiros')
       .update({ status, updated_at: new Date().toISOString() }).eq('id', r.id);
     if (error) { toast.error('Não foi possível mudar o status.'); load(); }
+  };
+
+  const vincular = async (r: Roteiro, taskId: string) => {
+    const alvo = taskId || null;
+    setRoteiros(prev => prev.map(x => x.id === r.id ? { ...x, task_id: alvo } : x));
+    const { error } = await supabase.from('project_roteiros')
+      .update({ task_id: alvo, updated_at: new Date().toISOString() }).eq('id', r.id);
+    if (error) {
+      toast.error(/task_id|column/i.test(error.message)
+        ? 'Falta rodar a migration 2026093320.' : 'Não foi possível vincular.');
+      load();
+    }
   };
 
   const excluir = async (r: Roteiro) => {
@@ -135,13 +173,35 @@ export default function ProjectRoteiros({ projectId, canManage }: Props) {
                   Criado em {new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })} · Google Docs
                 </p>
               </div>
+
+              {/* A qual tarefa este roteiro atende. Sem isso, quem abria a tarefa
+                  tinha que caçar o link no Docs ou perguntar pra alguém. */}
+              {tasks.length > 0 && !semVinculo && (
+                <div className="flex-shrink-0 w-[190px] hidden md:block">
+                  {canManage ? (
+                    <Select value={r.task_id || ''} onChange={v => void vincular(r, v)} align="right"
+                      searchable={tasks.length > 6} searchPlaceholder="Buscar tarefa…"
+                      menuClassName="min-w-[240px]"
+                      className={clsx('w-full h-7 rounded-lumos border px-2.5 text-[10.5px] font-bold truncate',
+                        r.task_id ? 'border-lumos-border text-lumos-text-primary' : 'border-dashed border-lumos-border text-lumos-text-secondary')}
+                      options={[{ value: '', label: 'Sem tarefa' }, ...tasks.map(t => ({ value: t.id, label: t.titulo }))]} />
+                  ) : (
+                    <span className="block text-[10.5px] font-bold text-lumos-text-secondary truncate">
+                      {tasks.find(t => t.id === r.task_id)?.titulo || 'Sem tarefa'}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Sempre visíveis: escondidas no hover, ninguém achava como
+                  renomear — e no celular não havia hover pra achar. */}
               {canManage && (
-                <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  <button type="button" onClick={() => editar(r)} className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
+                <span className="flex items-center gap-0.5 flex-shrink-0">
+                  <button type="button" onClick={() => editar(r)} className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow" title="Renomear ou trocar o link"><Pencil className="w-3.5 h-3.5" /></button>
                   <button type="button" onClick={() => excluir(r)} className="p-1.5 text-lumos-text-secondary hover:text-red-400" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
                 </span>
               )}
-              <div className="flex-shrink-0 w-[130px]">
+              <div className="flex-shrink-0 w-[150px]">
                 {canManage ? (
                   <Select value={r.status} onChange={v => void mudarStatus(r, v)} align="right"
                     className={clsx('w-full h-7 rounded-full border text-[10px] font-black px-3', STATUS[r.status]?.chip || STATUS.em_criacao.chip)}

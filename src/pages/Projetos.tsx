@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import TaskVideoReview from '@/components/producao/TaskVideoReview';
+import TaskRoteiros from '@/components/producao/TaskRoteiros';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
 import PortalModal from '@/components/producao/PortalModal';
@@ -2407,7 +2408,8 @@ export default function Projetos() {
 
                 {/* ================= ABA: ROTEIROS ================= */}
                 {projTab === 'roteiros' && (
-                <ProjectRoteiros key={'rt' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                <ProjectRoteiros key={'rt' + selectedProject.id} projectId={selectedProject.id} canManage={canManage}
+                  tasks={projectTasks.map(t => ({ id: t.id, titulo: t.titulo }))} />
                 )}
 
                 {/* ================= ABA: RESUMO (é onde o projeto abre) ================= */}
@@ -3516,6 +3518,14 @@ export default function Projetos() {
                     disabled={!canManage}
                   />
                 </div>
+
+                {/* Roteiro desta tarefa: fica antes do vídeo porque é a ordem em
+                    que o trabalho acontece — escreve, depois edita. */}
+                <TaskRoteiros
+                  projectId={selectedTask.project_id}
+                  taskId={selectedTask.id}
+                  canManage={canManage}
+                />
 
                 {/* Revisão de vídeo vinculada a esta tarefa (ver status/comentários e vincular) */}
                 <TaskVideoReview
