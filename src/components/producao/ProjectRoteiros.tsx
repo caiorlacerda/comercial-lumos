@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Select from '@/components/ui/Select';
 import QuickForm, { type QFField } from '@/components/common/QuickForm';
+import { OPCOES_ROTEIRO, etapaRoteiro } from '@/lib/roteiroStatus';
 
 /**
  * Roteiros do projeto, do jeito Lumos: cada roteiro é um link do Google Docs
@@ -14,19 +15,6 @@ import QuickForm, { type QFField } from '@/components/common/QuickForm';
  */
 
 interface Roteiro { id: string; nome: string; url: string; status: string; created_at: string; task_id: string | null }
-
-/**
- * 'revisao' é "alguém está lendo agora". 'ajustes' é "voltou com pedido,
- * precisa de uma nova versão" — que é a situação que faz alguém sentar e
- * escrever de novo. Estavam as duas no mesmo chip, e a diferença entre elas é
- * justamente a que muda o que acontece a seguir.
- */
-const STATUS: Record<string, { label: string; chip: string }> = {
-  em_criacao: { label: 'Em criação', chip: 'bg-purple-500/15 text-purple-500 border-purple-500/40' },
-  revisao: { label: 'Em revisão', chip: 'bg-sky-500/15 text-sky-500 border-sky-500/40' },
-  ajustes: { label: 'Precisa de ajustes', chip: 'bg-red-500/15 text-red-400 border-red-500/40' },
-  aprovado: { label: 'Aprovado', chip: 'bg-green-600/15 text-green-500 border-green-600/40' },
-};
 
 interface Props {
   projectId: string;
@@ -203,12 +191,12 @@ export default function ProjectRoteiros({ projectId, canManage, tasks = [] }: Pr
               )}
               <div className="flex-shrink-0 w-[150px]">
                 {canManage ? (
-                  <Select value={r.status} onChange={v => void mudarStatus(r, v)} align="right"
-                    className={clsx('w-full h-7 rounded-full border text-[10px] font-black px-3', STATUS[r.status]?.chip || STATUS.em_criacao.chip)}
-                    options={Object.entries(STATUS).map(([value, s]) => ({ value, label: s.label }))} />
+                  <Select value={etapaRoteiro(r.status).value} onChange={v => void mudarStatus(r, v)} align="right"
+                    className={clsx('w-full h-7 rounded-full border text-[10px] font-black px-3', etapaRoteiro(r.status).chip)}
+                    options={OPCOES_ROTEIRO} />
                 ) : (
-                  <span className={clsx('inline-flex items-center justify-center w-full h-7 rounded-full border text-[10px] font-black', STATUS[r.status]?.chip || STATUS.em_criacao.chip)}>
-                    {STATUS[r.status]?.label || r.status}
+                  <span className={clsx('inline-flex items-center justify-center w-full h-7 rounded-full border text-[10px] font-black', etapaRoteiro(r.status).chip)}>
+                    {etapaRoteiro(r.status).label}
                   </span>
                 )}
               </div>
