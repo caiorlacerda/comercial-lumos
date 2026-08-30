@@ -56,6 +56,17 @@ const MARCOS = [
 
 const NOME_SALVO = 'rev_nome';
 
+/**
+ * DE ONDE A PESSOA VEIO.
+ *
+ * Ao abrir um vídeo, o portal deixa um bilhete dizendo pra onde voltar. Vai na
+ * sessão do navegador, e não na URL, porque o endereço do vídeo é o que o
+ * cliente repassa por e-mail — e o do portal abre a conta inteira dele.
+ * Quem chega pelo link do e-mail simplesmente não tem bilhete, e o player não
+ * inventa um botão de voltar pra lugar nenhum.
+ */
+const BILHETE = 'lumos_voltar';
+
 const dia = (s?: string | null) =>
   s ? new Date(s.length <= 10 ? `${s}T12:00:00` : s).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : null;
 
@@ -107,8 +118,14 @@ export default function PortalCliente() {
     if (error || !data || (data as any).error) { setErro('Link inválido ou desativado.'); return; }
     const d = data as Portal;
     setDados(d);
-    // Link antigo, de projeto: abre já na aba daquele projeto.
-    if (d.abrir_projeto) setAba(d.abrir_projeto);
+    // Voltando do player: reabre na aba de onde a pessoa saiu.
+    const pedida = new URLSearchParams(window.location.search).get('aba');
+    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || d.projetos.some(p => p.id === pedida))) {
+      setAba(pedida);
+    } else if (d.abrir_projeto) {
+      // Link antigo, de projeto: abre já na aba daquele projeto.
+      setAba(d.abrir_projeto);
+    }
   }, [token]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -132,6 +149,16 @@ export default function PortalCliente() {
     return dados.projetos.flatMap(p =>
       p.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE').map(e => ({ ...e, projeto: p.nome })));
   }, [dados]);
+
+  /** Deixa o bilhete de volta antes de sair pro player. */
+  const marcarVolta = useCallback(() => {
+    try {
+      sessionStorage.setItem(BILHETE, JSON.stringify({
+        url: `/portal/${token}${aba !== 'inicio' ? `?aba=${aba}` : ''}`,
+        rotulo: dados ? `Portal de ${dados.cliente.nome}` : 'Portal',
+      }));
+    } catch { /* navegador sem sessão: só não tem botão de voltar */ }
+  }, [token, aba, dados]);
 
   // Aba trocou: volta pro topo e pede as capas dos quadros que ela mostra.
   // Sem o topo, trocar de aba caía no meio da página anterior.
@@ -265,6 +292,7 @@ export default function PortalCliente() {
                   const f = formato(e.largura, e.altura);
                   return (
                     <a key={`${e.file_name}${i}`} className={`quadro ${f.classe}`} style={{ animationDelay: `${i * 60}ms` }}
+                      onClick={() => marcarVolta()}
                       href={e.review_token ? `/revisao/${e.review_token}` : undefined}
                       title={`${nomeBonito(e.file_name)} · v${String(e.versao).padStart(2, '0')} · ${e.projeto}`}>
                       <span className="still">
@@ -439,6 +467,7 @@ export default function PortalCliente() {
                           const f = formato(e.largura, e.altura);
                           return (
                             <a key={`${e.file_name}${i}`} className={`quadro ${f.classe}`}
+                              onClick={() => marcarVolta()}
                               href={e.review_token ? `/revisao/${e.review_token}` : undefined}
                               title={`${nomeBonito(e.file_name)} · v${String(e.versao).padStart(2, '0')}`}>
                               <span className="still">

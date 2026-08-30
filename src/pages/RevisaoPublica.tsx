@@ -4,7 +4,7 @@ import {
   Play, Pause, Maximize, Download, Pencil, MoveUpRight,
   Square, Eraser, Send, Clock, Check, Sun, Moon, Volume2, VolumeX, Info, X,
   MoreVertical, Trash2, AlertTriangle, RotateCcw, ChevronDown,
-  ChevronLeft, ChevronRight, Search, SlidersHorizontal, ClipboardPaste, Frame,
+  ChevronLeft, ChevronRight, Search, SlidersHorizontal, ClipboardPaste, Frame, ArrowLeft,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -14,6 +14,28 @@ import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/prod
 import ColarComentarios from '@/components/producao/ColarComentarios';
 
 const LOGO = { dark: '/logo/Logotipo-Branco-Alpha.svg', light: '/logo/Logotipo-Preto-Alpha.svg' };
+
+/**
+ * DE ONDE A PESSOA VEIO.
+ *
+ * O portal deixa um bilhete antes de abrir o vídeo, dizendo pra onde voltar.
+ * Quem chega pelo link do e-mail não tem bilhete e não vê botão nenhum — não
+ * existe "voltar" pra quem não veio de lugar algum aqui dentro.
+ *
+ * O bilhete vive na sessão do navegador, não na URL: o endereço do vídeo é o
+ * que o cliente repassa por aí, e o do portal abre a conta inteira dele.
+ */
+const BILHETE = 'lumos_voltar';
+function lerBilhete(): { url: string; rotulo: string } | null {
+  try {
+    const cru = sessionStorage.getItem(BILHETE);
+    if (!cru) return null;
+    const b = JSON.parse(cru);
+    // Só caminho interno: bilhete adulterado não vira ponte pra fora.
+    if (typeof b?.url !== 'string' || !b.url.startsWith('/') || b.url.startsWith('//')) return null;
+    return { url: b.url, rotulo: typeof b.rotulo === 'string' ? b.rotulo : 'Voltar' };
+  } catch { return null; }
+}
 
 // ---------------------------------------------------------------------------
 type Point = { x: number; y: number }; // normalizados 0–1
@@ -116,6 +138,7 @@ export default function RevisaoPublica() {
   // da equipe entra registrado como se fosse do cliente. Silencioso e chato de
   // desfazer, então a página avisa em vez de deixar acontecer.
   const [souDaLumos, setSouDaLumos] = useState<{ nome: string; projetoId: string | null } | null>(null);
+  const [volta] = useState(lerBilhete);
 
   // Composição de comentário (box fixo)
   const [composing, setComposing] = useState(false);
@@ -615,6 +638,13 @@ export default function RevisaoPublica() {
       {/* Header (sem logo) */}
       <header className="h-14 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
         <div className="flex items-center gap-3 min-w-0">
+          {volta && (
+            <a href={volta.url} title={volta.rotulo}
+              className="flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-lumos border border-lumos-border text-[11.5px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 transition-colors flex-shrink-0">
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">{volta.rotulo}</span>
+            </a>
+          )}
           <img src={theme === 'dark' ? LOGO.dark : LOGO.light} alt="Lumos" className="h-7 transition-all duration-300 flex-shrink-0" />
           {/* O truncate vale só pro NOME DO PROJETO. No contêiner, o
               overflow:hidden cortaria a lista de versões, que abre pra fora da
