@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, ExternalLink, Loader2, RefreshCw, Eye, Trash2 } from 'lucide-react';
+import { Copy, ExternalLink, Loader2, RefreshCw, Eye, Trash2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
-import Modal from '@/components/common/Modal';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
 
@@ -169,6 +168,16 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
 
   useEffect(() => { if (open) load(); }, [open, load]);
 
+  // Folha de tela cheia: o fundo não rola junto.
+  useEffect(() => {
+    if (!open) return;
+    const antes = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', aoTeclar);
+    return () => { document.body.style.overflow = antes; window.removeEventListener('keydown', aoTeclar); };
+  }, [open, onClose]);
+
   const create = async () => {
     if (!clientId) { toast.error('Sem cliente, não dá para gerar o portal.'); return; }
     setBusy(true);
@@ -208,14 +217,31 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     toast.success('Link revogado. O cliente perdeu o acesso.');
   };
 
+  if (!open) return null;
+
   return (
-    <Modal isOpen={open} onClose={onClose} title="Portal do cliente" maxWidth="max-w-lg">
+    <div className="fixed inset-0 z-[220] flex sm:p-6">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
+      <div className="relative z-10 flex flex-col w-full sm:max-w-5xl sm:mx-auto bg-lumos-surface border border-lumos-border sm:rounded-lumos shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-start justify-between gap-4 px-5 sm:px-6 py-4 border-b border-lumos-border flex-shrink-0">
+          <div className="min-w-0">
+            <h3 className="text-lg sm:text-xl font-black text-lumos-text-primary tracking-tight truncate">
+              Portal de {clientName || 'cliente'}
+            </h3>
+            <p className="text-[11.5px] text-lumos-text-secondary mt-0.5">
+              Um link só, com uma aba por projeto. O cliente acompanha as entregas, vê onde cada
+              projeto está e aprova os vídeos por ali.
+            </p>
+          </div>
+          <button onClick={onClose} title="Fechar"
+            className="p-2 -mr-1 text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded-full transition-all flex-shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-5 sm:px-6 py-5">
       {dialogoConfirmar}
-      <div className="space-y-4">
-        <p className="text-xs text-lumos-text-secondary -mt-1">
-          Um link só de <b className="text-lumos-text-primary">{clientName || 'cliente'}</b>, com uma aba por projeto.
-          Ele acompanha as entregas, vê onde cada projeto está e aprova os vídeos por ali.
-        </p>
+      <div className="space-y-5">
 
         {loading ? (
           <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
@@ -231,7 +257,8 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
             </button>
           </div>
         ) : (
-          <>
+          <div className="grid lg:grid-cols-2 gap-5 lg:gap-6 items-start">
+            <div className="space-y-5">
             {/* Link */}
             <div>
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Link do cliente</label>
@@ -327,6 +354,9 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
               </p>
             </div>
 
+            </div>
+
+            <div className="space-y-5">
             {/* Quem entra, e o que cada um alcança */}
             <div>
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Quem entra no portal</label>
@@ -444,9 +474,12 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                 <RefreshCw className="w-3.5 h-3.5" /> Revogar link
               </button>
             </div>
-          </>
+            </div>
+          </div>
         )}
       </div>
-    </Modal>
+        </div>
+      </div>
+    </div>
   );
 }
