@@ -298,11 +298,29 @@ export const PORTAL_CSS = String.raw`
      Largura travada: com sete colunas em 1fr num painel largo, cada dia virava
      um quadrado gigante e o mês parecia um tabuleiro. */
   .calend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
-    margin: 12px auto 0; max-width: 420px; }
-  .calend .dia { aspect-ratio: 1; display: grid; place-items: center; border-radius: 9px;
+    margin: 12px auto 0; max-width: 560px; }
+  /* Seis semanas sempre, e a casa é um retângulo, não um quadradinho: cabe o
+     número e o nome da gravação, como num calendário de verdade. */
+  .calend .dia { aspect-ratio: 1.15; display: flex; flex-direction: column;
+    align-items: flex-start; gap: 2px; padding: 5px 6px; border-radius: 9px;
     font-family: "DM Mono", monospace; font-size: 12.5px; position: relative;
     background: var(--mesa-alta); border: 1px solid var(--fio); color: var(--meia-luz);
+    overflow: hidden; text-align: left;
     transition: border-color .12s, background .12s, color .12s; }
+  .calend .dia .num { line-height: 1; }
+  /* Nome da gravação dentro do dia. Some em tela estreita, onde a casa não
+     comporta texto legível e o ponto amarelo já diz que o dia é dele. */
+  .calend .dia .rot-dia { font-family: "Work Sans", system-ui, sans-serif;
+    font-size: 8.5px; line-height: 1.2; letter-spacing: .01em; opacity: .95;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; width: 100%; }
+  @media (max-width: 520px) { .calend .dia .rot-dia { display: none; } }
+  /* Casa vazia das pontas da grade: existe só pra altura não pular. */
+  .calend .dia.fantasma { background: transparent; border-color: transparent; }
+  /* Dia do mês fora da janela de 90 dias, passado ou longe demais: aparece
+     pra o mês ficar inteiro, e só. */
+  .calend .dia.fora { background: transparent; border-color: transparent;
+    color: var(--meia-luz); opacity: .3; }
   .calend .dia.livre { color: var(--gesso); cursor: pointer; }
   .calend .dia.livre:hover { border-color: var(--luz); color: var(--luz);
     background: rgba(239,199,0,.10); }
@@ -319,7 +337,7 @@ export const PORTAL_CSS = String.raw`
      então quem vem por último é quem pinta. */
   .calend .dia.sua { background: rgba(239,199,0,.14); border-color: rgba(239,199,0,.45);
     color: var(--luz); font-weight: 700; opacity: 1; }
-  .calend .dia.sua::after { content: ""; position: absolute; bottom: 6px;
+  .calend .dia.sua::after { content: ""; position: absolute; top: 7px; right: 7px;
     width: 4px; height: 4px; border-radius: 50%; background: var(--luz); }
   .calend .dia.escolhido { background: var(--luz); border-color: var(--luz);
     color: #14110b; font-weight: 700; }
@@ -328,15 +346,18 @@ export const PORTAL_CSS = String.raw`
     color: var(--meia-luz); text-align: center; padding-bottom: 2px; }
   /* O que cada cor quer dizer. Sem isto o cinza é adivinhação. */
   .legenda-cores { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
-    margin: 12px auto 0; max-width: 420px; font-size: 11px; color: var(--meia-luz); }
+    margin: 12px auto 0; max-width: 560px; font-size: 11px; color: var(--meia-luz); }
   .legenda-cores span { display: inline-flex; align-items: center; gap: 6px; }
   .legenda-cores i { width: 11px; height: 11px; border-radius: 4px; flex: 0 0 auto;
     border: 1px solid var(--fio); background: var(--mesa-alta); }
   .legenda-cores i.am-sua { background: rgba(239,199,0,.35); border-color: rgba(239,199,0,.55); }
   .legenda-cores i.am-fora { background: transparent; }
+  /* Linha invisível quando o mês não tem motivo nenhum: guarda o espaço pra
+     seção não mudar de altura ao trocar de mês, que era a queixa. */
+  .legenda-dias .vazia { visibility: hidden; }
   /* Legenda dos motivos de dia indisponível no mês em tela: o atributo title
      do dia só existe pra quem passa o mouse, e no celular não tem hover. */
-  .legenda-dias { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; }
+  .legenda-dias { margin-top: 12px; max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 5px; }
   .legenda-dias p { margin: 0; font-size: 12px; line-height: 1.4; color: var(--meia-luz); }
   .legenda-dias b { color: var(--gesso); font-weight: 700; }
 

@@ -319,11 +319,34 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
     });
   }, [mes]);
 
-  if (!mes) return null;
+  /**
+   * O mês inteiro, sempre em seis semanas.
+   *
+   * O servidor só manda de hoje até 90 dias, então agosto chegava com dois
+   * dias e novembro pela metade: o calendário nascia torto e a seção mudava
+   * de altura a cada seta, o que embaralha a leitura. Aqui o mês é completado
+   * com os dias que faltam, marcados como fora do alcance (passado, ou longe
+   * demais), e a grade tem sempre 42 casas: a altura para de pular.
+   */
+  const grade = useMemo(() => {
+    if (!mes) return [];
+    const [ano, numMes] = mes.chave.split('-').map(Number);
+    // Dia 0 do mês seguinte é o último dia deste.
+    const quantos = new Date(ano, numMes, 0).getDate();
+    // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
+    // anterior, e o calendário inteiro anda uma casa.
+    const comeca = new Date(`${mes.chave}-01T12:00:00`).getDay();
+    const porData = new Map(mes.dias.map(d => [d.data, d]));
+    const casas: (typeof mes.dias[number] | null)[] = Array.from({ length: comeca }, () => null);
+    for (let n = 1; n <= quantos; n++) {
+      const data = `${mes.chave}-${String(n).padStart(2, '0')}`;
+      casas.push(porData.get(data) || { data, estado: 'fora', motivo: null });
+    }
+    while (casas.length < 42) casas.push(null);
+    return casas;
+  }, [mes]);
 
-  // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
-  // anterior, e o calendário inteiro anda uma casa.
-  const vazios = new Date(mes.dias[0].data + 'T12:00:00').getDay();
+  if (!mes) return null;
 
   return (
     <div className="mes">
@@ -340,8 +363,8 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
       </div>
       <div className="calend">
         {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
-        {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
-        {mes.dias.map(d => {
+        {grade.map((d, i) => {
+          if (!d) return <span key={`v${i}`} className="dia fantasma" />;
           const livre = d.estado === 'livre';
           const sua = suas[d.data];
           return (
@@ -349,9 +372,15 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
               className={`dia ${d.estado}${sua ? ' sua' : ''}${escolhido === d.data ? ' escolhido' : ''}`}
               title={sua ? `Sua gravação, ${sua}`
                 : livre ? 'Pedir esta data'
-                : d.estado === 'cedo' ? 'Cedo demais para pedir' : (d.motivo || 'Indisponível')}
+                : d.estado === 'cedo' ? 'Cedo demais para pedir'
+                : d.estado === 'fora' ? 'Fora do período que dá pra pedir'
+                : (d.motivo || 'Indisponível')}
               onClick={e => onEscolher(d.data, e.currentTarget)}>
-              {Number(d.data.slice(8, 10))}
+              <span className="num">{Number(d.data.slice(8, 10))}</span>
+              {/* O nome da gravação escrito no dia, como num calendário de
+                  verdade: sem isto, o cliente vê a marca amarela e ainda tem
+                  que voltar na lista de cima pra saber o que é. */}
+              {sua && <span className="rot-dia">{sua}</span>}
             </button>
           );
         })}
@@ -361,13 +390,11 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
         <span><i className="am-sua" /> sua gravação</span>
         <span><i className="am-fora" /> indisponível</span>
       </div>
-      {!!legenda.length && (
-        <div className="legenda-dias">
-          {legenda.map((l, i) => (
-            <p key={i}><b>{l.rotulo}:</b> {l.motivo}</p>
-          ))}
-        </div>
-      )}
+      <div className="legenda-dias">
+        {legenda.length
+          ? legenda.map((l, i) => <p key={i}><b>{l.rotulo}:</b> {l.motivo}</p>)
+          : <p aria-hidden="true" className="vazia">&nbsp;</p>}
+      </div>
     </div>
   );
 }
