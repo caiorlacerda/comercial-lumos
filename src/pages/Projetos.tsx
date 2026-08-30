@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
-import TaskVideoReview from '@/components/producao/TaskVideoReview';
-import TaskRoteiros from '@/components/producao/TaskRoteiros';
+import TaskVideoReview, { prefetchEntregasDoProjeto } from '@/components/producao/TaskVideoReview';
+import TaskRoteiros, { prefetchRoteirosDoProjeto } from '@/components/producao/TaskRoteiros';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
 import PortalModal from '@/components/producao/PortalModal';
@@ -923,6 +923,11 @@ export default function Projetos() {
   useEffect(() => {
     if (selectedProjectId) {
       fetchProjectTasks(selectedProjectId);
+      // Adianta o que a tarefa vai precisar. Abrir uma tarefa deixa de ser uma
+      // ida ao servidor e passa a ser leitura do que já chegou — a diferença
+      // entre "abriu" e "está carregando".
+      prefetchEntregasDoProjeto(selectedProjectId);
+      prefetchRoteirosDoProjeto(selectedProjectId);
     } else {
       setProjectTasks([]);
     }

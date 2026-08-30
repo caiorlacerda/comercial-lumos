@@ -25,6 +25,34 @@ import { OPCOES_ROTEIRO, etapaRoteiro } from '@/lib/roteiroStatus';
 
 interface Roteiro { id: string; nome: string; url: string; status: string; task_id: string | null }
 
+/**
+ * Guardado por projeto e buscado assim que o projeto abre, pelo mesmo motivo
+ * das entregas: quando a pessoa clica numa tarefa, o dado já está aqui. São
+ * poucos KB, mas a ida ao servidor custa meio segundo — e meio segundo é o que
+ * separa "abriu" de "está carregando".
+ */
+const VALIDADE_MS = 60_000;
+const cache = new Map<string, { itens: Roteiro[]; ts: number }>();
+/** Guarda o projeto cujo banco ainda não tem a coluna, pra não tentar de novo. */
+const semColunaEm = new Set<string>();
+
+async function buscar(projectId: string): Promise<Roteiro[] | null> {
+  const { data, error } = await supabase.from('project_roteiros')
+    .select('id, nome, url, status, task_id')
+    .eq('project_id', projectId).order('ordem').order('created_at');
+  if (error) { semColunaEm.add(projectId); return null; }
+  const itens = (data as Roteiro[]) || [];
+  cache.set(projectId, { itens, ts: Date.now() });
+  return itens;
+}
+
+export function prefetchRoteirosDoProjeto(projectId: string) {
+  if (semColunaEm.has(projectId)) return;
+  const c = cache.get(projectId);
+  if (c && Date.now() - c.ts < VALIDADE_MS) return;
+  void buscar(projectId);
+}
+
 interface Props {
   projectId: string;
   taskId: string;
@@ -39,17 +67,24 @@ export default function TaskRoteiros({ projectId, taskId, canManage }: Props) {
   const [semColuna, setSemColuna] = useState(false);
   const [qf, setQf] = useState<null | { title: string; fields: QFField[]; submitLabel?: string; onSubmit: (v: Record<string, string>) => void }>(null);
 
-  const load = useCallback(async () => {
-    const { data, error } = await supabase.from('project_roteiros')
-      .select('id, nome, url, status, task_id')
-      .eq('project_id', projectId).order('ordem').order('created_at');
+  const load = useCallback(async (forcar = false) => {
+    if (semColunaEm.has(projectId)) { setSemColuna(true); setLoading(false); return; }
+    const c = cache.get(projectId);
+    if (!forcar && c) {
+      setTodos(c.itens); setLoading(false);
+      if (Date.now() - c.ts < VALIDADE_MS) return;
+    }
+    const itens = await buscar(projectId);
     // Sem a coluna task_id (migration não rodou) o bloco some em vez de mostrar
     // uma lista que nunca vai vincular nada.
-    if (error) { setSemColuna(true); setLoading(false); return; }
-    setTodos((data as Roteiro[]) || []);
+    if (!itens) { setSemColuna(true); setLoading(false); return; }
+    setTodos(itens);
     setLoading(false);
   }, [projectId]);
   useEffect(() => { load(); }, [load]);
+
+  /** Depois de mexer, o cache não vale mais. */
+  const recarregar = useCallback(() => { cache.delete(projectId); return load(true); }, [projectId, load]);
 
   const meus = todos.filter(r => r.task_id === taskId);
   const livres = todos.filter(r => !r.task_id);
@@ -59,7 +94,7 @@ export default function TaskRoteiros({ projectId, taskId, canManage }: Props) {
     setTodos(prev => prev.map(r => (r.id === id ? { ...r, task_id: taskId } : r)));
     const { error } = await supabase.from('project_roteiros')
       .update({ task_id: taskId, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) { toast.error('Não foi possível vincular.'); load(); }
+    if (error) { toast.error('Não foi possível vincular.'); recarregar(); } else cache.delete(projectId);
   };
 
   const desvincular = async (r: Roteiro) => {
@@ -68,14 +103,14 @@ export default function TaskRoteiros({ projectId, taskId, canManage }: Props) {
       .update({ task_id: null, updated_at: new Date().toISOString() }).eq('id', r.id);
     // Desvincular solta o vínculo; o roteiro continua na aba Roteiros do
     // projeto. Não é excluir, e o texto do menu diz isso.
-    if (error) { toast.error('Não foi possível desvincular.'); load(); }
+    if (error) { toast.error('Não foi possível desvincular.'); recarregar(); } else cache.delete(projectId);
   };
 
   const mudarStatus = async (r: Roteiro, status: string) => {
     setTodos(prev => prev.map(x => (x.id === r.id ? { ...x, status } : x)));
     const { error } = await supabase.from('project_roteiros')
       .update({ status, updated_at: new Date().toISOString() }).eq('id', r.id);
-    if (error) { toast.error('Não foi possível mudar o status.'); load(); }
+    if (error) { toast.error('Não foi possível mudar o status.'); recarregar(); } else cache.delete(projectId);
   };
 
   const criar = () => setQf({
@@ -92,7 +127,7 @@ export default function TaskRoteiros({ projectId, taskId, canManage }: Props) {
       }]);
       if (error) { toast.error('Não foi possível adicionar.'); return; }
       toast.success('Roteiro adicionado ✓');
-      load();
+      recarregar();
     },
   });
 

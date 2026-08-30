@@ -18,9 +18,50 @@ interface Version {
   versao: number;
   file_name: string;
   status: ReviewStatus;
-  thumb_url: string | null;
 }
 interface Group { id: string; current: Version; count: number; versions: Version[] }
+
+/**
+ * POR QUE ESTE CACHE E POR QUE SEM thumb_url.
+ *
+ * Abrir uma tarefa levava mais de 4 segundos até o vídeo aparecer. O motivo não
+ * era o vídeo: a tela pedia TODAS as versões do projeto COM a miniatura, e a
+ * miniatura é uma imagem inteira guardada dentro da linha (data URI). No
+ * Uniasselvi isso dava 1,65 MB por abertura — 1,64 MB só de imagem — pra
+ * desenhar UM card.
+ *
+ * Agora a consulta vem sem miniatura (15 KB), e a imagem do vídeo vinculado é
+ * buscada depois, sozinha, sem segurar o card: o que a pessoa precisa ler é o
+ * nome, a versão e a etapa; a imagem é enfeite e pode chegar um instante
+ * depois.
+ *
+ * O resultado fica guardado por projeto e é buscado assim que o projeto abre,
+ * então clicar numa tarefa costuma nem ir ao servidor.
+ */
+const VALIDADE_MS = 60_000;
+const cacheVersoes = new Map<string, { versions: Version[]; ts: number }>();
+const cacheThumb = new Map<string, string | null>();
+
+async function buscarVersoes(projectId: string): Promise<Version[]> {
+  const { data } = await supabase
+    .from('video_versions')
+    .select('id, group_id, task_id, versao, file_name, status')
+    .eq('project_id', projectId)
+    .order('versao', { ascending: false });
+  const vs = (data as Version[]) || [];
+  cacheVersoes.set(projectId, { versions: vs, ts: Date.now() });
+  return vs;
+}
+
+/**
+ * Chamado quando o projeto abre. Quando a pessoa clicar numa tarefa, o dado já
+ * está aqui — que é o que faz parecer instantâneo em vez de rápido.
+ */
+export function prefetchEntregasDoProjeto(projectId: string) {
+  const c = cacheVersoes.get(projectId);
+  if (c && Date.now() - c.ts < VALIDADE_MS) return;
+  void buscarVersoes(projectId);
+}
 
 interface Props {
   projectId: string;
@@ -46,16 +87,10 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
   const [menuAberto, setMenuAberto] = useState(false);
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
   const [excluindo, setExcluindo] = useState(false);
+  const [thumb, setThumb] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('video_versions')
-      .select('id, group_id, task_id, versao, file_name, status, thumb_url')
-      .eq('project_id', projectId)
-      .order('versao', { ascending: false });
-
-    const vs = (data as Version[]) || [];
+  const agrupar = useCallback((vs: Version[]) => {
     // Cada "vídeo" é um grupo de versões; a mais recente é a atual.
     const byGroup = new Map<string, Version[]>();
     vs.forEach(v => {
@@ -69,16 +104,52 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
       versions,
     }));
     setGroups(gs);
-
-    const ids = vs.map(v => v.id);
-    if (ids.length) {
-      const { data: cs } = await supabase.from('review_comments').select('video_version_id').in('video_version_id', ids);
-      const map: Record<string, number> = {};
-      (cs || []).forEach((c: any) => { map[c.video_version_id] = (map[c.video_version_id] || 0) + 1; });
-      setCounts(map);
-    }
     setLoading(false);
-  }, [projectId]);
+    return gs;
+  }, []);
+
+  /**
+   * O que segura o card é só a lista sem imagem. Contagem de comentários e
+   * miniatura entram depois, e só do vídeo desta tarefa: são dois detalhes do
+   * card, não motivo pra tela ficar vazia.
+   */
+  const completar = useCallback(async (gs: Group[]) => {
+    const meu = gs.find(g => g.current.task_id === task.id);
+    if (!meu) return;
+    const ids = meu.versions.map(v => v.id);
+    supabase.from('review_comments').select('video_version_id').in('video_version_id', ids)
+      .then(({ data: cs }) => {
+        const map: Record<string, number> = {};
+        (cs || []).forEach((c: any) => { map[c.video_version_id] = (map[c.video_version_id] || 0) + 1; });
+        setCounts(map);
+      });
+    const alvo = meu.current.id;
+    if (cacheThumb.has(alvo)) { setThumb(cacheThumb.get(alvo) ?? null); return; }
+    const { data: t } = await supabase.from('video_versions').select('thumb_url').eq('id', alvo).maybeSingle();
+    cacheThumb.set(alvo, (t as any)?.thumb_url ?? null);
+    setThumb((t as any)?.thumb_url ?? null);
+  }, [task.id]);
+
+  const load = useCallback(async (forcar = false) => {
+    const c = cacheVersoes.get(projectId);
+    // Tem no cache: desenha na hora. Se estiver velho, revalida por baixo, sem
+    // piscar a tela.
+    if (!forcar && c) {
+      const gs = agrupar(c.versions);
+      void completar(gs);
+      if (Date.now() - c.ts < VALIDADE_MS) return;
+    }
+    const vs = await buscarVersoes(projectId);
+    void completar(agrupar(vs));
+  }, [projectId, agrupar, completar]);
+
+  /** Depois de mexer (vincular, enviar, excluir) o cache não vale mais. A
+   *  miniatura entra junto: trocar a capa do vídeo passa por aqui. */
+  const recarregar = useCallback(() => {
+    cacheVersoes.delete(projectId);
+    cacheThumb.clear();
+    return load(true);
+  }, [projectId, load]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -105,7 +176,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
       }
     }
     setBusy(false);
-    load();
+    recarregar();
   };
 
   const unlink = async () => {
@@ -115,7 +186,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     setBusy(false);
     if (error) { toast.error('Não foi possível desvincular.'); return; }
     toast.success('Vídeo desvinculado.');
-    load();
+    recarregar();
   };
 
   /**
@@ -140,7 +211,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
       });
       if (error) throw error;
       toast.success('Vídeo excluído ✓');
-      await load();
+      await recarregar();
     } catch { toast.error('Não foi possível excluir.'); }
     finally { setExcluindo(false); }
   };
@@ -219,7 +290,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     toast.success(`${lista.length} vídeo(s) enviado(s) ✓ Vinculando à tarefa…`);
     // O scan cria o registro já com a tarefa. Damos um tempo e recarregamos.
     await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
-    await load();
+    await recarregar();
   };
 
   if (loading) return null;
@@ -236,7 +307,7 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
 
         {linked ? (
           <div className="flex items-center gap-2 p-2.5 rounded-lumos border border-lumos-border bg-lumos-bg/40">
-            <VideoThumb src={linked.current.thumb_url} className="w-16 aspect-video rounded flex-shrink-0" iconSize="w-6 h-6" />
+            <VideoThumb src={thumb} className="w-16 aspect-video rounded flex-shrink-0" iconSize="w-6 h-6" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-mono font-black text-lumos-text-secondary">v{String(linked.current.versao).padStart(2, '0')}</span>
@@ -359,9 +430,9 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
             if (!r.ok) { toast.error(`Erro: ${r.erro}`); return; }
             toast.success(mensagemDaEtapa(proximo, r.criouLink));
             setReviewModal(null);
-            await load();
+            await recarregar();
           }}
-          onClose={() => { setReviewModal(null); load(); }}
+          onClose={() => { setReviewModal(null); recarregar(); }}
         />
       )}
     </>
