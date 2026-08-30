@@ -8,36 +8,44 @@ import Modal from '@/components/common/Modal';
 import Select from '@/components/ui/Select';
 
 interface Blocks {
-  kpis: boolean; status_bar: boolean; etapas: boolean; atividade: boolean; arquivos: boolean;
-  cronograma: boolean;
+  escopo: boolean; cronograma: boolean; arquivos: boolean; atividade: boolean;
 }
 interface Portal {
   id: string; token: string; active: boolean; show_financeiro: boolean;
-  contact_user_id: string | null; contact_user_ids: string[]; blocks: Blocks;
+  contact_user_ids: string[]; blocks: Blocks;
   last_opened_at: string | null; opened_count: number;
 }
 
-// O que o cliente vê no Dashboard — cada item liga/desliga por projeto.
+// O que o cliente vê. O link agora é do CLIENTE, então isto vale para todos os
+// projetos dele — o que entra ou sai de cada projeto é o interruptor de baixo.
 const BLOCOS: { key: keyof Blocks; label: string; desc: string }[] = [
-  { key: 'kpis', label: 'Números do topo', desc: 'progresso, com você, aprovadas e entrega final' },
-  { key: 'status_bar', label: 'Barra por status', desc: 'quantas entregas em cada situação' },
-  { key: 'etapas', label: 'Etapas do projeto', desc: 'roteiro → captação → edição → revisão' },
-  { key: 'atividade', label: 'Atividade', desc: 'histórico do que foi entregue e aprovado' },
+  { key: 'escopo', label: 'Pacote do mês', desc: 'o combinado e quanto já saiu, quando o projeto tem contrato por volume' },
+  { key: 'cronograma', label: 'Onde o projeto está', desc: 'roteiro, captação, edição, sua revisão e entrega' },
   { key: 'arquivos', label: 'Arquivos', desc: 'documentos marcados como "Entrega (portal)"' },
+  { key: 'atividade', label: 'Últimos dias', desc: 'o que foi entregue e aprovado, em todos os projetos' },
 ];
-const BLOCKS_PADRAO: Blocks = { kpis: true, status_bar: true, etapas: true, atividade: true, arquivos: true, cronograma: true };
+const BLOCKS_PADRAO: Blocks = { escopo: true, cronograma: true, arquivos: true, atividade: true };
 
 interface Props {
   projectId: string;
   projectName: string;
+  clientId: string | null;
+  clientName: string;
+  portalVisivel: boolean;
   open: boolean;
   onClose: () => void;
   teamUsers: { id: string; full_name: string }[];
 }
 
-// Gestão do Portal do Cliente de um projeto: gerar/copiar o link, ligar o
-// resumo financeiro, escolher o contato do card de atendimento e revogar.
-export default function PortalModal({ projectId, projectName, open, onClose, teamUsers }: Props) {
+/**
+ * O PORTAL É DO CLIENTE, NÃO DO PROJETO.
+ *
+ * Cliente com seis projetos recebia seis links. Agora é um só, com uma aba por
+ * projeto — e este modal, aberto de dentro de um projeto, cuida do link do
+ * cliente daquele projeto e do interruptor que decide se ESTE projeto aparece
+ * lá dentro.
+ */
+export default function PortalModal({ projectId, projectName, clientId, clientName, portalVisivel, open, onClose, teamUsers }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
   const [portal, setPortal] = useState<Portal | null>(null);
@@ -46,21 +54,26 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
 
   const portalUrl = (t: string) => `${window.location.origin}/portal/${t}`;
 
+  const [visivel, setVisivel] = useState(portalVisivel);
+  useEffect(() => { setVisivel(portalVisivel); }, [portalVisivel]);
+
   const load = useCallback(async () => {
+    if (!clientId) { setPortal(null); setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase.from('project_portals')
-      .select('*').eq('project_id', projectId).eq('active', true)
+    const { data } = await supabase.from('client_portals')
+      .select('*').eq('client_id', clientId).eq('active', true)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     setPortal((data as Portal) || null);
     setLoading(false);
-  }, [projectId]);
+  }, [clientId]);
 
   useEffect(() => { if (open) load(); }, [open, load]);
 
   const create = async () => {
+    if (!clientId) { toast.error('Este projeto está sem cliente.'); return; }
     setBusy(true);
-    const { data, error } = await supabase.from('project_portals')
-      .insert([{ project_id: projectId, created_by: profile?.id, contact_user_ids: profile?.id ? [profile.id] : [] }])
+    const { data, error } = await supabase.from('client_portals')
+      .insert([{ client_id: clientId, created_by: profile?.id, contact_user_ids: profile?.id ? [profile.id] : [] }])
       .select('*').single();
     setBusy(false);
     if (error || !data) { toast.error('Não foi possível criar o portal.'); return; }
@@ -79,7 +92,7 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
     if (!portal) return;
     const prev = portal;
     setPortal({ ...portal, ...fields });
-    const { error } = await supabase.from('project_portals').update(fields).eq('id', portal.id);
+    const { error } = await supabase.from('client_portals').update(fields).eq('id', portal.id);
     if (error) { setPortal(prev); toast.error('Não foi possível salvar.'); return; }
     toast.success(okMsg);
   };
@@ -88,7 +101,7 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
   const revoke = async () => {
     if (!portal) return;
     setBusy(true);
-    const { error } = await supabase.from('project_portals').update({ active: false }).eq('id', portal.id);
+    const { error } = await supabase.from('client_portals').update({ active: false }).eq('id', portal.id);
     setBusy(false);
     if (error) { toast.error('Não foi possível revogar.'); return; }
     setPortal(null);
@@ -99,14 +112,17 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
     <Modal isOpen={open} onClose={onClose} title="Portal do cliente" maxWidth="max-w-lg">
       <div className="space-y-4">
         <p className="text-xs text-lumos-text-secondary -mt-1">
-          Um dashboard exclusivo de <b className="text-lumos-text-primary">{projectName}</b> pro cliente acompanhar entregas, etapas e aprovar vídeos.
+          Um link só de <b className="text-lumos-text-primary">{clientName || 'cliente'}</b>, com uma aba por projeto.
+          Ele acompanha as entregas, vê onde cada projeto está e aprova os vídeos por ali.
         </p>
 
         {loading ? (
           <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
         ) : !portal ? (
           <div className="border border-dashed border-lumos-border rounded-lumos p-6 text-center">
-            <p className="text-sm font-bold text-lumos-text-primary">Este projeto ainda não tem portal.</p>
+            <p className="text-sm font-bold text-lumos-text-primary">
+              {clientId ? `${clientName} ainda não tem portal.` : 'Este projeto está sem cliente.'}
+            </p>
             <p className="text-xs text-lumos-text-secondary mt-1">O link é secreto e pode ser revogado a qualquer momento.</p>
             <button onClick={create} disabled={busy}
               className="btn-primary mt-4 px-5 h-10 text-sm font-black inline-flex items-center gap-2 disabled:opacity-60">
@@ -135,7 +151,7 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
 
             {/* O que o cliente vê no Dashboard */}
             <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">O que o cliente vê no Dashboard</label>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">O que o cliente vê</label>
               <div className="mt-1.5 border border-lumos-border rounded-lumos divide-y divide-lumos-border/60">
                 {BLOCOS.map(b => {
                   const blocks = { ...BLOCKS_PADRAO, ...(portal.blocks || {}) };
@@ -168,32 +184,32 @@ export default function PortalModal({ projectId, projectName, open, onClose, tea
               </div>
             </div>
 
-            {/* Abas do portal */}
+            {/* Este projeto entra no portal do cliente? */}
             <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Abas do portal</label>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Este projeto no portal</label>
               <div className="mt-1.5 border border-lumos-border rounded-lumos">
                 <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                   <span className="min-w-0">
-                    <span className="block text-xs font-bold text-lumos-text-primary">Cronograma</span>
+                    <span className="block text-xs font-bold text-lumos-text-primary">{projectName} aparece pro cliente</span>
                     <span className="block text-[10.5px] text-lumos-text-secondary">
-                      Etapa por etapa com as datas das tarefas. Sem título de tarefa e sem responsável.
+                      Desligado, ele some da lista de abas. Nada é apagado, e o resto do portal continua igual.
                     </span>
                   </span>
-                  {(() => {
-                    const blocks = { ...BLOCKS_PADRAO, ...(portal.blocks || {}) };
-                    const on = blocks.cronograma;
-                    return (
-                      <button type="button"
-                        onClick={() => patch({ blocks: { ...blocks, cronograma: !on } }, on ? 'Aba Cronograma oculta pro cliente.' : 'Aba Cronograma visível pro cliente.')}
-                        className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', on ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
-                        <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', on ? 'left-5' : 'left-0.5')} />
-                      </button>
-                    );
-                  })()}
+                  <button type="button"
+                    onClick={async () => {
+                      const novoValor = !visivel;
+                      setVisivel(novoValor);
+                      const { error } = await supabase.from('projects').update({ portal_visivel: novoValor }).eq('id', projectId);
+                      if (error) { setVisivel(!novoValor); toast.error('Não foi possível salvar.'); return; }
+                      toast.success(novoValor ? 'Projeto visível no portal.' : 'Projeto oculto no portal.');
+                    }}
+                    className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', visivel ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                    <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', visivel ? 'left-5' : 'left-0.5')} />
+                  </button>
                 </div>
               </div>
               <p className="text-[10.5px] text-lumos-text-secondary mt-1.5">
-                Dashboard, Entregas e Atendimento estão sempre visíveis.
+                Entram os projetos ativos do cliente e os encerrados nos últimos 90 dias.
               </p>
             </div>
 
