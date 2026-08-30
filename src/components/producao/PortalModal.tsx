@@ -206,6 +206,29 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     toast.success(okMsg);
   };
 
+  /**
+   * Antecedência: input controlado, não `defaultValue`. Assim, se o `patch`
+   * falhar, o campo volta sozinho pro valor de verdade (o `useEffect` segue
+   * `portal.antecedencia_dias`, que o `patch` já reverte no erro) em vez de
+   * ficar mostrando o número recusado até o modal fechar.
+   */
+  const [antecedenciaInput, setAntecedenciaInput] = useState('7');
+  useEffect(() => { setAntecedenciaInput(String(portal?.antecedencia_dias ?? 7)); }, [portal?.antecedencia_dias]);
+
+  const salvarAntecedencia = () => {
+    if (!portal) return;
+    const atual = portal.antecedencia_dias ?? 7;
+    const n = Number(antecedenciaInput);
+    // Texto ou campo vazio não é "0 dias", é "não digitei nada direito":
+    // volta pro valor de verdade sem gravar lixo. Número válido é travado na
+    // faixa de 0 a 60, porque `min`/`max` do <input> são só dica visual.
+    const valido = antecedenciaInput.trim() !== '' && Number.isFinite(n);
+    const novo = valido ? Math.min(60, Math.max(0, Math.round(n))) : atual;
+    setAntecedenciaInput(String(novo));
+    if (novo === atual) return; // nada mudou: sem toast, sem chamada à toa
+    patch({ antecedencia_dias: novo } as any, 'Antecedência salva.');
+  };
+
   // Revogar = desativa o link atual; gerar de novo cria token novo.
   const revoke = async () => {
     if (!portal) return;
@@ -383,8 +406,9 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                       Dias de folga entre hoje e a data que o cliente consegue pedir.
                     </span>
                   </span>
-                  <input type="number" min={0} max={60} defaultValue={portal.antecedencia_dias ?? 7}
-                    onBlur={e => patch({ antecedencia_dias: Number(e.target.value) } as any, 'Antecedência salva.')}
+                  <input type="number" min={0} max={60} value={antecedenciaInput}
+                    onChange={e => setAntecedenciaInput(e.target.value)}
+                    onBlur={salvarAntecedencia}
                     className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />
                 </div>
 

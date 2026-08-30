@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarOff, Loader2, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarOff, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -35,17 +35,21 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [loading, setLoading] = useState(true);
   const [bloqueios, setBloqueios] = useState<Bloqueio[]>([]);
+  const [erro, setErro] = useState(false);
   const [data, setData] = useState('');
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data: rows } = await supabase.from('agenda_bloqueios')
+    const { data: rows, error } = await supabase.from('agenda_bloqueios')
       .select('data, motivo, criado_por, created_at')
       .gte('data', hoje())
       .order('data', { ascending: true });
-    setBloqueios((rows as Bloqueio[]) || []);
+    // Falha aqui não pode virar "lista vazia": isso diria pra tela que está
+    // tudo liberado quando na verdade só não deu pra saber.
+    setErro(!!error);
+    setBloqueios(error ? [] : (rows as Bloqueio[]) || []);
     setLoading(false);
   }, []);
   useEffect(() => { if (isOpen) load(); }, [isOpen, load]);
@@ -112,6 +116,19 @@ export default function BloqueiosDeAgenda({ isOpen, onClose, canManage }: Props)
 
         {loading ? (
           <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>
+        ) : erro ? (
+          <div className="rounded-lumos border border-red-500/40 bg-red-500/[0.06] px-3.5 py-3 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-lumos-text-primary">Não foi possível carregar as datas bloqueadas.</p>
+              <p className="text-[11px] text-lumos-text-secondary mt-0.5">
+                Pode ter data bloqueada que não está aparecendo aqui. Tente de novo antes de confiar na lista.
+              </p>
+              <button type="button" onClick={load} className="text-[11px] font-bold text-lumos-yellow hover:underline mt-1.5">
+                Tentar de novo
+              </button>
+            </div>
+          </div>
         ) : bloqueios.length === 0 ? (
           <p className="text-xs text-lumos-text-secondary italic text-center py-4">Nenhuma data futura bloqueada.</p>
         ) : (
