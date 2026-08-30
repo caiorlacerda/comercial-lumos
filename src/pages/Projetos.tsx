@@ -818,9 +818,20 @@ export default function Projetos() {
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
   // ── Hub do projeto (Fase 1 do redesign): abas + ferramentas da lista ──
-  const [projTab, setProjTab] = useState<'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'roteiros' | 'arquivos'>('status');
-  // Sub-abas do Briefing: o briefing em si, o Resumo (antiga visão geral) e os Arquivos.
-  const [briefingSub, setBriefingSub] = useState<'geral' | 'resumo' | 'arquivos'>('geral');
+  /**
+   * O projeto abre no RESUMO.
+   *
+   * O Resumo é onde fica descrito o que o projeto é e como ele está — é o que
+   * alguém precisa ler pra entrar no assunto. Ele vivia escondido como sub-aba
+   * do Briefing, dois cliques longe, então na prática quem abria o projeto caía
+   * no pipeline e ia perguntar o resto pra alguém.
+   *
+   * Ele saiu de dentro do Briefing em vez de existir nos dois lugares: página
+   * com duas portas é página que uma metade do time acha e a outra não.
+   */
+  const [projTab, setProjTab] = useState<'resumo' | 'status' | 'briefing' | 'geral' | 'tarefas' | 'entregas' | 'diarias' | 'ordemdia' | 'equipe' | 'roteiros' | 'arquivos'>('resumo');
+  // Sub-abas do Briefing: o briefing em si e os Arquivos.
+  const [briefingSub, setBriefingSub] = useState<'geral' | 'arquivos'>('geral');
   /**
    * Listas de tarefas do projeto (as abas de dentro da aba Tarefas).
    *
@@ -917,7 +928,9 @@ export default function Projetos() {
     setSelectedTaskId(null);
     setSelTaskIds(new Set());
     // Reset do hub ao trocar de projeto (aba, busca e filtros voltam ao padrão).
-    setProjTab('status');
+    // Trocar de projeto é "abrir um projeto" de novo: cai no Resumo, igual à
+    // primeira abertura. Senão a aba de entrada seria a primeira só uma vez.
+    setProjTab('resumo');
     setBriefingSub('geral');
     setTaskSearch('');
     setTaskStatusFilter('all');
@@ -975,11 +988,12 @@ export default function Projetos() {
       // ?tab= abre direto numa aba do hub (ex.: Visão Geral → Entregas).
       // Depois do reset do effect de troca de projeto, então usa timeout 0.
       const tab = searchParams.get('tab');
-      if (tab && ['status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos'].includes(tab)) {
-        // 'geral' e 'arquivos' viraram sub-abas do Briefing; links antigos seguem valendo.
-        const mapa: Record<string, ['briefing', 'resumo' | 'arquivos']> = { geral: ['briefing', 'resumo'], arquivos: ['briefing', 'arquivos'] };
+      if (tab && ['resumo', 'status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos'].includes(tab)) {
+        // Links antigos seguem valendo: 'geral' era o nome do que hoje é o
+        // Resumo, e 'arquivos' virou sub-aba do Briefing.
         setTimeout(() => {
-          if (mapa[tab]) { setProjTab('briefing'); setBriefingSub(mapa[tab][1]); }
+          if (tab === 'geral') setProjTab('resumo');
+          else if (tab === 'arquivos') { setProjTab('briefing'); setBriefingSub('arquivos'); }
           else setProjTab(tab as any);
         }, 0);
       }
@@ -2327,6 +2341,7 @@ export default function Projetos() {
                   {/* Abas do hub */}
                   <div className="flex gap-1 border-t border-lumos-border/50 -mx-5 md:-mx-6 px-5 md:px-6 overflow-x-auto no-scrollbar">
                     {([
+                      { key: 'resumo' as const, label: 'Resumo', count: null as number | null },
                       { key: 'status' as const, label: 'Status', count: null as number | null },
                       { key: 'briefing' as const, label: 'Briefing', count: null as number | null },
                       { key: 'tarefas' as const, label: 'Tarefas', count: activeCount },
@@ -2358,7 +2373,7 @@ export default function Projetos() {
                 {projTab === 'briefing' && (
                 <div className="space-y-3">
                   <div className="flex gap-1 border-b border-lumos-border">
-                    {([['geral', 'Briefing'], ['resumo', 'Resumo'], ['arquivos', 'Arquivos']] as const).map(([key, label]) => (
+                    {([['geral', 'Briefing'], ['arquivos', 'Arquivos']] as const).map(([key, label]) => (
                       <button key={key} type="button" onClick={() => setBriefingSub(key)}
                         className={clsx('px-3.5 py-2 text-[11px] font-black uppercase tracking-wider border-b-2 transition-colors',
                           briefingSub === key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
@@ -2395,8 +2410,8 @@ export default function Projetos() {
                 <ProjectRoteiros key={'rt' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
                 )}
 
-                {/* ================= SUB-ABA: RESUMO (antiga Visão geral, dentro do Briefing) ================= */}
-                {projTab === 'briefing' && briefingSub === 'resumo' && (
+                {/* ================= ABA: RESUMO (é onde o projeto abre) ================= */}
+                {projTab === 'resumo' && (
                 <div className="space-y-5">
 
                   {/* Resumo rápido */}
