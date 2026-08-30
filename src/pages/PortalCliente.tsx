@@ -271,15 +271,8 @@ export default function PortalCliente() {
       </div>
     );
   }
-  if (!dados) {
-    return (
-      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
-        <style>{PORTAL_CSS}</style>
-        <span className="farol" />
-      </div>
-    );
-  }
-
+  // Vem ANTES do "carregando": com login ligado e ninguém logado, não há dados
+  // pra esperar — ficar girando seria esconder a porta de entrada.
   // Porta fechada: portal com login ligado.
   if (porta) {
     const enviar = async () => {
@@ -346,6 +339,15 @@ export default function PortalCliente() {
             </>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (!dados) {
+    return (
+      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
+        <style>{PORTAL_CSS}</style>
+        <span className="farol" />
       </div>
     );
   }

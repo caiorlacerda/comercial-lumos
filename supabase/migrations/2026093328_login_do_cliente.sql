@@ -97,8 +97,12 @@ DECLARE
   v_result    jsonb;
   u           RECORD;
   v_email     text;
-  v_pessoa    RECORD;
-  v_restrito  boolean := false;
+  -- Escalares, e não um RECORD: sem login a variável nunca é preenchida, e ler
+  -- um campo de RECORD não atribuído derruba a função inteira.
+  v_pessoa_id    uuid := NULL;
+  v_pessoa_nome  text := NULL;
+  v_pessoa_email text := NULL;
+  v_restrito     boolean := false;
   c_visiveis  text[] := ARRAY['EM_REVISAO_CLIENTE', 'ALTERACOES_CLIENTE', 'APROVADO'];
   c_mes       date := date_trunc('month', current_date)::date;
 BEGIN
@@ -125,15 +129,16 @@ BEGIN
       RETURN jsonb_build_object('error', 'precisa_login',
                                 'cliente', jsonb_build_object('nome', v_client.name));
     END IF;
-    SELECT * INTO v_pessoa FROM client_users
+    SELECT id, nome, email INTO v_pessoa_id, v_pessoa_nome, v_pessoa_email
+    FROM client_users
     WHERE client_id = v_client.id AND lower(email) = v_email AND ativo;
-    IF v_pessoa IS NULL THEN
+    IF v_pessoa_id IS NULL THEN
       RETURN jsonb_build_object('error', 'sem_acesso',
                                 'cliente', jsonb_build_object('nome', v_client.name));
     END IF;
     UPDATE client_users SET auth_user_id = auth.uid(), last_login_at = now()
-    WHERE id = v_pessoa.id;
-    v_restrito := EXISTS (SELECT 1 FROM client_user_projects WHERE client_user_id = v_pessoa.id);
+    WHERE id = v_pessoa_id;
+    v_restrito := EXISTS (SELECT 1 FROM client_user_projects WHERE client_user_id = v_pessoa_id);
   END IF;
 
   v_avisar := v_portal.last_opened_at IS NULL OR v_portal.last_opened_at < now() - interval '60 minutes';
@@ -147,7 +152,7 @@ BEGIN
       VALUES (
         u.id, 'cliente_abriu_link', 'producao', 'normal',
         'Cliente abriu o portal 👀',
-        COALESCE(v_pessoa.nome, v_pessoa.email, v_client.name) || ' abriu o portal.',
+        COALESCE(v_pessoa_nome, v_pessoa_email, v_client.name) || ' abriu o portal.',
         '/producao',
         jsonb_build_object('client_portal_id', v_portal.id, 'client_id', v_client.id)
       );
@@ -190,9 +195,9 @@ BEGIN
     'portal', jsonb_build_object('show_financeiro', v_portal.show_financeiro,
                                  'blocks', v_portal.blocks,
                                  'exige_login', v_portal.exige_login),
-    'voce', CASE WHEN v_pessoa.id IS NULL THEN NULL ELSE
-      jsonb_build_object('nome', COALESCE(v_pessoa.nome, split_part(v_pessoa.email, '@', 1)),
-                         'email', v_pessoa.email) END,
+    'voce', CASE WHEN v_pessoa_id IS NULL THEN NULL ELSE
+      jsonb_build_object('nome', COALESCE(v_pessoa_nome, split_part(v_pessoa_email, '@', 1)),
+                         'email', v_pessoa_email) END,
     'abrir_projeto', v_abrir,
     'projetos', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
@@ -259,7 +264,7 @@ BEGIN
         AND (p.status <> 'concluido' OR p.updated_at > now() - interval '90 days')
         AND (NOT v_restrito OR p.id IN (
               SELECT cup.project_id FROM client_user_projects cup
-              WHERE cup.client_user_id = v_pessoa.id))
+              WHERE cup.client_user_id = v_pessoa_id))
     ), '[]'::jsonb),
     'contatos', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
@@ -287,7 +292,7 @@ BEGIN
             AND vv.status = ANY(c_visiveis) AND vv.client_decided_at IS NOT NULL
             AND (NOT v_restrito OR p.id IN (
                   SELECT cup.project_id FROM client_user_projects cup
-                  WHERE cup.client_user_id = v_pessoa.id))
+                  WHERE cup.client_user_id = v_pessoa_id))
           UNION ALL
           SELECT jsonb_build_object('tipo', 'entrega', 'projeto', p.name,
             'file_name', vv.file_name, 'versao', vv.versao,
@@ -297,7 +302,7 @@ BEGIN
             AND vv.status = ANY(c_visiveis)
             AND (NOT v_restrito OR p.id IN (
                   SELECT cup.project_id FROM client_user_projects cup
-                  WHERE cup.client_user_id = v_pessoa.id))
+                  WHERE cup.client_user_id = v_pessoa_id))
         ) raw
         ORDER BY (raw.x->>'quando') DESC NULLS LAST
         LIMIT 12
