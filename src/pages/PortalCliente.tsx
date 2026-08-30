@@ -255,6 +255,7 @@ export default function PortalCliente() {
           menu — com sete abas abertas, a fita virava parede de texto e o
           Atendimento sumia no fim da rolagem. */}
       <header className="topo">
+        <div className="topo-dentro">
         <span className="marca">
           <img className="logotipo" src={LOGO_LUMOS} alt="Produtora Lumos" />
           <span className="cliente">Portal de <b>{dados.cliente.nome}</b></span>
@@ -267,10 +268,14 @@ export default function PortalCliente() {
           </button>
 
           <span className="menu-abre">
+            {/* Sempre "Projetos": o rótulo é o nome do lugar, não o do item
+                aberto. Qual projeto está aberto já está no título da página, e
+                um botão que muda de nome faz a pessoa procurar o menu duas
+                vezes. O destaque em amarelo é que diz que ela está num deles. */}
             <button type="button" className="link" aria-haspopup="menu" aria-expanded={menuProjetos}
               aria-current={!!projetoAberto}
               onClick={() => setMenuProjetos(o => !o)}>
-              {projetoAberto ? projetoAberto.nome.trim() : 'Projetos'}
+              Projetos
               <ChevronDown aberto={menuProjetos} />
             </button>
             {menuProjetos && (
@@ -306,6 +311,7 @@ export default function PortalCliente() {
           <span className="so-grande">Você é <b>{nome}</b></span>
           <button className="trocar" onClick={() => { localStorage.removeItem(NOME_SALVO); setNome(''); setDigitando(''); }}>trocar</button>
         </span>
+        </div>
       </header>
 
       {/* ── INÍCIO ─────────────────────────────────────────────── */}

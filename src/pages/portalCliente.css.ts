@@ -334,4 +334,29 @@ export const PORTAL_CSS = String.raw`
     .navegacao { order: 3; width: 100%; margin: 2px 0 0; justify-content: space-between; }
     .quem .so-grande { display: none; }
   }
+
+  /* ── Alinhamento do cabeçalho ─────────────────────────────────
+     A barra atravessa a tela, mas o miolo dela usa a MESMA largura do
+     conteúdo: assim a marca começa onde o texto começa e o perfil termina
+     onde o texto termina. E as três colunas iguais deixam a navegação no
+     centro de verdade — com "auto" nas laterais, o lado mais largo empurrava
+     o meio pro lado. */
+  /* O .topo era flex e o miolo, como filho, encolhia pro tamanho do conteúdo:
+     o cabeçalho ficava estreito e desalinhado do texto. Aqui ele volta a ser
+     uma faixa simples, e quem organiza as três colunas é o miolo. */
+  .topo { display: block; padding: 0; }
+  .topo-dentro {
+    max-width: 1180px; margin: 0 auto; padding: 13px 26px;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px;
+  }
+  .topo-dentro > .marca { justify-self: start; }
+  .topo-dentro > .navegacao { justify-self: center; margin: 0; }
+  .topo-dentro > .quem { justify-self: end; margin: 0; }
+
+  @media (max-width: 760px) {
+    .topo-dentro {
+      grid-template-columns: 1fr auto; row-gap: 10px; padding: 12px 18px;
+    }
+    .topo-dentro > .navegacao { grid-column: 1 / -1; justify-self: stretch; }
+  }
 `;
