@@ -47,7 +47,14 @@ interface Agenda {
   antecedencia_dias: number;
   dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo' }[];
   agendadas: { nome: string; data: string; hora_inicio: string | null; hora_fim: string | null; local: string | null }[];
+  /** O pacote do MÊS CORRENTE, do bloco "Suas diárias neste mês". */
   pacote: { meta: number; realizado: number } | null;
+  /** O pacote de cada mês que o calendário alcança, com a chave em 'AAAA-MM'.
+   *  O aviso de diária extra tem que ler o mês da data escolhida, que é o mesmo
+   *  mês que `portal_pedir_diaria` usa pra gravar `fora_do_pacote`. Mês sem
+   *  contrato por volume não entra no mapa. Opcional porque só existe depois da
+   *  migração 2026093333. */
+  pacotes?: Record<string, { meta: number; realizado: number }>;
   pedidos: { id: string; data_desejada: string; estado: string; motivo_recusa: string | null; fora_do_pacote: boolean; descricao: string }[];
 }
 
@@ -169,6 +176,19 @@ const BILHETE = 'lumos_voltar';
 
 const dia = (s?: string | null) =>
   s ? new Date(s.length <= 10 ? `${s}T12:00:00` : s).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : null;
+
+/** O mês de uma data 'AAAA-MM-DD' por extenso, pro aviso dizer de que mês está
+ *  falando: o calendário vai a 90 dias, e quase toda data escolhida cai num mês
+ *  que não é o de hoje. */
+const mesPorExtenso = (s: string) =>
+  new Date(`${s.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' });
+
+/** O mês de hoje em 'AAAA-MM', pelo relógio local. `toISOString()` é UTC e
+ *  viraria o mês cedo demais na virada do dia, aqui no fuso do Brasil. */
+const mesDeHoje = () => {
+  const h = new Date();
+  return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
+};
 
 const quandoRelativo = (s: string) => {
   const d = Math.floor((Date.now() - new Date(s).getTime()) / 86400000);
@@ -451,6 +471,23 @@ export default function PortalCliente() {
   }, [abaProj, projetoAberto?.id, token, exigeLogin]);
 
   const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
+
+  /** O pacote do mês DA DATA ESCOLHIDA, que é o único que responde a pergunta
+   *  do formulário: "esta diária vai entrar como extra?". `portal_pedir_diaria`
+   *  decide `fora_do_pacote` pelo mês da data pedida, e a tela lia o mês
+   *  corrente, então a maioria das datas do calendário (90 dias, quase sempre
+   *  outro mês) dava aviso errado, nos dois sentidos: aviso de cobrança à parte
+   *  sem motivo, ou nenhum aviso e o pedido chegando marcado como extra.
+   *  Sem data escolhida, não há aviso nenhum.
+   *  Enquanto a migração 2026093333 não roda, `pacotes` não vem: aí o pacote do
+   *  mês corrente ainda vale, mas só para datas do mês corrente. */
+  const pacoteDaData = useMemo(() => {
+    if (!dataEscolhida || !agenda) return null;
+    const mes = dataEscolhida.slice(0, 7);
+    if (agenda.pacotes) return agenda.pacotes[mes] || null;
+    return mes === mesDeHoje() ? agenda.pacote : null;
+  }, [agenda, dataEscolhida]);
+
   const [pedDescricao, setPedDescricao] = useState('');
   const [pedLocal, setPedLocal] = useState('');
   const [pedDuracao, setPedDuracao] = useState(10);
@@ -460,6 +497,12 @@ export default function PortalCliente() {
     try { return localStorage.getItem(EMAIL_SALVO) || ''; } catch { return ''; }
   });
   const [enviandoPedido, setEnviandoPedido] = useState(false);
+  /** A mesma trava, mas síncrona. `enviandoPedido` é estado: dois cliques no
+   *  mesmo tique do navegador leem os dois `false` (o React ainda não
+   *  re-renderizou o botão desabilitado) e saem os dois pedidos ao mesmo tempo.
+   *  Um vence, o outro bate no índice único de pedido pendente. O ref muda na
+   *  hora, então o segundo clique nem chega a sair. */
+  const enviandoRef = useRef(false);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [erroCancelar, setErroCancelar] = useState<string | null>(null);
@@ -479,8 +522,9 @@ export default function PortalCliente() {
   useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
 
   const enviarPedido = useCallback(async () => {
-    if (!projetoAberto || !dataEscolhida || enviandoPedido) return;
+    if (!projetoAberto || !dataEscolhida || enviandoRef.current) return;
     const minhaGeracao = geracaoAgenda.current;
+    enviandoRef.current = true;
     setEnviandoPedido(true);
     setErroPedido(null);
     const { data, error } = await supabase.rpc('portal_pedir_diaria', {
@@ -498,12 +542,14 @@ export default function PortalCliente() {
     // caminho de sucesso como se o pedido tivesse sido criado de verdade.
     if (error) {
       setErroPedido(MOTIVO_GENERICO);
+      enviandoRef.current = false;
       setEnviandoPedido(false);
       return;
     }
     const falha = (data as any)?.error;
     if (falha) {
       setErroPedido(motivoPedido(falha));
+      enviandoRef.current = false;
       setEnviandoPedido(false);
       return;
     }
@@ -516,6 +562,7 @@ export default function PortalCliente() {
     setPedDescricao('');
     setPedLocal('');
     setDataEscolhida(null);
+    enviandoRef.current = false;
     setEnviandoPedido(false);
     const { data: nova, error: erroNova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
     // Mesma guarda do efeito principal: se a pessoa já trocou de projeto
@@ -523,7 +570,7 @@ export default function PortalCliente() {
     if (geracaoAgenda.current === minhaGeracao && !erroNova && !(nova as any)?.error) {
       setAgenda(nova as Agenda);
     }
-  }, [token, projetoAberto, dataEscolhida, enviandoPedido, pedDuracao, pedLocal, pedDescricao, exigeLogin, pedNome, pedEmail]);
+  }, [token, projetoAberto, dataEscolhida, pedDuracao, pedLocal, pedDescricao, exigeLogin, pedNome, pedEmail]);
 
   const cancelarPedido = useCallback(async (id: string) => {
     if (!projetoAberto || cancelandoId) return;
@@ -1012,7 +1059,10 @@ export default function PortalCliente() {
                 </section>
               ) : (
                 <>
-                  {agenda?.pacote && (
+                  {/* Meta zero não é pacote: seria barra de largura NaN% e
+                      "3 de 0" escrito na tela. Sem meta, o bloco não aparece,
+                      igual a projeto sem contrato por volume. */}
+                  {agenda?.pacote && agenda.pacote.meta > 0 && (
                     <section className="secao">
                       <span className="rotulo">Suas diárias neste mês</span>
                       <div className="proj" style={{ cursor: 'default' }}>
@@ -1083,9 +1133,9 @@ export default function PortalCliente() {
                           </div>
                         )}
 
-                        {agenda?.pacote && agenda.pacote.realizado >= agenda.pacote.meta && (
+                        {pacoteDaData && pacoteDaData.meta > 0 && pacoteDaData.realizado >= pacoteDaData.meta && (
                           <p className="nota alerta">
-                            Esta seria a {agenda.pacote.realizado + 1}ª diária de {agenda.pacote.meta} no mês.
+                            Esta seria a {pacoteDaData.realizado + 1}ª diária de {pacoteDaData.meta} em {mesPorExtenso(dataEscolhida)}.
                             Ela entra como extra, e a Lumos vai orçar antes de confirmar.
                           </p>
                         )}
