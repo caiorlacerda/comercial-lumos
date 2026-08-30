@@ -79,7 +79,9 @@ export const PORTAL_CSS = String.raw`
   .fita::-webkit-scrollbar { display: none; }
   .fita-proj { padding: 0; margin: 22px 0 4px; border-bottom: 1px solid var(--fio); }
   .fita-proj .link { font-size: 12px; padding: 9px 13px; }
-  .secao:first-of-type { padding-top: 26px; border-top: 0; }
+  /* Só a primeira seção logo depois da fita do projeto: .secao:first-of-type
+     sozinho vazava pra fora da folha do projeto (Início, Atendimento). */
+  .fita-proj + .secao { padding-top: 26px; border-top: 0; }
   .aba {
     appearance: none; background: none; border: 0; cursor: pointer; white-space: nowrap;
     padding: 14px 12px 12px; border-bottom: 2px solid transparent;

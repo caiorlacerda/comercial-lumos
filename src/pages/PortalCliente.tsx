@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
@@ -40,6 +40,10 @@ interface Portal {
   financeiro: { em_dia: boolean; proximo_vencimento: string | null } | null;
   atividade: { tipo: string; projeto: string; file_name: string; decisao?: string; quem?: string; versao?: number; quando: string }[];
 }
+
+/** As quatro abas de dentro de um projeto. */
+type AbaProjeto = 'geral' | 'entregas' | 'diarias' | 'arquivos';
+const ABAS_PROJETO: readonly AbaProjeto[] = ['geral', 'entregas', 'diarias', 'arquivos'];
 
 /** Como o cliente lê o estado de um vídeo. Etapa interna nunca chega aqui. */
 const ESTADO: Record<string, { label: string; classe: string }> = {
@@ -148,8 +152,22 @@ export default function PortalCliente() {
   /** Aba de dentro do projeto. Volta pra "geral" ao trocar de projeto: manter
    *  "diarias" ao pular pra outro projeto mostraria o calendário de um projeto
    *  que a pessoa nem olhou ainda. */
-  const [abaProj, setAbaProj] = useState<'geral' | 'entregas' | 'diarias' | 'arquivos'>('geral');
-  useEffect(() => { setAbaProj('geral'); }, [aba]);
+  const [abaProj, setAbaProj] = useState<AbaProjeto>('geral');
+  /**
+   * Sub-aba que `carregar` leu da URL de volta, esperando ser aplicada.
+   * O efeito abaixo reseta `abaProj` toda vez que `aba` muda — inclusive
+   * quando é a própria restauração quem muda `aba` — então ele confere esta
+   * ref antes de resetar, em vez de sempre voltar pra "geral".
+   */
+  const subRestaurada = useRef<AbaProjeto | null>(null);
+  useEffect(() => {
+    if (subRestaurada.current) {
+      setAbaProj(subRestaurada.current);
+      subRestaurada.current = null;
+      return;
+    }
+    setAbaProj('geral');
+  }, [aba]);
   const [nome, setNome] = useState(() => localStorage.getItem(NOME_SALVO) || '');
   /**
    * Capas dos quadros, buscadas DEPOIS e só das que estão na tela.
@@ -190,9 +208,18 @@ export default function PortalCliente() {
       try { localStorage.setItem(NOME_SALVO, d.voce.nome); } catch { /* ignore */ }
     }
     setDados(d);
-    // Voltando do player: reabre na aba de onde a pessoa saiu.
-    const pedida = new URLSearchParams(window.location.search).get('aba');
-    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || d.projetos.some(p => p.id === pedida))) {
+    // Voltando do player: reabre na aba de onde a pessoa saiu — e, se era de
+    // dentro de um projeto, na aba interna também (`sub`).
+    const params = new URLSearchParams(window.location.search);
+    const pedida = params.get('aba');
+    const ehProjeto = !!pedida && d.projetos.some(p => p.id === pedida);
+    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || ehProjeto)) {
+      if (ehProjeto) {
+        const subPedida = params.get('sub');
+        if (subPedida && (ABAS_PROJETO as readonly string[]).includes(subPedida)) {
+          subRestaurada.current = subPedida as AbaProjeto;
+        }
+      }
       setAba(pedida);
     } else if (d.abrir_projeto) {
       // Link antigo, de projeto: abre já na aba daquele projeto.
@@ -235,12 +262,16 @@ export default function PortalCliente() {
   /** Deixa o bilhete de volta antes de sair pro player. */
   const marcarVolta = useCallback(() => {
     try {
+      // Dentro de um projeto, o bilhete leva também a aba interna (`sub`):
+      // sem ela, quem saiu de Entregas voltava sempre em Visão geral.
+      const dentroProjeto = dados?.projetos.some(p => p.id === aba) ?? false;
+      const sub = dentroProjeto ? `&sub=${abaProj}` : '';
       sessionStorage.setItem(BILHETE, JSON.stringify({
-        url: `/portal/${token}${aba !== 'inicio' ? `?aba=${aba}` : ''}`,
+        url: `/portal/${token}${aba !== 'inicio' ? `?aba=${aba}${sub}` : ''}`,
         rotulo: dados ? `Portal de ${dados.cliente.nome}` : 'Portal',
       }));
     } catch { /* navegador sem sessão: só não tem botão de voltar */ }
-  }, [token, aba, dados]);
+  }, [token, aba, dados, abaProj]);
 
   // Aba trocou: volta pro topo e pede as capas dos quadros que ela mostra.
   // Sem o topo, trocar de aba caía no meio da página anterior.
