@@ -7,7 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import InternalReviewModal from './InternalReviewModal';
 import Select from '@/components/ui/Select';
-import { type ReviewStatus, STATUS_UI, STATUS_TO_TASK, taskStatusToVideo } from '@/lib/reviewStatus';
+import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
+import { sincronizarTarefa } from '@/lib/reviewTransition';
 import { captureVideoThumb } from '@/lib/videoThumb';
 import { moverEtapa, mensagemDaEtapa } from '@/lib/reviewTransition';
 
@@ -243,10 +244,10 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
       const { error } = await supabase.from('video_versions')
         .update({ status: next, updated_at: new Date().toISOString() }).in('id', versionIds);
       if (error) throw error;
-      const taskIds = gs.map(g => g.current.task_id).filter(Boolean) as string[];
-      if (taskIds.length) {
-        await supabase.from('project_tasks').update({ status: STATUS_TO_TASK[next] }).in('id', taskIds);
-      }
+      // Uma tarefa pode ter vários formatos: cada uma recalcula pelo conjunto,
+      // em vez de todas receberem o status do lote.
+      const taskIds = [...new Set(gs.map(g => g.current.task_id).filter(Boolean) as string[])];
+      await Promise.all(taskIds.map(id => sincronizarTarefa(id, next)));
       toast.success(`${gs.length} vídeo(s) em ${STATUS_UI[next].label} ✓`);
       setSelected(new Set());
       await fetchVersions();
@@ -665,12 +666,21 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     const value = taskId || null;
     const groupId = g.id;
     setVersions(prev => prev.map(v => (v.group_id === groupId ? { ...v, task_id: value } : v)));
+    const anterior = g.current.task_id;
     const { error } = await supabase.from('video_versions').update({ task_id: value }).eq('group_id', groupId);
     if (error) { toast.error('Não foi possível vincular a tarefa.'); fetchVersions(); return; }
+    // A tarefa de onde ele saiu também muda: talvez ela estivesse presa
+    // esperando justamente por este formato.
+    if (anterior && anterior !== value) await sincronizarTarefa(anterior);
 
     if (value) {
       const t = tasks.find(x => x.id === value);
-      const next = t?.status ? taskStatusToVideo(t.status, g.current.status) : null;
+      // Alinhar o vídeo ao status da tarefa só faz sentido quando ele é o
+      // ÚNICO da tarefa. Com outros formatos já lá, cada um tem a própria
+      // etapa, e puxar o novo pro status da tarefa apagaria justamente a
+      // independência que os formatos precisam ter.
+      const sozinho = !versions.some(v => v.task_id === value && (v.group_id || v.id) !== groupId);
+      const next = sozinho && t?.status ? taskStatusToVideo(t.status, g.current.status) : null;
       if (next && next !== g.current.status) {
         await supabase.from('video_versions')
           .update({ status: next, updated_at: new Date().toISOString() })

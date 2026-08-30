@@ -9,7 +9,7 @@ import Select from '@/components/ui/Select';
 import InternalReviewModal from './InternalReviewModal';
 import VideoThumb from './VideoThumb';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
-import { moverEtapa, mensagemDaEtapa } from '@/lib/reviewTransition';
+import { moverEtapa, mensagemDaEtapa, sincronizarTarefa } from '@/lib/reviewTransition';
 
 interface Version {
   id: string;
@@ -179,9 +179,12 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     const { error } = await supabase.from('video_versions').update({ task_id: task.id }).eq('group_id', groupId);
     if (error) { toast.error('Não foi possível vincular o vídeo.'); setBusy(false); return; }
 
-    // A tarefa manda: o vídeo assume o status dela.
+    // O vídeo assume o status da tarefa só quando é o PRIMEIRO dela. Com
+    // outros formatos já vinculados, cada um segue a própria etapa — o 16:9
+    // pode estar aprovado e o 1:1 em ajustes, e é isso que precisa aparecer.
     if (g) {
-      const next = taskStatusToVideo(task.status, g.current.status);
+      const sozinho = !vinculados.some(x => x.id !== groupId);
+      const next = sozinho ? taskStatusToVideo(task.status, g.current.status) : null;
       if (next && next !== g.current.status) {
         await supabase.from('video_versions')
           .update({ status: next, updated_at: new Date().toISOString() })
@@ -191,6 +194,9 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
         toast.success('Vídeo vinculado ✓');
       }
     }
+    // A tarefa passa a refletir o conjunto (inclusive o formato que acabou de
+    // entrar, que pode estar mais atrasado que os outros).
+    await sincronizarTarefa(task.id);
     setBusy(false);
     recarregar();
   };
@@ -201,6 +207,8 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     setBusy(false);
     if (error) { toast.error('Não foi possível desvincular.'); return; }
     toast.success('Vídeo desvinculado.');
+    // Sem ele, a tarefa pode ter destravado: recalcula pelos que ficaram.
+    await sincronizarTarefa(task.id);
     recarregar();
   };
 
