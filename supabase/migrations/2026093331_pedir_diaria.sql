@@ -21,6 +21,9 @@ BEGIN
     SELECT id, nome, email INTO v_pessoa, v_nome, v_email FROM client_users
     WHERE client_id = v_portal.client_id AND lower(email) = v_email AND ativo;
     IF v_pessoa IS NULL THEN RETURN jsonb_build_object('error','sem_acesso'); END IF;
+    -- client_users.nome é opcional; diaria_pedidos.nome não é. Mesmo padrão
+    -- da get_client_portal_v2 para o mesmo problema.
+    v_nome := COALESCE(v_nome, split_part(v_email, '@', 1));
   ELSE
     v_nome  := NULLIF(btrim(p_nome), '');
     v_email := lower(NULLIF(btrim(p_email), ''));
@@ -67,14 +70,43 @@ BEGIN
   RETURNING id INTO v_id;
 
   RETURN jsonb_build_object('ok', true, 'id', v_id, 'fora_do_pacote', v_fora);
+-- O pré-teste de 'repetido' olha o índice único parcial antes de inserir, mas
+-- duas chamadas simultâneas passam as duas pelo pré-teste. Quem perder a
+-- corrida do INSERT recebe o erro tratado, não um 23505 cru.
+EXCEPTION WHEN unique_violation THEN
+  RETURN jsonb_build_object('error','repetido');
 END; $$;
 
+-- Com login ligado, só quem pediu pode cancelar: o link do portal não é
+-- credencial, é convite. Sem login, o cliente é uma coisa só e continua
+-- cancelando qualquer pedido pendente dele.
 CREATE OR REPLACE FUNCTION public.portal_cancelar_pedido(p_token text, p_pedido_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_portal RECORD; v_n int;
+DECLARE
+  v_portal RECORD;
+  v_pessoa uuid := NULL;
+  v_email  text;
+  v_p      RECORD;
+  v_n      int;
 BEGIN
   SELECT * INTO v_portal FROM client_portals WHERE token = p_token AND active = true;
   IF v_portal IS NULL THEN RETURN jsonb_build_object('error','invalid'); END IF;
+
+  IF v_portal.exige_login THEN
+    v_email := lower(COALESCE(auth.jwt() ->> 'email', ''));
+    SELECT id INTO v_pessoa FROM client_users
+    WHERE client_id = v_portal.client_id AND lower(email) = v_email AND ativo;
+    IF v_pessoa IS NULL THEN RETURN jsonb_build_object('error','sem_acesso'); END IF;
+  END IF;
+
+  SELECT * INTO v_p FROM diaria_pedidos
+  WHERE id = p_pedido_id AND client_id = v_portal.client_id AND estado = 'pendente';
+  IF v_p IS NULL THEN RETURN jsonb_build_object('error','nao_encontrado'); END IF;
+
+  IF v_pessoa IS NOT NULL AND v_p.client_user_id IS DISTINCT FROM v_pessoa THEN
+    RETURN jsonb_build_object('error','sem_acesso');
+  END IF;
+
   UPDATE diaria_pedidos SET estado = 'cancelado'
   WHERE id = p_pedido_id AND client_id = v_portal.client_id AND estado = 'pendente';
   GET DIAGNOSTICS v_n = ROW_COUNT;
