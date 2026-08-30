@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
@@ -936,8 +936,9 @@ export default function Projetos() {
     // Reset do hub ao trocar de projeto (aba, busca e filtros voltam ao padrão).
     // Trocar de projeto é "abrir um projeto" de novo: cai no Resumo, igual à
     // primeira abertura. Senão a aba de entrada seria a primeira só uma vez.
-    setProjTab('resumo');
+    // A exceção é o link que pediu uma aba — esse recado manda mais que o padrão.
     setBriefingSub('geral');
+    if (!aplicarAbaPedida()) setProjTab('resumo');
     setTaskSearch('');
     setTaskStatusFilter('all');
     setTaskAssigneeFilter('all');
@@ -985,23 +986,29 @@ export default function Projetos() {
         setSelectedClientId(proj.client_id);
         setSelectedProjectId(proj.id);
       }
-      // ?review= vem da notificação de menção e aponta pra um vídeo. O painel de
-      // vídeos só existe dentro de Entregas, então sem forçar a aba o link
-      // abria o projeto e parava ali — que era justamente a caça ao tesouro
-      // que a menção queria evitar.
-      if (searchParams.get('review')) setTimeout(() => setProjTab('entregas'), 0);
-
-      // ?tab= abre direto numa aba do hub (ex.: Visão Geral → Entregas).
-      // Depois do reset do effect de troca de projeto, então usa timeout 0.
+      /**
+       * A ABA PEDIDA PELO LINK.
+       *
+       * Isto já foi um setTimeout(0) correndo contra o reset que acontece ao
+       * trocar de projeto — e corrida assim é decidida pela ordem em que o
+       * React resolve as coisas, que muda quando qualquer efeito muda. Agora o
+       * link deixa um recado, e quem reseta lê o recado em vez de ignorar.
+       *
+       * ?review= vem da notificação de menção e aponta pra um vídeo. O painel
+       * de vídeos só existe dentro de Entregas, então sem forçar a aba o link
+       * abria o projeto e parava ali.
+       */
       const tab = searchParams.get('tab');
-      if (tab && ['resumo', 'status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos'].includes(tab)) {
-        // Links antigos seguem valendo: 'geral' era o nome do que hoje é o
-        // Resumo, e 'arquivos' virou sub-aba do Briefing.
-        setTimeout(() => {
-          if (tab === 'geral') setProjTab('resumo');
-          else if (tab === 'arquivos') { setProjTab('briefing'); setBriefingSub('arquivos'); }
-          else setProjTab(tab as any);
-        }, 0);
+      const abas = ['resumo', 'status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos'];
+      // Links antigos seguem valendo: 'geral' era o nome do que hoje é o Resumo,
+      // e 'arquivos' virou sub-aba do Briefing.
+      const pedida = searchParams.get('review') ? 'entregas'
+        : tab && abas.includes(tab) ? (tab === 'geral' ? 'resumo' : tab)
+        : null;
+      if (pedida) {
+        abaPedidaRef.current = pedida;
+        // Projeto já aberto: não vai haver reset nenhum, então aplica agora.
+        if (proj.id === selectedProjectId) aplicarAbaPedida();
       }
     }
     // Mantém projectId na URL (reflete o projeto aberto → destaque na sidebar e
@@ -1018,6 +1025,16 @@ export default function Projetos() {
   // Se o carregamento terminou e ela não veio (foi pra lixeira, ou o link é
   // velho), avisa — antes a página só ficava parada no projeto sem explicação.
   const pendingArmedRef = useRef(false);
+  /** Aba que o link pediu, esperando o projeto terminar de abrir. */
+  const abaPedidaRef = useRef<string | null>(null);
+  const aplicarAbaPedida = useCallback(() => {
+    const alvo = abaPedidaRef.current;
+    abaPedidaRef.current = null;
+    if (!alvo) return false;
+    if (alvo === 'arquivos') { setProjTab('briefing'); setBriefingSub('arquivos'); }
+    else setProjTab(alvo as any);
+    return true;
+  }, []);
   useEffect(() => {
     if (tasksLoading) { pendingArmedRef.current = true; return; }
     const tid = pendingTaskIdRef.current;

@@ -16,7 +16,6 @@ interface VV {
   status: string;
   updated_at: string;
   file_name: string;
-  thumb_url: string | null;
   project: { id: string; name: string; code: string | null; status: string; client: { name: string } | null } | null;
 }
 
@@ -39,6 +38,16 @@ function rel(iso: string) {
 
 export default function VideoReviewHub() {
   const [rows, setRows] = useState<VV[]>([]);
+  /**
+   * As capas vêm DEPOIS, e só as que a tela mostra.
+   *
+   * A miniatura é uma imagem inteira guardada dentro da linha do banco. Esta
+   * página pedia todas as linhas COM a imagem: 193 vídeos, 5,3 MB e 9 segundos
+   * de espera — pra desenhar uma capa por projeto, quinze imagens. Agora a
+   * lista vem sem imagem nenhuma (rápida) e só as capas que aparecem são
+   * buscadas em seguida.
+   */
+  const [capas, setCapas] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [openProject, setOpenProject] = useState<{ id: string; name: string; code: string | null } | null>(null);
   const [openTasks, setOpenTasks] = useState<{ id: string; titulo: string }[]>([]);
@@ -51,38 +60,46 @@ export default function VideoReviewHub() {
     const projJoin = 'project:projects(id, name, code, status, client:clients(name))';
     const res = await supabase
       .from('video_versions')
-      .select(`id, project_id, versao, status, updated_at, file_name, thumb_url, ${projJoin}`)
+      .select(`id, project_id, versao, status, updated_at, file_name, ${projJoin}`)
       .order('updated_at', { ascending: false });
-    let data: any = res.data;
-    // Fallback caso a coluna thumb_url ainda não exista (migration não rodada).
-    if (res.error) {
-      const r = await supabase
-        .from('video_versions')
-        .select(`id, project_id, versao, status, updated_at, file_name, ${projJoin}`)
-        .order('updated_at', { ascending: false });
-      data = r.data;
-    }
-    setRows((data as VV[]) || []);
+    setRows(((res.data as unknown) as VV[]) || []);
     setLoading(false);
   }
 
   // Agrupa por projeto: contagem de vídeos, último update e status mais recente.
   const projects = useMemo(() => {
-    const m = new Map<string, { project: NonNullable<VV['project']>; count: number; latest: string; latestStatus: string; thumb: string | null }>();
+    const m = new Map<string, { project: NonNullable<VV['project']>; count: number; latest: string; latestStatus: string; capaId: string | null }>();
     // rows já vem ordenado por updated_at desc → o 1º de cada projeto é o mais recente.
     rows.forEach(r => {
       if (!r.project_id || !r.project) return;
       // Só projetos ativos: os encerrados somem do hub de revisão.
       if (r.project.status === 'concluido') return;
       const cur = m.get(r.project_id);
-      if (!cur) m.set(r.project_id, { project: r.project, count: 1, latest: r.updated_at, latestStatus: r.status, thumb: r.thumb_url });
+      if (!cur) m.set(r.project_id, { project: r.project, count: 1, latest: r.updated_at, latestStatus: r.status, capaId: r.id });
       else {
         cur.count++;
-        if (r.updated_at > cur.latest) { cur.latest = r.updated_at; cur.latestStatus = r.status; cur.thumb = r.thumb_url; }
+        if (r.updated_at > cur.latest) { cur.latest = r.updated_at; cur.latestStatus = r.status; cur.capaId = r.id; }
       }
     });
     return Array.from(m.values()).sort((a, b) => b.latest.localeCompare(a.latest));
   }, [rows]);
+
+  // Só as capas que a tela mostra: uma por projeto, não uma por vídeo.
+  useEffect(() => {
+    const faltando = projects.map(p => p.capaId).filter(id => id && !(id in capas)) as string[];
+    if (!faltando.length) return;
+    let vivo = true;
+    (async () => {
+      const { data } = await supabase.from('video_versions').select('id, thumb_url').in('id', faltando);
+      if (!vivo) return;
+      const novo: Record<string, string | null> = {};
+      faltando.forEach(id => { novo[id] = null; });   // sem capa também é resposta
+      (data || []).forEach((r: any) => { novo[r.id] = r.thumb_url ?? null; });
+      setCapas(prev => ({ ...prev, ...novo }));
+    })();
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
 
   const openReview = async (p: (typeof projects)[number]) => {
     setOpenProject({ id: p.project.id, name: p.project.name, code: p.project.code });
@@ -121,7 +138,7 @@ export default function VideoReviewHub() {
               >
                 {/* Capa = thumbnail do vídeo mais recente (fallback para o play). */}
                 <div className="relative aspect-video">
-                  <VideoThumb src={p.thumb} className="w-full h-full" iconSize="w-11 h-11" />
+                  <VideoThumb src={p.capaId ? capas[p.capaId] : null} className="w-full h-full" iconSize="w-11 h-11" />
                   <span className="absolute top-1.5 right-1.5 z-10 text-[10px] font-black bg-black/60 text-white px-1.5 py-0.5 rounded-full">{p.count} {p.count === 1 ? 'vídeo' : 'vídeos'}</span>
                 </div>
                 <div className="p-2.5 space-y-1.5">

@@ -496,15 +496,19 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
    * pro roteiro) e trocar a capa do vídeo. A capa hoje é o primeiro frame que
    * o app conseguiu pegar, e primeiro frame costuma ser preto ou claquete.
    */
-  const capturarFrame = (): string | null => {
+  const capturarFrame = (larguraMax?: number): string | null => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return null;
     const cv = document.createElement('canvas');
-    cv.width = v.videoWidth; cv.height = v.videoHeight;
+    // Sem largura pedida, tamanho cheio: é o caso do "baixar este frame", que
+    // vai pra reunião ou pro retorno e precisa de resolução.
+    const escala = larguraMax && v.videoWidth > larguraMax ? larguraMax / v.videoWidth : 1;
+    cv.width = Math.round(v.videoWidth * escala);
+    cv.height = Math.round(v.videoHeight * escala);
     const ctx = cv.getContext('2d');
     if (!ctx) return null;
     try { ctx.drawImage(v, 0, 0, cv.width, cv.height); } catch { return null; }
-    try { return cv.toDataURL('image/jpeg', 0.9); } catch { return null; }
+    try { return cv.toDataURL('image/jpeg', escala === 1 ? 0.9 : 0.6); } catch { return null; }
   };
 
   const baixarFrame = () => {
@@ -518,7 +522,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   };
 
   const definirCapa = async () => {
-    const img = capturarFrame();
+    // Capa vai reduzida (480px, qualidade 0.6), como as automáticas. Em tamanho
+    // cheio a imagem ia inteira pra dentro da linha do banco — chegamos a ter
+    // capa de 304 KB, e é isso que fazia a lista de entregas pesar megabytes.
+    const img = capturarFrame(480);
     if (!img) { toast.error('Não deu pra capturar o frame.'); return; }
     const { error } = await supabase.from('video_versions').update({ thumb_url: img }).eq('id', versionId);
     if (error) { toast.error('Não deu pra salvar a capa.'); return; }

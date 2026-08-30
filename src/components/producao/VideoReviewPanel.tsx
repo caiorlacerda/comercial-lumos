@@ -37,7 +37,8 @@ interface VideoVersion {
   /** Muda quando a etapa muda — é a régua de "mexeu por último". */
   updated_at: string | null;
   fps: number | null;
-  thumb_url: string | null;
+  /** Não vem na consulta da lista: é imagem inteira dentro da linha. Ver `capas`. */
+  thumb_url?: string | null;
   client_decision: string | null;
   client_decided_by: string | null;
   client_decided_at: string | null;
@@ -147,10 +148,16 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     : null;
 
   const fetchVersions = useCallback(async () => {
+    // Tudo menos thumb_url. A miniatura é uma imagem inteira guardada dentro da
+    // linha: com ela, este projeto pedia 1,7 MB e levava 4 segundos só pra
+    // desenhar a lista. Sem ela são 15 KB, e as capas entram em seguida.
+    const COLUNAS = 'id, project_id, task_id, group_id, versao, file_name, drive_file_id, drive_web_link, '
+      + 'status, approved_file_id, created_at, updated_at, width, height, duration_ms, size_bytes, mime_type, '
+      + 'uploaded_by, uploaded_at, fps, client_decision, client_decided_by, client_decided_at';
     const { data, error } = await supabase
-      .from('video_versions').select('*').eq('project_id', projectId).order('versao', { ascending: false });
+      .from('video_versions').select(COLUNAS).eq('project_id', projectId).order('versao', { ascending: false });
     if (!error) {
-      const vs = (data as VideoVersion[]) || [];
+      const vs = ((data as unknown) as VideoVersion[]) || [];
       setVersions(vs);
       const versionIds = vs.map(v => v.id);
       const groupIds = [...new Set(vs.map(v => v.group_id).filter(Boolean))] as string[];
@@ -574,14 +581,53 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   // que estão na tela e ainda não têm thumb, e o resultado fica salvo.
   const thumbTriedRef = useRef<Set<string>>(new Set());
   const [thumbRunning, setThumbRunning] = useState(0);
+  /**
+   * Capas por versão, buscadas depois e só das que estão na tela.
+   * `null` = já perguntamos e não tem (é o que libera a captura automática);
+   * indefinido = ainda não perguntamos.
+   */
+  const [capas, setCapas] = useState<Record<string, string | null>>({});
+
+  useEffect(() => {
+    const faltando = shownGroups.map(g => g.current.id).filter(id => !(id in capas));
+    if (!faltando.length) return;
+    let vivo = true;
+    (async () => {
+      // Em blocos pequenos, na ordem da tela: as capas de cima aparecem
+      // enquanto o resto ainda vem. Bloco grande junta o peso de todas as
+      // imagens numa espera só, e aí ninguém vê nada até o fim.
+      for (let i = 0; i < faltando.length && vivo; i += 5) {
+        const lote = faltando.slice(i, i + 5);
+        const { data } = await supabase.from('video_versions').select('id, thumb_url').in('id', lote);
+        if (!vivo) return;
+        const novo: Record<string, string | null> = {};
+        lote.forEach(id => { novo[id] = null; });
+        (data || []).forEach((r: any) => { novo[r.id] = r.thumb_url ?? null; });
+        setCapas(prev => ({ ...prev, ...novo }));
+      }
+    })();
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownGroups]);
+
+  // Todas as capas da tela já foram perguntadas ao banco?
+  const capasProntas = shownGroups.every(g => g.current.id in capas);
 
   useEffect(() => {
     if (!canManage || loading) return;
+    // Só depois que as capas existentes chegaram. Capturar frame significa
+    // BAIXAR vídeo, e fazer isso enquanto as capas ainda vêm tira banda de
+    // quem está esperando pra ver a lista: as primeiras capas chegavam depois
+    // de mais de 20 segundos por causa disso.
+    if (!capasProntas) return;
     let alive = true;
 
     (async () => {
       const alvo = shownGroups
-        .filter(g => !g.current.thumb_url && !thumbTriedRef.current.has(g.current.id))
+        // capas[id] === null é "perguntamos e não tem". Sem essa checagem, a
+        // fila sairia recapturando vídeo que já tem capa, agora que a consulta
+        // da lista não traz mais a imagem.
+        .filter(g => capas[g.current.id] === null && !thumbTriedRef.current.has(g.current.id))
         .slice(0, 12);   // teto por rodada: não sai baixando 39 vídeos de uma vez
       if (!alvo.length) return;
       setThumbRunning(alvo.length);
@@ -603,7 +649,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
           if (!alive) break;
           if (thumb) {
             await supabase.from('video_versions').update({ thumb_url: thumb }).eq('id', g.current.id);
-            setVersions(prev => prev.map(v => v.id === g.current.id ? { ...v, thumb_url: thumb } : v));
+            setCapas(prev => ({ ...prev, [g.current.id]: thumb }));
           }
         } catch { /* segue pro próximo: thumb é enfeite, não pode travar a tela */ }
         finally { if (alive) setThumbRunning(n => Math.max(0, n - 1)); }
@@ -612,7 +658,8 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     })();
 
     return () => { alive = false; };
-  }, [shownGroups, loading, canManage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownGroups, loading, canManage, capasProntas]);
 
   const linkTask = async (g: Group, taskId: string) => {
     const value = taskId || null;
@@ -813,8 +860,8 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         {/* Thumb */}
         <button type="button" onClick={() => openReview(g)} disabled={isBusy}
           className="relative aspect-[16/10] bg-lumos-bg/70 flex items-center justify-center group/thumb overflow-hidden">
-          {v.thumb_url
-            ? <img src={v.thumb_url} alt="" className="w-full h-full object-cover" />
+          {capas[v.id]
+            ? <img src={capas[v.id]!} alt="" loading="lazy" className="w-full h-full object-cover" />
             : <Film className="w-8 h-8 text-lumos-text-secondary/25" />}
           <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/25 transition-colors flex items-center justify-center">
             <span className="w-10 h-10 rounded-full bg-lumos-yellow/90 text-black flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
@@ -934,7 +981,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         {/* Thumb pequena */}
         <button type="button" onClick={() => openReview(g)}
           className="relative w-16 h-10 rounded bg-lumos-bg/70 flex items-center justify-center overflow-hidden flex-shrink-0 group/thumb">
-          {v.thumb_url ? <img src={v.thumb_url} alt="" className="w-full h-full object-cover" /> : <Film className="w-4 h-4 text-lumos-text-secondary/25" />}
+          {capas[v.id] ? <img src={capas[v.id]!} alt="" loading="lazy" className="w-full h-full object-cover" /> : <Film className="w-4 h-4 text-lumos-text-secondary/25" />}
           <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/30 transition-colors flex items-center justify-center">
             <Play className="w-3 h-3 text-white opacity-0 group-hover/thumb:opacity-100" fill="currentColor" />
           </span>
