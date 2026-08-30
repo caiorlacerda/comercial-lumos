@@ -2,6 +2,8 @@
 -- O calendário que o cliente enxerga. Devolve o ESTADO do dia, nunca o dono
 -- dele: quantos clientes temos e quando estamos parados não é assunto do
 -- cliente.
+CREATE INDEX IF NOT EXISTS idx_project_diarias_data ON public.project_diarias(data);
+
 CREATE OR REPLACE FUNCTION public.portal_agenda(p_token text, p_project_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -39,7 +41,7 @@ BEGIN
   RETURN jsonb_build_object(
     'antecedencia_dias', v_portal.antecedencia_dias,
     'dias', COALESCE((
-      SELECT jsonb_agg(jsonb_build_object('data', d.dia, 'estado',
+      SELECT jsonb_agg(jsonb_build_object('data', d.dia::date, 'estado',
         CASE
           WHEN EXISTS (SELECT 1 FROM agenda_bloqueios b WHERE b.data = d.dia) THEN 'bloqueado'
           WHEN EXISTS (SELECT 1 FROM project_diarias pd WHERE pd.data = d.dia)  THEN 'ocupado'
