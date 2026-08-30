@@ -97,6 +97,19 @@ const motivoPedido = (erro: string) => MOTIVOS[erro] || MOTIVO_GENERICO;
 const motivoCancelar = (erro: string) =>
   erro === 'sem_acesso' ? 'Este pedido é de outra pessoa.' : (MOTIVOS[erro] || MOTIVO_GENERICO);
 
+/** `portal_agenda` também devolve `error`, e não tem as chaves de `Agenda`
+ *  quando devolve: sem tratar, `agenda?.dias` etc. quebram o render (tela
+ *  branca). O caso mais comum é sessão vencida num portal com login. */
+const motivoAgenda = (erro: string, exigeLogin: boolean) => {
+  if (erro === 'invalid') return 'Este link não está mais ativo. Fale com quem te mandou o link.';
+  if (erro === 'sem_acesso') {
+    return exigeLogin
+      ? 'Sua sessão expirou. Entre de novo para ver as diárias deste projeto.'
+      : 'Este projeto não está disponível para diárias agora.';
+  }
+  return MOTIVO_GENERICO;
+};
+
 const NOME_SALVO = 'rev_nome';
 const EMAIL_SALVO = 'rev_email';
 
@@ -396,26 +409,53 @@ export default function PortalCliente() {
   // pra buscar a agenda, e hook não pode vir depois de um retorno condicional.
   const projetoAberto = dados?.projetos.find(p => p.id === aba) || null;
 
+  const exigeLogin = !!dados?.portal.exige_login;
+
   // ── Diárias: agenda do projeto aberto ──────────────────────────────
   const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+  const [erroAgenda, setErroAgenda] = useState<string | null>(null);
+  /** Geração da busca de agenda: cada troca de projeto/aba soma um. Uma busca
+   *  (a inicial ou um refetch pós-envio/cancelamento) só aplica o resultado
+   *  se a geração ainda for a mesma — senão a pessoa já saiu dali, e um
+   *  resultado tardio de outro projeto sobrescreveria a tela atual. */
+  const geracaoAgenda = useRef(0);
 
   // Só quando a aba abre: a maioria das visitas não vai ao calendário, e ele
   // custa 90 dias de consulta.
   useEffect(() => {
     if (abaProj !== 'diarias' || !projetoAberto) return;
-    let vivo = true;
+    const minhaGeracao = ++geracaoAgenda.current;
     setCarregandoAgenda(true);
+    // Limpa o que sobrou do projeto anterior: sem isso, pacote/gravações/
+    // pedidos de um projeto ficavam visíveis embaixo do nome do próximo
+    // enquanto a busca nova ainda não voltou.
+    setAgenda(null);
+    setErroAgenda(null);
     supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id })
-      .then(({ data }) => { if (vivo) { setAgenda(data as Agenda); setCarregandoAgenda(false); } });
-    return () => { vivo = false; };
-  }, [abaProj, projetoAberto?.id, token]);
+      .then(({ data, error }) => {
+        if (geracaoAgenda.current !== minhaGeracao) return;
+        const falha = error ? 'erro' : (data as any)?.error;
+        if (falha) {
+          // `portal_agenda` devolve um objeto sem as chaves de Agenda quando
+          // dá erro: nunca guardar isso como se fosse a agenda, ou o render
+          // quebra (agenda?.dias etc. não protegem contra objeto sem a
+          // chave — só contra agenda nula).
+          setAgenda(null);
+          setErroAgenda(error ? MOTIVO_GENERICO : motivoAgenda(falha, exigeLogin));
+        } else {
+          setAgenda(data as Agenda);
+        }
+        setCarregandoAgenda(false);
+      });
+  }, [abaProj, projetoAberto?.id, token, exigeLogin]);
 
   const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
   const [pedDescricao, setPedDescricao] = useState('');
   const [pedLocal, setPedLocal] = useState('');
   const [pedDuracao, setPedDuracao] = useState(10);
   const [pedNome, setPedNome] = useState(nome);
+  const pedNomeTocado = useRef(false);
   const [pedEmail, setPedEmail] = useState(() => {
     try { return localStorage.getItem(EMAIL_SALVO) || ''; } catch { return ''; }
   });
@@ -424,18 +464,26 @@ export default function PortalCliente() {
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [erroCancelar, setErroCancelar] = useState<string | null>(null);
 
+  // `nome` só existe depois da tela "Como te chamamos?", que roda DEPOIS do
+  // primeiro render deste componente — então `useState(nome)` acima só pega
+  // o nome a tempo se ele já estava salvo. Sem isto, quem digita o nome ali
+  // encontrava o campo do pedido vazio. Só sincroniza enquanto a pessoa não
+  // tiver mexido no campo com a mão.
+  useEffect(() => {
+    if (!pedNomeTocado.current) setPedNome(nome);
+  }, [nome]);
+
   // Trocou de data, de aba ou de projeto: o aviso da tentativa anterior não
   // vale mais.
   useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
   useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
 
-  const exigeLogin = !!dados?.portal.exige_login;
-
   const enviarPedido = useCallback(async () => {
     if (!projetoAberto || !dataEscolhida || enviandoPedido) return;
+    const minhaGeracao = geracaoAgenda.current;
     setEnviandoPedido(true);
     setErroPedido(null);
-    const { data } = await supabase.rpc('portal_pedir_diaria', {
+    const { data, error } = await supabase.rpc('portal_pedir_diaria', {
       p_token: token,
       p_project_id: projetoAberto.id,
       p_data: dataEscolhida,
@@ -445,6 +493,14 @@ export default function PortalCliente() {
       p_nome: exigeLogin ? null : pedNome,
       p_email: exigeLogin ? null : pedEmail,
     });
+    // Erro de transporte (rede, RLS) não é "sem resposta": sem tratar aqui,
+    // `data` vem nulo, `falha` fica undefined, e o código seguia pro
+    // caminho de sucesso como se o pedido tivesse sido criado de verdade.
+    if (error) {
+      setErroPedido(MOTIVO_GENERICO);
+      setEnviandoPedido(false);
+      return;
+    }
     const falha = (data as any)?.error;
     if (falha) {
       setErroPedido(motivoPedido(falha));
@@ -461,15 +517,25 @@ export default function PortalCliente() {
     setPedLocal('');
     setDataEscolhida(null);
     setEnviandoPedido(false);
-    const { data: nova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
-    setAgenda(nova as Agenda);
+    const { data: nova, error: erroNova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
+    // Mesma guarda do efeito principal: se a pessoa já trocou de projeto
+    // enquanto isto rodava, este resultado é velho e não vale mais nada.
+    if (geracaoAgenda.current === minhaGeracao && !erroNova && !(nova as any)?.error) {
+      setAgenda(nova as Agenda);
+    }
   }, [token, projetoAberto, dataEscolhida, enviandoPedido, pedDuracao, pedLocal, pedDescricao, exigeLogin, pedNome, pedEmail]);
 
   const cancelarPedido = useCallback(async (id: string) => {
     if (!projetoAberto || cancelandoId) return;
+    const minhaGeracao = geracaoAgenda.current;
     setCancelandoId(id);
     setErroCancelar(null);
-    const { data } = await supabase.rpc('portal_cancelar_pedido', { p_token: token, p_pedido_id: id });
+    const { data, error } = await supabase.rpc('portal_cancelar_pedido', { p_token: token, p_pedido_id: id });
+    if (error) {
+      setErroCancelar(MOTIVO_GENERICO);
+      setCancelandoId(null);
+      return;
+    }
     const falha = (data as any)?.error;
     if (falha) {
       setErroCancelar(motivoCancelar(falha));
@@ -477,8 +543,10 @@ export default function PortalCliente() {
       return;
     }
     setCancelandoId(null);
-    const { data: nova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
-    setAgenda(nova as Agenda);
+    const { data: nova, error: erroNova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projetoAberto.id });
+    if (geracaoAgenda.current === minhaGeracao && !erroNova && !(nova as any)?.error) {
+      setAgenda(nova as Agenda);
+    }
   }, [token, projetoAberto, cancelandoId]);
 
   if (erro) {
@@ -932,122 +1000,136 @@ export default function PortalCliente() {
             )}
 
             {abaProj === 'diarias' && (
-              <>
-                {agenda?.pacote && (
-                  <section className="secao">
-                    <span className="rotulo">Suas diárias neste mês</span>
-                    <div className="proj" style={{ cursor: 'default' }}>
-                      <span><span className="nome">Diárias do pacote</span></span>
-                      <span className="barra">
-                        <i className={agenda.pacote.realizado >= agenda.pacote.meta ? 'b-ok' : 'b-voce'}
-                          style={{ width: `${Math.min(100, (agenda.pacote.realizado / agenda.pacote.meta) * 100)}%` }} />
-                      </span>
-                      <span className="contagem">{agenda.pacote.realizado} de {agenda.pacote.meta}</span>
-                    </div>
-                  </section>
-                )}
-
+              erroAgenda ? (
                 <section className="secao">
-                  <span className="rotulo">Gravações marcadas</span>
-                  {!agenda?.agendadas.length ? (
-                    <p className="nota">Nenhuma gravação marcada por enquanto.</p>
-                  ) : agenda.agendadas.map((g, i) => (
-                    <div key={i} className="arquivo">
-                      <span className="nm">{g.nome}<span>{dia(g.data)}{g.hora_inicio ? `, ${g.hora_inicio.slice(0,5)}` : ''}{g.local ? `, ${g.local}` : ''}</span></span>
-                    </div>
-                  ))}
-                </section>
-
-                <section className="secao">
-                  <span className="rotulo">Pedir uma data</span>
-                  {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
-
-                  {!carregandoAgenda && dataEscolhida && (
-                    <div className="pedido-form">
-                      <p className="rotulo" style={{ marginTop: 22 }}>Pedido para {dia(dataEscolhida)}</p>
-
-                      <label>
-                        <span className="rotulo">O que precisa gravar</span>
-                        <textarea className="campo area" rows={3} value={pedDescricao}
-                          onChange={e => setPedDescricao(e.target.value)}
-                          placeholder="Ex.: depoimento do cliente X, sala de reunião" />
-                      </label>
-
-                      <div className="pedido-linha">
-                        <label>
-                          <span className="rotulo">Onde</span>
-                          <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
-                            placeholder="Endereço ou local (opcional)" />
-                        </label>
-                        <label>
-                          <span className="rotulo">Duração</span>
-                          <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
-                            <option value={6}>6 horas</option>
-                            <option value={10}>10 horas</option>
-                            <option value={12}>12 horas</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      {!exigeLogin && (
-                        <div className="pedido-linha">
-                          <label>
-                            <span className="rotulo">Seu nome</span>
-                            <input className="campo" value={pedNome} onChange={e => setPedNome(e.target.value)} placeholder="Seu nome" />
-                          </label>
-                          <label>
-                            <span className="rotulo">Seu e-mail</span>
-                            <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
-                          </label>
-                        </div>
-                      )}
-
-                      {agenda?.pacote && agenda.pacote.realizado >= agenda.pacote.meta && (
-                        <p className="nota alerta">
-                          Esta seria a {agenda.pacote.realizado + 1}ª diária de {agenda.pacote.meta} no mês.
-                          Ela entra como extra, e a Lumos vai orçar antes de confirmar.
-                        </p>
-                      )}
-
-                      {erroPedido && <p className="nota alerta">{erroPedido}</p>}
-
-                      <button type="button" className="botao" style={{ marginTop: 4 }}
-                        disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
-                        onClick={enviarPedido}>
-                        {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
-                      </button>
-                    </div>
+                  <p className="nota alerta">{erroAgenda}</p>
+                  {exigeLogin && (
+                    <button type="button" className="botao" style={{ marginTop: 12 }}
+                      onClick={async () => { await supabase.auth.signOut(); location.reload(); }}>
+                      Entrar de novo
+                    </button>
                   )}
                 </section>
-
-                <section className="secao">
-                  <span className="rotulo">Seus pedidos</span>
-                  {!agenda?.pedidos.length ? (
-                    <p className="nota">Nenhum pedido feito por aqui ainda.</p>
-                  ) : agenda.pedidos.map(p => {
-                    const est = ESTADO_PEDIDO[p.estado] || { label: p.estado, classe: 's-prod' };
-                    return (
-                      <div key={p.id} className="arquivo">
-                        <span className="nm">
-                          {p.descricao}
-                          <span>
-                            {dia(p.data_desejada)}
-                            {p.estado === 'recusado' && p.motivo_recusa ? `, ${p.motivo_recusa}` : ''}
-                          </span>
+              ) : (
+                <>
+                  {agenda?.pacote && (
+                    <section className="secao">
+                      <span className="rotulo">Suas diárias neste mês</span>
+                      <div className="proj" style={{ cursor: 'default' }}>
+                        <span><span className="nome">Diárias do pacote</span></span>
+                        <span className="barra">
+                          <i className={agenda.pacote.realizado >= agenda.pacote.meta ? 'b-ok' : 'b-voce'}
+                            style={{ width: `${Math.min(100, (agenda.pacote.realizado / agenda.pacote.meta) * 100)}%` }} />
                         </span>
-                        <span className={`selo ${est.classe}`} style={{ margin: 0 }}>{est.label}</span>
-                        {p.estado === 'pendente' && (
-                          <button type="button" className="baixar" disabled={cancelandoId === p.id}
-                            onClick={() => cancelarPedido(p.id)}>
-                            {cancelandoId === p.id ? 'Cancelando…' : 'Cancelar'}
-                          </button>
-                        )}
+                        <span className="contagem">{agenda.pacote.realizado} de {agenda.pacote.meta}</span>
                       </div>
-                    );
-                  })}
-                  {erroCancelar && <p className="nota alerta">{erroCancelar}</p>}
-                </section>
-              </>
+                    </section>
+                  )}
+
+                  <section className="secao">
+                    <span className="rotulo">Gravações marcadas</span>
+                    {!agenda?.agendadas.length ? (
+                      <p className="nota">Nenhuma gravação marcada por enquanto.</p>
+                    ) : agenda.agendadas.map((g, i) => (
+                      <div key={i} className="arquivo">
+                        <span className="nm">{g.nome}<span>{dia(g.data)}{g.hora_inicio ? `, ${g.hora_inicio.slice(0,5)}` : ''}{g.local ? `, ${g.local}` : ''}</span></span>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="secao">
+                    <span className="rotulo">Pedir uma data</span>
+                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
+
+                    {!carregandoAgenda && dataEscolhida && (
+                      <div className="pedido-form">
+                        <p className="rotulo" style={{ marginTop: 22 }}>Pedido para {dia(dataEscolhida)}</p>
+
+                        <label>
+                          <span className="rotulo">O que precisa gravar</span>
+                          <textarea className="campo area" rows={3} value={pedDescricao}
+                            onChange={e => setPedDescricao(e.target.value)}
+                            placeholder="Ex.: depoimento do cliente X, sala de reunião" />
+                        </label>
+
+                        <div className="pedido-linha">
+                          <label>
+                            <span className="rotulo">Onde</span>
+                            <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
+                              placeholder="Endereço ou local (opcional)" />
+                          </label>
+                          <label>
+                            <span className="rotulo">Duração</span>
+                            <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
+                              <option value={6}>6 horas</option>
+                              <option value={10}>10 horas</option>
+                              <option value={12}>12 horas</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        {!exigeLogin && (
+                          <div className="pedido-linha">
+                            <label>
+                              <span className="rotulo">Seu nome</span>
+                              <input className="campo" value={pedNome}
+                                onChange={e => { pedNomeTocado.current = true; setPedNome(e.target.value); }}
+                                placeholder="Seu nome" />
+                            </label>
+                            <label>
+                              <span className="rotulo">Seu e-mail</span>
+                              <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
+                            </label>
+                          </div>
+                        )}
+
+                        {agenda?.pacote && agenda.pacote.realizado >= agenda.pacote.meta && (
+                          <p className="nota alerta">
+                            Esta seria a {agenda.pacote.realizado + 1}ª diária de {agenda.pacote.meta} no mês.
+                            Ela entra como extra, e a Lumos vai orçar antes de confirmar.
+                          </p>
+                        )}
+
+                        {erroPedido && <p className="nota alerta">{erroPedido}</p>}
+
+                        <button type="button" className="botao" style={{ marginTop: 4 }}
+                          disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
+                          onClick={enviarPedido}>
+                          {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
+                        </button>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="secao">
+                    <span className="rotulo">Seus pedidos</span>
+                    {!agenda?.pedidos.length ? (
+                      <p className="nota">Nenhum pedido feito por aqui ainda.</p>
+                    ) : agenda.pedidos.map(p => {
+                      const est = ESTADO_PEDIDO[p.estado] || { label: p.estado, classe: 's-prod' };
+                      return (
+                        <div key={p.id} className="arquivo">
+                          <span className="nm">
+                            {p.descricao}
+                            <span>
+                              {dia(p.data_desejada)}
+                              {p.estado === 'recusado' && p.motivo_recusa ? `, ${p.motivo_recusa}` : ''}
+                            </span>
+                          </span>
+                          <span className={`selo ${est.classe}`} style={{ margin: 0 }}>{est.label}</span>
+                          {p.estado === 'pendente' && (
+                            <button type="button" className="baixar" disabled={cancelandoId === p.id}
+                              onClick={() => cancelarPedido(p.id)}>
+                              {cancelandoId === p.id ? 'Cancelando…' : 'Cancelar'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {erroCancelar && <p className="nota alerta">{erroCancelar}</p>}
+                  </section>
+                </>
+              )
             )}
 
             {abaProj === 'arquivos' && blocos.arquivos !== false && projetoAberto.arquivos.length > 0 && (
