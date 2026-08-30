@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2, Pencil, Archive } from 'lucide-react';
+import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2, Pencil, Archive, Handshake } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { formatBudgetCode } from '@/utils/formatters';
 import Select from '@/components/ui/Select';
+import PortalModal from '@/components/producao/PortalModal';
 
 // Cores disponíveis para clientes. A chave é o que fica salvo no banco
 // (client_colors.color); a classe é só apresentação.
@@ -62,7 +63,9 @@ export default function SidebarProjectTree() {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, can } = useAuth();
+  // Mesma régua da página de projetos: quem toca em produção cuida do portal.
+  const podeGerirPortal = isAdmin || can('ordem_do_dia');
 
   const [open, setOpen] = useState(true);
   const [clients, setClients] = useState<TreeClient[]>([]);
@@ -72,6 +75,9 @@ export default function SidebarProjectTree() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [colorMenu, setColorMenu] = useState<{ x: number; y: number; clientId: string } | null>(null);
+  // O portal é do cliente inteiro, então mora aqui, junto do nome dele, e não
+  // repetido dentro de cada projeto.
+  const [portalCliente, setPortalCliente] = useState<{ id: string; name: string } | null>(null);
   // Menu de contexto (botão direito) no projeto + exclusão definitiva (admin)
   const [projMenu, setProjMenu] = useState<{ x: number; y: number; proj: TreeProject } | null>(null);
   // Edição de projeto (nome/código/categoria)
@@ -305,7 +311,9 @@ export default function SidebarProjectTree() {
                         e.preventDefault();
                         setColorMenu({ x: e.clientX, y: e.clientY, clientId: client.id });
                       }}
-                      title={`${client.name} — botão direito para escolher a cor`}
+                      title={podeGerirPortal
+                        ? `${client.name} — botão direito para o portal e a cor`
+                        : `${client.name} — botão direito para escolher a cor`}
                       className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all"
                     >
                       {isOpen
@@ -437,9 +445,22 @@ export default function SidebarProjectTree() {
           <div className="fixed inset-0 z-[190]" onClick={() => setColorMenu(null)} onContextMenu={e => { e.preventDefault(); setColorMenu(null); }} />
           <div
             className="fixed z-[200] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-100"
-            style={{ left: Math.min(colorMenu.x, window.innerWidth - 200), top: Math.min(colorMenu.y, window.innerHeight - 140) }}
+            style={{ left: Math.min(colorMenu.x, window.innerWidth - 200), top: Math.min(colorMenu.y, window.innerHeight - 200) }}
           >
-            <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary mb-2">Cor do cliente</p>
+            {podeGerirPortal && (
+              <button
+                onClick={() => {
+                  const c = clients.find(x => x.id === colorMenu.clientId);
+                  setColorMenu(null);
+                  if (c) setPortalCliente({ id: c.id, name: c.name });
+                }}
+                className="w-full flex items-center gap-2 px-1 py-1.5 mb-2 rounded text-[11px] font-bold text-lumos-yellow hover:bg-lumos-yellow/10 transition-colors"
+              >
+                <Handshake className="w-3.5 h-3.5 flex-shrink-0" /> Portal do cliente
+              </button>
+            )}
+            <p className={clsx('text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary mb-2',
+              podeGerirPortal && 'border-t border-lumos-border/40 pt-2')}>Cor do cliente</p>
             <div className="grid grid-cols-5 gap-1.5">
               {CLIENT_COLOR_OPTIONS.map(opt => (
                 <button
@@ -568,6 +589,16 @@ export default function SidebarProjectTree() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Portal do cliente: um link por cliente, aberto pelo nome dele */}
+      {portalCliente && (
+        <PortalModal
+          clientId={portalCliente.id}
+          clientName={portalCliente.name}
+          open
+          onClose={() => setPortalCliente(null)}
+        />
       )}
     </div>
   );
