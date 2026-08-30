@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { PORTAL_CSS, LOGO_LUMOS } from './portalCliente.css';
+import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
 
 /**
  * PORTAL DO CLIENTE — um link por cliente, uma aba por projeto.
@@ -34,7 +34,7 @@ interface Portal {
   portal: { show_financeiro: boolean; blocks: Record<string, boolean> };
   abrir_projeto: string | null;
   projetos: Projeto[];
-  contatos: { nome: string; email: string; cargo: string | null }[];
+  contatos: { nome: string; email: string; cargo: string | null; foto: string | null; whatsapp: string | null; slack: string | null }[];
   financeiro: { em_dia: boolean; proximo_vencimento: string | null } | null;
   atividade: { tipo: string; projeto: string; file_name: string; decisao?: string; quem?: string; versao?: number; quando: string }[];
 }
@@ -55,6 +55,41 @@ const MARCOS = [
 ];
 
 const NOME_SALVO = 'rev_nome';
+
+const Sol = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </svg>
+);
+const Lua = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+  </svg>
+);
+const IconeZap = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm5.8 14.14c-.25.7-1.44 1.33-1.99 1.38-.53.05-1.02.24-3.44-.72-2.9-1.15-4.75-4.11-4.89-4.3-.14-.19-1.17-1.56-1.17-2.98 0-1.42.74-2.12 1-2.41.26-.29.57-.36.76-.36h.55c.18 0 .41-.03.64.49.25.6.84 2.07.91 2.22.07.15.12.32.02.51-.34.69-.71.66-.51 1 .74 1.27 1.48 1.71 2.6 2.28.19.1.3.08.42-.05.12-.14.48-.56.61-.75.13-.19.26-.16.44-.1.18.07 1.15.54 1.35.64.2.1.33.15.38.23.05.09.05.51-.2 1.21Z" />
+  </svg>
+);
+const IconeSlack = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M6 15.2A2.1 2.1 0 1 1 3.9 13H6v2.2Zm1.1 0A2.1 2.1 0 0 1 9.2 13a2.1 2.1 0 0 1 2.1 2.2v5.3a2.1 2.1 0 1 1-4.2 0v-5.3ZM9.2 6.1A2.1 2.1 0 1 1 11.3 4v2.1H9.2Zm0 1.1a2.1 2.1 0 0 1 0 4.2H3.9a2.1 2.1 0 0 1 0-4.2h5.3ZM18 9.3a2.1 2.1 0 1 1 2.1 2.1H18V9.3Zm-1.1 0a2.1 2.1 0 0 1-4.2 0V3.9a2.1 2.1 0 1 1 4.2 0v5.4ZM14.8 18a2.1 2.1 0 1 1-2.1 2.1V18h2.1Zm0-1.1a2.1 2.1 0 0 1 0-4.2h5.3a2.1 2.1 0 0 1 0 4.2h-5.3Z" />
+  </svg>
+);
+const IconeMail = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" />
+  </svg>
+);
+
+/** WhatsApp aceita telefone escrito de qualquer jeito; o link precisa de dígitos. */
+const linkZap = (n: string) => {
+  const so = n.replace(/\D/g, '');
+  if (so.length < 10) return null;
+  return `https://wa.me/${so.length <= 11 ? '55' + so : so}`;
+};
+/** Slack pode vir como link ou como @nome; só o link vira botão que abre algo. */
+const linkSlack = (s: string) => (/^https?:\/\//.test(s.trim()) ? s.trim() : null);
 
 /** Setinha do menu, virada quando ele está aberto. */
 const ChevronDown = ({ aberto }: { aberto: boolean }) => (
@@ -112,6 +147,11 @@ export default function PortalCliente() {
   const [capas, setCapas] = useState<Record<string, string | null>>({});
   const [digitando, setDigitando] = useState('');
   const [menuProjetos, setMenuProjetos] = useState(false);
+  /** Tema do portal, lembrado por navegador. Começa escuro: é sala de projeção. */
+  const [tema, setTema] = useState<'escuro' | 'claro'>(() => {
+    try { return (localStorage.getItem('portal_tema') as 'escuro' | 'claro') || 'escuro'; } catch { return 'escuro'; }
+  });
+  useEffect(() => { try { localStorage.setItem('portal_tema', tema); } catch { /* ignore */ } }, [tema]);
 
   // As fontes do portal não são as do app: entram só aqui.
   useEffect(() => {
@@ -197,7 +237,7 @@ export default function PortalCliente() {
 
   if (erro) {
     return (
-      <div className="portal-lumos" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
+      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
         <style>{PORTAL_CSS}</style>
         <p className="rotulo">{erro}</p>
       </div>
@@ -205,7 +245,7 @@ export default function PortalCliente() {
   }
   if (!dados) {
     return (
-      <div className="portal-lumos" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
+      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
         <style>{PORTAL_CSS}</style>
         <span className="farol" />
       </div>
@@ -216,10 +256,10 @@ export default function PortalCliente() {
   // ficar sem dono agora que o link é da empresa inteira.
   if (!nome) {
     return (
-      <div className="portal-lumos" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
+      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
         <style>{PORTAL_CSS}</style>
         <div style={{ width: '100%', maxWidth: 380 }}>
-          <img className="logotipo" src={LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
+          <img className="logotipo" src={tema === "claro" ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
           <p className="rotulo">Portal de {dados.cliente.nome}</p>
           <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 34, lineHeight: 1.02, margin: '8px 0 18px' }}>
             Como<br />te chamamos?
@@ -247,7 +287,7 @@ export default function PortalCliente() {
   const blocos = dados.portal.blocks || {};
 
   return (
-    <div className="portal-lumos">
+    <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`}>
       <style>{PORTAL_CSS}</style>
 
       {/* Cabeçalho em uma linha só: marca à esquerda, navegação no meio,
@@ -257,14 +297,14 @@ export default function PortalCliente() {
       <header className="topo">
         <div className="topo-dentro">
         <span className="marca">
-          <img className="logotipo" src={LOGO_LUMOS} alt="Produtora Lumos" />
+          <img className="logotipo" src={tema === "claro" ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" />
           <span className="cliente">Portal de <b>{dados.cliente.nome}</b></span>
         </span>
 
         <nav className="navegacao" aria-label="Seções">
           <button type="button" className="link" aria-current={aba === 'inicio'}
             onClick={() => setAba('inicio')}>
-            Início {esperando.length > 0 && <span className="n">{esperando.length}</span>}
+            Início
           </button>
 
           <span className="menu-abre">
@@ -307,6 +347,12 @@ export default function PortalCliente() {
         </nav>
 
         <span className="quem">
+          <button type="button" className="tema"
+            title={tema === 'escuro' ? 'Trocar para o tema claro' : 'Trocar para o tema escuro'}
+            aria-label={tema === 'escuro' ? 'Trocar para o tema claro' : 'Trocar para o tema escuro'}
+            onClick={() => setTema(t => (t === 'escuro' ? 'claro' : 'escuro'))}>
+            {tema === 'escuro' ? <Sol /> : <Lua />}
+          </button>
           <span className="rosto">{nome.trim().charAt(0).toUpperCase()}</span>
           <span className="so-grande">Você é <b>{nome}</b></span>
           <button className="trocar" onClick={() => { localStorage.removeItem(NOME_SALVO); setNome(''); setDigitando(''); }}>trocar</button>
@@ -563,13 +609,25 @@ export default function PortalCliente() {
               <h2>Quem cuida<br />da sua conta</h2>
             </div>
             <section className="secao">
-              {dados.contatos.length ? dados.contatos.map((c, i) => (
-                <div key={i} className="pessoa">
-                  <span className="rosto">{c.nome.charAt(0)}</span>
-                  <span><span className="nm">{c.nome}</span><span className="fn">{c.cargo || 'Produtora Lumos'}</span></span>
-                  <a href={`mailto:${c.email}`}>Escrever</a>
-                </div>
-              )) : (
+              {dados.contatos.length ? dados.contatos.map((c, i) => {
+                const zap = c.whatsapp ? linkZap(c.whatsapp) : null;
+                const slack = c.slack ? linkSlack(c.slack) : null;
+                return (
+                  <div key={i} className="pessoa">
+                    {c.foto
+                      ? <img className="foto" src={c.foto} alt="" loading="lazy" />
+                      : <span className="rosto" style={{ width: 44, height: 44, fontSize: 16 }}>{c.nome.charAt(0)}</span>}
+                    <span><span className="nm">{c.nome}</span><span className="fn">{c.cargo || 'Produtora Lumos'}</span></span>
+                    {/* Só entra o canal que existe: botão que não leva a lugar
+                        nenhum é pior que botão que não está lá. */}
+                    <span className="canais">
+                      {zap && <a className="canal zap" href={zap} target="_blank" rel="noopener noreferrer"><IconeZap /> WhatsApp</a>}
+                      {slack && <a className="canal slack" href={slack} target="_blank" rel="noopener noreferrer"><IconeSlack /> Slack</a>}
+                      {c.email && <a className="canal mail" href={`mailto:${c.email}`}><IconeMail /> E-mail</a>}
+                    </span>
+                  </div>
+                );
+              }) : (
                 <p className="nota">Fale com quem te mandou este link que a gente te conecta com o time.</p>
               )}
             </section>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Users2, UserPlus, Search, Shield, Mail, Phone, Loader2, X, Trash2, Camera,
+  Users2, UserPlus, Search, Shield, Mail, Phone, MessageSquare, Loader2, X, Trash2, Camera,
   Cake, CalendarDays, Briefcase, MapPin, CreditCard, Shirt, Footprints, HeartPulse, IdCard, ShieldAlert,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -58,13 +58,13 @@ const PERM_OPTIONS = [
 ];
 
 // Campos de RH (tabela team_members)
-const HR_FIELDS = ['whatsapp', 'cpf', 'rg', 'birth_date', 'address', 'department', 'joined_at', 'pix_key', 'emergency_contact', 'shirt_size', 'pants_size', 'shoe_size', 'notes'] as const;
+const HR_FIELDS = ['whatsapp', 'slack', 'cpf', 'rg', 'birth_date', 'address', 'department', 'joined_at', 'pix_key', 'emergency_contact', 'shirt_size', 'pants_size', 'shoe_size', 'notes'] as const;
 type HrForm = Record<(typeof HR_FIELDS)[number] | 'role_title', string>;
-const EMPTY_HR: HrForm = { role_title: '', whatsapp: '', cpf: '', rg: '', birth_date: '', address: '', department: '', joined_at: '', pix_key: '', emergency_contact: '', shirt_size: '', pants_size: '', shoe_size: '', notes: '' };
+const EMPTY_HR: HrForm = { role_title: '', whatsapp: '', slack: '', cpf: '', rg: '', birth_date: '', address: '', department: '', joined_at: '', pix_key: '', emergency_contact: '', shirt_size: '', pants_size: '', shoe_size: '', notes: '' };
 
 interface TeamMember {
   id: string; app_user_id: string | null; full_name: string; role_title: string | null; department: string | null;
-  whatsapp: string | null; cpf: string | null; rg: string | null; birth_date: string | null; address: string | null;
+  whatsapp: string | null; slack: string | null; cpf: string | null; rg: string | null; birth_date: string | null; address: string | null;
   joined_at: string | null; pix_key: string | null; emergency_contact: string | null;
   shirt_size: string | null; pants_size: string | null; shoe_size: string | null; notes: string | null; photo_url: string | null;
   app_user?: { avatar_url: string | null } | null;
@@ -508,6 +508,9 @@ export default function Equipe() {
                   <Field label="Cargo / função" value={hr.role_title} onChange={v => setHr(f => ({ ...f, role_title: v }))} icon={Briefcase} />
                   <Field label="Setor" value={hr.department} onChange={v => setHr(f => ({ ...f, department: v }))} />
                   <Field label="WhatsApp" value={hr.whatsapp} onChange={v => setHr(f => ({ ...f, whatsapp: v }))} icon={Phone} />
+                  {/* Vai pro portal do cliente, junto do WhatsApp e do e-mail:
+                      cole o link do perfil no Slack pra virar botão de verdade. */}
+                  <Field label="Slack (link do perfil)" value={hr.slack} onChange={v => setHr(f => ({ ...f, slack: v }))} icon={MessageSquare} />
                   <Field label="Nascimento" type="date" value={hr.birth_date} onChange={v => setHr(f => ({ ...f, birth_date: v }))} icon={Cake} />
                   <Field label="CPF" value={hr.cpf} onChange={v => setHr(f => ({ ...f, cpf: v }))} />
                   <Field label="RG" value={hr.rg} onChange={v => setHr(f => ({ ...f, rg: v }))} />
