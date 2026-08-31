@@ -4,12 +4,13 @@ import {
   ArrowLeft, CalendarDays, Check, ChevronDown, Clock, CloudRain, Copy, ExternalLink,
   Loader2, MapPin, Pencil, Plus, Shirt, Sun, Trash2, Users2, Video, Package, Camera,
   FileText, ArrowUp, ArrowDown, AlertTriangle, Megaphone, ScrollText, Wrench,
-  Utensils, Coffee, Truck, SlidersHorizontal, FileDown,
+  Utensils, Coffee, Truck, SlidersHorizontal, FileDown, Eye, Search, UserPlus,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import Modal from '@/components/common/Modal';
 import QuickForm, { type QFField } from '@/components/common/QuickForm';
 import Select from '@/components/ui/Select';
 import { geocode, previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
@@ -49,6 +50,10 @@ interface OD {
   equipamentos: ItemSimples[];
   roteiros: { id: string; name: string; url: string }[];
   contatos: { funcao: string; nome: string; telefone: string }[];
+  /** O único campo desta página que o CLIENTE lê. Sai no portal dele, dentro
+   *  da gravação marcada, quando a ordem está aprovada. Os outros campos de
+   *  texto livre (regras, objetos, figurino) são internos e ficam aqui. */
+  nota_cliente: string;
   project_id: string | null;
 }
 
@@ -230,8 +235,8 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
       ) : (
         <div ref={wrapRef} className="relative">
           {/* cabeçalho */}
-          <div className="grid grid-cols-[130px_70px_44px_1fr_96px_92px] gap-2 px-4 py-2 border-b border-lumos-border text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary max-lg:hidden">
-            <span>Hora</span><span>Duração</span><span>Tipo</span><span>Descrição</span><span>Ações</span><span>Status</span>
+          <div className="grid grid-cols-[192px_76px_1fr_96px_92px] gap-2 px-4 py-2 border-b border-lumos-border text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary max-lg:hidden">
+            <span>Hora</span><span>Duração</span><span>Descrição</span><span>Ações</span><span>Status</span>
           </div>
 
           {rows.map((r, i) => {
@@ -242,33 +247,33 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
             return (
               <div key={i} ref={el => { rowRefs.current[i] = el; }}
                 style={{ minHeight: alturaMin, borderLeft: `3px solid ${t.cor}` }}
-                className={clsx('grid grid-cols-[130px_70px_44px_1fr_96px_92px] max-lg:grid-cols-[110px_1fr_80px] gap-2 px-4 py-2 border-b border-lumos-border/60 items-start group',
+                className={clsx('grid grid-cols-[192px_76px_1fr_96px_92px] max-lg:grid-cols-[96px_1fr_76px] gap-2 px-4 py-2 border-b border-lumos-border/60 items-start group',
                   r.destaque && 'bg-lumos-yellow/[0.04]')}>
-                {/* hora */}
-                <span className="flex items-center gap-1 tabular-nums text-[11.5px] font-black text-lumos-text-primary pt-1">
+                {/* hora: no celular os dois campos empilham, pra caber na coluna estreita */}
+                <span className="flex items-center gap-1 min-h-8 max-lg:flex-col max-lg:items-stretch tabular-nums text-[11.5px] font-black text-lumos-text-primary">
                   {canManage ? (
                     <>
-                      <input type="time" defaultValue={r.inicio || ''} onBlur={e => e.target.value !== r.inicio && editar(i, 'inicio', e.target.value)} className="input-lumos h-7 text-[10.5px] w-[62px] px-1" />
-                      –
-                      <input type="time" defaultValue={r.fim || ''} onBlur={e => e.target.value !== r.fim && editar(i, 'fim', e.target.value)} className="input-lumos h-7 text-[10.5px] w-[62px] px-1" />
+                      <input type="time" aria-label="Hora de início" defaultValue={r.inicio || ''} onBlur={e => e.target.value !== r.inicio && editar(i, 'inicio', e.target.value)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
+                      <span className="text-lumos-text-secondary max-lg:hidden">–</span>
+                      <input type="time" aria-label="Hora de término" defaultValue={r.fim || ''} onBlur={e => e.target.value !== r.fim && editar(i, 'fim', e.target.value)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
                     </>
                   ) : <>{r.inicio} – {r.fim}</>}
                 </span>
                 {/* duração */}
-                <span className="text-[10.5px] text-lumos-text-secondary tabular-nums pt-2 max-lg:hidden">
+                <span className="text-[10.5px] text-lumos-text-secondary tabular-nums min-h-8 flex items-center max-lg:hidden">
                   {dur != null && dur > 0 ? (dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ` ${dur % 60}m` : ''}` : `${dur}min`) : '—'}
                 </span>
-                {/* tipo */}
-                <span className="pt-1.5 max-lg:hidden" title={t.label}>
-                  <t.Icon className="w-4 h-4" style={{ color: t.cor }} />
-                </span>
-                {/* descrição + chips */}
+                {/* descrição + chips (o tipo virou chip com nome, o ícone sozinho não dizia nada) */}
                 <span className="min-w-0">
                   {canManage ? (
                     <input defaultValue={r.descricao} onBlur={e => e.target.value !== r.descricao && editar(i, 'descricao', e.target.value)}
                       placeholder="O que acontece nesse bloco" className="input-lumos h-8 text-[12px] w-full" />
-                  ) : <span className="text-[12.5px] font-bold text-lumos-text-primary">{r.descricao}</span>}
-                  <span className="flex flex-wrap gap-1.5 mt-1">
+                  ) : <span className="text-[12.5px] font-bold text-lumos-text-primary min-h-8 flex items-center">{r.descricao}</span>}
+                  <span className="flex flex-wrap items-center gap-1.5 mt-1">
+                    <span className="text-[9px] font-black uppercase tracking-wide rounded-full px-2 py-0.5 flex items-center gap-1"
+                      style={{ color: t.cor, backgroundColor: `${t.cor}1f` }}>
+                      <t.Icon className="w-2.5 h-2.5" /> {t.label}
+                    </span>
                     {r.locacao && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{r.locacao}</span>}
                     {r.tipo === 'deslocamento' && r.chegada && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5">→ {r.chegada}</span>}
                     {r.paralelo && <span className="text-[9px] font-black uppercase text-purple-400 bg-purple-500/10 rounded-full px-2 py-0.5">paralelo</span>}
@@ -276,7 +281,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
                   </span>
                 </span>
                 {/* ações */}
-                <span className="pt-1 max-lg:hidden">
+                <span className="min-h-8 flex items-center max-lg:hidden">
                   {canManage && (
                     <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button type="button" disabled={i === 0} onClick={() => { const l = [...rows]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; onChange(l); }}
@@ -291,7 +296,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
                   )}
                 </span>
                 {/* status */}
-                <span className={clsx('pt-2 inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase',
+                <span className={clsx('min-h-8 inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase',
                   st === 'atrasado' ? 'text-red-500' : st === 'agora' ? 'text-lumos-yellow' : 'text-lumos-text-secondary')}>
                   <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', st === 'atrasado' ? 'bg-red-500' : st === 'agora' ? 'bg-lumos-yellow animate-pulse' : 'bg-lumos-text-secondary/40')} />
                   {st === 'atrasado' ? 'Atrasado' : st === 'agora' ? 'Agora' : 'Pendente'}
@@ -410,8 +415,12 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
 // página re-renderiza a cada segundo (relógio AGORA) e um componente definido
 // inline seria remontado a cada tick — o lápis fechava sozinho e o texto saía
 // invertido (cursor voltava pro início). Aqui o estado local sobrevive.
-function CardRegra({ valor, titulo, Icon, destaque, canManage, onSave }: {
+function CardRegra({ valor, titulo, Icon, destaque, canManage, ajuda, vazio, onSave }: {
   valor: string; titulo: string; Icon: any; destaque?: boolean; canManage: boolean;
+  /** Linha de ajuda embaixo do título, pra dizer quem lê aquele texto. */
+  ajuda?: string;
+  /** O que aparece quando o campo está vazio, no lugar do texto padrão. */
+  vazio?: string;
   onSave: (v: string) => void;
 }) {
   const [editando, setEditando] = useState(false);
@@ -430,6 +439,7 @@ function CardRegra({ valor, titulo, Icon, destaque, canManage, onSave }: {
           </button>
         )}
       </div>
+      {ajuda && <p className="text-[10.5px] leading-snug text-lumos-text-secondary mb-2">{ajuda}</p>}
       {editando ? (
         <div>
           <textarea autoFocus rows={2} value={draft} onChange={e => setDraft(e.target.value)}
@@ -442,10 +452,128 @@ function CardRegra({ valor, titulo, Icon, destaque, canManage, onSave }: {
         </div>
       ) : (
         <p className={clsx('text-[12.5px] leading-snug', tem ? 'text-lumos-text-primary' : 'text-lumos-text-secondary italic')}>
-          {valor || 'Clique no lápis pra preencher.'}
+          {valor || vazio || 'Clique no lápis pra preencher.'}
         </p>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FICHA TÉCNICA: escolher gente do cadastro GERAL da plataforma, não só de quem
+// está no projeto. Mesmo desenho do modal de escalar das Diárias
+// (ProjectDiarias): uma busca só, equipe do projeto em destaque, depois
+// fornecedores e o time Lumos. Vive fora da página pelo mesmo motivo do
+// CardRegra: o tick de 1s remontaria um componente declarado inline.
+// ─────────────────────────────────────────────────────────────────────────────
+interface PessoaCatalogo { tipo: 'user' | 'freela'; id: string; nome: string; funcao?: string | null; doProjeto?: boolean }
+
+function EscolherDoCadastro({ projectId, jaNaFicha, onEscolher, onClose }: {
+  projectId: string | null;
+  /** Nomes já na ficha, em minúsculas, pra não oferecer quem já entrou. */
+  jaNaFicha: Set<string>;
+  onEscolher: (p: PessoaCatalogo) => void;
+  onClose: () => void;
+}) {
+  const [busca, setBusca] = useState('');
+  const [catalogo, setCatalogo] = useState<PessoaCatalogo[] | null>(null);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const [pm, forn, users] = await Promise.all([
+        projectId
+          ? supabase.from('project_members').select('user_id, freela_id, funcao').eq('project_id', projectId)
+          : Promise.resolve({ data: [] as any[], error: null }),
+        supabase.from('fornecedores').select('id, nome').order('nome'),
+        supabase.from('app_users').select('id, full_name, job_title').eq('status', 'ativo').order('full_name'),
+      ]);
+      if (!vivo) return;
+      if (forn.error || users.error) {
+        setErro('Não foi possível carregar o cadastro. Feche e tente de novo.');
+        setCatalogo([]);
+        return;
+      }
+      // A equipe do projeto só decide o destaque e a função sugerida: se ela
+      // falhar, a lista completa continua servindo.
+      const funcaoDe = new Map<string, string | null>();
+      const doProjeto = new Set<string>();
+      for (const m of ((pm.data as any[]) || [])) {
+        const k = m.user_id ? `user:${m.user_id}` : `freela:${m.freela_id}`;
+        doProjeto.add(k);
+        funcaoDe.set(k, m.funcao || null);
+      }
+      setCatalogo([
+        ...((forn.data as any[]) || []).map(f => ({
+          tipo: 'freela' as const, id: f.id, nome: f.nome,
+          funcao: funcaoDe.get(`freela:${f.id}`) || null, doProjeto: doProjeto.has(`freela:${f.id}`),
+        })),
+        ...((users.data as any[]) || []).map(u => ({
+          tipo: 'user' as const, id: u.id, nome: u.full_name,
+          funcao: funcaoDe.get(`user:${u.id}`) || u.job_title || null, doProjeto: doProjeto.has(`user:${u.id}`),
+        })),
+      ]);
+    })();
+    return () => { vivo = false; };
+  }, [projectId]);
+
+  const q = busca.trim().toLowerCase();
+  const disponiveis = (catalogo || []).filter(p =>
+    !jaNaFicha.has(p.nome.trim().toLowerCase()) && (!q || p.nome.toLowerCase().includes(q)));
+  const grupos = [
+    { titulo: 'Equipe do projeto', itens: disponiveis.filter(p => p.doProjeto) },
+    { titulo: 'Fornecedores', itens: disponiveis.filter(p => !p.doProjeto && p.tipo === 'freela') },
+    { titulo: 'Time Lumos', itens: disponiveis.filter(p => !p.doProjeto && p.tipo === 'user') },
+  ].filter(g => g.itens.length > 0);
+
+  return (
+    <Modal isOpen onClose={onClose} title="Buscar no cadastro" maxWidth="max-w-md">
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary pointer-events-none" />
+          <input autoFocus value={busca} onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar pessoa ou fornecedor…" className="input-lumos pl-9 w-full h-10 text-sm" />
+        </div>
+        <p className="text-[10.5px] text-lumos-text-secondary">
+          Todo o cadastro da plataforma, não só quem está neste projeto. Dá pra ajustar a função depois, no cartão da pessoa.
+        </p>
+        <div className="border border-lumos-border rounded-lumos max-h-72 overflow-y-auto custom-scrollbar divide-y divide-lumos-border/40">
+          {catalogo === null ? (
+            <p className="text-xs text-lumos-text-secondary italic p-4 flex items-center justify-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando o cadastro…
+            </p>
+          ) : erro ? (
+            <p className="text-xs text-red-400 p-4 text-center">{erro}</p>
+          ) : grupos.length === 0 ? (
+            <p className="text-xs text-lumos-text-secondary italic p-4 text-center">
+              {q ? 'Ninguém encontrado com esse nome.' : 'Todo mundo do cadastro já está na ficha.'}
+            </p>
+          ) : grupos.map(g => (
+            <div key={g.titulo}>
+              <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary bg-lumos-bg/60 px-3 py-1.5 sticky top-0">{g.titulo}</p>
+              {g.itens.map(pessoa => (
+                <button key={`${pessoa.tipo}:${pessoa.id}`} type="button"
+                  onClick={() => { onEscolher(pessoa); onClose(); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-lumos-text-primary/5 transition-colors">
+                  <span className={clsx('w-7 h-7 rounded-full text-[10px] font-black flex items-center justify-center flex-shrink-0',
+                    pessoa.tipo === 'freela' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
+                    {pessoa.nome.trim().split(/\s+/).slice(0, 2).map(x => x[0]?.toUpperCase() || '').join('')}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-xs font-bold text-lumos-text-primary block truncate">{pessoa.nome}</span>
+                    <span className="text-[10px] text-lumos-text-secondary block truncate">
+                      {pessoa.tipo === 'freela' ? 'Fornecedor' : 'Time Lumos'}{pessoa.funcao ? ` · ${pessoa.funcao}` : ''}
+                    </span>
+                  </span>
+                  <UserPlus className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -467,6 +595,8 @@ export default function OrdemDoDiaDetalhe() {
   // Formulário rápido do app (nada de prompt() do navegador).
   const [qf, setQf] = useState<null | { title: string; fields: QFField[]; submitLabel?: string; onSubmit: (v: Record<string, string>) => void }>(null);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  // Busca no cadastro geral pra ficha técnica (freela que não está no projeto).
+  const [buscandoPessoa, setBuscandoPessoa] = useState(false);
 
   // ── Carga ──────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -491,6 +621,9 @@ export default function OrdemDoDiaDetalhe() {
       equipamentos: o.equipamentos || [],
       roteiros: Array.isArray(o.roteiros) ? o.roteiros : [],
       contatos: o.contatos || [],
+      // Sem a migração 2026093337 a coluna não existe: a página abre igual, com
+      // o recado vazio.
+      nota_cliente: o.nota_cliente || '',
       aprovacao: o.aprovacao || 'rascunho',
     });
     setLoading(false);
@@ -527,7 +660,7 @@ export default function OrdemDoDiaDetalhe() {
     salvandoRef.current = false;
     if (error) {
       setOd(prev);
-      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros/.test(String(error.message))
+      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros|nota_cliente/.test(String(error.message))
         ? 'Falta rodar a migração da Ordem do Dia 2.0 no banco.'
         : 'Não foi possível salvar.');
     } else if (!silencioso) toast.success('Salvo ✓');
@@ -856,6 +989,15 @@ export default function OrdemDoDiaDetalhe() {
           <CardRegra valor={od.regras.outras || ''} titulo="Outras observações" Icon={FileText} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, outras: v } }, true)} />
         </div>
 
+        {/* O único campo desta página que sai do prédio: o cliente lê este
+            texto no portal dele. Fica logo abaixo das regras do set, que são
+            internas, com o aviso na cara pra ninguém confundir uma coisa com
+            a outra. */}
+        <CardRegra valor={od.nota_cliente} titulo="Recado para o cliente" Icon={Eye} canManage={canManage}
+          ajuda="Esse texto o cliente lê no portal dele, dentro da gravação marcada, assim que a ordem for aprovada. Escreva o que ele precisa providenciar no dia."
+          vazio="Nenhum recado para o cliente. Clique no lápis pra escrever."
+          onSave={v => void patch({ nota_cliente: v }, true)} />
+
         <CronogramaPrincipal od={od} canManage={canManage} agora={agora} hoje={cron.hoje}
           locsAtivas={locsAtivas} onChange={lista => void editarLista('plano_acao', lista)} />
       </>)}
@@ -1000,6 +1142,10 @@ export default function OrdemDoDiaDetalhe() {
                     Puxar equipe do projeto
                   </button>
                 )}
+                <button type="button" onClick={() => setBuscandoPessoa(true)}
+                  className="text-[11px] font-bold border border-lumos-border text-lumos-text-secondary rounded-lumos px-3 h-9 hover:text-lumos-text-primary flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5" /> Buscar no cadastro
+                </button>
                 <button type="button" onClick={() => setQf({ title: 'Adicionar à ficha técnica', submitLabel: 'Adicionar', fields: [
                   { key: 'nome', label: 'Nome', required: true },
                   { key: 'funcao', label: 'Função nesta diária', placeholder: 'Ex.: Diretor de fotografia' },
@@ -1009,7 +1155,7 @@ export default function OrdemDoDiaDetalhe() {
             )}
           </div>
           {od.equipe.length === 0 ? (
-            <div className="card p-8 text-center"><Users2 className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" /><p className="text-sm font-bold text-lumos-text-primary">Ficha técnica vazia.</p><p className="text-xs text-lumos-text-secondary mt-1">Puxe a equipe do projeto ou adicione pessoa a pessoa.</p></div>
+            <div className="card p-8 text-center"><Users2 className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" /><p className="text-sm font-bold text-lumos-text-primary">Ficha técnica vazia.</p><p className="text-xs text-lumos-text-secondary mt-1">Puxe a equipe do projeto, busque no cadastro geral ou adicione pessoa a pessoa.</p></div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
               {od.equipe.map((m, i) => (
@@ -1034,6 +1180,18 @@ export default function OrdemDoDiaDetalhe() {
                 </div>
               ))}
             </div>
+          )}
+
+          {buscandoPessoa && (
+            <EscolherDoCadastro
+              projectId={od.project_id}
+              jaNaFicha={new Set(od.equipe.map(m => m.nome.trim().toLowerCase()))}
+              onEscolher={p => {
+                void editarLista('equipe', [...od.equipe, { nome: p.nome, funcao: p.funcao || (p.tipo === 'freela' ? 'Freelancer' : '') }]);
+                toast.success(`${p.nome} entrou na ficha técnica ✓`);
+              }}
+              onClose={() => setBuscandoPessoa(false)}
+            />
           )}
         </div>
       )}
@@ -1155,6 +1313,10 @@ export default function OrdemDoDiaDetalhe() {
           <CardRegra valor={od.regras.redes || ''} titulo="Regras de postagem da equipe em redes sociais" Icon={Megaphone} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, redes: v } }, true)} />
           <CardRegra valor={od.regras.setup_camera || ''} titulo="Setup de câmera" Icon={Camera} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, setup_camera: v } }, true)} />
           <CardRegra valor={od.regras.outras || ''} titulo="Outras observações" Icon={FileText} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, outras: v } }, true)} />
+          <CardRegra valor={od.nota_cliente} titulo="Recado para o cliente" Icon={Eye} canManage={canManage}
+            ajuda="Esse texto o cliente lê no portal dele, dentro da gravação marcada, assim que a ordem for aprovada. Escreva o que ele precisa providenciar no dia."
+            vazio="Nenhum recado para o cliente. Clique no lápis pra escrever."
+            onSave={v => void patch({ nota_cliente: v }, true)} />
         </div>
       )}
     </div>

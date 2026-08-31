@@ -396,6 +396,36 @@ export const PORTAL_CSS = String.raw`
   .grav-pessoa .fn { font-family: "DM Mono", monospace; font-size: 10.5px;
     color: var(--meia-luz); text-align: right; }
 
+  /* No dia: a ordem do dia aprovada, na janela da própria gravação. Só o que
+     é do cliente, onde encontrar a equipe, o que acontece a cada hora e o que
+     ele precisa providenciar. A hora tem largura fixa e o que acontece quebra
+     na linha, pra caber num celular sem empurrar a página pro lado. */
+  .grav-dia { margin-top: 22px; }
+  .grav-dia > .rotulo { display: block; margin-bottom: 4px; }
+  /* Cabeça da seção "No dia": rótulo à esquerda, baixar o PDF à direita. Em
+     telas estreitas o botão quebra pra linha de baixo, sem empurrar nada pro
+     lado (a página não rola na horizontal). */
+  .grav-dia-cabeca { display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .grav-dia-cabeca > .rotulo { margin: 0; }
+  .grav-dia-erro { margin-top: 8px; }
+  .grav-dia .rt { display: block; font-family: "DM Mono", monospace; font-size: 10px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--meia-luz);
+    margin: 16px 0 6px; }
+  .grav-ponto .nm { display: block; font-size: 13.5px; font-weight: 600;
+    overflow-wrap: anywhere; }
+  .grav-ponto .end { display: block; font-size: 12.5px; line-height: 1.5;
+    color: var(--meia-luz); margin-top: 2px; overflow-wrap: anywhere; }
+  .grav-crono { list-style: none; margin: 0; padding: 0; }
+  .grav-crono li { display: flex; align-items: baseline; gap: 14px;
+    padding: 9px 0; border-bottom: 1px solid var(--fio); }
+  .grav-crono .hr { font-family: "DM Mono", monospace; font-size: 11.5px;
+    color: var(--luz); flex: 0 0 44px; }
+  .grav-crono .oq { font-size: 13px; line-height: 1.45; min-width: 0;
+    overflow-wrap: anywhere; }
+  .grav-recado p { margin: 0; font-size: 13px; line-height: 1.55;
+    overflow-wrap: anywhere; }
+
   /* Janela de pedido: por cima do calendário, no estilo da sala (sem nada
      do Tailwind do app, que aqui não existe). */
   .pedido-modal-fora {
