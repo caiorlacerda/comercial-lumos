@@ -402,6 +402,13 @@ export const PORTAL_CSS = String.raw`
      na linha, pra caber num celular sem empurrar a página pro lado. */
   .grav-dia { margin-top: 22px; }
   .grav-dia > .rotulo { display: block; margin-bottom: 4px; }
+  /* Cabeça da seção "No dia": rótulo à esquerda, baixar o PDF à direita. Em
+     telas estreitas o botão quebra pra linha de baixo, sem empurrar nada pro
+     lado (a página não rola na horizontal). */
+  .grav-dia-cabeca { display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .grav-dia-cabeca > .rotulo { margin: 0; }
+  .grav-dia-erro { margin-top: 8px; }
   .grav-dia .rt { display: block; font-family: "DM Mono", monospace; font-size: 10px;
     letter-spacing: .14em; text-transform: uppercase; color: var(--meia-luz);
     margin: 16px 0 6px; }

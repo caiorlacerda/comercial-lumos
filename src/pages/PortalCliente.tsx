@@ -696,8 +696,50 @@ export default function PortalCliente() {
   const abrirGravacao = useCallback((g: Gravacao, gatilho?: HTMLButtonElement) => {
     gatilhoGravacaoRef.current = gatilho || null;
     setGravacaoAberta(g);
+    setErroOrdemPdf(null);
   }, []);
   useJanela(!!gravacaoAberta, gravacaoModalRef, gatilhoGravacaoRef, () => setGravacaoAberta(null));
+
+  /** Baixar a ordem do dia em PDF, de dentro da janela da gravação. O gerador
+   *  de PDF (`@react-pdf/renderer`, mais de 1MB) só entra no bundle quando o
+   *  cliente clica — o portal é público e abre rápido pra todo mundo, mesmo
+   *  quem nunca baixa nada. */
+  const [baixandoOrdemPdf, setBaixandoOrdemPdf] = useState(false);
+  const [erroOrdemPdf, setErroOrdemPdf] = useState<string | null>(null);
+  const baixarOrdemPdf = useCallback(async (g: Gravacao) => {
+    const d = noDia(g);
+    if (!d || baixandoOrdemPdf) return;
+    setBaixandoOrdemPdf(true);
+    setErroOrdemPdf(null);
+    try {
+      const [{ pdf }, { OrdemDoDiaClientePDF }, React] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/editor/OrdemDoDiaClientePDF'),
+        import('react'),
+      ]);
+      const blob = await pdf(React.createElement(OrdemDoDiaClientePDF, {
+        nome: g.nome,
+        data: g.data,
+        horario: horario(g),
+        local: g.local,
+        ordem: { ponto_encontro: d.ponto, cronograma: d.cronograma, nota_cliente: d.nota || null },
+      }) as any).toBlob();
+      const nomeArquivo = `Ordem_do_dia_${g.nome}_${g.data}`
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') + '.pdf';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nomeArquivo;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      setErroOrdemPdf('Não foi possível gerar o PDF. Tente de novo.');
+    } finally {
+      setBaixandoOrdemPdf(false);
+    }
+  }, [baixandoOrdemPdf]);
 
   /** O botão do dia que abriu a janela de pedido, pra devolver o foco a ele
    *  quando ela fechar (Esc, X ou clique fora) — sem isto, quem navega por
@@ -1373,7 +1415,14 @@ export default function PortalCliente() {
                           if (!d) return null;
                           return (
                             <div className="grav-dia">
-                              <span className="rotulo">No dia</span>
+                              <div className="grav-dia-cabeca">
+                                <span className="rotulo">No dia</span>
+                                <button type="button" className="baixar" disabled={baixandoOrdemPdf}
+                                  onClick={() => baixarOrdemPdf(gravacaoAberta)}>
+                                  {baixandoOrdemPdf ? 'Gerando…' : 'Baixar ordem do dia'}
+                                </button>
+                              </div>
+                              {erroOrdemPdf && <p className="nota alerta grav-dia-erro">{erroOrdemPdf}</p>}
                               {d.ponto && (
                                 <div className="grav-ponto">
                                   <span className="rt">Ponto de encontro</span>
