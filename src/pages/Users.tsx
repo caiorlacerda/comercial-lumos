@@ -77,8 +77,13 @@ export default function UsersPage() {
     hidden: false,
     password: '',
     custom_permissions: {} as Record<string, boolean>,
+    revisor_fixo: false,
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // A coluna revisor_fixo chegou na migração 2026093339. Enquanto ela não rodar,
+  // o campo simplesmente não aparece e o salvar não manda a chave, assim a tela
+  // não quebra num banco que ainda está atrás.
+  const [revisorFixoOk, setRevisorFixoOk] = useState(false);
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
 
   useEffect(() => {
@@ -95,6 +100,7 @@ export default function UsersPage() {
 
       if (error) throw error;
       setUsers(data || []);
+      setRevisorFixoOk(!!data?.length && 'revisor_fixo' in data[0]);
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
     } finally {
@@ -173,6 +179,7 @@ export default function UsersPage() {
           status: formData.status,
           hidden: formData.hidden,
           custom_permissions: formData.custom_permissions,
+          ...(revisorFixoOk ? { revisor_fixo: formData.revisor_fixo } : {}),
         })
         .eq('id', selectedUser.id);
 
@@ -299,6 +306,7 @@ export default function UsersPage() {
       hidden: (user as any).hidden || false,
       password: '',
       custom_permissions: { ...(user.custom_permissions || {}) },
+      revisor_fixo: user.revisor_fixo ?? false,
     });
     setIsEditModalOpen(true);
   };
@@ -321,7 +329,8 @@ export default function UsersPage() {
       status: 'ativo',
       hidden: false,
       password: '',
-      custom_permissions: {}
+      custom_permissions: {},
+      revisor_fixo: false,
     });
   };
 
@@ -744,6 +753,23 @@ export default function UsersPage() {
               </span>
             </span>
           </label>
+
+          {revisorFixoOk && (
+            <label className="flex items-start gap-2.5 p-2.5 rounded-lumos border border-lumos-border/50 bg-lumos-bg/20 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.revisor_fixo}
+                onChange={(e) => setFormData({ ...formData, revisor_fixo: e.target.checked })}
+                className="mt-0.5 rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer flex-shrink-0"
+              />
+              <span className="min-w-0">
+                <span className="text-xs font-bold text-lumos-text-primary block">Revisor fixo</span>
+                <span className="text-[10px] text-lumos-text-secondary/80 leading-relaxed">
+                  Acompanha automaticamente toda revisão interna: entra sozinho como colaborador da tarefa quando o vídeo chega, recebe o aviso, e sai quando a revisão termina.
+                </span>
+              </span>
+            </label>
+          )}
 
           {formData.role !== 'admin' && (
             <div className="space-y-2">

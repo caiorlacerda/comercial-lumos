@@ -92,6 +92,9 @@ export default function Equipe() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  // A coluna revisor_fixo chegou na migração 2026093339. Enquanto ela não rodar,
+  // o campo não aparece e o salvar não manda a chave: a ficha segue funcionando.
+  const [revisorFixoOk, setRevisorFixoOk] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('lumos-equipe-view') as ViewMode) || 'list');
   useEffect(() => { localStorage.setItem('lumos-equipe-view', viewMode); }, [viewMode]);
 
@@ -102,7 +105,9 @@ export default function Equipe() {
       supabase.from('team_members').select('*, app_user:app_users(avatar_url)').order('full_name'),
     ]);
     // Contas ocultas (de teste/visão) não entram na Equipe nem no contador.
-    setUsersRows(((u.data as AppUserProfile[]) || []).filter(x => !(x as any).hidden));
+    const rows = (u.data as AppUserProfile[]) || [];
+    setRevisorFixoOk(rows.length > 0 && 'revisor_fixo' in rows[0]);
+    setUsersRows(rows.filter(x => !(x as any).hidden));
     setTeamRows((t.data as TeamMember[]) || []);
     setLoading(false);
   }, []);
@@ -139,12 +144,12 @@ export default function Equipe() {
   // ── Detalhe da pessoa ─────────────────────────────────────────────────────
   const [detail, setDetail] = useState<Person | null>(null);
   const [detailTab, setDetailTab] = useState<'dados' | 'acesso'>('dados');
-  const [access, setAccess] = useState({ role: 'time' as UserRole, status: 'ativo' as 'ativo' | 'inativo', job_title: '', custom_permissions: {} as Record<string, boolean> });
+  const [access, setAccess] = useState({ role: 'time' as UserRole, status: 'ativo' as 'ativo' | 'inativo', job_title: '', custom_permissions: {} as Record<string, boolean>, revisor_fixo: false });
   const [hr, setHr] = useState<HrForm>(EMPTY_HR);
   const [saving, setSaving] = useState(false);
 
   const openDetail = (p: Person) => {
-    if (p.user) setAccess({ role: p.user.role as UserRole, status: p.user.status, job_title: p.user.job_title || '', custom_permissions: { ...(p.user.custom_permissions || {}) } });
+    if (p.user) setAccess({ role: p.user.role as UserRole, status: p.user.status, job_title: p.user.job_title || '', custom_permissions: { ...(p.user.custom_permissions || {}) }, revisor_fixo: p.user.revisor_fixo ?? false });
     const h = p.hr; const f: HrForm = { ...EMPTY_HR, role_title: h?.role_title || '' };
     HR_FIELDS.forEach(k => { if (h?.[k]) f[k] = h[k] as string; });
     setHr(f);
@@ -161,6 +166,7 @@ export default function Equipe() {
     setSaving(true);
     const { error } = await supabase.from('app_users').update({
       role: access.role, status: access.status, job_title: access.job_title || null, custom_permissions: access.custom_permissions,
+      ...(revisorFixoOk ? { revisor_fixo: access.revisor_fixo } : {}),
     }).eq('id', detail.user.id);
     setSaving(false);
     if (error) { toast.error(`Erro: ${error.message}`); return; }
@@ -462,6 +468,19 @@ export default function Equipe() {
                         options={[{ value: 'ativo', label: 'Ativo' }, { value: 'inativo', label: 'Inativo' }]} />
                     </div>
                   </div>
+                  {revisorFixoOk && (
+                    <label className="sm:col-span-2 flex items-start gap-2.5 p-2.5 rounded-lumos border border-lumos-border/50 bg-lumos-bg/20 cursor-pointer">
+                      <input type="checkbox" checked={access.revisor_fixo}
+                        onChange={e => setAccess(a => ({ ...a, revisor_fixo: e.target.checked }))}
+                        className="mt-0.5 rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer flex-shrink-0" />
+                      <span className="min-w-0">
+                        <span className="text-[11px] font-bold text-lumos-text-primary block">Revisor fixo</span>
+                        <span className="text-[10px] text-lumos-text-secondary/80 leading-relaxed">
+                          Acompanha automaticamente toda revisão interna: entra sozinho como colaborador da tarefa quando o vídeo chega, recebe o aviso, e sai quando a revisão termina.
+                        </span>
+                      </span>
+                    </label>
+                  )}
                   {access.role !== 'admin' && (
                     <div className="sm:col-span-2 space-y-1.5">
                       <p className="text-[10px] text-lumos-text-secondary/70">Padrão = herda do cargo. Liberar/Bloquear sobrescreve só para esta pessoa.</p>
