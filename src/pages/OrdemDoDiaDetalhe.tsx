@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { InputHTMLAttributes } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, Check, Clock, CloudRain, Copy, ExternalLink,
@@ -9,6 +10,7 @@ import {
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { salvarComVersao } from '@/lib/salvarComVersao';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
@@ -108,6 +110,62 @@ const TIPOS: Record<TipoMomento, { label: string; Icon: any; cor: string; defMin
   intervalo:     { label: 'Intervalo',     Icon: Clock,     cor: '#14b8a6', defMin: 5 },
   personalizado: { label: 'Personalizado', Icon: Pencil,    cor: '#EFC700', defMin: 30 },
 };
+
+/**
+ * CAMPO AO VIVO — o input que não atropela quem está digitando.
+ *
+ * Os campos do cronograma são não controlados (`defaultValue` + salvar no
+ * blur), porque o relógio da página bate de segundo em segundo e um input
+ * controlado perderia o que a pessoa digita a cada tique. O preço disso é que
+ * o React ignora a mudança de `defaultValue` depois que o campo já existe: sem
+ * ajuda, alteração de outra pessoa chegava no estado mas não aparecia dentro
+ * do campo.
+ *
+ * Então a sincronia é feita na mão, e com uma regra: **campo em uso não muda
+ * embaixo da mão de ninguém**. Chegou valor novo do servidor e o campo está
+ * parado, ele entra na hora. Chegou e o campo está com o foco dentro, ele fica
+ * esperando aqui até a pessoa sair. Na saída, se ela mexeu, o que vale é o que
+ * ela digitou (e o salvamento decide, com a trava de versão, se entra ou não);
+ * se ela só passou pelo campo sem mexer, entra o valor que estava esperando.
+ */
+function CampoAoVivo({ valor, onSalvar, ...resto }: {
+  valor: string;
+  onSalvar: (v: string) => void;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'defaultValue' | 'onBlur'>) {
+  const ref = useRef<HTMLInputElement>(null);
+  // Último valor do servidor que já está dentro do campo. É contra ele que a
+  // saída do campo decide se a pessoa mexeu.
+  const aplicado = useRef(valor);
+  // Valor do servidor que chegou enquanto o campo estava em uso.
+  const esperando = useRef<string | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || valor === aplicado.current) return;
+    if (document.activeElement === el) { esperando.current = valor; return; }
+    aplicado.current = valor;
+    esperando.current = null;
+    el.value = valor;
+  }, [valor]);
+
+  return (
+    <input ref={ref} defaultValue={valor} {...resto}
+      onBlur={e => {
+        const digitado = e.target.value;
+        if (digitado !== aplicado.current) {
+          aplicado.current = digitado;
+          esperando.current = null;
+          onSalvar(digitado);
+          return;
+        }
+        if (esperando.current !== null) {
+          aplicado.current = esperando.current;
+          e.target.value = esperando.current;
+          esperando.current = null;
+        }
+      }} />
+  );
+}
 
 function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange, confirm }: {
   od: { plano_acao: Momento[]; hora_inicio: string | null };
@@ -258,9 +316,9 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                 <span className="flex items-center gap-1 min-h-8 max-lg:flex-col max-lg:items-stretch tabular-nums text-[11.5px] font-black text-lumos-text-primary">
                   {canManage ? (
                     <>
-                      <input type="time" aria-label="Hora de início" defaultValue={r.inicio || ''} onBlur={e => e.target.value !== r.inicio && editar(i, 'inicio', e.target.value)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
+                      <CampoAoVivo type="time" aria-label="Hora de início" valor={r.inicio || ''} onSalvar={v => editar(i, 'inicio', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
                       <span className="text-lumos-text-secondary max-lg:hidden">–</span>
-                      <input type="time" aria-label="Hora de término" defaultValue={r.fim || ''} onBlur={e => e.target.value !== r.fim && editar(i, 'fim', e.target.value)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
+                      <CampoAoVivo type="time" aria-label="Hora de término" valor={r.fim || ''} onSalvar={v => editar(i, 'fim', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
                     </>
                   ) : <>{r.inicio} – {r.fim}</>}
                 </span>
@@ -271,7 +329,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                 {/* descrição + chips (o tipo virou chip com nome, o ícone sozinho não dizia nada) */}
                 <span className="min-w-0">
                   {canManage ? (
-                    <input defaultValue={r.descricao} onBlur={e => e.target.value !== r.descricao && editar(i, 'descricao', e.target.value)}
+                    <CampoAoVivo valor={r.descricao} onSalvar={v => editar(i, 'descricao', v)}
                       placeholder="O que acontece nesse bloco" className="input-lumos h-8 text-[12px] w-full" />
                   ) : <span className="text-[12.5px] font-bold text-lumos-text-primary min-h-8 flex items-center">{r.descricao}</span>}
                   <span className="flex flex-wrap items-center gap-1.5 mt-1">
@@ -620,19 +678,28 @@ export default function OrdemDoDiaDetalhe() {
   // salvamento (migração 2026093338). `null` = banco ainda sem a coluna, aí a
   // tela salva como antes, sem trava.
   const versaoRef = useRef<number | null>(null);
+  // Carimbo do que já está aplicado na tela: a versão, ou o updated_at enquanto
+  // a migração não roda. Serve pra reconhecer o eco do próprio salvamento
+  // quando o tempo real avisa da mudança que fomos nós que fizemos.
+  const carimboRef = useRef('');
   // Contador de cargas: uma resposta que chega atrasada, depois de um
   // salvamento ou de uma carga mais nova, é descartada em vez de repor dado
   // velho por cima do novo.
   const cargaRef = useRef(0);
+  const carimboDe = (o: any) => String(o?.versao ?? o?.updated_at ?? '');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silencioso?: boolean }) => {
+    // Silencioso = veio do tempo real: sem spinner, sem tela de erro, e sem
+    // mexer em nada se o dado do servidor já for o que está aqui.
+    const silencioso = opts?.silencioso === true;
     const carga = ++cargaRef.current;
-    setErroCarga(false);
+    if (!silencioso) setErroCarga(false);
     const { data, error } = await supabase.from('ordens_do_dia').select('*').eq('id', id).maybeSingle();
     if (carga !== cargaRef.current) return;
-    if (error) { setErroCarga(true); setLoading(false); return; }
-    if (!data) { setLoading(false); return; }
+    if (error) { if (!silencioso) { setErroCarga(true); setLoading(false); } return; }
+    if (!data) { if (!silencioso) setLoading(false); return; }
     const o = data as any;
+    if (silencioso && carimboDe(o) === carimboRef.current) return;
     // Locação única antiga vira a primeira da lista nova (sem tocar no banco).
     let locacoes: Loc[] = Array.isArray(o.locacoes) ? o.locacoes : [];
     if (!locacoes.length && o.locacao?.nome) {
@@ -657,6 +724,8 @@ export default function OrdemDoDiaDetalhe() {
       aprovacao: o.aprovacao || 'rascunho',
     });
     versaoRef.current = typeof o.versao === 'number' ? o.versao : null;
+    carimboRef.current = carimboDe(o);
+    if (silencioso) return;
     setLoading(false);
     if (o.project_id) {
       supabase.from('projects').select('name').eq('id', o.project_id).maybeSingle()
@@ -720,9 +789,15 @@ export default function OrdemDoDiaDetalhe() {
       return false;
     }
     versaoRef.current = r.versao;
+    carimboRef.current = carimboDe(r.linha);
     if (!silencioso) toast.success('Salvo ✓');
     return true;
   };
+
+  // ── Tempo real ────────────────────────────────────────────────────────
+  // Salvou de um lado, aparece do outro. Carga silenciosa: sem spinner, e o
+  // carimbo garante que o eco do próprio salvamento não vira recarregamento.
+  useRealtimeRefetch(['ordens_do_dia'], () => { void load({ silencioso: true }); }, { enabled: !!id && !loading });
 
   // ── Derivados do cronograma ───────────────────────────────────────────
   const cron = useMemo(() => {
