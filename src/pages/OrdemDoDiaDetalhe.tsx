@@ -796,16 +796,21 @@ export default function OrdemDoDiaDetalhe() {
                 const [{ pdf }, { OrdemDoDiaPDF }, React] = await Promise.all([
                   import('@react-pdf/renderer'), import('@/components/editor/OrdemDoDiaPDF'), import('react'),
                 ]);
-                const l0 = od.locacoes.find(x => x.incluida);
+                // A call sheet da equipe leva TUDO o que foi preenchido nas nove
+                // abas. Só as locações incluídas vão, que são as mesmas que a
+                // tela usa no cronograma, no Maps e na previsão.
+                const locs = od.locacoes.filter(x => x.incluida)
+                  .map(l => ({ nome: l.nome, endereco: l.endereco, observacoes: l.obs || '' }));
                 const ordem = {
-                  id: od.id, codigo: od.codigo, titulo: od.titulo, data_producao: od.data_producao,
+                  codigo: od.codigo, titulo: od.titulo, data_producao: od.data_producao,
                   data_emissao: new Date().toISOString(), clima: od.clima,
-                  ponto_encontro: od.ponto_encontro || { nome: '', endereco: '' },
-                  locacao: l0 ? { nome: l0.nome, endereco: l0.endereco, observacoes: l0.obs || '' } : (od.locacao || { nome: '', endereco: '', observacoes: '' }),
+                  ponto_encontro: od.ponto_encontro,
+                  call_times: od.call_times,
+                  locacoes: locs.length ? locs : (od.locacao?.nome ? [od.locacao] : []),
                   contatos: od.contatos, equipe: od.equipe, plano_acao: od.plano_acao, talentos: od.talentos,
-                  secoes_ativas: { clima: true, ponto_encontro: true, locacao: true, contatos: true, equipe: true, plano_acao: true, talentos: true },
-                  created_at: '', updated_at: '', created_by: null,
-                } as any;
+                  objetos: od.objetos, figurino: od.figurino, equipamentos: od.equipamentos,
+                  roteiros: od.roteiros, regras: od.regras, nota_cliente: od.nota_cliente,
+                };
                 const blob = await pdf(React.createElement(OrdemDoDiaPDF, { ordem }) as any).toBlob();
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
