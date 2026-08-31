@@ -68,9 +68,10 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [bloqueiosAbertos, setBloqueiosAbertos] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('project_diarias')
+    const { data, error } = await supabase.from('project_diarias')
       .select('*').eq('project_id', projectId)
       .order('data', { ascending: true, nullsFirst: false }).order('ordem');
+    if (error) { toast.error('Não foi possível carregar as diárias.'); setLoading(false); return; }
     const lista = (data as Diaria[]) || [];
     setDiarias(lista);
     setLoading(false);
@@ -161,7 +162,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     if (!editando?.nome?.trim()) { toast.error('Dê um nome pra diária.'); return; }
     setSalvando(true);
     const mi = min(editando.hora_inicio), mf = min(editando.hora_fim);
-    if (mi != null && mf != null && mf <= mi) { toast.error('O horário final precisa ser depois do início.'); return; }
+    if (mi != null && mf != null && mf <= mi) { setSalvando(false); toast.error('O horário final precisa ser depois do início.'); return; }
     const payload = {
       project_id: projectId,
       nome: editando.nome.trim(),
