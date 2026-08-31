@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { salvarComVersao } from '@/lib/salvarComVersao';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
@@ -615,9 +616,20 @@ export default function OrdemDoDiaDetalhe() {
   const [buscandoPessoa, setBuscandoPessoa] = useState(false);
 
   // ── Carga ──────────────────────────────────────────────────────────────
+  // A versão da linha que está na tela agora. É ela que vai como trava em todo
+  // salvamento (migração 2026093338). `null` = banco ainda sem a coluna, aí a
+  // tela salva como antes, sem trava.
+  const versaoRef = useRef<number | null>(null);
+  // Contador de cargas: uma resposta que chega atrasada, depois de um
+  // salvamento ou de uma carga mais nova, é descartada em vez de repor dado
+  // velho por cima do novo.
+  const cargaRef = useRef(0);
+
   const load = useCallback(async () => {
+    const carga = ++cargaRef.current;
     setErroCarga(false);
     const { data, error } = await supabase.from('ordens_do_dia').select('*').eq('id', id).maybeSingle();
+    if (carga !== cargaRef.current) return;
     if (error) { setErroCarga(true); setLoading(false); return; }
     if (!data) { setLoading(false); return; }
     const o = data as any;
@@ -644,6 +656,7 @@ export default function OrdemDoDiaDetalhe() {
       nota_cliente: o.nota_cliente || '',
       aprovacao: o.aprovacao || 'rascunho',
     });
+    versaoRef.current = typeof o.versao === 'number' ? o.versao : null;
     setLoading(false);
     if (o.project_id) {
       supabase.from('projects').select('name').eq('id', o.project_id).maybeSingle()
@@ -674,19 +687,39 @@ export default function OrdemDoDiaDetalhe() {
   }, [od?.locacoes, od?.data_producao]);
 
   // ── Persistência campo a campo ────────────────────────────────────────
+  // Todo salvamento da tela passa por aqui, inclusive `editarLista`, e todo
+  // salvamento leva a trava de versão junto: cada campo salvo manda o objeto
+  // inteiro de volta, então sem a trava quem salva por último apaga o trabalho
+  // de quem salvou antes.
   const patch = async (fields: Partial<OD>, silencioso = false): Promise<boolean> => {
     if (!od) return false;
     const prev = od;
     setOd({ ...od, ...fields });
-    const { error } = await supabase.from('ordens_do_dia')
-      .update({ ...fields, updated_at: new Date().toISOString() }).eq('id', od.id);
-    if (error) {
+    // Invalida carga em andamento: o que vier do servidor daqui a pouco é mais
+    // velho do que o que estamos escrevendo agora.
+    cargaRef.current++;
+    const r = await salvarComVersao<Record<string, any>>({
+      tabela: 'ordens_do_dia', id: od.id, versao: versaoRef.current,
+      campos: { ...fields, updated_at: new Date().toISOString() },
+    });
+
+    if (r.status === 'desatualizado') {
+      // Nada foi escrito no banco. Desfaz o otimista, traz o que está lá, e
+      // conta o que aconteceu, porque sumir com o que a pessoa digitou sem
+      // dizer nada é justamente o problema que a trava existe pra resolver.
       setOd(prev);
-      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros|nota_cliente/.test(String(error.message))
+      await load();
+      toast.error('Outra pessoa salvou esta ordem do dia enquanto você editava. A tela foi atualizada com a versão que está no servidor, e a sua última alteração não entrou. Confira e faça de novo, por favor.');
+      return false;
+    }
+    if (r.status === 'erro') {
+      setOd(prev);
+      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros|nota_cliente/.test(String(r.erro.message))
         ? 'Falta rodar a migração da Ordem do Dia 2.0 no banco.'
         : 'Não foi possível salvar.');
       return false;
     }
+    versaoRef.current = r.versao;
     if (!silencioso) toast.success('Salvo ✓');
     return true;
   };
@@ -717,6 +750,10 @@ export default function OrdemDoDiaDetalhe() {
   }, [od?.plano_acao, od?.hora_inicio, od?.hora_fim, od?.data_producao, agora]);
 
   // ── Helpers de listas ─────────────────────────────────────────────────
+  // Toda lista (cronograma, equipe, elenco, objetos, figurino, equipamentos,
+  // locações, call times) vai inteira de volta pro banco. Por isso passa por
+  // `patch`, e por isso a trava de versão dele é o que separa "dois editando"
+  // de "um apagando o outro".
   const editarLista = <T,>(campo: keyof OD, lista: T[]) => patch({ [campo]: lista } as any, true);
 
   if (loading) return <div className="min-h-[50vh] grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>;
