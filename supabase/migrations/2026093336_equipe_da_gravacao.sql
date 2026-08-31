@@ -1,10 +1,17 @@
 -- 2026093336_equipe_da_gravacao.sql
--- Cada gravação marcada vira um cartão clicável na tela, e por isso passa a
--- vir com id, duração, descrição e equipe. A equipe é informação nossa: só sai
--- do banco quando a Lumos autorizar aquele cliente
--- (`client_portals.mostrar_equipe`). Desligada, a lista volta vazia, porque
--- esconder na tela não esconde do navegador. E mesmo autorizada, cada pessoa vai
--- só com nome e função, nunca e-mail, telefone ou valor.
+-- Duas mudanças no portal do cliente, as duas em `portal_agenda`:
+--
+-- 1) Cada gravação marcada vira um cartão clicável na tela, e por isso passa a
+--    vir com id, duração, descrição e equipe. A equipe é informação nossa: só
+--    sai do banco quando a Lumos autorizar aquele cliente
+--    (`client_portals.mostrar_equipe`). Desligada, a lista volta vazia, porque
+--    esconder na tela não esconde do navegador. E mesmo autorizada, cada pessoa
+--    vai só com nome e função, nunca e-mail, telefone ou valor.
+--
+-- 2) Dia indisponível não conta mais o porquê: `motivo` sai do retorno. O
+--    cliente lê "Indisponível", e nada além disso. `portal_pedir_diaria`
+--    continua recusando dia bloqueado, dia ocupado e dia da semana fechado, com
+--    os mesmos códigos de erro de sempre: só a explicação é que não desce.
 --
 -- Nada aqui altera as migrações 2026093329 a 2026093335, que já rodaram em
 -- produção: a coluna nova é ADD COLUMN IF NOT EXISTS, e a função é
@@ -22,12 +29,12 @@ COMMENT ON COLUMN public.client_portals.mostrar_equipe IS
   'Liga a equipe de cada gravação no portal deste cliente, em todos os projetos dele. Só nome e função.';
 
 -- ───────────────────────────────────────────────────────────────
--- 2) portal_agenda: gravação com detalhes
+-- 2) portal_agenda: gravação com detalhes, dia sem motivo
 -- ───────────────────────────────────────────────────────────────
--- A precedência dos estados do dia continua exatamente a mesma de 2026093334:
--- data bloqueada em agenda_bloqueios vence tudo; depois dia com diária marcada
--- (ocupado); depois dia da semana fechado (bloqueado, com motivo); depois cedo;
--- senão livre.
+-- A precedência dos estados do dia continua exatamente a mesma de
+-- 2026093334: data bloqueada em agenda_bloqueios vence tudo; depois dia com
+-- diária marcada (ocupado); depois dia da semana fechado (bloqueado); depois
+-- cedo; senão livre. O que saiu foi só o texto do motivo.
 CREATE OR REPLACE FUNCTION public.portal_agenda(p_token text, p_project_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -39,9 +46,6 @@ DECLARE
   v_fim    date := current_date + 90;
   v_cedo   date;
   v_client_id uuid;
-  -- Frase padrão por dia da semana, usada quando a tabela não tem motivo
-  -- escrito. Índice 1 = domingo (DOW 0) até índice 7 = sábado (DOW 6).
-  v_dias_prep text[] := ARRAY['aos domingos','às segundas','às terças','às quartas','às quintas','às sextas','aos sábados'];
 BEGIN
   SELECT * INTO v_portal FROM client_portals WHERE token = p_token AND active = true;
 
@@ -91,12 +95,6 @@ BEGIN
           WHEN f.dia_semana IS NOT NULL THEN 'bloqueado'
           WHEN d.dia < v_cedo THEN 'cedo'
           ELSE 'livre'
-        END,
-        'motivo', CASE
-          WHEN b.data IS NOT NULL THEN b.motivo
-          WHEN EXISTS (SELECT 1 FROM project_diarias pd WHERE pd.data = d.dia::date) THEN NULL
-          WHEN f.dia_semana IS NOT NULL THEN COALESCE(f.motivo, 'Não gravamos ' || v_dias_prep[f.dia_semana + 1])
-          ELSE NULL
         END
       ) ORDER BY d.dia)
       FROM generate_series(v_ini, v_fim, interval '1 day') AS d(dia)

@@ -352,14 +352,9 @@ export const PORTAL_CSS = String.raw`
     border: 1px solid var(--fio); background: var(--mesa-alta); }
   .legenda-cores i.am-sua { background: rgba(239,199,0,.35); border-color: rgba(239,199,0,.55); }
   .legenda-cores i.am-fora { background: transparent; }
-  /* Linha invisível quando o mês não tem motivo nenhum: guarda o espaço pra
-     seção não mudar de altura ao trocar de mês, que era a queixa. */
-  .legenda-dias .vazia { visibility: hidden; }
-  /* Legenda dos motivos de dia indisponível no mês em tela: o atributo title
-     do dia só existe pra quem passa o mouse, e no celular não tem hover. */
-  .legenda-dias { margin-top: 12px; max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 5px; }
-  .legenda-dias p { margin: 0; font-size: 12px; line-height: 1.4; color: var(--meia-luz); }
-  .legenda-dias b { color: var(--gesso); font-weight: 700; }
+  /* A altura da seção não pula ao trocar de mês porque a grade tem sempre 42
+     casas e a legenda de cores é sempre a mesma linha: nada aqui muda de
+     tamanho conforme o mês. */
 
   /* ── Gravações marcadas: um cartão por gravação ───────────── */
   /* Cartão em vez de linha, porque cada gravação abre. Uma coluna no celular

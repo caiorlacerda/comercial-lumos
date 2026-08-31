@@ -45,11 +45,10 @@ interface Portal {
  *  do mês e os pedidos em aberto. Vem inteira de `portal_agenda`. */
 interface Agenda {
   antecedencia_dias: number;
-  /** `motivo` é null quando não há motivo, e sempre null em dia ocupado (isso
-   *  não é "fechado", é "já tem gravação"). Só existe depois da migração
-   *  2026093334: sem ela, a chave nem vem, e o dia bloqueado mostra o texto
-   *  genérico de sempre. */
-  dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo'; motivo?: string | null }[];
+  /** O dia diz o estado e nada mais. O porquê de um dia estar indisponível é
+   *  assunto interno: `portal_agenda` parou de mandar `motivo` na migração
+   *  2026093336, e a tela não pergunta por ele. */
+  dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo' }[];
   /** `id`, `duracao_horas`, `descricao` e `equipe` só chegam depois da
    *  migração 2026093336; antes dela o cartão abre com data, horário e local,
    *  que é o que a função antiga manda. `equipe` só vem preenchida quando a
@@ -110,7 +109,9 @@ const MOTIVOS: Record<string, string> = {
   cedo: 'Esta data é cedo demais. Escolha um dia com mais folga.',
   dia_ocupado: 'Este dia acabou de ser ocupado. Escolha outro.',
   dia_bloqueado: 'Este dia não está disponível.',
-  dia_semana_fechado: 'Não gravamos neste dia da semana. Escolha outro dia.',
+  // O código do erro continua o mesmo; o que o cliente lê é que não explica a
+  // razão, igual a qualquer outro dia indisponível.
+  dia_semana_fechado: 'Este dia não está disponível. Escolha outro.',
   repetido: 'Você já tem um pedido em aberto para este dia.',
   sem_descricao: 'Conte o que precisa gravar.',
   sem_nome: 'Diga seu nome e seu e-mail.',
@@ -270,13 +271,8 @@ const formato = (l: number | null, a: number | null) => {
 const SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
   'julho','agosto','setembro','outubro','novembro','dezembro'];
-/** Plural do dia da semana, pra legenda de motivos ("Domingos: ..."). Mesmo
- *  índice do `Date#getDay()` (0 = domingo). */
-const DIA_SEMANA_PLURAL = ['Domingos', 'Segundas-feiras', 'Terças-feiras',
-  'Quartas-feiras', 'Quintas-feiras', 'Sextas-feiras', 'Sábados'];
-
 function Calendario({ dias, suas, escolhido, onEscolher }: {
-  dias: { data: string; estado: string; motivo?: string | null }[];
+  dias: { data: string; estado: string }[];
   /** Datas em que ESTE projeto tem gravação marcada, pelo nome. O servidor já
    *  manda isso em `agendadas`, e sem cruzar aqui um dia do próprio cliente
    *  aparecia com o mesmo cinza de um dia ocupado por outro: "indisponível",
@@ -323,32 +319,6 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
 
   const mes = meses[indice];
 
-  /** Legenda dos motivos de indisponibilidade do mês em tela: o `title` do
-   *  dia só existe pra quem passa o mouse, e no celular não tem hover — sem
-   *  isto, o motivo de um dia bloqueado nunca chega ao cliente no celular.
-   *  Agrupa por texto do motivo (sem repetir a mesma frase duas vezes): mais
-   *  de um dia com o mesmo motivo, todos no mesmo dia da semana, vira
-   *  "Domingos" (fechamento semanal); senão vira a(s) data(s) específica(s),
-   *  tipo "21/09". Só dias com motivo escrito entram — 'ocupado' e 'cedo'
-   *  não têm motivo de texto. */
-  const legenda = useMemo(() => {
-    if (!mes) return [];
-    const porMotivo = new Map<string, string[]>();
-    mes.dias.forEach(d => {
-      if (d.estado !== 'bloqueado' || !d.motivo) return;
-      const lista = porMotivo.get(d.motivo) || [];
-      lista.push(d.data);
-      porMotivo.set(d.motivo, lista);
-    });
-    return Array.from(porMotivo.entries()).map(([motivo, datas]) => {
-      const semanas = new Set(datas.map(dt => new Date(`${dt}T12:00:00`).getDay()));
-      const rotulo = datas.length > 1 && semanas.size === 1
-        ? DIA_SEMANA_PLURAL[[...semanas][0]]
-        : datas.map(dt => `${dt.slice(8, 10)}/${dt.slice(5, 7)}`).join(', ');
-      return { rotulo, motivo };
-    });
-  }, [mes]);
-
   /**
    * O mês inteiro, sempre em seis semanas.
    *
@@ -370,7 +340,7 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
     const casas: (typeof mes.dias[number] | null)[] = Array.from({ length: comeca }, () => null);
     for (let n = 1; n <= quantos; n++) {
       const data = `${mes.chave}-${String(n).padStart(2, '0')}`;
-      casas.push(porData.get(data) || { data, estado: 'fora', motivo: null });
+      casas.push(porData.get(data) || { data, estado: 'fora' });
     }
     while (casas.length < 42) casas.push(null);
     return casas;
@@ -404,7 +374,7 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
                 : livre ? 'Pedir esta data'
                 : d.estado === 'cedo' ? 'Cedo demais para pedir'
                 : d.estado === 'fora' ? 'Fora do período que dá pra pedir'
-                : (d.motivo || 'Indisponível')}
+                : 'Indisponível'}
               onClick={e => onEscolher(d.data, e.currentTarget)}>
               <span className="num">{Number(d.data.slice(8, 10))}</span>
               {/* O nome da gravação escrito no dia, como num calendário de
@@ -419,11 +389,6 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
         <span><i className="am-livre" /> livre para pedir</span>
         <span><i className="am-sua" /> sua gravação</span>
         <span><i className="am-fora" /> indisponível</span>
-      </div>
-      <div className="legenda-dias">
-        {legenda.length
-          ? legenda.map((l, i) => <p key={i}><b>{l.rotulo}:</b> {l.motivo}</p>)
-          : <p aria-hidden="true" className="vazia">&nbsp;</p>}
       </div>
     </div>
   );
