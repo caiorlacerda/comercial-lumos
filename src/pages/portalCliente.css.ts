@@ -81,7 +81,7 @@ export const PORTAL_CSS = String.raw`
   .fita-proj .link { font-size: 12px; padding: 9px 13px; }
   /* Só a primeira seção logo depois da fita do projeto: .secao:first-of-type
      sozinho vazava pra fora da folha do projeto (Início, Atendimento). */
-  .fita-proj + .secao { padding-top: 26px; border-top: 0; }
+  .fita-proj + .secao { padding-top: 34px; border-top: 0; }
   .aba {
     appearance: none; background: none; border: 0; cursor: pointer; white-space: nowrap;
     padding: 14px 12px 12px; border-bottom: 2px solid transparent;
@@ -182,7 +182,14 @@ export const PORTAL_CSS = String.raw`
   }
 
   /* ── Seções ──────────────────────────────────────────────── */
-  .secao { padding-top: 34px; border-top: 1px solid var(--fio); }
+  /* O respiro é o mesmo em cima e embaixo: 34px da linha até o texto, e 34px
+     do fim do conteúdo até a linha seguinte. Sem o de baixo, a linha da
+     próxima seção colava no fim da anterior e a página lia torta. */
+  .secao { padding-top: 34px; padding-bottom: 34px; border-top: 1px solid var(--fio); }
+  .secao:last-child { padding-bottom: 0; }
+  /* Dentro da grade de duas colunas o espaço já vem do gap: somar o de baixo
+     daria 68 e a página teria dois ritmos diferentes. */
+  .duas .secao { padding-bottom: 0; }
   .secao > .rotulo { display: block; margin-bottom: 16px; }
   .duas { display: grid; gap: 34px; grid-template-columns: 1fr; }
   @media (min-width: 920px) { .duas { grid-template-columns: 1.5fr 1fr; gap: 44px; } }
