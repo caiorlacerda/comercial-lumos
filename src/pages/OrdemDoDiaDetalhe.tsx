@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, CalendarDays, Check, ChevronDown, Clock, CloudRain, Copy, ExternalLink,
+  ArrowLeft, CalendarDays, Check, Clock, CloudRain, Copy, ExternalLink,
   Loader2, MapPin, Pencil, Plus, Shirt, Sun, Trash2, Users2, Video, Package, Camera,
   FileText, ArrowUp, ArrowDown, AlertTriangle, Megaphone, ScrollText, Wrench,
   Utensils, Coffee, Truck, SlidersHorizontal, FileDown, Eye, Search, UserPlus,
@@ -13,6 +13,7 @@ import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import QuickForm, { type QFField } from '@/components/common/QuickForm';
 import Select from '@/components/ui/Select';
+import { useConfirm } from '@/components/ui/useConfirm';
 import { geocode, previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 import { notify, getUserIdsWithPermission } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
@@ -107,11 +108,12 @@ const TIPOS: Record<TipoMomento, { label: string; Icon: any; cor: string; defMin
   personalizado: { label: 'Personalizado', Icon: Pencil,    cor: '#EFC700', defMin: 30 },
 };
 
-function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange }: {
+function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange, confirm }: {
   od: { plano_acao: Momento[]; hora_inicio: string | null };
   canManage: boolean; agora: Date; hoje: boolean;
   locsAtivas: { nome: string }[];
   onChange: (lista: Momento[]) => void;
+  confirm: (opts: { title?: string; message: string; confirmLabel?: string; danger?: boolean }) => Promise<boolean>;
 }) {
   const rows = od.plano_acao as Momento[];
   const [pickerAberto, setPickerAberto] = useState(false);
@@ -182,7 +184,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
     const ini = minutos(base) ?? 480;
     const t = TIPOS[cfg.tipo];
     const desc = cfg.descricao.trim()
-      || (cfg.tipo === 'deslocamento' ? `Deslocamento: ${cfg.locacao || '?'} → ${cfg.chegada || '?'}` : t.label + (cfg.locacao ? ` — ${cfg.locacao}` : ''));
+      || (cfg.tipo === 'deslocamento' ? `Deslocamento: ${cfg.locacao || '?'} → ${cfg.chegada || '?'}` : t.label + (cfg.locacao ? `, ${cfg.locacao}` : ''));
     const novo: Momento = {
       inicio: fmtMin(ini), fim: fmtMin(Math.min(ini + Math.max(5, cfg.duracao), 1439)),
       descricao: desc, responsavel: '', destaque: cfg.tipo === 'gravacao',
@@ -231,7 +233,9 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-center text-xs text-lumos-text-secondary italic py-8">O minuto a minuto do dia: chegada, montagem, gravação, refeições, deslocamentos.</p>
+        <p className="text-center text-xs text-lumos-text-secondary italic py-8">
+          {canManage ? 'Nenhum momento no cronograma ainda. Toque em "Novo momento", ali em cima, pra criar o primeiro.' : 'Nenhum momento no cronograma ainda.'}
+        </p>
       ) : (
         <div ref={wrapRef} className="relative">
           {/* cabeçalho */}
@@ -261,7 +265,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
                 </span>
                 {/* duração */}
                 <span className="text-[10.5px] text-lumos-text-secondary tabular-nums min-h-8 flex items-center max-lg:hidden">
-                  {dur != null && dur > 0 ? (dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ` ${dur % 60}m` : ''}` : `${dur}min`) : '—'}
+                  {dur != null && dur > 0 ? (dur >= 60 ? `${Math.floor(dur / 60)}h${dur % 60 ? ` ${dur % 60}m` : ''}` : `${dur}min`) : 'Sem duração'}
                 </span>
                 {/* descrição + chips (o tipo virou chip com nome, o ícone sozinho não dizia nada) */}
                 <span className="min-w-0">
@@ -290,7 +294,10 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
                         className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5" /></button>
                       <button type="button" onClick={() => editar(i, 'destaque', !r.destaque)} title="Destacar"
                         className={clsx('p-1', r.destaque ? 'text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-yellow')}>★</button>
-                      <button type="button" onClick={() => onChange(rows.filter((_, j) => j !== i))}
+                      <button type="button" onClick={async () => {
+                        if (!await confirm({ title: `Apagar "${r.descricao || t.label}"`, message: 'O momento some do cronograma, sem desfazer.', confirmLabel: 'Apagar', danger: true })) return;
+                        onChange(rows.filter((_, j) => j !== i));
+                      }}
                         className="p-1 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                     </span>
                   )}
@@ -359,7 +366,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
                     options={[...locsAtivas.map(l => ({ value: l.nome, label: l.nome })), { value: '', label: 'Outro lugar' }]} />
                 </div>
                 <label className="flex items-center gap-2 text-[11.5px] font-bold text-lumos-text-primary">
-                  <input type="checkbox" checked={cfg.manual} onChange={e => setCfg({ ...cfg, manual: e.target.checked })} className="accent-[#EFC700]" />
+                  <input type="checkbox" checked={cfg.manual} onChange={e => setCfg({ ...cfg, manual: e.target.checked })} className="accent-lumos-yellow" />
                   Inserir tempo manualmente
                 </label>
                 {!cfg.manual && (
@@ -388,7 +395,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
             </div>
 
             <label className="flex items-center gap-2 text-[11.5px] font-bold text-lumos-text-primary">
-              <input type="checkbox" checked={cfg.paralelo} onChange={e => setCfg({ ...cfg, paralelo: e.target.checked })} className="accent-[#EFC700]" />
+              <input type="checkbox" checked={cfg.paralelo} onChange={e => setCfg({ ...cfg, paralelo: e.target.checked })} className="accent-lumos-yellow" />
               Acontece em paralelo a outro momento
             </label>
 
@@ -583,15 +590,24 @@ export default function OrdemDoDiaDetalhe() {
   const { profile, isAdmin, can } = useAuth();
   const canManage = isAdmin || can('ordem_do_dia');
   const toast = useToast();
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const [od, setOd] = useState<OD | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<Aba>('cronograma');
+  const [erroCarga, setErroCarga] = useState(false);
+  // A aba fica na URL (?tab=) pra sobreviver a reload e dar pra mandar link direto.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const abaParam = searchParams.get('tab');
+  const aba: Aba = ABAS.some(a => a.key === abaParam) ? (abaParam as Aba) : 'cronograma';
+  const setAba = (a: Aba) => setSearchParams(prev => {
+    const p = new URLSearchParams(prev);
+    if (a === 'cronograma') p.delete('tab'); else p.set('tab', a);
+    return p;
+  }, { replace: true });
   const [clima, setClima] = useState<PrevisaoDia | null>(null);
   const [agora, setAgora] = useState(() => new Date());
   const [roteiros, setRoteiros] = useState<{ id: string; name: string; url: string }[]>([]);
   const [projetoNome, setProjetoNome] = useState<string | null>(null);
-  const salvandoRef = useRef(false);
   // Formulário rápido do app (nada de prompt() do navegador).
   const [qf, setQf] = useState<null | { title: string; fields: QFField[]; submitLabel?: string; onSubmit: (v: Record<string, string>) => void }>(null);
   const [gerandoPdf, setGerandoPdf] = useState(false);
@@ -600,7 +616,9 @@ export default function OrdemDoDiaDetalhe() {
 
   // ── Carga ──────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    const { data } = await supabase.from('ordens_do_dia').select('*').eq('id', id).maybeSingle();
+    setErroCarga(false);
+    const { data, error } = await supabase.from('ordens_do_dia').select('*').eq('id', id).maybeSingle();
+    if (error) { setErroCarga(true); setLoading(false); return; }
     if (!data) { setLoading(false); return; }
     const o = data as any;
     // Locação única antiga vira a primeira da lista nova (sem tocar no banco).
@@ -629,9 +647,15 @@ export default function OrdemDoDiaDetalhe() {
     setLoading(false);
     if (o.project_id) {
       supabase.from('projects').select('name').eq('id', o.project_id).maybeSingle()
-        .then(({ data: p }) => setProjetoNome((p as any)?.name || null));
+        .then(({ data: p, error: errP }) => {
+          if (errP) { toast.error('Não foi possível carregar o nome do projeto.'); return; }
+          setProjetoNome((p as any)?.name || null);
+        });
       supabase.from('project_roteiros').select('id, nome, url').eq('project_id', o.project_id).order('ordem').order('created_at')
-        .then(({ data: docs }) => setRoteiros(((docs as any[]) || []).map(d => ({ id: d.id, name: d.nome, url: d.url }))));
+        .then(({ data: docs, error: errR }) => {
+          if (errR) { toast.error('Não foi possível carregar os roteiros do projeto.'); return; }
+          setRoteiros(((docs as any[]) || []).map(d => ({ id: d.id, name: d.nome, url: d.url })));
+        });
     }
   }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -650,20 +674,21 @@ export default function OrdemDoDiaDetalhe() {
   }, [od?.locacoes, od?.data_producao]);
 
   // ── Persistência campo a campo ────────────────────────────────────────
-  const patch = async (fields: Partial<OD>, silencioso = false) => {
-    if (!od) return;
+  const patch = async (fields: Partial<OD>, silencioso = false): Promise<boolean> => {
+    if (!od) return false;
     const prev = od;
     setOd({ ...od, ...fields });
-    salvandoRef.current = true;
     const { error } = await supabase.from('ordens_do_dia')
       .update({ ...fields, updated_at: new Date().toISOString() }).eq('id', od.id);
-    salvandoRef.current = false;
     if (error) {
       setOd(prev);
       toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros|nota_cliente/.test(String(error.message))
         ? 'Falta rodar a migração da Ordem do Dia 2.0 no banco.'
         : 'Não foi possível salvar.');
-    } else if (!silencioso) toast.success('Salvo ✓');
+      return false;
+    }
+    if (!silencioso) toast.success('Salvo ✓');
+    return true;
   };
 
   // ── Derivados do cronograma ───────────────────────────────────────────
@@ -691,23 +716,19 @@ export default function OrdemDoDiaDetalhe() {
     return { rows, inicio, fim, total, hoje, atual, atrasoSeg, atrasados: Math.max(0, atrasados - (atual && atrasoSeg > 0 ? 1 : 0)) };
   }, [od?.plano_acao, od?.hora_inicio, od?.hora_fim, od?.data_producao, agora]);
 
-  const statusLinha = (r: AtividadePlano): 'feito' | 'atrasado' | 'agora' | 'pendente' => {
-    if (!cron.hoje) return 'pendente';
-    const agoraMin = agora.getHours() * 60 + agora.getMinutes();
-    const ri = minutos(r.inicio); const rf = minutos(r.fim);
-    if (rf != null && agoraMin > rf) return 'atrasado';
-    if (ri != null && agoraMin >= ri) return 'agora';
-    return 'pendente';
-  };
-
   // ── Helpers de listas ─────────────────────────────────────────────────
   const editarLista = <T,>(campo: keyof OD, lista: T[]) => patch({ [campo]: lista } as any, true);
 
   if (loading) return <div className="min-h-[50vh] grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>;
   if (!od) return (
     <div className="text-center py-20">
-      <p className="text-sm font-bold text-lumos-text-primary">Ordem do dia não encontrada.</p>
-      <button onClick={() => navigate('/ordem-do-dia')} className="text-xs text-lumos-yellow underline mt-2">Voltar pra lista</button>
+      <p className="text-sm font-bold text-lumos-text-primary">
+        {erroCarga ? 'Não foi possível carregar esta ordem do dia. Verifique sua conexão e tente de novo.' : 'Ordem do dia não encontrada.'}
+      </p>
+      <div className="flex items-center justify-center gap-4 mt-2">
+        {erroCarga && <button onClick={() => { setLoading(true); load(); }} className="text-xs text-lumos-yellow underline">Tentar de novo</button>}
+        <button onClick={() => navigate('/ordem-do-dia')} className="text-xs text-lumos-yellow underline">Voltar pra lista</button>
+      </div>
     </div>
   );
 
@@ -716,6 +737,7 @@ export default function OrdemDoDiaDetalhe() {
 
   return (
     <div className="space-y-4 font-work-sans pb-16">
+      {confirmDialog}
       {/* ═════════ Cabeçalho ═════════ */}
       <div className="flex items-center gap-3 flex-wrap">
         <button onClick={() => navigate(od.project_id ? `/producao/projetos?projectId=${od.project_id}&tab=ordemdia` : '/ordem-do-dia')}
@@ -738,11 +760,20 @@ export default function OrdemDoDiaDetalhe() {
         {/* Status de aprovação, igual referência */}
         <div className="ml-auto flex items-center gap-2">
           <button type="button" disabled={!canManage}
-            onClick={() => {
+            onClick={async () => {
               const aprovando = od.aprovacao !== 'aprovada';
-              void patch({ aprovacao: aprovando ? 'aprovada' : 'rascunho' });
+              if (!aprovando) {
+                // Desaprovar tira a gravação do portal do cliente na hora: avisa antes de fazer.
+                if (!await confirm({
+                  title: 'Desaprovar ordem do dia',
+                  message: 'A gravação sai do portal do cliente na hora. Ele deixa de ver os dados dela até você aprovar de novo.',
+                  confirmLabel: 'Desaprovar', danger: true,
+                })) return;
+              }
+              const ok = await patch({ aprovacao: aprovando ? 'aprovada' : 'rascunho' });
               // O time só é avisado quando a OD é APROVADA — rascunho não pinga ninguém.
-              if (aprovando) {
+              // E só quando o salvamento deu certo, senão o time recebe aviso de algo que não aconteceu.
+              if (ok && aprovando) {
                 getUserIdsWithPermission('ordem_do_dia').then(ids => notify({
                   userIds: ids,
                   event: NOTIFICATION_EVENTS.ORDEM_DIA_PUBLICADA,
@@ -757,7 +788,6 @@ export default function OrdemDoDiaDetalhe() {
                 ? 'bg-green-600/15 border-green-600/50 text-green-500'
                 : 'bg-lumos-text-secondary/10 border-lumos-border text-lumos-text-secondary')}>
             {od.aprovacao === 'aprovada' ? <><Check className="w-3.5 h-3.5" /> Aprovada</> : 'Rascunho'}
-            {canManage && <ChevronDown className="w-3 h-3" />}
           </button>
           <button type="button" disabled={gerandoPdf}
             onClick={async () => {
@@ -856,7 +886,7 @@ export default function OrdemDoDiaDetalhe() {
             {!cron.hoje ? (
               <p className="text-[12px] text-lumos-text-secondary italic">O relógio ao vivo liga no dia da produção.</p>
             ) : !cron.atual ? (
-              <p className="text-[12px] text-lumos-text-secondary">Nada rolando ainda, primeira atividade às {cron.inicio != null ? fmtMin(cron.inicio) : '—'}.</p>
+              <p className="text-[12px] text-lumos-text-secondary">Nada rolando ainda, primeira atividade às {cron.inicio != null ? fmtMin(cron.inicio) : 'horário não definido'}.</p>
             ) : (
               <div className="flex items-end justify-between gap-3">
                 <p className="text-[13px] font-black text-lumos-text-primary leading-tight">{cron.atual.descricao || 'Atividade atual'}</p>
@@ -946,7 +976,10 @@ export default function OrdemDoDiaDetalhe() {
                     <span className="text-[12px] font-bold text-lumos-text-primary flex-1 truncate">{c.grupo}</span>
                     <span className="text-[12px] font-black text-lumos-yellow tabular-nums">{c.hora}</span>
                     {canManage && (
-                      <button type="button" onClick={() => void editarLista('call_times', od.call_times.filter((_, j) => j !== i))}
+                      <button type="button" onClick={async () => {
+                        if (!await confirm({ title: `Remover "${c.grupo}"`, message: 'O horário de chegada deste grupo sai da ordem do dia.', confirmLabel: 'Remover', danger: true })) return;
+                        void editarLista('call_times', od.call_times.filter((_, j) => j !== i));
+                      }}
                         className="opacity-0 group-hover:opacity-100 p-0.5 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
                     )}
                   </div>
@@ -999,7 +1032,7 @@ export default function OrdemDoDiaDetalhe() {
           onSave={v => void patch({ nota_cliente: v }, true)} />
 
         <CronogramaPrincipal od={od} canManage={canManage} agora={agora} hoje={cron.hoje}
-          locsAtivas={locsAtivas} onChange={lista => void editarLista('plano_acao', lista)} />
+          locsAtivas={locsAtivas} onChange={lista => void editarLista('plano_acao', lista)} confirm={confirm} />
       </>)}
 
       {/* ═════════ ABA LOCAÇÕES ═════════ */}
@@ -1053,7 +1086,10 @@ export default function OrdemDoDiaDetalhe() {
                         { key: 'endereco', label: 'Endereço completo', value: l.endereco },
                       ], onSubmit: v => void editarLista('locacoes', od.locacoes.map((x, j) => j === i ? { ...x, nome: v.nome.trim(), endereco: v.endereco.trim() } : x)) })}
                         className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow opacity-0 group-hover:opacity-100" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button type="button" onClick={() => void editarLista('locacoes', od.locacoes.filter((_, j) => j !== i))}
+                      <button type="button" onClick={async () => {
+                        if (!await confirm({ title: `Remover "${l.nome}"`, message: 'A locação sai do cronograma, do link do Maps e da previsão do tempo desta ordem do dia.', confirmLabel: 'Remover', danger: true })) return;
+                        void editarLista('locacoes', od.locacoes.filter((_, j) => j !== i));
+                      }}
                         className="p-1.5 text-lumos-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100" title="Remover"><Trash2 className="w-3.5 h-3.5" /></button>
                       <button type="button" onClick={() => void editarLista('locacoes', od.locacoes.map((x, j) => j === i ? { ...x, incluida: !x.incluida } : x))}
                         className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', l.incluida ? 'bg-green-600' : 'bg-lumos-text-secondary/30')}
@@ -1101,7 +1137,7 @@ export default function OrdemDoDiaDetalhe() {
                       </button>
                     )}
                     <span className={clsx('text-[9px] font-black uppercase flex-shrink-0', nesta ? 'text-green-500' : 'text-lumos-text-secondary/60')}>
-                      {nesta ? 'Nesta diária' : '—'}
+                      {nesta ? 'Nesta diária' : 'Fora desta diária'}
                     </span>
                   </div>
                 );
@@ -1121,7 +1157,8 @@ export default function OrdemDoDiaDetalhe() {
                 {od.project_id && (
                   <button type="button" onClick={async () => {
                     // Puxa a equipe do projeto (cadastrada + das tarefas) pra ficha.
-                    const { data: members } = await supabase.from('project_members').select('user_id, freela_id, funcao').eq('project_id', od.project_id!);
+                    const { data: members, error: errMembers } = await supabase.from('project_members').select('user_id, freela_id, funcao').eq('project_id', od.project_id!);
+                    if (errMembers) { toast.error('Não foi possível carregar a equipe do projeto.'); return; }
                     const ids = (members || []).map(m => (m.user_id || m.freela_id) as string);
                     if (!ids.length) { toast.error('A equipe do projeto está vazia, monte na aba Equipe do projeto.'); return; }
                     const [users, freelas] = await Promise.all([
@@ -1173,7 +1210,10 @@ export default function OrdemDoDiaDetalhe() {
                         { key: 'funcao', label: 'Função nesta diária', value: m.funcao },
                       ], onSubmit: v => void editarLista('equipe', od.equipe.map((x, j) => j === i ? { ...x, funcao: v.funcao.trim() } : x)) })}
                         className="p-1 text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button type="button" onClick={() => void editarLista('equipe', od.equipe.filter((_, j) => j !== i))}
+                      <button type="button" onClick={async () => {
+                        if (!await confirm({ title: `Remover "${m.nome}"`, message: 'A pessoa sai da ficha técnica desta diária.', confirmLabel: 'Remover', danger: true })) return;
+                        void editarLista('equipe', od.equipe.filter((_, j) => j !== i));
+                      }}
                         className="p-1 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                     </span>
                   )}
@@ -1231,7 +1271,10 @@ export default function OrdemDoDiaDetalhe() {
                           { key: 'obs', label: 'Observações', type: 'textarea', value: t.obs || '' },
                         ], onSubmit: v => void editarLista('talentos', od.talentos.map((x, j) => j === i ? { ...x, horario_chegada: v.chegada, horario_gravacao: v.grava, obs: v.obs.trim() } : x)) })}
                           className="p-1 text-lumos-text-secondary hover:text-lumos-yellow"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => void editarLista('talentos', od.talentos.filter((_, j) => j !== i))}
+                        <button type="button" onClick={async () => {
+                          if (!await confirm({ title: `Remover "${t.nome}"`, message: 'O talento sai do elenco desta diária.', confirmLabel: 'Remover', danger: true })) return;
+                          void editarLista('talentos', od.talentos.filter((_, j) => j !== i));
+                        }}
                           className="p-1 text-lumos-text-secondary hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                       </span>
                     )}
@@ -1294,7 +1337,11 @@ export default function OrdemDoDiaDetalhe() {
                     {(it.desc || it.personagem) && <p className="text-[10.5px] text-lumos-text-secondary truncate">{it.personagem ? `Figurino de ${it.personagem}` : it.desc}</p>}
                   </div>
                   {canManage && (
-                    <button type="button" onClick={() => void editarLista(campo, od[campo].filter((_, j) => j !== i))}
+                    <button type="button" onClick={async () => {
+                      const rotulo = campo === 'objetos' ? 'objeto' : campo === 'figurino' ? 'look' : 'equipamento';
+                      if (!await confirm({ title: `Remover "${it.nome}"`, message: `Esse ${rotulo} sai da lista de ${campo} desta diária.`, confirmLabel: 'Remover', danger: true })) return;
+                      void editarLista(campo, od[campo].filter((_, j) => j !== i));
+                    }}
                       className="p-1 text-lumos-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3.5 h-3.5" /></button>
                   )}
                 </div>
