@@ -60,6 +60,18 @@ interface Agenda {
     hora_fim: string | null; local: string | null;
     duracao_horas?: number | null; descricao?: string | null;
     equipe?: { nome: string; funcao: string | null }[];
+    /** A ordem do dia daquela gravação, só depois da migração 2026093337 e só
+     *  quando a Lumos aprovou a ordem: rascunho não chega aqui. Vêm três
+     *  coisas, e nada além delas. Horário de chamada de cada pessoa,
+     *  equipamento, figurino, objetos, regras internas, contatos, talentos,
+     *  locações, clima e a equipe da ordem não saem do banco. */
+    ordem?: {
+      ponto_encontro: { nome: string | null; endereco: string | null } | null;
+      /** O minuto a minuto na ordem em que foi escrito: hora e o que
+       *  acontece, nada mais. */
+      cronograma: { hora: string | null; descricao: string | null }[] | null;
+      nota_cliente: string | null;
+    } | null;
   }[];
   /** O pacote do MÊS CORRENTE, do bloco "Suas diárias neste mês". */
   pacote: { meta: number; realizado: number } | null;
@@ -232,6 +244,22 @@ const horario = (g: { hora_inicio: string | null; hora_fim: string | null }) => 
   const f = g.hora_fim?.slice(0, 5);
   if (!i) return null;
   return f ? `${i} às ${f}` : `a partir das ${i}`;
+};
+
+/** O que a ordem do dia aprovada tem pro cliente, já limpo: ponto de encontro,
+ *  cronograma e o recado dele. Devolve null quando não há nada pra mostrar, e
+ *  a seção "No dia" some inteira. Antes da migração 2026093337 a chave `ordem`
+ *  nem chega, e é exatamente o mesmo caminho. */
+const noDia = (g: Gravacao) => {
+  const o = g.ordem;
+  if (!o) return null;
+  const nome = o.ponto_encontro?.nome?.trim() || '';
+  const endereco = o.ponto_encontro?.endereco?.trim() || '';
+  const ponto = nome || endereco ? { nome, endereco } : null;
+  const cronograma = (o.cronograma || []).filter(m => m.hora?.trim() || m.descricao?.trim());
+  const nota = o.nota_cliente?.trim() || '';
+  if (!ponto && !cronograma.length && !nota) return null;
+  return { ponto, cronograma, nota };
 };
 
 /** Duração em horas, com meia hora escrita como o Brasil escreve (10,5). */
@@ -1335,6 +1363,46 @@ export default function PortalCliente() {
                         {gravacaoAberta.descricao?.trim() && (
                           <p className="grav-desc">{gravacaoAberta.descricao}</p>
                         )}
+
+                        {/* O dia por dentro, e só a parte que é do cliente. Só
+                            existe quando a Lumos aprovou a ordem do dia
+                            daquela gravação: rascunho não sai do banco, então
+                            não há nada aqui pra esconder. */}
+                        {(() => {
+                          const d = noDia(gravacaoAberta);
+                          if (!d) return null;
+                          return (
+                            <div className="grav-dia">
+                              <span className="rotulo">No dia</span>
+                              {d.ponto && (
+                                <div className="grav-ponto">
+                                  <span className="rt">Ponto de encontro</span>
+                                  <span className="nm">{d.ponto.nome || d.ponto.endereco}</span>
+                                  {d.ponto.nome && d.ponto.endereco && <span className="end">{d.ponto.endereco}</span>}
+                                </div>
+                              )}
+                              {!!d.cronograma.length && (
+                                <>
+                                  <span className="rt">Como vai ser o dia</span>
+                                  <ol className="grav-crono">
+                                    {d.cronograma.map((m, i) => (
+                                      <li key={i}>
+                                        <span className="hr">{m.hora?.slice(0, 5) || ''}</span>
+                                        <span className="oq">{m.descricao || 'A combinar'}</span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </>
+                              )}
+                              {d.nota && (
+                                <div className="grav-recado">
+                                  <span className="rt">O que você precisa providenciar</span>
+                                  <p>{d.nota}</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {!!gravacaoAberta.equipe?.length && (
                           <div className="grav-equipe">

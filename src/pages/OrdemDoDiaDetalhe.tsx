@@ -4,7 +4,7 @@ import {
   ArrowLeft, CalendarDays, Check, ChevronDown, Clock, CloudRain, Copy, ExternalLink,
   Loader2, MapPin, Pencil, Plus, Shirt, Sun, Trash2, Users2, Video, Package, Camera,
   FileText, ArrowUp, ArrowDown, AlertTriangle, Megaphone, ScrollText, Wrench,
-  Utensils, Coffee, Truck, SlidersHorizontal, FileDown,
+  Utensils, Coffee, Truck, SlidersHorizontal, FileDown, Eye,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -49,6 +49,10 @@ interface OD {
   equipamentos: ItemSimples[];
   roteiros: { id: string; name: string; url: string }[];
   contatos: { funcao: string; nome: string; telefone: string }[];
+  /** O único campo desta página que o CLIENTE lê. Sai no portal dele, dentro
+   *  da gravação marcada, quando a ordem está aprovada. Os outros campos de
+   *  texto livre (regras, objetos, figurino) são internos e ficam aqui. */
+  nota_cliente: string;
   project_id: string | null;
 }
 
@@ -410,8 +414,12 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange 
 // página re-renderiza a cada segundo (relógio AGORA) e um componente definido
 // inline seria remontado a cada tick — o lápis fechava sozinho e o texto saía
 // invertido (cursor voltava pro início). Aqui o estado local sobrevive.
-function CardRegra({ valor, titulo, Icon, destaque, canManage, onSave }: {
+function CardRegra({ valor, titulo, Icon, destaque, canManage, ajuda, vazio, onSave }: {
   valor: string; titulo: string; Icon: any; destaque?: boolean; canManage: boolean;
+  /** Linha de ajuda embaixo do título, pra dizer quem lê aquele texto. */
+  ajuda?: string;
+  /** O que aparece quando o campo está vazio, no lugar do texto padrão. */
+  vazio?: string;
   onSave: (v: string) => void;
 }) {
   const [editando, setEditando] = useState(false);
@@ -430,6 +438,7 @@ function CardRegra({ valor, titulo, Icon, destaque, canManage, onSave }: {
           </button>
         )}
       </div>
+      {ajuda && <p className="text-[10.5px] leading-snug text-lumos-text-secondary mb-2">{ajuda}</p>}
       {editando ? (
         <div>
           <textarea autoFocus rows={2} value={draft} onChange={e => setDraft(e.target.value)}
@@ -442,7 +451,7 @@ function CardRegra({ valor, titulo, Icon, destaque, canManage, onSave }: {
         </div>
       ) : (
         <p className={clsx('text-[12.5px] leading-snug', tem ? 'text-lumos-text-primary' : 'text-lumos-text-secondary italic')}>
-          {valor || 'Clique no lápis pra preencher.'}
+          {valor || vazio || 'Clique no lápis pra preencher.'}
         </p>
       )}
     </div>
@@ -491,6 +500,9 @@ export default function OrdemDoDiaDetalhe() {
       equipamentos: o.equipamentos || [],
       roteiros: Array.isArray(o.roteiros) ? o.roteiros : [],
       contatos: o.contatos || [],
+      // Sem a migração 2026093337 a coluna não existe: a página abre igual, com
+      // o recado vazio.
+      nota_cliente: o.nota_cliente || '',
       aprovacao: o.aprovacao || 'rascunho',
     });
     setLoading(false);
@@ -527,7 +539,7 @@ export default function OrdemDoDiaDetalhe() {
     salvandoRef.current = false;
     if (error) {
       setOd(prev);
-      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros/.test(String(error.message))
+      toast.error(/aprovacao|call_times|locacoes|regras|objetos|figurino|equipamentos|hora_inicio|roteiros|nota_cliente/.test(String(error.message))
         ? 'Falta rodar a migração da Ordem do Dia 2.0 no banco.'
         : 'Não foi possível salvar.');
     } else if (!silencioso) toast.success('Salvo ✓');
@@ -856,6 +868,15 @@ export default function OrdemDoDiaDetalhe() {
           <CardRegra valor={od.regras.outras || ''} titulo="Outras observações" Icon={FileText} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, outras: v } }, true)} />
         </div>
 
+        {/* O único campo desta página que sai do prédio: o cliente lê este
+            texto no portal dele. Fica logo abaixo das regras do set, que são
+            internas, com o aviso na cara pra ninguém confundir uma coisa com
+            a outra. */}
+        <CardRegra valor={od.nota_cliente} titulo="Recado para o cliente" Icon={Eye} canManage={canManage}
+          ajuda="Esse texto o cliente lê no portal dele, dentro da gravação marcada, assim que a ordem for aprovada. Escreva o que ele precisa providenciar no dia."
+          vazio="Nenhum recado para o cliente. Clique no lápis pra escrever."
+          onSave={v => void patch({ nota_cliente: v }, true)} />
+
         <CronogramaPrincipal od={od} canManage={canManage} agora={agora} hoje={cron.hoje}
           locsAtivas={locsAtivas} onChange={lista => void editarLista('plano_acao', lista)} />
       </>)}
@@ -1155,6 +1176,10 @@ export default function OrdemDoDiaDetalhe() {
           <CardRegra valor={od.regras.redes || ''} titulo="Regras de postagem da equipe em redes sociais" Icon={Megaphone} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, redes: v } }, true)} />
           <CardRegra valor={od.regras.setup_camera || ''} titulo="Setup de câmera" Icon={Camera} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, setup_camera: v } }, true)} />
           <CardRegra valor={od.regras.outras || ''} titulo="Outras observações" Icon={FileText} canManage={canManage} onSave={v => void patch({ regras: { ...od.regras, outras: v } }, true)} />
+          <CardRegra valor={od.nota_cliente} titulo="Recado para o cliente" Icon={Eye} canManage={canManage}
+            ajuda="Esse texto o cliente lê no portal dele, dentro da gravação marcada, assim que a ordem for aprovada. Escreva o que ele precisa providenciar no dia."
+            vazio="Nenhum recado para o cliente. Clique no lápis pra escrever."
+            onSave={v => void patch({ nota_cliente: v }, true)} />
         </div>
       )}
     </div>
