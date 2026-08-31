@@ -14,6 +14,10 @@ interface Portal {
   id: string; token: string; active: boolean; show_financeiro: boolean;
   contact_user_ids: string[]; blocks: Blocks; exige_login: boolean;
   last_opened_at: string | null; opened_count: number; antecedencia_dias: number;
+  /** Libera a equipe de cada gravação no portal deste cliente. Só existe
+   *  depois da migração 2026093336; antes dela, vem `undefined` e o
+   *  interruptor aparece desligado, que é o padrão da coluna. */
+  mostrar_equipe: boolean;
 }
 /** Pessoa do lado do cliente, com o que ela alcança. */
 interface Pessoa {
@@ -334,6 +338,18 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                   <button type="button" onClick={() => patch({ show_financeiro: !portal.show_financeiro }, portal.show_financeiro ? 'Financeiro oculto.' : 'Financeiro visível no portal.')}
                     className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', portal.show_financeiro ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
                     <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.show_financeiro ? 'left-5' : 'left-0.5')} />
+                  </button>
+                </div>
+                {/* Equipe da gravação. Desligado, o nome de quem grava nem sai
+                    do banco: a tela do cliente não recebe a lista. */}
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-lumos-text-primary">Equipe da gravação</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary">Nome e função de quem grava, em todos os projetos deste cliente.</span>
+                  </span>
+                  <button type="button" onClick={() => patch({ mostrar_equipe: !portal.mostrar_equipe } as any, portal.mostrar_equipe ? 'Equipe oculta pro cliente.' : 'Equipe visível pro cliente.')}
+                    className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', portal.mostrar_equipe ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                    <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.mostrar_equipe ? 'left-5' : 'left-0.5')} />
                   </button>
                 </div>
               </div>

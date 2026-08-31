@@ -361,6 +361,39 @@ export const PORTAL_CSS = String.raw`
   .legenda-dias p { margin: 0; font-size: 12px; line-height: 1.4; color: var(--meia-luz); }
   .legenda-dias b { color: var(--gesso); font-weight: 700; }
 
+  /* ── Gravações marcadas: um cartão por gravação ───────────── */
+  /* Cartão em vez de linha, porque cada gravação abre. Uma coluna no celular
+     e quantas couberem no desktop, sem nunca empurrar a página pro lado. */
+  .gravs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 10px; margin-top: 14px; }
+  .grav-card { appearance: none; font: inherit; color: inherit; text-align: left;
+    background: var(--mesa-alta); border: 1px solid var(--fio); border-radius: 12px;
+    padding: 14px 15px; cursor: pointer; display: flex; flex-direction: column; gap: 3px;
+    transition: border-color .16s, background .16s; }
+  .grav-card:hover { border-color: rgba(239,199,0,.45); background: rgba(239,199,0,.07); }
+  .grav-card:focus-visible { outline: 2px solid var(--luz); outline-offset: 2px; }
+  .grav-card .qd { font-family: "DM Mono", monospace; font-size: 10.5px;
+    letter-spacing: .08em; color: var(--luz); }
+  .grav-card .nm { font-size: 14px; font-weight: 600; line-height: 1.25; margin-bottom: 2px; }
+  .grav-card .det { font-family: "DM Mono", monospace; font-size: 10.5px;
+    color: var(--meia-luz); overflow-wrap: anywhere; }
+
+  /* A gravação por dentro, na mesma janela do pedido (mesma moldura, mesmo
+     jeito de fechar). */
+  .grav-quando { margin: 8px 0 0; font-size: 13px; color: var(--meia-luz); }
+  .grav-detalhe { margin-top: 18px; display: flex; flex-direction: column; }
+  .grav-detalhe p { margin: 0; display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px; font-size: 13px; padding: 10px 0; border-bottom: 1px solid var(--fio); }
+  .grav-detalhe p > span:last-child { text-align: right; overflow-wrap: anywhere; }
+  .grav-desc { margin: 16px 0 0; font-size: 13px; line-height: 1.55; }
+  .grav-equipe { margin-top: 22px; }
+  .grav-equipe > .rotulo { display: block; margin-bottom: 4px; }
+  .grav-pessoa { display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--fio); }
+  .grav-pessoa .nm { font-size: 13.5px; font-weight: 600; }
+  .grav-pessoa .fn { font-family: "DM Mono", monospace; font-size: 10.5px;
+    color: var(--meia-luz); text-align: right; }
+
   /* Janela de pedido: por cima do calendário, no estilo da sala (sem nada
      do Tailwind do app, que aqui não existe). */
   .pedido-modal-fora {

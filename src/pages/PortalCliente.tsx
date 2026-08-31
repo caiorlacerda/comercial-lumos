@@ -50,7 +50,18 @@ interface Agenda {
    *  2026093334: sem ela, a chave nem vem, e o dia bloqueado mostra o texto
    *  genérico de sempre. */
   dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo'; motivo?: string | null }[];
-  agendadas: { nome: string; data: string; hora_inicio: string | null; hora_fim: string | null; local: string | null }[];
+  /** `id`, `duracao_horas`, `descricao` e `equipe` só chegam depois da
+   *  migração 2026093336; antes dela o cartão abre com data, horário e local,
+   *  que é o que a função antiga manda. `equipe` só vem preenchida quando a
+   *  Lumos autorizou este cliente (`client_portals.mostrar_equipe`): sem
+   *  autorização a lista chega vazia do banco, e não há nada escondido na
+   *  tela. De cada pessoa vêm só nome e função. */
+  agendadas: {
+    id?: string; nome: string; data: string; hora_inicio: string | null;
+    hora_fim: string | null; local: string | null;
+    duracao_horas?: number | null; descricao?: string | null;
+    equipe?: { nome: string; funcao: string | null }[];
+  }[];
   /** O pacote do MÊS CORRENTE, do bloco "Suas diárias neste mês". */
   pacote: { meta: number; realizado: number } | null;
   /** O pacote de cada mês que o calendário alcança, com a chave em 'AAAA-MM'.
@@ -61,6 +72,9 @@ interface Agenda {
   pacotes?: Record<string, { meta: number; realizado: number }>;
   pedidos: { id: string; data_desejada: string; estado: string; motivo_recusa: string | null; fora_do_pacote: boolean; descricao: string }[];
 }
+
+/** Uma gravação marcada, do jeito que o cartão e a janela dela leem. */
+type Gravacao = Agenda['agendadas'][number];
 
 /** As quatro abas de dentro de um projeto. */
 type AbaProjeto = 'geral' | 'entregas' | 'diarias' | 'arquivos';
@@ -208,6 +222,22 @@ const dataPorExtenso = (s: string) => {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
   return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+/** O horário da gravação em uma linha só. Sem hora marcada não inventa
+ *  número: quem lê precisa saber que ainda não está definido. */
+const horario = (g: { hora_inicio: string | null; hora_fim: string | null }) => {
+  const i = g.hora_inicio?.slice(0, 5);
+  const f = g.hora_fim?.slice(0, 5);
+  if (!i) return null;
+  return f ? `${i} às ${f}` : `a partir das ${i}`;
+};
+
+/** Duração em horas, com meia hora escrita como o Brasil escreve (10,5). */
+const duracaoTexto = (h?: number | null) => {
+  const n = Number(h);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return `${n.toLocaleString('pt-BR')} ${n === 1 ? 'hora' : 'horas'}`;
 };
 
 /** O mês de hoje em 'AAAA-MM', pelo relógio local. `toISOString()` é UTC e
@@ -397,6 +427,56 @@ function Calendario({ dias, suas, escolhido, onEscolher }: {
       </div>
     </div>
   );
+}
+
+/**
+ * O comportamento das janelas do portal, escrito uma vez só: fecha no Esc,
+ * trava a rolagem de trás enquanto está aberta, prende o foco lá dentro (Tab
+ * não escapa pro conteúdo atrás) e devolve o foco pro botão que a abriu quando
+ * fecha. Sem isto, quem usa teclado ou leitor de tela continua "atrás" da
+ * janela, mesmo com aria-modal="true".
+ */
+function useJanela(
+  aberta: boolean,
+  modalRef: React.RefObject<HTMLDivElement | null>,
+  gatilhoRef: React.RefObject<HTMLButtonElement | null>,
+  fechar: () => void,
+) {
+  // O fechar entra por ref, não por dependência: assim trocar a função a cada
+  // render não reabre o efeito nem rouba o foco de volta pro começo da janela.
+  const fecharRef = useRef(fechar);
+  fecharRef.current = fechar;
+  useEffect(() => {
+    if (!aberta) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const modal = modalRef.current;
+    modal?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { fecharRef.current(); return; }
+      if (e.key === 'Tab' && modal) {
+        const focaveis = Array.from(modal.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+        if (!focaveis.length) return;
+        const primeiro = focaveis[0];
+        const ultimo = focaveis[focaveis.length - 1];
+        if (e.shiftKey && document.activeElement === primeiro) {
+          e.preventDefault();
+          ultimo.focus();
+        } else if (!e.shiftKey && document.activeElement === ultimo) {
+          e.preventDefault();
+          primeiro.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+      gatilhoRef.current?.focus();
+    };
+  }, [aberta, modalRef, gatilhoRef]);
 }
 
 export default function PortalCliente() {
@@ -614,6 +694,18 @@ export default function PortalCliente() {
     (agenda?.agendadas || []).forEach(g => { if (g.data) mapa[g.data] = g.nome; });
     return mapa;
   }, [agenda]);
+  /** A gravação aberta na janela de detalhes. Guarda a gravação, não o índice
+   *  dela: se a agenda recarregar com a janela aberta, o índice passaria a
+   *  apontar pra outra gravação. */
+  const [gravacaoAberta, setGravacaoAberta] = useState<Gravacao | null>(null);
+  const gatilhoGravacaoRef = useRef<HTMLButtonElement | null>(null);
+  const gravacaoModalRef = useRef<HTMLDivElement>(null);
+  const abrirGravacao = useCallback((g: Gravacao, gatilho?: HTMLButtonElement) => {
+    gatilhoGravacaoRef.current = gatilho || null;
+    setGravacaoAberta(g);
+  }, []);
+  useJanela(!!gravacaoAberta, gravacaoModalRef, gatilhoGravacaoRef, () => setGravacaoAberta(null));
+
   /** O botão do dia que abriu a janela de pedido, pra devolver o foco a ele
    *  quando ela fechar (Esc, X ou clique fora) — sem isto, quem navega por
    *  teclado ou leitor de tela perde o lugar onde estava. */
@@ -671,44 +763,11 @@ export default function PortalCliente() {
   // Trocou de data, de aba ou de projeto: o aviso da tentativa anterior não
   // vale mais.
   useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
-  useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
+  useEffect(() => { setDataEscolhida(null); setErroPedido(null); setGravacaoAberta(null); }, [abaProj, projetoAberto?.id]);
 
-  // A janela de pedido (aberta quando há data escolhida) fecha pelo Esc, trava
-  // a rolagem de trás enquanto está aberta, prende o foco lá dentro (Tab não
-  // escapa pro conteúdo atrás) e devolve o foco pro dia que a abriu quando ela
-  // fecha — sem isto, quem usa teclado ou leitor de tela continua "atrás" da
-  // janela, mesmo com aria-modal="true".
-  useEffect(() => {
-    if (!dataEscolhida) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const modal = pedidoModalRef.current;
-    modal?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setDataEscolhida(null); return; }
-      if (e.key === 'Tab' && modal) {
-        const focaveis = Array.from(modal.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        ));
-        if (!focaveis.length) return;
-        const primeiro = focaveis[0];
-        const ultimo = focaveis[focaveis.length - 1];
-        if (e.shiftKey && document.activeElement === primeiro) {
-          e.preventDefault();
-          ultimo.focus();
-        } else if (!e.shiftKey && document.activeElement === ultimo) {
-          e.preventDefault();
-          primeiro.focus();
-        }
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKey);
-      gatilhoPedidoRef.current?.focus();
-    };
-  }, [dataEscolhida]);
+  // A janela de pedido (aberta quando há data escolhida) segue o mesmo
+  // comportamento da janela da gravação.
+  useJanela(!!dataEscolhida, pedidoModalRef, gatilhoPedidoRef, () => setDataEscolhida(null));
 
   const enviarPedido = useCallback(async () => {
     if (!projetoAberto || !dataEscolhida || enviandoRef.current) return;
@@ -1265,16 +1324,67 @@ export default function PortalCliente() {
                     </section>
                   )}
 
+                  {/* Um cartão por gravação, e o cartão abre a gravação. A
+                      lista de linhas mostrava data e local e parava aí: o que
+                      estava marcado pra aquele dia ficava do lado de cá. */}
                   <section className="secao">
                     <span className="rotulo">Gravações marcadas</span>
                     {!agenda?.agendadas.length ? (
                       <p className="nota">Nenhuma gravação marcada por enquanto.</p>
-                    ) : agenda.agendadas.map((g, i) => (
-                      <div key={i} className="arquivo">
-                        <span className="nm">{g.nome}<span>{dia(g.data)}{g.hora_inicio ? `, ${g.hora_inicio.slice(0,5)}` : ''}{g.local ? `, ${g.local}` : ''}</span></span>
+                    ) : (
+                      <div className="gravs">
+                        {agenda.agendadas.map((g, i) => (
+                          <button key={g.id || `${g.data}-${i}`} type="button" className="grav-card"
+                            onClick={e => abrirGravacao(g, e.currentTarget)}>
+                            <span className="qd">{dia(g.data)}</span>
+                            <span className="nm">{g.nome}</span>
+                            <span className="det">{horario(g) || 'Horário a combinar'}</span>
+                            {g.local && <span className="det">{g.local}</span>}
+                          </button>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </section>
+
+                  {/* A gravação por dentro. A equipe só aparece quando o banco
+                      mandou uma: sem autorização a lista vem vazia, e a janela
+                      não fala do que não veio. */}
+                  {gravacaoAberta && (
+                    <div className="pedido-modal-fora" onClick={e => { if (e.target === e.currentTarget) setGravacaoAberta(null); }}>
+                      <div className="pedido-modal" ref={gravacaoModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="gravacao-titulo">
+                        <button type="button" className="fechar" onClick={() => setGravacaoAberta(null)} aria-label="Fechar">
+                          <IconeFechar />
+                        </button>
+                        <p className="rotulo">Gravação marcada</p>
+                        <h3 id="gravacao-titulo" className="pedido-titulo">{gravacaoAberta.nome}</h3>
+                        <p className="grav-quando">{dataPorExtenso(gravacaoAberta.data)}</p>
+
+                        <div className="grav-detalhe">
+                          <p><span className="rotulo">Horário</span><span>{horario(gravacaoAberta) || 'A combinar'}</span></p>
+                          {duracaoTexto(gravacaoAberta.duracao_horas) && (
+                            <p><span className="rotulo">Duração</span><span>{duracaoTexto(gravacaoAberta.duracao_horas)}</span></p>
+                          )}
+                          <p><span className="rotulo">Onde</span><span>{gravacaoAberta.local || 'A combinar'}</span></p>
+                        </div>
+
+                        {gravacaoAberta.descricao?.trim() && (
+                          <p className="grav-desc">{gravacaoAberta.descricao}</p>
+                        )}
+
+                        {!!gravacaoAberta.equipe?.length && (
+                          <div className="grav-equipe">
+                            <span className="rotulo">Quem grava</span>
+                            {gravacaoAberta.equipe.map((pessoa, i) => (
+                              <div key={i} className="grav-pessoa">
+                                <span className="nm">{pessoa.nome}</span>
+                                {pessoa.funcao && <span className="fn">{pessoa.funcao}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <section className="secao">
                     <span className="rotulo">Pedir uma data</span>
