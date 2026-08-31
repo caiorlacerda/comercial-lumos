@@ -55,6 +55,9 @@ const PERM_OPTIONS = [
   // então não dá pra decidir isso pelo cargo — é pessoa a pessoa.
   { key: 'revisao_interna', label: 'Aprovar vídeo na revisão interna' },
   { key: 'equipamentos', label: 'Equipamentos (inventário, reservas, manutenção)' },
+  // Fechar dia vale pra produtora inteira, não só pra um projeto: a data some
+  // do calendário de todos os clientes, em todos os portais.
+  { key: 'fechar_agenda', label: 'Fechar datas na agenda (vale para todos os clientes)' },
 ];
 
 // Campos de RH (tabela team_members)

@@ -48,6 +48,7 @@ const PERM_OPTIONS: { key: string; label: string }[] = [
   { key: 'reembolso', label: 'Reembolso' },
   { key: 'custos_projeto', label: 'Custos de Projeto' },
   { key: 'equipamentos', label: 'Equipamentos (inventário, reservas, manutenção)' },
+  { key: 'fechar_agenda', label: 'Fechar datas na agenda (vale para todos os clientes)' },
 ];
 type UserStatus = 'ativo' | 'inativo';
 

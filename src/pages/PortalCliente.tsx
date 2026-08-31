@@ -45,8 +45,22 @@ interface Portal {
  *  do mês e os pedidos em aberto. Vem inteira de `portal_agenda`. */
 interface Agenda {
   antecedencia_dias: number;
+  /** O dia diz o estado e nada mais. O porquê de um dia estar indisponível é
+   *  assunto interno: `portal_agenda` parou de mandar `motivo` na migração
+   *  2026093336, e a tela não pergunta por ele. */
   dias: { data: string; estado: 'livre' | 'ocupado' | 'bloqueado' | 'cedo' }[];
-  agendadas: { nome: string; data: string; hora_inicio: string | null; hora_fim: string | null; local: string | null }[];
+  /** `id`, `duracao_horas`, `descricao` e `equipe` só chegam depois da
+   *  migração 2026093336; antes dela o cartão abre com data, horário e local,
+   *  que é o que a função antiga manda. `equipe` só vem preenchida quando a
+   *  Lumos autorizou este cliente (`client_portals.mostrar_equipe`): sem
+   *  autorização a lista chega vazia do banco, e não há nada escondido na
+   *  tela. De cada pessoa vêm só nome e função. */
+  agendadas: {
+    id?: string; nome: string; data: string; hora_inicio: string | null;
+    hora_fim: string | null; local: string | null;
+    duracao_horas?: number | null; descricao?: string | null;
+    equipe?: { nome: string; funcao: string | null }[];
+  }[];
   /** O pacote do MÊS CORRENTE, do bloco "Suas diárias neste mês". */
   pacote: { meta: number; realizado: number } | null;
   /** O pacote de cada mês que o calendário alcança, com a chave em 'AAAA-MM'.
@@ -57,6 +71,9 @@ interface Agenda {
   pacotes?: Record<string, { meta: number; realizado: number }>;
   pedidos: { id: string; data_desejada: string; estado: string; motivo_recusa: string | null; fora_do_pacote: boolean; descricao: string }[];
 }
+
+/** Uma gravação marcada, do jeito que o cartão e a janela dela leem. */
+type Gravacao = Agenda['agendadas'][number];
 
 /** As quatro abas de dentro de um projeto. */
 type AbaProjeto = 'geral' | 'entregas' | 'diarias' | 'arquivos';
@@ -92,6 +109,9 @@ const MOTIVOS: Record<string, string> = {
   cedo: 'Esta data é cedo demais. Escolha um dia com mais folga.',
   dia_ocupado: 'Este dia acabou de ser ocupado. Escolha outro.',
   dia_bloqueado: 'Este dia não está disponível.',
+  // O código do erro continua o mesmo; o que o cliente lê é que não explica a
+  // razão, igual a qualquer outro dia indisponível.
+  dia_semana_fechado: 'Este dia não está disponível. Escolha outro.',
   repetido: 'Você já tem um pedido em aberto para este dia.',
   sem_descricao: 'Conte o que precisa gravar.',
   sem_nome: 'Diga seu nome e seu e-mail.',
@@ -163,6 +183,19 @@ const ChevronDown = ({ aberto }: { aberto: boolean }) => (
   </svg>
 );
 
+const IconeFechar = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
+/** Seta do cabeçalho do calendário: o mesmo chevron do menu, deitado. */
+const SetaMes = ({ dir }: { dir: 'esq' | 'dir' }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    style={{ transform: dir === 'esq' ? 'rotate(90deg)' : 'rotate(-90deg)' }}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
 /**
  * DE ONDE A PESSOA VEIO.
  *
@@ -182,6 +215,31 @@ const dia = (s?: string | null) =>
  *  que não é o de hoje. */
 const mesPorExtenso = (s: string) =>
   new Date(`${s.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' });
+
+/** A data por extenso, pro título da janela de pedido: "Terça-feira, 3 de
+ *  setembro de 2026". */
+const dataPorExtenso = (s: string) => {
+  const t = new Date(`${s.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+/** O horário da gravação em uma linha só. Sem hora marcada não inventa
+ *  número: quem lê precisa saber que ainda não está definido. */
+const horario = (g: { hora_inicio: string | null; hora_fim: string | null }) => {
+  const i = g.hora_inicio?.slice(0, 5);
+  const f = g.hora_fim?.slice(0, 5);
+  if (!i) return null;
+  return f ? `${i} às ${f}` : `a partir das ${i}`;
+};
+
+/** Duração em horas, com meia hora escrita como o Brasil escreve (10,5). */
+const duracaoTexto = (h?: number | null) => {
+  const n = Number(h);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return `${n.toLocaleString('pt-BR')} ${n === 1 ? 'hora' : 'horas'}`;
+};
 
 /** O mês de hoje em 'AAAA-MM', pelo relógio local. `toISOString()` é UTC e
  *  viraria o mês cedo demais na virada do dia, aqui no fuso do Brasil. */
@@ -213,56 +271,177 @@ const formato = (l: number | null, a: number | null) => {
 const SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 const MES_NOME = ['janeiro','fevereiro','março','abril','maio','junho',
   'julho','agosto','setembro','outubro','novembro','dezembro'];
-
-function Calendario({ dias, escolhido, onEscolher }: {
+function Calendario({ dias, suas, escolhido, onEscolher }: {
   dias: { data: string; estado: string }[];
+  /** Datas em que ESTE projeto tem gravação marcada, pelo nome. O servidor já
+   *  manda isso em `agendadas`, e sem cruzar aqui um dia do próprio cliente
+   *  aparecia com o mesmo cinza de um dia ocupado por outro: "indisponível",
+   *  sem dizer que a gravação é dele. A lista de cima e o calendário passam a
+   *  contar a mesma história. */
+  suas: Record<string, string>;
   escolhido: string | null;
-  onEscolher: (d: string) => void;
+  onEscolher: (d: string, gatilho?: HTMLButtonElement) => void;
 }) {
   // Agrupa por mês na ordem em que vieram: o banco já mandou ordenado, e
   // reordenar aqui só criaria uma segunda fonte da mesma verdade.
-  const meses: { chave: string; titulo: string; dias: typeof dias }[] = [];
-  dias.forEach(d => {
-    const chave = d.data.slice(0, 7);
-    let m = meses.find(x => x.chave === chave);
-    if (!m) {
-      const [ano, mes] = chave.split('-');
-      m = { chave, titulo: `${MES_NOME[Number(mes) - 1]} de ${ano}`, dias: [] };
-      meses.push(m);
-    }
-    m.dias.push(d);
+  const meses = useMemo(() => {
+    const lista: { chave: string; titulo: string; dias: typeof dias }[] = [];
+    dias.forEach(d => {
+      const chave = d.data.slice(0, 7);
+      let m = lista.find(x => x.chave === chave);
+      if (!m) {
+        const [ano, mes] = chave.split('-');
+        m = { chave, titulo: `${MES_NOME[Number(mes) - 1]} de ${ano}`, dias: [] };
+        lista.push(m);
+      }
+      m.dias.push(d);
+    });
+    return lista;
+  }, [dias]);
+
+  // Um mês por vez, abrindo no mês corrente. Se o mês de hoje não estiver
+  // entre os que o servidor mandou (não devia acontecer: a agenda começa em
+  // current_date), cai no primeiro mês disponível.
+  const [indice, setIndice] = useState(() => {
+    // Abre no primeiro mês que tem dia pedível, não no mês corrente. Pedindo
+    // no fim do mês, com a antecedência mínima, o mês de hoje aparecia sem
+    // nenhum dia clicável: um calendário vazio como primeira impressão, e a
+    // pessoa tendo que adivinhar que precisa avançar.
+    const comLivre = meses.findIndex(m => m.dias.some(d => d.estado === 'livre'));
+    if (comLivre >= 0) return comLivre;
+    const i = meses.findIndex(m => m.chave === mesDeHoje());
+    return i >= 0 ? i : 0;
   });
+  // Guarda contra o mês sumir de baixo da pessoa se `dias` encolher.
+  useEffect(() => {
+    setIndice(i => Math.min(i, Math.max(0, meses.length - 1)));
+  }, [meses.length]);
+
+  const mes = meses[indice];
+
+  /**
+   * O mês inteiro, sempre em seis semanas.
+   *
+   * O servidor só manda de hoje até 90 dias, então agosto chegava com dois
+   * dias e novembro pela metade: o calendário nascia torto e a seção mudava
+   * de altura a cada seta, o que embaralha a leitura. Aqui o mês é completado
+   * com os dias que faltam, marcados como fora do alcance (passado, ou longe
+   * demais), e a grade tem sempre 42 casas: a altura para de pular.
+   */
+  const grade = useMemo(() => {
+    if (!mes) return [];
+    const [ano, numMes] = mes.chave.split('-').map(Number);
+    // Dia 0 do mês seguinte é o último dia deste.
+    const quantos = new Date(ano, numMes, 0).getDate();
+    // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
+    // anterior, e o calendário inteiro anda uma casa.
+    const comeca = new Date(`${mes.chave}-01T12:00:00`).getDay();
+    const porData = new Map(mes.dias.map(d => [d.data, d]));
+    const casas: (typeof mes.dias[number] | null)[] = Array.from({ length: comeca }, () => null);
+    for (let n = 1; n <= quantos; n++) {
+      const data = `${mes.chave}-${String(n).padStart(2, '0')}`;
+      casas.push(porData.get(data) || { data, estado: 'fora' });
+    }
+    while (casas.length < 42) casas.push(null);
+    return casas;
+  }, [mes]);
+
+  if (!mes) return null;
 
   return (
-    <>
-      {meses.map(m => {
-        // T12:00:00 e não T00:00:00: meia-noite em fuso negativo cai no dia
-        // anterior, e o calendário inteiro anda uma casa.
-        const vazios = new Date(m.dias[0].data + 'T12:00:00').getDay();
-        return (
-          <div key={m.chave} className="mes">
-            <span className="rotulo">{m.titulo}</span>
-            <div className="calend">
-              {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
-              {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
-              {m.dias.map(d => {
-                const livre = d.estado === 'livre';
-                return (
-                  <button key={d.data} type="button" disabled={!livre}
-                    className={`dia ${d.estado}${escolhido === d.data ? ' escolhido' : ''}`}
-                    title={livre ? 'Pedir esta data'
-                      : d.estado === 'cedo' ? 'Cedo demais para pedir' : 'Indisponível'}
-                    onClick={() => onEscolher(d.data)}>
-                    {Number(d.data.slice(8, 10))}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </>
+    <div className="mes">
+      <div className="mes-cabeca">
+        <button type="button" className="seta-mes" disabled={indice === 0}
+          onClick={() => setIndice(i => i - 1)} aria-label="Mês anterior">
+          <SetaMes dir="esq" />
+        </button>
+        <span className="rotulo">{mes.titulo}</span>
+        <button type="button" className="seta-mes" disabled={indice === meses.length - 1}
+          onClick={() => setIndice(i => i + 1)} aria-label="Próximo mês">
+          <SetaMes dir="dir" />
+        </button>
+      </div>
+      <div className="calend">
+        {SEMANA.map((d, i) => <span key={`c${i}`} className="cab">{d}</span>)}
+        {grade.map((d, i) => {
+          if (!d) return <span key={`v${i}`} className="dia fantasma" />;
+          const livre = d.estado === 'livre';
+          const sua = suas[d.data];
+          return (
+            <button key={d.data} type="button" disabled={!livre}
+              className={`dia ${d.estado}${sua ? ' sua' : ''}${escolhido === d.data ? ' escolhido' : ''}`}
+              title={sua ? `Sua gravação, ${sua}`
+                : livre ? 'Pedir esta data'
+                : d.estado === 'cedo' ? 'Cedo demais para pedir'
+                : d.estado === 'fora' ? 'Fora do período que dá pra pedir'
+                : 'Indisponível'}
+              onClick={e => onEscolher(d.data, e.currentTarget)}>
+              <span className="num">{Number(d.data.slice(8, 10))}</span>
+              {/* O nome da gravação escrito no dia, como num calendário de
+                  verdade: sem isto, o cliente vê a marca amarela e ainda tem
+                  que voltar na lista de cima pra saber o que é. */}
+              {sua && <span className="rot-dia">{sua}</span>}
+            </button>
+          );
+        })}
+      </div>
+      <div className="legenda-cores">
+        <span><i className="am-livre" /> livre para pedir</span>
+        <span><i className="am-sua" /> sua gravação</span>
+        <span><i className="am-fora" /> indisponível</span>
+      </div>
+    </div>
   );
+}
+
+/**
+ * O comportamento das janelas do portal, escrito uma vez só: fecha no Esc,
+ * trava a rolagem de trás enquanto está aberta, prende o foco lá dentro (Tab
+ * não escapa pro conteúdo atrás) e devolve o foco pro botão que a abriu quando
+ * fecha. Sem isto, quem usa teclado ou leitor de tela continua "atrás" da
+ * janela, mesmo com aria-modal="true".
+ */
+function useJanela(
+  aberta: boolean,
+  modalRef: React.RefObject<HTMLDivElement | null>,
+  gatilhoRef: React.RefObject<HTMLButtonElement | null>,
+  fechar: () => void,
+) {
+  // O fechar entra por ref, não por dependência: assim trocar a função a cada
+  // render não reabre o efeito nem rouba o foco de volta pro começo da janela.
+  const fecharRef = useRef(fechar);
+  fecharRef.current = fechar;
+  useEffect(() => {
+    if (!aberta) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const modal = modalRef.current;
+    modal?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { fecharRef.current(); return; }
+      if (e.key === 'Tab' && modal) {
+        const focaveis = Array.from(modal.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+        if (!focaveis.length) return;
+        const primeiro = focaveis[0];
+        const ultimo = focaveis[focaveis.length - 1];
+        if (e.shiftKey && document.activeElement === primeiro) {
+          e.preventDefault();
+          ultimo.focus();
+        } else if (!e.shiftKey && document.activeElement === ultimo) {
+          e.preventDefault();
+          primeiro.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+      gatilhoRef.current?.focus();
+    };
+  }, [aberta, modalRef, gatilhoRef]);
 }
 
 export default function PortalCliente() {
@@ -472,6 +651,36 @@ export default function PortalCliente() {
 
   const [dataEscolhida, setDataEscolhida] = useState<string | null>(null);
 
+  /** Data da gravação -> nome dela, pra marcar no calendário os dias que já
+   *  são do próprio cliente. Sai de `agendadas`, a mesma lista do bloco
+   *  "Gravações marcadas": uma fonte só, contada em dois lugares. */
+  const suasGravacoes = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    (agenda?.agendadas || []).forEach(g => { if (g.data) mapa[g.data] = g.nome; });
+    return mapa;
+  }, [agenda]);
+  /** A gravação aberta na janela de detalhes. Guarda a gravação, não o índice
+   *  dela: se a agenda recarregar com a janela aberta, o índice passaria a
+   *  apontar pra outra gravação. */
+  const [gravacaoAberta, setGravacaoAberta] = useState<Gravacao | null>(null);
+  const gatilhoGravacaoRef = useRef<HTMLButtonElement | null>(null);
+  const gravacaoModalRef = useRef<HTMLDivElement>(null);
+  const abrirGravacao = useCallback((g: Gravacao, gatilho?: HTMLButtonElement) => {
+    gatilhoGravacaoRef.current = gatilho || null;
+    setGravacaoAberta(g);
+  }, []);
+  useJanela(!!gravacaoAberta, gravacaoModalRef, gatilhoGravacaoRef, () => setGravacaoAberta(null));
+
+  /** O botão do dia que abriu a janela de pedido, pra devolver o foco a ele
+   *  quando ela fechar (Esc, X ou clique fora) — sem isto, quem navega por
+   *  teclado ou leitor de tela perde o lugar onde estava. */
+  const gatilhoPedidoRef = useRef<HTMLButtonElement | null>(null);
+  const pedidoModalRef = useRef<HTMLDivElement>(null);
+  const abrirPedido = useCallback((data: string, gatilho?: HTMLButtonElement) => {
+    gatilhoPedidoRef.current = gatilho || null;
+    setDataEscolhida(data);
+  }, []);
+
   /** O pacote do mês DA DATA ESCOLHIDA, que é o único que responde a pergunta
    *  do formulário: "esta diária vai entrar como extra?". `portal_pedir_diaria`
    *  decide `fora_do_pacote` pelo mês da data pedida, e a tela lia o mês
@@ -519,7 +728,11 @@ export default function PortalCliente() {
   // Trocou de data, de aba ou de projeto: o aviso da tentativa anterior não
   // vale mais.
   useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
-  useEffect(() => { setDataEscolhida(null); setErroPedido(null); }, [abaProj, projetoAberto?.id]);
+  useEffect(() => { setDataEscolhida(null); setErroPedido(null); setGravacaoAberta(null); }, [abaProj, projetoAberto?.id]);
+
+  // A janela de pedido (aberta quando há data escolhida) segue o mesmo
+  // comportamento da janela da gravação.
+  useJanela(!!dataEscolhida, pedidoModalRef, gatilhoPedidoRef, () => setDataEscolhida(null));
 
   const enviarPedido = useCallback(async () => {
     if (!projetoAberto || !dataEscolhida || enviandoRef.current) return;
@@ -1076,80 +1289,153 @@ export default function PortalCliente() {
                     </section>
                   )}
 
+                  {/* Um cartão por gravação, e o cartão abre a gravação. A
+                      lista de linhas mostrava data e local e parava aí: o que
+                      estava marcado pra aquele dia ficava do lado de cá. */}
                   <section className="secao">
                     <span className="rotulo">Gravações marcadas</span>
                     {!agenda?.agendadas.length ? (
                       <p className="nota">Nenhuma gravação marcada por enquanto.</p>
-                    ) : agenda.agendadas.map((g, i) => (
-                      <div key={i} className="arquivo">
-                        <span className="nm">{g.nome}<span>{dia(g.data)}{g.hora_inicio ? `, ${g.hora_inicio.slice(0,5)}` : ''}{g.local ? `, ${g.local}` : ''}</span></span>
-                      </div>
-                    ))}
-                  </section>
-
-                  <section className="secao">
-                    <span className="rotulo">Pedir uma data</span>
-                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} escolhido={dataEscolhida} onEscolher={setDataEscolhida} />}
-
-                    {!carregandoAgenda && dataEscolhida && (
-                      <div className="pedido-form">
-                        <p className="rotulo" style={{ marginTop: 22 }}>Pedido para {dia(dataEscolhida)}</p>
-
-                        <label>
-                          <span className="rotulo">O que precisa gravar</span>
-                          <textarea className="campo area" rows={3} value={pedDescricao}
-                            onChange={e => setPedDescricao(e.target.value)}
-                            placeholder="Ex.: depoimento do cliente X, sala de reunião" />
-                        </label>
-
-                        <div className="pedido-linha">
-                          <label>
-                            <span className="rotulo">Onde</span>
-                            <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
-                              placeholder="Endereço ou local (opcional)" />
-                          </label>
-                          <label>
-                            <span className="rotulo">Duração</span>
-                            <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
-                              <option value={6}>6 horas</option>
-                              <option value={10}>10 horas</option>
-                              <option value={12}>12 horas</option>
-                            </select>
-                          </label>
-                        </div>
-
-                        {!exigeLogin && (
-                          <div className="pedido-linha">
-                            <label>
-                              <span className="rotulo">Seu nome</span>
-                              <input className="campo" value={pedNome}
-                                onChange={e => { pedNomeTocado.current = true; setPedNome(e.target.value); }}
-                                placeholder="Seu nome" />
-                            </label>
-                            <label>
-                              <span className="rotulo">Seu e-mail</span>
-                              <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
-                            </label>
-                          </div>
-                        )}
-
-                        {pacoteDaData && pacoteDaData.meta > 0 && pacoteDaData.realizado >= pacoteDaData.meta && (
-                          <p className="nota alerta">
-                            Esta seria a {pacoteDaData.realizado + 1}ª diária de {pacoteDaData.meta} em {mesPorExtenso(dataEscolhida)}.
-                            Ela entra como extra, e a Lumos vai orçar antes de confirmar.
-                          </p>
-                        )}
-
-                        {erroPedido && <p className="nota alerta">{erroPedido}</p>}
-
-                        <button type="button" className="botao" style={{ marginTop: 4 }}
-                          disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
-                          onClick={enviarPedido}>
-                          {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
-                        </button>
+                    ) : (
+                      <div className="gravs">
+                        {agenda.agendadas.map((g, i) => (
+                          <button key={g.id || `${g.data}-${i}`} type="button" className="grav-card"
+                            onClick={e => abrirGravacao(g, e.currentTarget)}>
+                            <span className="qd">{dia(g.data)}</span>
+                            <span className="nm">{g.nome}</span>
+                            <span className="det">{horario(g) || 'Horário a combinar'}</span>
+                            {g.local && <span className="det">{g.local}</span>}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </section>
+
+                  {/* A gravação por dentro. A equipe só aparece quando o banco
+                      mandou uma: sem autorização a lista vem vazia, e a janela
+                      não fala do que não veio. */}
+                  {gravacaoAberta && (
+                    <div className="pedido-modal-fora" onClick={e => { if (e.target === e.currentTarget) setGravacaoAberta(null); }}>
+                      <div className="pedido-modal" ref={gravacaoModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="gravacao-titulo">
+                        <button type="button" className="fechar" onClick={() => setGravacaoAberta(null)} aria-label="Fechar">
+                          <IconeFechar />
+                        </button>
+                        <p className="rotulo">Gravação marcada</p>
+                        <h3 id="gravacao-titulo" className="pedido-titulo">{gravacaoAberta.nome}</h3>
+                        <p className="grav-quando">{dataPorExtenso(gravacaoAberta.data)}</p>
+
+                        <div className="grav-detalhe">
+                          <p><span className="rotulo">Horário</span><span>{horario(gravacaoAberta) || 'A combinar'}</span></p>
+                          {duracaoTexto(gravacaoAberta.duracao_horas) && (
+                            <p><span className="rotulo">Duração</span><span>{duracaoTexto(gravacaoAberta.duracao_horas)}</span></p>
+                          )}
+                          <p><span className="rotulo">Onde</span><span>{gravacaoAberta.local || 'A combinar'}</span></p>
+                        </div>
+
+                        {gravacaoAberta.descricao?.trim() && (
+                          <p className="grav-desc">{gravacaoAberta.descricao}</p>
+                        )}
+
+                        {!!gravacaoAberta.equipe?.length && (
+                          <div className="grav-equipe">
+                            <span className="rotulo">Quem grava</span>
+                            {gravacaoAberta.equipe.map((pessoa, i) => (
+                              <div key={i} className="grav-pessoa">
+                                <span className="nm">{pessoa.nome}</span>
+                                {pessoa.funcao && <span className="fn">{pessoa.funcao}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <section className="secao">
+                    <span className="rotulo">Pedir uma data</span>
+                    {carregandoAgenda ? <span className="farol" /> : <Calendario dias={agenda?.dias || []} suas={suasGravacoes} escolhido={dataEscolhida} onEscolher={abrirPedido} />}
+                  </section>
+
+                  {!carregandoAgenda && dataEscolhida && (
+                    <div className="pedido-modal-fora" onClick={e => { if (e.target === e.currentTarget) setDataEscolhida(null); }}>
+                      <div className="pedido-modal" ref={pedidoModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="pedido-titulo">
+                        <button type="button" className="fechar" onClick={() => setDataEscolhida(null)} aria-label="Fechar">
+                          <IconeFechar />
+                        </button>
+                        <p className="rotulo">Pedir uma data</p>
+                        <h3 id="pedido-titulo" className="pedido-titulo">{dataPorExtenso(dataEscolhida)}</h3>
+
+                        <div className="pedido-form">
+                          <label>
+                            <span className="rotulo">O que precisa gravar</span>
+                            <textarea className="campo area" rows={3} value={pedDescricao}
+                              onChange={e => setPedDescricao(e.target.value)}
+                              placeholder="Ex.: depoimento do cliente X, sala de reunião" />
+                          </label>
+
+                          <div className="pedido-linha">
+                            <label>
+                              <span className="rotulo">Onde</span>
+                              <input className="campo" value={pedLocal} onChange={e => setPedLocal(e.target.value)}
+                                placeholder="Endereço ou local (opcional)" />
+                            </label>
+                            <label>
+                              <span className="rotulo">Duração</span>
+                              <select className="campo" value={pedDuracao} onChange={e => setPedDuracao(Number(e.target.value))}>
+                                <option value={6}>6 horas</option>
+                                <option value={10}>10 horas</option>
+                                <option value={12}>12 horas</option>
+                              </select>
+                            </label>
+                          </div>
+
+                          {exigeLogin ? (
+                            <>
+                              <div className="pedido-linha">
+                                <label>
+                                  <span className="rotulo">Seu nome</span>
+                                  <input className="campo" value={dados.voce?.nome || nome} disabled />
+                                </label>
+                                <label>
+                                  <span className="rotulo">Seu e-mail</span>
+                                  <input className="campo" value={dados.voce?.email || ''} disabled />
+                                </label>
+                              </div>
+                              <p className="nota">Entrando como {dados.voce?.nome || nome}.</p>
+                            </>
+                          ) : (
+                            <div className="pedido-linha">
+                              <label>
+                                <span className="rotulo">Seu nome</span>
+                                <input className="campo" value={pedNome}
+                                  onChange={e => { pedNomeTocado.current = true; setPedNome(e.target.value); }}
+                                  placeholder="Seu nome" />
+                              </label>
+                              <label>
+                                <span className="rotulo">Seu e-mail</span>
+                                <input className="campo" type="email" value={pedEmail} onChange={e => setPedEmail(e.target.value)} placeholder="voce@empresa.com.br" />
+                              </label>
+                            </div>
+                          )}
+
+                          {pacoteDaData && pacoteDaData.meta > 0 && pacoteDaData.realizado >= pacoteDaData.meta && (
+                            <p className="nota alerta">
+                              Esta seria a {pacoteDaData.realizado + 1}ª diária de {pacoteDaData.meta} em {mesPorExtenso(dataEscolhida)}.
+                              Ela entra como extra, e a Lumos vai orçar antes de confirmar.
+                            </p>
+                          )}
+
+                          {erroPedido && <p className="nota alerta">{erroPedido}</p>}
+
+                          <button type="button" className="botao" style={{ marginTop: 4 }}
+                            disabled={enviandoPedido || !pedDescricao.trim() || (!exigeLogin && (!pedNome.trim() || !pedEmail.trim()))}
+                            onClick={enviarPedido}>
+                            {enviandoPedido ? 'Enviando…' : 'Pedir esta data'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <section className="secao">
                     <span className="rotulo">Seus pedidos</span>

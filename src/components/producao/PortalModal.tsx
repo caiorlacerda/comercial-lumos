@@ -14,6 +14,10 @@ interface Portal {
   id: string; token: string; active: boolean; show_financeiro: boolean;
   contact_user_ids: string[]; blocks: Blocks; exige_login: boolean;
   last_opened_at: string | null; opened_count: number; antecedencia_dias: number;
+  /** Libera a equipe de cada gravação no portal deste cliente. Só existe
+   *  depois da migração 2026093336; antes dela, vem `undefined` e o
+   *  interruptor aparece desligado, que é o padrão da coluna. */
+  mostrar_equipe: boolean;
 }
 /** Pessoa do lado do cliente, com o que ela alcança. */
 interface Pessoa {
@@ -213,7 +217,10 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
    * ficar mostrando o número recusado até o modal fechar.
    */
   const [antecedenciaInput, setAntecedenciaInput] = useState('7');
-  useEffect(() => { setAntecedenciaInput(String(portal?.antecedencia_dias ?? 7)); }, [portal?.antecedencia_dias]);
+  // Portal salvo antigamente com 0 ou 1 (antes do piso de 2 dias existir):
+  // o servidor já aplica o piso na hora de calcular a data mais cedo pedível,
+  // então o campo mostra o valor que vale de verdade, não o número cru salvo.
+  useEffect(() => { setAntecedenciaInput(String(Math.max(2, portal?.antecedencia_dias ?? 7))); }, [portal?.antecedencia_dias]);
 
   const salvarAntecedencia = () => {
     if (!portal) return;
@@ -221,9 +228,10 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     const n = Number(antecedenciaInput);
     // Texto ou campo vazio não é "0 dias", é "não digitei nada direito":
     // volta pro valor de verdade sem gravar lixo. Número válido é travado na
-    // faixa de 0 a 60, porque `min`/`max` do <input> são só dica visual.
+    // faixa de 2 a 60, porque `min`/`max` do <input> são só dica visual, e o
+    // servidor tem piso de 2 dias mesmo que o portal peça menos.
     const valido = antecedenciaInput.trim() !== '' && Number.isFinite(n);
-    const novo = valido ? Math.min(60, Math.max(0, Math.round(n))) : atual;
+    const novo = valido ? Math.min(60, Math.max(2, Math.round(n))) : atual;
     setAntecedenciaInput(String(novo));
     if (novo === atual) return; // nada mudou: sem toast, sem chamada à toa
     patch({ antecedencia_dias: novo } as any, 'Antecedência salva.');
@@ -332,6 +340,18 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                     <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.show_financeiro ? 'left-5' : 'left-0.5')} />
                   </button>
                 </div>
+                {/* Equipe da gravação. Desligado, o nome de quem grava nem sai
+                    do banco: a tela do cliente não recebe a lista. */}
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-lumos-text-primary">Equipe da gravação</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary">Nome e função de quem grava, em todos os projetos deste cliente.</span>
+                  </span>
+                  <button type="button" onClick={() => patch({ mostrar_equipe: !portal.mostrar_equipe } as any, portal.mostrar_equipe ? 'Equipe oculta pro cliente.' : 'Equipe visível pro cliente.')}
+                    className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0', portal.mostrar_equipe ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                    <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', portal.mostrar_equipe ? 'left-5' : 'left-0.5')} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -403,10 +423,10 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                   <span className="min-w-0">
                     <span className="block text-xs font-bold text-lumos-text-primary">Antecedência para pedir diária</span>
                     <span className="block text-[10.5px] text-lumos-text-secondary">
-                      Dias de folga entre hoje e a data que o cliente consegue pedir.
+                      Dias de folga entre hoje e a data que o cliente consegue pedir, no mínimo dois, mesmo que você escolha menos.
                     </span>
                   </span>
-                  <input type="number" min={0} max={60} value={antecedenciaInput}
+                  <input type="number" min={2} max={60} value={antecedenciaInput}
                     onChange={e => setAntecedenciaInput(e.target.value)}
                     onBlur={salvarAntecedencia}
                     className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />

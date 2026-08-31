@@ -81,7 +81,7 @@ export const PORTAL_CSS = String.raw`
   .fita-proj .link { font-size: 12px; padding: 9px 13px; }
   /* Só a primeira seção logo depois da fita do projeto: .secao:first-of-type
      sozinho vazava pra fora da folha do projeto (Início, Atendimento). */
-  .fita-proj + .secao { padding-top: 26px; border-top: 0; }
+  .fita-proj + .secao { padding-top: 34px; border-top: 0; }
   .aba {
     appearance: none; background: none; border: 0; cursor: pointer; white-space: nowrap;
     padding: 14px 12px 12px; border-bottom: 2px solid transparent;
@@ -182,7 +182,14 @@ export const PORTAL_CSS = String.raw`
   }
 
   /* ── Seções ──────────────────────────────────────────────── */
-  .secao { padding-top: 34px; border-top: 1px solid var(--fio); }
+  /* O respiro é o mesmo em cima e embaixo: 34px da linha até o texto, e 34px
+     do fim do conteúdo até a linha seguinte. Sem o de baixo, a linha da
+     próxima seção colava no fim da anterior e a página lia torta. */
+  .secao { padding-top: 34px; padding-bottom: 34px; border-top: 1px solid var(--fio); }
+  .secao:last-child { padding-bottom: 0; }
+  /* Dentro da grade de duas colunas o espaço já vem do gap: somar o de baixo
+     daria 68 e a página teria dois ritmos diferentes. */
+  .duas .secao { padding-bottom: 0; }
   .secao > .rotulo { display: block; margin-bottom: 16px; }
   .duas { display: grid; gap: 34px; grid-template-columns: 1fr; }
   @media (min-width: 920px) { .duas { grid-template-columns: 1.5fr 1fr; gap: 44px; } }
@@ -278,15 +285,146 @@ export const PORTAL_CSS = String.raw`
 
   /* ── Diárias: calendário e pedido ─────────────────────────── */
   .mes + .mes { margin-top: 26px; }
-  .calend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
-  .calend .dia { aspect-ratio: 1; display: grid; place-items: center; border-radius: 8px;
-    font-family: "DM Mono", monospace; font-size: 12px; border: 1px solid transparent; }
-  .calend .dia.livre { background: rgba(255,247,230,.05); color: var(--gesso); cursor: pointer; }
-  .calend .dia.livre:hover { border-color: var(--luz); color: var(--luz); }
-  .calend .dia.escolhido { background: var(--luz); color: #14110b; font-weight: 700; }
-  .calend .dia.ocupado, .calend .dia.bloqueado { color: var(--meia-luz); opacity: .38; }
-  .calend .dia.cedo { color: var(--meia-luz); opacity: .22; }
-  .calend .cab { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--meia-luz); }
+  /* Cabeçalho do mês: seta, nome do mês, seta. Um mês por vez, com as pontas
+     travadas no primeiro e no último mês que o servidor mandou. */
+  .mes-cabeca { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 4px; }
+  .mes-cabeca .rotulo { min-width: 15ch; text-align: center; }
+  .seta-mes {
+    appearance: none; background: none; border: 1px solid var(--fio); border-radius: 999px;
+    width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer;
+    color: var(--gesso); flex: 0 0 auto; transition: color .16s, border-color .16s, opacity .16s;
+  }
+  .seta-mes svg { width: 13px; height: 13px; }
+  .seta-mes:hover:not(:disabled) { color: var(--luz); border-color: rgba(239,199,0,.4); }
+  .seta-mes:disabled { opacity: .3; cursor: default; }
+  /* O calendário é uma grade de verdade, com célula visível nos DOIS temas.
+     Antes o dia livre era um branco translúcido de 5%, que no tema claro
+     desaparecia contra o papel: a pessoa via números soltos, sem grade e sem
+     conseguir diferenciar um dia do outro. Agora toda célula tem fundo e fio,
+     e o que muda entre os estados é a cor, não a existência da célula.
+     Largura travada: com sete colunas em 1fr num painel largo, cada dia virava
+     um quadrado gigante e o mês parecia um tabuleiro. */
+  .calend { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+    margin: 12px auto 0; max-width: 560px; }
+  /* Seis semanas sempre, e a casa é um retângulo, não um quadradinho: cabe o
+     número e o nome da gravação, como num calendário de verdade. */
+  .calend .dia { aspect-ratio: 1.15; display: flex; flex-direction: column;
+    align-items: flex-start; gap: 2px; padding: 5px 6px; border-radius: 9px;
+    font-family: "DM Mono", monospace; font-size: 12.5px; position: relative;
+    background: var(--mesa-alta); border: 1px solid var(--fio); color: var(--meia-luz);
+    overflow: hidden; text-align: left;
+    transition: border-color .12s, background .12s, color .12s; }
+  .calend .dia .num { line-height: 1; }
+  /* Nome da gravação dentro do dia. Some em tela estreita, onde a casa não
+     comporta texto legível e o ponto amarelo já diz que o dia é dele. */
+  .calend .dia .rot-dia { font-family: "Work Sans", system-ui, sans-serif;
+    font-size: 8.5px; line-height: 1.2; letter-spacing: .01em; opacity: .95;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; width: 100%; }
+  @media (max-width: 520px) { .calend .dia .rot-dia { display: none; } }
+  /* Casa vazia das pontas da grade: existe só pra altura não pular. */
+  .calend .dia.fantasma { background: transparent; border-color: transparent; }
+  /* Dia do mês fora da janela de 90 dias, passado ou longe demais: aparece
+     pra o mês ficar inteiro, e só. */
+  .calend .dia.fora { background: transparent; border-color: transparent;
+    color: var(--meia-luz); opacity: .3; }
+  .calend .dia.livre { color: var(--gesso); cursor: pointer; }
+  .calend .dia.livre:hover { border-color: var(--luz); color: var(--luz);
+    background: rgba(239,199,0,.10); }
+  .calend .dia.livre:focus-visible { outline: 2px solid var(--luz); outline-offset: 2px; }
+  /* Ocupado por outro trabalho, bloqueado, ou cedo demais: a célula continua
+     existindo, o número recua. Bloqueado leva risco, que se lê sem cor. */
+  .calend .dia.ocupado { background: transparent; color: var(--meia-luz); }
+  .calend .dia.bloqueado { background: transparent; color: var(--meia-luz);
+    text-decoration: line-through; text-decoration-thickness: 1px; }
+  .calend .dia.cedo { background: transparent; border-color: transparent;
+    color: var(--meia-luz); opacity: .45; }
+  /* Gravação do próprio cliente. Vem depois de 'ocupado' de propósito: o dia
+     dele também chega marcado como ocupado, e as duas regras têm o mesmo peso,
+     então quem vem por último é quem pinta. */
+  .calend .dia.sua { background: rgba(239,199,0,.14); border-color: rgba(239,199,0,.45);
+    color: var(--luz); font-weight: 700; opacity: 1; }
+  .calend .dia.sua::after { content: ""; position: absolute; top: 7px; right: 7px;
+    width: 4px; height: 4px; border-radius: 50%; background: var(--luz); }
+  .calend .dia.escolhido { background: var(--luz); border-color: var(--luz);
+    color: #14110b; font-weight: 700; }
+  .calend .dia.escolhido::after { background: #14110b; }
+  .calend .cab { font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--meia-luz); text-align: center; padding-bottom: 2px; }
+  /* O que cada cor quer dizer. Sem isto o cinza é adivinhação. */
+  .legenda-cores { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
+    margin: 12px auto 0; max-width: 560px; font-size: 11px; color: var(--meia-luz); }
+  .legenda-cores span { display: inline-flex; align-items: center; gap: 6px; }
+  .legenda-cores i { width: 11px; height: 11px; border-radius: 4px; flex: 0 0 auto;
+    border: 1px solid var(--fio); background: var(--mesa-alta); }
+  .legenda-cores i.am-sua { background: rgba(239,199,0,.35); border-color: rgba(239,199,0,.55); }
+  .legenda-cores i.am-fora { background: transparent; }
+  /* A altura da seção não pula ao trocar de mês porque a grade tem sempre 42
+     casas e a legenda de cores é sempre a mesma linha: nada aqui muda de
+     tamanho conforme o mês. */
+
+  /* ── Gravações marcadas: um cartão por gravação ───────────── */
+  /* Cartão em vez de linha, porque cada gravação abre. Uma coluna no celular
+     e quantas couberem no desktop, sem nunca empurrar a página pro lado. */
+  .gravs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 10px; margin-top: 14px; }
+  .grav-card { appearance: none; font: inherit; color: inherit; text-align: left;
+    background: var(--mesa-alta); border: 1px solid var(--fio); border-radius: 12px;
+    padding: 14px 15px; cursor: pointer; display: flex; flex-direction: column; gap: 3px;
+    transition: border-color .16s, background .16s; }
+  .grav-card:hover { border-color: rgba(239,199,0,.45); background: rgba(239,199,0,.07); }
+  .grav-card:focus-visible { outline: 2px solid var(--luz); outline-offset: 2px; }
+  .grav-card .qd { font-family: "DM Mono", monospace; font-size: 10.5px;
+    letter-spacing: .08em; color: var(--luz); }
+  .grav-card .nm { font-size: 14px; font-weight: 600; line-height: 1.25; margin-bottom: 2px; }
+  .grav-card .det { font-family: "DM Mono", monospace; font-size: 10.5px;
+    color: var(--meia-luz); overflow-wrap: anywhere; }
+
+  /* A gravação por dentro, na mesma janela do pedido (mesma moldura, mesmo
+     jeito de fechar). */
+  .grav-quando { margin: 8px 0 0; font-size: 13px; color: var(--meia-luz); }
+  .grav-detalhe { margin-top: 18px; display: flex; flex-direction: column; }
+  .grav-detalhe p { margin: 0; display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px; font-size: 13px; padding: 10px 0; border-bottom: 1px solid var(--fio); }
+  .grav-detalhe p > span:last-child { text-align: right; overflow-wrap: anywhere; }
+  .grav-desc { margin: 16px 0 0; font-size: 13px; line-height: 1.55; }
+  .grav-equipe { margin-top: 22px; }
+  .grav-equipe > .rotulo { display: block; margin-bottom: 4px; }
+  .grav-pessoa { display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--fio); }
+  .grav-pessoa .nm { font-size: 13.5px; font-weight: 600; }
+  .grav-pessoa .fn { font-family: "DM Mono", monospace; font-size: 10.5px;
+    color: var(--meia-luz); text-align: right; }
+
+  /* Janela de pedido: por cima do calendário, no estilo da sala (sem nada
+     do Tailwind do app, que aqui não existe). */
+  .pedido-modal-fora {
+    position: fixed; inset: 0; z-index: 90; display: flex; align-items: center;
+    justify-content: center; padding: 20px; overflow-y: auto;
+    background: color-mix(in srgb, var(--sala) 78%, transparent);
+    backdrop-filter: blur(4px);
+  }
+  .pedido-modal {
+    position: relative; width: 100%; max-width: 480px; max-height: calc(100dvh - 40px);
+    overflow-y: auto; background: var(--mesa); border: 1px solid var(--fio);
+    border-radius: 12px; padding: 26px 24px 24px;
+    box-shadow: 0 30px 70px -20px rgba(0,0,0,.85);
+  }
+  /* Recebe o foco por script ao abrir (prende o foco lá dentro): sem anel de
+     foco no container em si, só nos controles de verdade. */
+  .pedido-modal:focus { outline: none; }
+  .pedido-modal .fechar {
+    position: absolute; top: 14px; right: 14px; appearance: none; background: none;
+    border: 0; cursor: pointer; color: var(--meia-luz); padding: 6px; border-radius: 999px;
+    transition: color .16s, background-color .16s;
+  }
+  .pedido-modal .fechar:hover { color: var(--gesso); background: rgba(255,247,230,.08); }
+  .pedido-modal .fechar svg { width: 17px; height: 17px; display: block; }
+  .pedido-titulo {
+    font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
+    font-size: clamp(21px, 4vw, 27px); line-height: 1.05; margin: 6px 26px 0 0;
+  }
+  .pedido-modal .pedido-form { margin-top: 20px; max-width: none; }
 
   .pedido-form { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; max-width: 480px; }
   .pedido-form label { display: block; }
@@ -294,6 +432,7 @@ export const PORTAL_CSS = String.raw`
   .pedido-linha { display: grid; grid-template-columns: 1fr; gap: 14px; }
   @media (min-width: 480px) { .pedido-linha { grid-template-columns: 1fr 1fr; } }
   .campo.area { height: auto; padding: 10px 14px; resize: vertical; font-family: inherit; }
+  .campo:disabled { opacity: .55; cursor: not-allowed; }
   select.campo { cursor: pointer; }
   /* Aba de projeto tem nome comprido: não deixa a fita virar parede de texto. */
   .aba { max-width: 210px; overflow: hidden; }
@@ -424,6 +563,16 @@ export const PORTAL_CSS = String.raw`
   .portal-lumos.claro .botao { background: #EFC700; color: #241D00; }
   .portal-lumos.claro .baixar:hover,
   .portal-lumos.claro .pessoa a { color: #8A6D00; border-color: rgba(239,199,0,.55); }
+  .portal-lumos.claro .calend .dia.livre { background: var(--mesa); }
+  .portal-lumos.claro .calend .dia.livre:hover { color: #8A6D00; background: rgba(239,199,0,.16);
+    border-color: #C79E00; }
+  .portal-lumos.claro .calend .dia.sua { background: rgba(239,199,0,.22);
+    border-color: #C79E00; color: #7A6000; }
+  .portal-lumos.claro .calend .dia.sua::after { background: #B08C00; }
+  .portal-lumos.claro .calend .dia.escolhido { background: #EFC700; border-color: #C79E00;
+    color: #241D00; }
+  .portal-lumos.claro .legenda-cores i.am-sua { background: rgba(239,199,0,.45);
+    border-color: #C79E00; }
   .portal-lumos.claro .farol { box-shadow: 0 0 0 4px rgba(239,199,0,.18), 0 0 18px 3px rgba(239,199,0,.35); }
 
   /* Botão de tema, ao lado do perfil. */
