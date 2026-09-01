@@ -289,21 +289,13 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 
 -- ───────────────────────────────────────────────────────────────────────────
--- 8) Ligar para as duas pessoas — FALTA CONFIRMAR QUAL VINI
+-- 8) Ligar para as duas pessoas
 --
--- A coluna nasce toda FALSA de propósito. O pedido era marcar "o Caio e o
--- Vini". O Caio é certo: 'Caio Rizzutti' (caio.lacerda@produtoralumos.com.br,
--- CEO, admin). O Vini não é: o time tem DOIS Vinicius ativos, e nenhum dos dois
--- é obviamente o do pedido:
---
---   · Vinicius Ankerkrone — CFO,    admin — vinicius.ankerkrone@produtoralumos.com.br
---   · Vinicius Gimenez    — Editor, time  — vinicius.gimenez@produtoralumos.com.br
---
--- (Não é acaso: src/pages/ProducaoOverview.tsx já abrevia nome com a inicial do
--- sobrenome justamente pra esses dois não se confundirem.)
---
--- Marcar a pessoa errada é pior do que entregar desligado. Caio: escolha o
--- Vinicius certo, descomente as duas linhas do UPDATE e rode.
+-- A coluna nasce toda FALSA. O pedido era marcar "o Caio e o Vini", e o time
+-- tem DOIS Vinicius ativos: Ankerkrone (CFO, admin) e Gimenez (Editor). Não é
+-- acaso que src/pages/ProducaoOverview.tsx já abrevia nome com a inicial do
+-- sobrenome: é justamente pra esses dois não se confundirem. Em vez de chutar,
+-- a pergunta foi feita.
 --
 -- Escolhidos pelo Caio em 01/09/2026: ele e o Vinicius Ankerkrone. O outro
 -- Vinicius ativo (Vinicius Gimenez, Editor) NÃO entra: ele é quem sobe vídeo,
