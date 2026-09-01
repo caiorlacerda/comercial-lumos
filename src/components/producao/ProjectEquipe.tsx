@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Plus, Search, Trash2, Users2 } from 'lucide-react';
+import { Headset, Loader2, Plus, Search, Trash2, Users2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,6 +17,7 @@ interface Pessoa {
   tarefas: number; abertas: number;
   memberId?: string; // presente = cadastrada à mão, dá pra remover
   viaTarefas: boolean;
+  atendimento: boolean; // marca lida pela automação atendimento_com_cliente
 }
 interface Candidato { id: string; nome: string; cargo: string | null; freela: boolean }
 
@@ -33,17 +34,24 @@ export default function ProjectEquipe({ projectId, canManage }: Props) {
   const [funcao, setFuncao] = useState('');
   const [selecionado, setSelecionado] = useState<Candidato | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // A coluna e_atendimento chegou na migração 2026093340. Enquanto ela não
+  // rodar, a marca simplesmente não aparece e o resto da ficha funciona igual.
+  const [atendimentoOk, setAtendimentoOk] = useState(false);
+  const [marcando, setMarcando] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [tasksQ, membersQ] = await Promise.all([
       supabase.from('project_tasks')
         .select('id, status, responsavel_id, responsavel_freela_id')
         .eq('project_id', projectId).is('deleted_at', null),
+      // select('*') de propósito: pedir e_atendimento pelo nome derrubaria a
+      // consulta inteira num banco onde a migração 2026093340 ainda não rodou.
       supabase.from('project_members')
-        .select('id, user_id, freela_id, funcao').eq('project_id', projectId),
+        .select('*').eq('project_id', projectId),
     ]);
     const tasks = tasksQ.data || [];
     const members = membersQ.data || [];
+    setAtendimentoOk(!!members.length && 'e_atendimento' in members[0]);
     const taskIds = tasks.map(t => t.id);
 
     const { data: collabs } = taskIds.length
@@ -95,6 +103,7 @@ export default function ProjectEquipe({ projectId, canManage }: Props) {
         abertas: c?.abertas || 0,
         memberId: m?.id,
         viaTarefas: !!c,
+        atendimento: !!(m as any)?.e_atendimento,
       };
     }).sort((a, b) => b.tarefas - a.tarefas || a.nome.localeCompare(b.nome, 'pt-BR'));
     setPessoas(lista);
@@ -144,6 +153,21 @@ export default function ProjectEquipe({ projectId, canManage }: Props) {
     load();
   };
 
+  // A marca de atendimento do projeto. É separada da função (texto livre) de
+  // propósito: é ela que a automação lê quando o vídeo vai pro cliente.
+  const marcarAtendimento = async (p: Pessoa) => {
+    if (!p.memberId) return;
+    setMarcando(p.memberId);
+    const { error } = await supabase.from('project_members')
+      .update({ e_atendimento: !p.atendimento }).eq('id', p.memberId);
+    setMarcando(null);
+    if (error) { toast.error('Não foi possível salvar a marca de atendimento.'); return; }
+    setPessoas(lista => lista.map(x => x.id === p.id ? { ...x, atendimento: !p.atendimento } : x));
+    toast.success(p.atendimento
+      ? `${p.nome.split(' ')[0]} não é mais o atendimento deste projeto`
+      : `${p.nome.split(' ')[0]} é o atendimento deste projeto ✓`);
+  };
+
   const remover = async (p: Pessoa) => {
     if (!p.memberId) return;
     const { error } = await supabase.from('project_members').delete().eq('id', p.memberId);
@@ -168,6 +192,26 @@ export default function ProjectEquipe({ projectId, canManage }: Props) {
           {p.cargo || (p.freela ? 'Freelancer' : 'Equipe')}
           {p.viaTarefas && !p.memberId && <span className="ml-1.5 text-[9px] font-black uppercase text-lumos-text-secondary/70">· via tarefas</span>}
         </p>
+        {/* Marca de atendimento: some inteira num banco sem a migração, e é só
+            leitura pra quem não gere o projeto. Sempre visível, sem depender de
+            passar o mouse, porque a ficha é muito usada no celular. */}
+        {atendimentoOk && !p.freela && p.memberId && (canManage ? (
+          <button type="button" onClick={() => marcarAtendimento(p)} disabled={marcando === p.memberId}
+            title={p.atendimento
+              ? 'Deixa de ser o atendimento: para de entrar sozinho na tarefa quando o vídeo vai pro cliente.'
+              : 'Marca como atendimento: entra sozinho na tarefa e é avisado quando o vídeo vai pro cliente.'}
+            className={clsx('mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border transition-colors disabled:opacity-50',
+              p.atendimento
+                ? 'bg-lumos-yellow/15 text-lumos-yellow border-lumos-yellow/30'
+                : 'text-lumos-text-secondary border-lumos-border hover:border-lumos-yellow/40 hover:text-lumos-yellow')}>
+            {marcando === p.memberId ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Headset className="w-2.5 h-2.5" />}
+            Atendimento
+          </button>
+        ) : p.atendimento && (
+          <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide bg-lumos-yellow/15 text-lumos-yellow border border-lumos-yellow/30">
+            <Headset className="w-2.5 h-2.5" /> Atendimento
+          </span>
+        ))}
       </div>
       <div className="text-right flex-shrink-0">
         <p className="text-[15px] font-black tabular-nums leading-none text-lumos-text-primary">{p.tarefas}</p>
@@ -224,6 +268,17 @@ export default function ProjectEquipe({ projectId, canManage }: Props) {
           <p className="text-[10.5px] text-lumos-text-secondary">
             Quem tem o selo "via tarefas" entrou sozinho pelas tarefas do projeto; os demais foram adicionados aqui.
           </p>
+          {atendimentoOk && (
+            <p className="text-[10.5px] text-lumos-text-secondary flex items-start gap-1.5">
+              <Headset className="w-3 h-3 text-lumos-yellow flex-shrink-0 mt-0.5" />
+              <span>
+                Marque "Atendimento" em quem cuida do cliente neste projeto: quando um vídeo daqui vai pra revisão do
+                cliente, essa pessoa entra sozinha como colaboradora da tarefa e recebe o aviso, e sai quando todos os
+                formatos da tarefa são aprovados. A função continua livre pra escrever o que quiser, a marca é coisa
+                separada. Quem entrou só pelas tarefas precisa ser adicionado aqui antes de receber a marca.
+              </span>
+            </p>
+          )}
         </>
       )}
 
