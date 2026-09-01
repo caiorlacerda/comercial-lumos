@@ -805,5 +805,21 @@ LEFT JOIN pg_policies p ON p.tablename = c.relname AND p.schemaname = 'public'
 WHERE c.relname = 'automacoes'
 ORDER BY p.cmd;
 
--- (d) os gatilhos que a página vai listar, com e sem descrição
-SELECT * FROM public.automacoes_do_banco();
+-- (d) os gatilhos que a página vai listar.
+--
+-- Aqui vai a consulta crua, e NÃO a função automacoes_do_banco(): ela exige
+-- admin, e o editor de SQL do Supabase roda como dono do banco, sem usuário do
+-- app. Sem auth.uid(), a própria trava barra a conferência e derruba a
+-- migração inteira, que é uma transação só. A trava está certa, quem estava
+-- errado era a conferência.
+SELECT t.tgname::text  AS gatilho,
+       c.relname::text AS tabela,
+       p.proname::text AS funcao,
+       obj_description(p.oid, 'pg_proc')::text AS descricao
+FROM pg_trigger t
+JOIN pg_class c     ON c.oid = t.tgrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_proc p      ON p.oid = t.tgfoid
+WHERE NOT t.tgisinternal
+  AND n.nspname = 'public'
+ORDER BY c.relname, t.tgname;
