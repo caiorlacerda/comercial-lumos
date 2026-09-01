@@ -305,18 +305,27 @@ ORDER BY table_name;
 -- Marcar a pessoa errada é pior do que entregar desligado. Caio: escolha o
 -- Vinicius certo, descomente as duas linhas do UPDATE e rode.
 --
--- UPDATE public.app_users
--- SET revisor_fixo = true
--- WHERE status = 'ativo'
---   AND email IN (
---     'caio.lacerda@produtoralumos.com.br',       -- Caio Rizzutti
---     'vinicius.ankerkrone@produtoralumos.com.br' -- Vinicius Ankerkrone  ← ou troque por
---     -- 'vinicius.gimenez@produtoralumos.com.br' -- Vinicius Gimenez
---   );
---
--- -- e, logo em seguida, o vínculo nas tarefas que já estão abertas
--- -- (sem notificação retroativa):
--- SELECT public.backfill_revisores_fixos();
+-- Escolhidos pelo Caio em 01/09/2026: ele e o Vinicius Ankerkrone. O outro
+-- Vinicius ativo (Vinicius Gimenez, Editor) NÃO entra: ele é quem sobe vídeo,
+-- e revisor fixo é quem confere. Para mudar depois, não mexa aqui: é a marca
+-- "Revisor fixo" na ficha da pessoa, em Usuários ou Equipe.
+UPDATE public.app_users
+SET revisor_fixo = true
+WHERE status = 'ativo'
+  AND email IN (
+    'caio.lacerda@produtoralumos.com.br',        -- Caio Rizzutti
+    'vinicius.ankerkrone@produtoralumos.com.br'  -- Vinicius Ankerkrone
+  );
+
+-- O vínculo nas tarefas que já estão em revisão hoje, sem notificação
+-- retroativa: só entram como colaboradores, a sineta não toca.
+SELECT public.backfill_revisores_fixos();
+
+-- Conferência: tem que listar exatamente duas pessoas.
+SELECT full_name, email, role
+FROM public.app_users
+WHERE revisor_fixo AND status = 'ativo'
+ORDER BY full_name;
 --
 -- Conferência:
 -- SELECT full_name, email, revisor_fixo FROM public.app_users WHERE revisor_fixo;
