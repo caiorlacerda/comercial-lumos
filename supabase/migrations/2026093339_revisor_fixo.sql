@@ -121,7 +121,7 @@ BEGIN
   -- tarefa, não precisa aparecer duas vezes na mesma linha.
   IF NEW.task_id IS NOT NULL THEN
     INSERT INTO task_collaborators (task_id, user_id, added_by, auto_revisor)
-    SELECT NEW.task_id, a.id, NULL, true
+    SELECT NEW.task_id, a.id, NULL::uuid, true
     FROM app_users a
     WHERE a.status = 'ativo'
       AND a.revisor_fixo
@@ -258,7 +258,7 @@ RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE n integer;
 BEGIN
   INSERT INTO task_collaborators (task_id, user_id, added_by, auto_revisor)
-  SELECT DISTINCT vv.task_id, a.id, NULL, true
+  SELECT DISTINCT vv.task_id, a.id, NULL::uuid, true
   FROM video_versions vv
   JOIN project_tasks pt ON pt.id = vv.task_id AND pt.deleted_at IS NULL
   CROSS JOIN app_users a
