@@ -54,6 +54,8 @@ export interface AppUserProfile {
   presence_status?: 'online' | 'busy' | 'away' | 'offline';
   last_seen?: string;
   tour_seen?: boolean;
+  /** Acompanha automaticamente toda revisão interna (coluna nova: pode não existir antes da migração). */
+  revisor_fixo?: boolean;
 }
 
 const AuthContext = createContext<{
