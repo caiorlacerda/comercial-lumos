@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone, Newspaper, Package
+  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone, Newspaper, Package, Bot
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -91,6 +91,7 @@ export const NAV_SECTIONS: Section[] = [
       { icon: Megaphone, label: 'Comunicados', path: '/comunicados', permission: 'admin' },
       { icon: Radio, label: 'Monitoramento', path: '/monitoramento', permission: 'admin' },
       { icon: Settings, label: 'Configurações', path: '/configuracoes' },
+      { icon: Bot, label: 'Automações', path: '/configuracoes/automacoes', permission: 'admin' },
       { icon: ClipboardList, label: 'Auditoria', path: '/auditoria', permission: 'admin' },
     ],
   },
