@@ -448,10 +448,10 @@ BEGIN
   -- Quem foi escolhido na página. Lista vazia, chave ausente ou id estragado
   -- caem no padrão por papel: melhor avisar demais do que ninguém.
   BEGIN
-    SELECT array_agg(x::uuid) INTO v_ids
+    SELECT array_agg(t.v::uuid) INTO v_ids
     FROM jsonb_array_elements_text(
            COALESCE(public.automacao_config('pedido_diaria_avisa') -> 'user_ids', '[]'::jsonb)
-         ) AS x;
+         ) AS t(v);
   EXCEPTION WHEN OTHERS THEN
     v_ids := NULL;
   END;
