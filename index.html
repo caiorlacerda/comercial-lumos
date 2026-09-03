@@ -20,6 +20,47 @@
     window.global = window;
     window.Buffer = window.Buffer || { isBuffer: () => false };
   </script>
+  <script>
+    /* TELA PRETA DEPOIS DE VÁRIOS DEPLOYS, A REDE QUE NÃO DEPENDE DO BUNDLE.
+     *
+     * O app já tinha recuperação de build velho, só que ela mora dentro do
+     * pacote principal. Quando o service worker do PWA serve um índice antigo,
+     * o arquivo de entrada citado nele já não existe (404), NADA do nosso
+     * código roda, e a tela fica preta inteira, sem nem o cabeçalho. Foi o que
+     * o time viu em 03/09/2026, recarregando por meia hora sem sair do lugar.
+     *
+     * Este trecho vive no próprio HTML, então ele é a única coisa que continua
+     * de pé nesse caso: ouve falha de carregamento dos nossos arquivos, limpa
+     * o cache do PWA e recarrega uma vez por aba. */
+    (function () {
+      var CHAVE = 'lumos_recuperou_entrada';
+      window.addEventListener('error', function (e) {
+        var alvo = e && e.target;
+        /* Erro de script em si não tem alvo com tagName: aqui só interessa
+           recurso que não carregou. */
+        if (!alvo || !alvo.tagName) return;
+        var url = alvo.src || alvo.href || '';
+        if (url.indexOf('/assets/') === -1) return;
+        if (sessionStorage.getItem(CHAVE)) return;   /* uma vez por aba, sem laço */
+        sessionStorage.setItem(CHAVE, '1');
+        var limpar = [];
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            limpar.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+              return Promise.all(rs.map(function (r) { return r.unregister(); }));
+            }));
+          }
+          if (window.caches && caches.keys) {
+            limpar.push(caches.keys().then(function (ks) {
+              return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+            }));
+          }
+        } catch (_) { /* segue pro reload de qualquer jeito */ }
+        Promise.all(limpar)['catch'](function () {})
+          .then(function () { location.reload(); });
+      }, true);  /* captura: falha de recurso não borbulha */
+    })();
+  </script>
 </head>
 
 <body class="bg-[#222222] text-white font-body">
