@@ -164,11 +164,18 @@ export default function RichTextEditor({ value, onChange, editable = true, class
 
   useEffect(() => { editor?.setEditable(editable); }, [editable, editor]);
 
+  // ANTES do return abaixo, e não depois: com `immediatelyRender: false`, o
+  // editor é nulo na primeira renderização e a gente saía cedo. Na segunda,
+  // com o editor pronto, este hook passava a ser chamado e o React via mais
+  // hooks do que na anterior (erro #310), derrubando a árvore inteira: tela
+  // preta em toda página com editor, entre elas o orçamento novo. Hook não
+  // pode viver depois de um return condicional.
+  const { prompt, dialog: dialogoPrompt } = usePrompt();
+
   if (!editor) return null;
 
   const curLevel = ([1, 2, 3, 4, 5] as const).find(l => editor.isActive('heading', { level: l }));
   const headingValue = curLevel ? String(curLevel) : 'p';
-  const { prompt, dialog: dialogoPrompt } = usePrompt();
 
   const setHeading = (v: string) => {
     if (v === 'p') editor.chain().focus().setParagraph().run();
