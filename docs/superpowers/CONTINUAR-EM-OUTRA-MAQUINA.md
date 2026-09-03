@@ -65,6 +65,12 @@ Vale copiar a pasta inteira.
 - Todo o código, na `main`, e a branch `f6` empurrada.
 - As 12 migrações desta sessão, `2026093329` a `2026093340`, **todas já
   rodadas em produção**. Na máquina nova não rode nada de novo.
+- **Exceto uma: falta rodar `2026093341_stream_automatico.sql`.** Ela faz o
+  envio pro Cloudflare Stream ficar automático a cada vídeo novo (fim do
+  "Migrar acervo" manual). O código já está mergeado e a edge function
+  `stream-ingest` já foi redeployada, então só falta a migração em si. Antes
+  de rodar, trocar `<SEGREDO>` pelo mesmo valor de `DRIVE_WEBHOOK_SECRET` que
+  já foi usado antes (não é segredo novo).
 - As specs e o plano, em `docs/superpowers/specs/` e `docs/superpowers/plans/`.
 - Os relatórios de cada agente, em `docs/superpowers/relatorios/`, incluindo a
   revisão da Ordem do Dia com os 26 achados, que é a lista de onde saem as
@@ -76,6 +82,10 @@ Feito e no ar: portal do cliente com abas, pedido de diária com calendário,
 dias da semana fechados, permissão de fechar agenda, ordem do dia no portal com
 PDF do cliente, PDF interno completo, ordem do dia editável a várias mãos,
 revisor fixo entrando e saindo sozinho, e a página de Automações.
+
+**Pendente com o Caio agora mesmo:** rodar `2026093341_stream_automatico.sql`
+(veja acima). Sem ela, vídeo novo continua caindo no caminho lento até
+alguém clicar em "Migrar acervo".
 
 Esperando decisão do Caio:
 
