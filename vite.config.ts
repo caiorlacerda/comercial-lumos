@@ -46,6 +46,10 @@ export default defineConfig(({ command }) => {
           ]
         },
         workbox: {
+          // Apaga o precache das versões antigas em vez de acumular: cache
+          // velho é justamente quem serve o índice que aponta pra arquivo que
+          // não existe mais.
+          cleanupOutdatedCaches: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           // Handlers de Web Push (push + notificationclick) — arquivo em public/.
