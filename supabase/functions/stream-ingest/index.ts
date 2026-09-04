@@ -15,8 +15,16 @@
 //   { action: 'lote', limite }              manda as que ainda não foram
 //   { action: 'conferir' }                  atualiza o status do que está processando
 //   { action: 'situacao' }                  quanto já migrou
+//   { action: 'auto', version_id }          o gatilho do banco chama isto sozinho
+//                                            a cada vídeo novo (trg_enviar_pro_stream,
+//                                            migration 2026093341). Sem sessão de
+//                                            ninguém: autenticado pelo mesmo segredo do
+//                                            Drive (x-drive-secret), não por JWT de admin.
 //
-// Deploy: SEM --no-verify-jwt (exige login). Quem chama é o app ou o drive-watch.
+// Deploy: COM --no-verify-jwt (o gatilho do banco não carrega sessão de ninguém,
+// então o próprio portão do Supabase não pode exigir JWT antes de chegar aqui).
+// Quem protege cada ação é o código: 'auto' exige o segredo; todas as outras
+// continuam exigindo admin, como sempre.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -111,11 +119,30 @@ async function enviarUma(v: { id: string; file_name: string | null }): Promise<R
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (!CF_ACCOUNT || !CF_TOKEN) return json({ error: 'faltam CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_STREAM_TOKEN' }, 500)
-  if (!await ehAdmin(req)) return json({ error: 'só admin' }, 403)
 
   let corpo: any = {}
   try { corpo = (await req.json()) ?? {} } catch (_) {}
   const acao = corpo.action ?? 'situacao'
+
+  // Porta separada pro gatilho do banco: manda UM vídeo, sem sessão de
+  // ninguém, autenticada só pelo segredo que o Drive já usa. Fica antes do
+  // portão de admin de propósito — esta é a única ação que não passa por ele,
+  // e ela não faz mais nada além de enviar a versão pedida.
+  if (acao === 'auto') {
+    if (!PULL_SECRET || req.headers.get('x-drive-secret') !== PULL_SECRET) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    if (!corpo.version_id) return json({ error: 'falta version_id' }, 400)
+    try {
+      const { data: v } = await db.from('video_versions').select('id, file_name').eq('id', corpo.version_id).maybeSingle()
+      if (!v) return json({ error: 'versão não encontrada' }, 404)
+      return json(await enviarUma(v))
+    } catch (err: any) {
+      return json({ error: String(err?.message || err).slice(0, 300) }, 500)
+    }
+  }
+
+  if (!await ehAdmin(req)) return json({ error: 'só admin' }, 403)
 
   try {
     if (acao === 'testar') {
