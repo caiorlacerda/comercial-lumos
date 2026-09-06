@@ -8,4 +8,5 @@ client_secret_*.json
 .claude/
 .gemini/
 .worktrees/
+.superpowers/
 /public/version.json
