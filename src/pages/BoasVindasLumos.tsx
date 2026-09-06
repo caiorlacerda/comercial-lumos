@@ -30,7 +30,10 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
   const carregar = useCallback(async () => {
     setCarregando(true);
     const { data, error } = await supabase.rpc('get_boas_vindas_lumos', { p_token: token });
-    if (!error && data && !data.error) {
+    if (error || data?.error) {
+      setErro('Não deu pra carregar os itens agora. Recarrega a página, ou tenta de novo em instantes.');
+    } else if (data) {
+      setErro(null);
       const mapa: Record<string, ItemStatus> = {};
       for (const it of data.itens as ItemStatus[]) mapa[it.item_key] = it;
       setItens(mapa);
