@@ -636,4 +636,23 @@ export const PORTAL_CSS = String.raw`
     .pessoa { flex-wrap: wrap; }
     .canais { margin-left: 0; width: 100%; }
   }
+
+  /* ── Bem-vindo à Lumos ──────────────────────────────────────── */
+  .boas-vindas .intro { color: var(--meia-luz); max-width: 60ch; margin-bottom: 28px; }
+  .boas-vindas .itens { display: grid; gap: 14px; }
+  .item-bv {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 18px 20px; border: 1px solid var(--fio); border-radius: 10px; background: var(--mesa);
+  }
+  .item-bv .nome { font-weight: 600; }
+  .item-bv .desc { color: var(--meia-luz); font-size: 13px; margin-top: 4px; }
+  .item-bv .status { display: flex; align-items: center; gap: 10px; }
+  .item-bv .feito { color: var(--aprovado); font-family: "DM Mono", monospace; font-size: 13px; }
+  .item-bv .reenviar { color: var(--meia-luz); font-size: 12px; text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; }
+  .item-bv .botao {
+    background: var(--luz); color: var(--sala); border: none; border-radius: 8px;
+    padding: 10px 16px; font-weight: 600; cursor: pointer;
+  }
+  .item-bv .botao:disabled { opacity: .5; cursor: default; }
+  .item-bv input[type="file"] { display: none; }
 `;
