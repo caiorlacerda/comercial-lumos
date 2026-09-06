@@ -215,7 +215,7 @@ serve(async (req) => {
     const bytes = new Uint8Array(await arquivo.arrayBuffer())
     const fileId = await uploadFile(subfolderId, arquivo.name, arquivo.type, bytes)
 
-    await db.from('client_boas_vindas_itens').upsert({
+    const { error: upsertError } = await db.from('client_boas_vindas_itens').upsert({
       client_id: client.id,
       item_key: itemKey,
       tipo: 'arquivo',
@@ -224,6 +224,7 @@ serve(async (req) => {
       concluido_por: nomePessoa || null,
       concluido_em: new Date().toISOString(),
     }, { onConflict: 'client_id,item_key' })
+    if (upsertError) throw upsertError
 
     // Notificação nunca deve transformar um upload que já deu certo em erro
     // pro cliente — mesmo princípio do resto do projeto (pg_net triggers só
@@ -236,10 +237,12 @@ serve(async (req) => {
 
     return json({ ok: true, drive_file_id: fileId, nome_arquivo: arquivo.name })
   } catch (err) {
-    await db.from('drive_sync_log').insert([{
-      entity_type: 'client', entity_id: client.id, action: 'error',
-      detail: String((err as Error)?.message || err).slice(0, 900), status: 'error',
-    }])
+    try {
+      await db.from('drive_sync_log').insert([{
+        entity_type: 'client', entity_id: client.id, action: 'error',
+        detail: String((err as Error)?.message || err).slice(0, 900), status: 'error',
+      }])
+    } catch (_) { /* log nunca derruba o fluxo */ }
     return json({ error: 'falha ao enviar, tenta de novo' }, 500)
   }
 })
