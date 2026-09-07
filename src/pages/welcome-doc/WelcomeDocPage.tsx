@@ -1,0 +1,88 @@
+import { useEffect, useState, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import { interpolarSecoes, type VariavelDef } from './interpolate';
+import type { Secao } from './tipos';
+import LeadSection from './sections/LeadSection';
+import RowsSection from './sections/RowsSection';
+import TwoPanelsSection from './sections/TwoPanelsSection';
+import StepsSection from './sections/StepsSection';
+import NoteSection from './sections/NoteSection';
+import TipsSection from './sections/TipsSection';
+import DateCardsSection from './sections/DateCardsSection';
+import NextStepsSection from './sections/NextStepsSection';
+import ProgressBar from './ProgressBar';
+import BoasVindasLumos from '../BoasVindasLumos';
+
+type ItemDoc = {
+  item_key: string; group_key: string; titulo: string; descricao: string | null;
+  requer_arquivo: boolean; sort_order: number; feito: boolean;
+  nome_arquivo: string | null; concluido_em: string | null; concluido_por: string | null;
+};
+
+type Resposta = {
+  error?: 'invalid' | 'precisa_login' | 'sem_acesso';
+  cliente?: { id: string; nome: string };
+  doc: { sections: Secao[]; variables: VariavelDef[]; values: Record<string, string> } | null;
+  itens: ItemDoc[];
+};
+
+const MSG_ERRO = 'Não deu pra carregar essa página agora. Recarrega, ou tenta de novo em instantes.';
+
+export default function WelcomeDocPage({ token, nomePessoa }: { token: string; nomePessoa: string }) {
+  const [resposta, setResposta] = useState<Resposta | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
+
+  const carregar = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_welcome_doc', { p_token: token });
+    if (error || data?.error) {
+      setErro(MSG_ERRO);
+    } else {
+      setErro(null);
+      setResposta(data as Resposta);
+    }
+    setCarregando(false);
+  }, [token]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  if (carregando) return <div className="boas-vindas"><p className="wd-lead">Carregando…</p></div>;
+  if (erro) return <div className="boas-vindas"><p className="wd-lead" style={{ color: 'var(--ajuste)' }}>{erro}</p></div>;
+  if (!resposta?.doc) {
+    return (
+      <div className="boas-vindas">
+        <p className="wd-lead">Seu material de boas-vindas está sendo preparado. Já te avisamos por aqui assim que estiver pronto.</p>
+      </div>
+    );
+  }
+
+  const secoes = interpolarSecoes(resposta.doc.sections, resposta.doc.values, resposta.doc.variables);
+  const feitos = resposta.itens.filter(i => i.feito).length;
+
+  return (
+    <div className="boas-vindas">
+      {secoes.map(secao => {
+        switch (secao.type) {
+          case 'lead': return <LeadSection {...secao} />;
+          case 'rows': return <RowsSection {...secao} />;
+          case 'two-panels': return <TwoPanelsSection {...secao} />;
+          case 'steps': return <StepsSection {...secao} />;
+          case 'note': return <NoteSection {...secao} />;
+          case 'tips': return <TipsSection {...secao} />;
+          case 'date-cards': return <DateCardsSection {...secao} />;
+          case 'next-steps': return <NextStepsSection {...secao} />;
+          case 'checklist':
+            return (
+              <div className="wd-secao" key={secao.key}>
+                <ProgressBar feitos={feitos} total={resposta.itens.length} />
+                <BoasVindasLumos token={token} nomePessoa={nomePessoa} itens={resposta.itens} aoAtualizar={carregar} />
+              </div>
+            );
+          default:
+            // Tipo de seção desconhecido: ignora, não quebra a página do cliente.
+            return null;
+        }
+      })}
+    </div>
+  );
+}

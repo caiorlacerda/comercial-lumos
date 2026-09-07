@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
-import BoasVindasLumos from './BoasVindasLumos';
+import WelcomeDocPage from './welcome-doc/WelcomeDocPage';
 
 /**
  * PORTAL DO CLIENTE — um link por cliente, uma aba por projeto.
@@ -1668,7 +1668,7 @@ export default function PortalCliente() {
       {aba === 'boas_vindas' && (
         <main className="painel">
           <div className="folha">
-            <BoasVindasLumos token={token} nomePessoa={nome || 'cliente'} />
+            <WelcomeDocPage token={token} nomePessoa={nome || 'cliente'} />
           </div>
         </main>
       )}

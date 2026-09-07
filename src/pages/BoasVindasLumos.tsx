@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-type ItemKey = 'logo' | 'brand_book' | 'guidelines' | 'acessos';
+type ItemKey = string;
 
 type ItemStatus = {
   item_key: ItemKey;
@@ -11,12 +11,11 @@ type ItemStatus = {
   concluido_por: string | null;
 };
 
-const ITENS: { key: ItemKey; nome: string; desc: string; tipo: 'arquivo' | 'manual' }[] = [
-  { key: 'logo', nome: 'Logo', desc: 'Em alta resolução, de preferência vetorial (AI, EPS ou SVG), ou um PNG bem grande se não tiver outro.', tipo: 'arquivo' },
-  { key: 'brand_book', nome: 'Brand book', desc: 'O documento com as diretrizes visuais da sua marca, se você tiver um.', tipo: 'arquivo' },
-  { key: 'guidelines', nome: 'Guidelines de conteúdo', desc: 'Como sua marca fala, o que evitar, referências de tom.', tipo: 'arquivo' },
-  { key: 'acessos', nome: 'Acessos', desc: 'Convide contato@produtoralumos.com.br como editor nas contas que vamos mexer (redes sociais, Drive etc.), e marca aqui quando fizer.', tipo: 'manual' },
-];
+type ItemDoWelcomeDoc = {
+  item_key: string; group_key: string; titulo: string; descricao: string | null;
+  requer_arquivo: boolean; feito: boolean; nome_arquivo: string | null;
+  concluido_em: string | null; concluido_por: string | null;
+};
 
 const EDGE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/boas-vindas-upload`;
 
@@ -25,28 +24,24 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const MSG_GRANDE = 'Esse arquivo passa de 25MB. Manda uma versão menor, ou o link do Drive/WeTransfer por WhatsApp.';
 const MSG_LOGIN = 'Você precisa estar logado nesse portal pra enviar isso. Atualiza a página e entra de novo.';
 
-export default function BoasVindasLumos({ token, nomePessoa }: { token: string; nomePessoa: string }) {
-  const [itens, setItens] = useState<Record<string, ItemStatus>>({});
-  const [carregando, setCarregando] = useState(true);
+export default function BoasVindasLumos({
+  token, nomePessoa, itens: itensIniciais, aoAtualizar,
+}: {
+  token: string; nomePessoa: string; itens: ItemDoWelcomeDoc[]; aoAtualizar: () => void;
+}) {
   const [enviando, setEnviando] = useState<ItemKey | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const carregar = useCallback(async () => {
-    setCarregando(true);
-    const { data, error } = await supabase.rpc('get_boas_vindas_lumos', { p_token: token });
-    if (error || data?.error) {
-      setErro('Não deu pra carregar os itens agora. Recarrega a página, ou tenta de novo em instantes.');
-    } else if (data) {
-      setErro(null);
-      const mapa: Record<string, ItemStatus> = {};
-      for (const it of data.itens as ItemStatus[]) mapa[it.item_key] = it;
-      setItens(mapa);
+  const itens: Record<string, ItemStatus> = {};
+  for (const it of itensIniciais) {
+    if (it.feito) {
+      itens[it.item_key] = {
+        item_key: it.item_key as ItemKey, tipo: it.requer_arquivo ? 'arquivo' : 'manual',
+        nome_arquivo: it.nome_arquivo, concluido_em: it.concluido_em, concluido_por: it.concluido_por,
+      };
     }
-    setCarregando(false);
-  }, [token]);
-
-  useEffect(() => { carregar(); }, [carregar]);
+  }
 
   const enviarArquivo = useCallback(async (key: ItemKey, arquivo: File) => {
     setEnviando(key);
@@ -68,7 +63,7 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
       });
       const body = await res.json();
       if (!res.ok || body.error) throw new Error(body.error || 'falha ao enviar');
-      await carregar();
+      aoAtualizar();
     } catch (err) {
       const codigo = (err as Error)?.message;
       if (codigo === 'precisa_login' || codigo === 'sem_acesso') {
@@ -81,7 +76,7 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
     } finally {
       setEnviando(null);
     }
-  }, [token, nomePessoa, carregar]);
+  }, [token, nomePessoa, aoAtualizar]);
 
   const marcarManual = useCallback(async (key: ItemKey) => {
     setEnviando(key);
@@ -91,38 +86,27 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
         p_token: token, p_item_key: key, p_nome_pessoa: nomePessoa,
       });
       if (error || data?.error) throw new Error(data?.error || 'falha ao marcar');
-      await carregar();
+      aoAtualizar();
     } catch (err) {
       setErro('Não deu pra marcar agora. Tenta de novo em instantes.');
     } finally {
       setEnviando(null);
     }
-  }, [token, nomePessoa, carregar]);
-
-  if (carregando) return <div className="boas-vindas"><p className="intro">Carregando…</p></div>;
+  }, [token, nomePessoa, aoAtualizar]);
 
   return (
     <div className="boas-vindas">
-      <div className="hero-bv">
-        <span className="feixe" aria-hidden="true" />
-        <h1>BEM-VINDO<br /><span className="risca">À LUMOS</span></h1>
-      </div>
-      <p className="intro">
-        Que bom te ter por aqui. Antes de começarmos a gravar, precisamos de algumas coisas
-        suas, pra já sair com a cara certa desde o primeiro vídeo. Manda o que puder abaixo,
-        no seu tempo, a gente avisa o time a cada item recebido.
-      </p>
       {erro && <p className="intro" style={{ color: 'var(--ajuste)' }}>{erro}</p>}
       <div className="itens">
-        {ITENS.map(def => {
-          const status = itens[def.key];
+        {itensIniciais.map(def => {
+          const status = itens[def.item_key];
           const concluido = !!status;
-          const carregandoEste = enviando === def.key;
+          const carregandoEste = enviando === def.item_key;
           return (
-            <div className="item-bv" key={def.key}>
+            <div className="item-bv" key={def.item_key}>
               <div>
-                <div className="nome">{def.nome}</div>
-                <div className="desc">{def.desc}</div>
+                <div className="nome">{def.titulo}</div>
+                <div className="desc">{def.descricao}</div>
                 {concluido && (
                   <div className="feito">
                     {status.nome_arquivo || 'Concluído'} · {status.concluido_por || 'cliente'}
@@ -130,15 +114,15 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
                 )}
               </div>
               <div className="status">
-                {def.tipo === 'arquivo' ? (
+                {def.requer_arquivo ? (
                   <>
                     <input
-                      ref={el => { inputRefs.current[def.key] = el; }}
+                      ref={el => { inputRefs.current[def.item_key] = el; }}
                       type="file"
                       onChange={e => {
                         const f = e.target.files?.[0];
                         if (f && f.size > MAX_BYTES) setErro(MSG_GRANDE);
-                        else if (f) enviarArquivo(def.key, f);
+                        else if (f) enviarArquivo(def.item_key, f);
                         e.target.value = '';
                       }}
                     />
@@ -146,7 +130,7 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
                       type="button"
                       className={concluido ? 'reenviar' : 'botao'}
                       disabled={carregandoEste}
-                      onClick={() => inputRefs.current[def.key]?.click()}
+                      onClick={() => inputRefs.current[def.item_key]?.click()}
                     >
                       {carregandoEste ? 'Enviando…' : concluido ? 'Reenviar' : 'Enviar arquivo'}
                     </button>
@@ -156,7 +140,7 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
                     type="button"
                     className={concluido ? 'reenviar' : 'botao'}
                     disabled={carregandoEste || concluido}
-                    onClick={() => marcarManual(def.key)}
+                    onClick={() => marcarManual(def.item_key)}
                   >
                     {carregandoEste ? 'Marcando…' : concluido ? 'Concluído' : 'Marcar como feito'}
                   </button>
