@@ -673,6 +673,15 @@ export const PORTAL_CSS = String.raw`
 
   .boas-vindas .intro { color: var(--meia-luz); max-width: 60ch; margin-bottom: 28px; }
   .boas-vindas .itens { display: grid; gap: 14px; }
+  /* Rótulo de grupo dentro do checklist. Mesma família do .wd-kicker (mono,
+     caixa alta, meia-luz), mas menor e com respiro em cima: lê como subtítulo
+     de um bloco de itens, não como kicker de seção da página. */
+  .wd-grupo-label {
+    display: block; font-family: "DM Mono", monospace; text-transform: uppercase;
+    letter-spacing: .14em; font-size: 10.5px; color: var(--meia-luz);
+    margin: 12px 0 -2px;
+  }
+  .boas-vindas .itens > .wd-grupo-label:first-child { margin-top: 0; }
   .item-bv {
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
     padding: 18px 20px; border: 1px solid var(--fio); border-radius: 10px; background: var(--mesa);

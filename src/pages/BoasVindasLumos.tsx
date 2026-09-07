@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { Fragment, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 type ItemKey = string;
@@ -24,10 +24,31 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const MSG_GRANDE = 'Esse arquivo passa de 25MB. Manda uma versão menor, ou o link do Drive/WeTransfer por WhatsApp.';
 const MSG_LOGIN = 'Você precisa estar logado nesse portal pra enviar isso. Atualiza a página e entra de novo.';
 
+// Rótulo de cada grupo do checklist (spec, "Checklist do template"). Grupo que
+// não estiver aqui cai no próprio group_key, pra nunca sumir da tela.
+const GRUPO_LABEL: Record<string, string> = {
+  marca: 'Marca',
+  acessos: 'Acessos e pessoas',
+  contexto: 'Contexto',
+  gravacao: 'Gravação',
+};
+
+// Agrupa preservando a ordem em que os grupos aparecem — os itens já chegam
+// ordenados por sort_order, então essa ordem é a do template.
+function agruparPorGrupo(itens: ItemDoWelcomeDoc[]): { key: string; itens: ItemDoWelcomeDoc[] }[] {
+  const grupos: { key: string; itens: ItemDoWelcomeDoc[] }[] = [];
+  for (const it of itens) {
+    const atual = grupos.find(g => g.key === it.group_key);
+    if (atual) atual.itens.push(it);
+    else grupos.push({ key: it.group_key, itens: [it] });
+  }
+  return grupos;
+}
+
 export default function BoasVindasLumos({
   token, nomePessoa, itens: itensIniciais, aoAtualizar,
 }: {
-  token: string; nomePessoa: string; itens: ItemDoWelcomeDoc[]; aoAtualizar: () => void;
+  token: string; nomePessoa: string; itens: ItemDoWelcomeDoc[]; aoAtualizar: () => Promise<void>;
 }) {
   const [enviando, setEnviando] = useState<ItemKey | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -63,7 +84,9 @@ export default function BoasVindasLumos({
       });
       const body = await res.json();
       if (!res.ok || body.error) throw new Error(body.error || 'falha ao enviar');
-      aoAtualizar();
+      // Com await: o botão só volta a ficar clicável depois que o dado fresco
+      // chegou, não em cima do estado velho.
+      await aoAtualizar();
     } catch (err) {
       const codigo = (err as Error)?.message;
       if (codigo === 'precisa_login' || codigo === 'sem_acesso') {
@@ -86,7 +109,7 @@ export default function BoasVindasLumos({
         p_token: token, p_item_key: key, p_nome_pessoa: nomePessoa,
       });
       if (error || data?.error) throw new Error(data?.error || 'falha ao marcar');
-      aoAtualizar();
+      await aoAtualizar();
     } catch (err) {
       setErro('Não deu pra marcar agora. Tenta de novo em instantes.');
     } finally {
@@ -98,57 +121,62 @@ export default function BoasVindasLumos({
     <div className="boas-vindas">
       {erro && <p className="intro" style={{ color: 'var(--ajuste)' }}>{erro}</p>}
       <div className="itens">
-        {itensIniciais.map(def => {
-          const status = itens[def.item_key];
-          const concluido = !!status;
-          const carregandoEste = enviando === def.item_key;
-          return (
-            <div className="item-bv" key={def.item_key}>
-              <div>
-                <div className="nome">{def.titulo}</div>
-                <div className="desc">{def.descricao}</div>
-                {concluido && (
-                  <div className="feito">
-                    {status.nome_arquivo || 'Concluído'} · {status.concluido_por || 'cliente'}
+        {agruparPorGrupo(itensIniciais).map(grupo => (
+          <Fragment key={grupo.key}>
+            <span className="wd-grupo-label">{GRUPO_LABEL[grupo.key] ?? grupo.key}</span>
+            {grupo.itens.map(def => {
+              const status = itens[def.item_key];
+              const concluido = !!status;
+              const carregandoEste = enviando === def.item_key;
+              return (
+                <div className="item-bv" key={def.item_key}>
+                  <div>
+                    <div className="nome">{def.titulo}</div>
+                    <div className="desc">{def.descricao}</div>
+                    {concluido && (
+                      <div className="feito">
+                        {status.nome_arquivo || 'Concluído'} · {status.concluido_por || 'cliente'}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="status">
-                {def.requer_arquivo ? (
-                  <>
-                    <input
-                      ref={el => { inputRefs.current[def.item_key] = el; }}
-                      type="file"
-                      onChange={e => {
-                        const f = e.target.files?.[0];
-                        if (f && f.size > MAX_BYTES) setErro(MSG_GRANDE);
-                        else if (f) enviarArquivo(def.item_key, f);
-                        e.target.value = '';
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className={concluido ? 'reenviar' : 'botao'}
-                      disabled={carregandoEste}
-                      onClick={() => inputRefs.current[def.item_key]?.click()}
-                    >
-                      {carregandoEste ? 'Enviando…' : concluido ? 'Reenviar' : 'Enviar arquivo'}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className={concluido ? 'reenviar' : 'botao'}
-                    disabled={carregandoEste || concluido}
-                    onClick={() => marcarManual(def.item_key)}
-                  >
-                    {carregandoEste ? 'Marcando…' : concluido ? 'Concluído' : 'Marcar como feito'}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                  <div className="status">
+                    {def.requer_arquivo ? (
+                      <>
+                        <input
+                          ref={el => { inputRefs.current[def.item_key] = el; }}
+                          type="file"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f && f.size > MAX_BYTES) setErro(MSG_GRANDE);
+                            else if (f) enviarArquivo(def.item_key, f);
+                            e.target.value = '';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className={concluido ? 'reenviar' : 'botao'}
+                          disabled={carregandoEste}
+                          onClick={() => inputRefs.current[def.item_key]?.click()}
+                        >
+                          {carregandoEste ? 'Enviando…' : concluido ? 'Reenviar' : 'Enviar arquivo'}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className={concluido ? 'reenviar' : 'botao'}
+                        disabled={carregandoEste || concluido}
+                        onClick={() => marcarManual(def.item_key)}
+                      >
+                        {carregandoEste ? 'Marcando…' : concluido ? 'Concluído' : 'Marcar como feito'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
       </div>
     </div>
   );
