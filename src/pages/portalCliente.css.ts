@@ -688,4 +688,91 @@ export const PORTAL_CSS = String.raw`
   }
   .item-bv .botao:disabled { opacity: .5; cursor: default; }
   .item-bv input[type="file"] { display: none; }
+
+  /* ── Welcome Doc: seções de conteúdo ao redor do checklist ────── */
+  .wd-lead { color: var(--meia-luz); max-width: 60ch; font-size: 15px; }
+  .wd-secao { padding: 38px 0; border-top: 1px solid var(--fio); }
+  .wd-secao:first-child { border-top: none; padding-top: 0; }
+  .wd-kicker {
+    display: block; font-family: "DM Mono", monospace; text-transform: uppercase;
+    letter-spacing: .16em; font-size: 11px; color: var(--meia-luz); margin-bottom: 10px;
+  }
+  .wd-titulo {
+    font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
+    font-size: clamp(22px, 3vw, 32px); line-height: 1; margin: 0 0 20px;
+  }
+  .wd-destaque { color: var(--luz); }
+  .wd-footnote { color: var(--meia-luz); font-size: 13px; margin-top: 14px; max-width: 60ch; }
+
+  .wd-rows { display: grid; gap: 12px; }
+  .wd-row {
+    display: grid; grid-template-columns: 1fr auto auto; gap: 8px 16px; align-items: center;
+    padding: 14px 16px; border: 1px solid var(--fio); border-radius: 8px; background: var(--mesa);
+  }
+  .wd-row-nome { font-weight: 600; }
+  .wd-row-papel, .wd-row-quando { color: var(--meia-luz); font-size: 13px; }
+  .wd-pill { font-family: "DM Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--fio); white-space: nowrap; }
+  .wd-pill-accent { background: rgba(239,199,0,.10); color: var(--luz); border-color: rgba(239,199,0,.3); }
+  .wd-pill-ghost { background: transparent; color: var(--meia-luz); border-color: var(--fio); }
+  .wd-pill-green { background: rgba(116,201,138,.10); color: var(--aprovado); border-color: rgba(116,201,138,.3); }
+
+  .wd-two-panels { display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 720px) { .wd-two-panels { grid-template-columns: 1fr 1fr; } }
+  .wd-panel { padding: 18px 20px; border: 1px solid var(--fio); border-radius: 10px; background: var(--mesa); }
+  .wd-panel h3 { margin: 0 0 4px; font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: 17px; }
+  .wd-panel-sub { margin: 0 0 14px; font-family: "DM Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); }
+  .wd-panel ul { margin: 0; padding-left: 18px; color: var(--gesso); font-size: 14px; }
+  .wd-panel li { margin-bottom: 6px; }
+  .wd-panel-fora ul { color: var(--meia-luz); }
+  .wd-panel-fora li::marker { content: "× "; }
+
+  .wd-secao-lead { color: var(--meia-luz); max-width: 60ch; font-size: 14px; margin: -8px 0 20px; }
+
+  .wd-steps { display: grid; gap: 2px; border-top: 1px solid var(--fio); }
+  .wd-step { display: flex; align-items: center; gap: 18px; padding: 13px 4px; border-bottom: 1px solid var(--fio); }
+  .wd-step-numero { font-family: "DM Mono", monospace; font-size: 12px; color: var(--meia-luz); width: 22px; }
+  .wd-step-texto { flex: 1; font-size: 14px; }
+  .wd-step-quem { font-family: "DM Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); width: 150px; }
+  .wd-step-quando { font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); width: 110px; text-align: right; }
+  .wd-step-sua-vez { background: rgba(239,199,0,.035); }
+  .wd-step-sua-vez .wd-step-texto { font-weight: 600; }
+  .wd-step-sua-vez .wd-step-numero { color: var(--luz); }
+  @media (max-width: 720px) { .wd-step-quem, .wd-step-quando { display: none; } }
+
+  .wd-note { background: var(--mesa); border: 1px solid var(--fio); border-left: 2px solid var(--luz); border-radius: 10px; padding: 20px 22px; }
+  .wd-note-label { display: block; font-family: "DM Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); margin-bottom: 10px; }
+  .wd-note p { margin: 0 0 12px; color: var(--gesso); font-size: 14px; max-width: 62ch; }
+  .wd-note p:last-child { margin-bottom: 0; }
+
+  .wd-tips { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 720px) { .wd-tips { grid-template-columns: repeat(3, 1fr); } }
+  .wd-tip { background: var(--mesa); border: 1px solid var(--fio); border-radius: 10px; padding: 20px 22px; }
+  .wd-tip-numero { font-family: "Anton", Impact, sans-serif; font-size: 26px; color: var(--luz); line-height: 1; }
+  .wd-tip h4 { margin: 10px 0 6px; font-size: 14px; }
+  .wd-tip p { margin: 0; color: var(--meia-luz); font-size: 13px; }
+
+  .wd-date-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .wd-date-card { padding: 16px 18px; border: 1px solid var(--fio); border-radius: 8px; background: var(--mesa); }
+  .wd-date-card-destaque { border-color: rgba(239,199,0,.4); background: rgba(239,199,0,.05); }
+  .wd-date-data { font-family: "DM Mono", monospace; font-size: 11px; color: var(--luz); letter-spacing: .08em; }
+  .wd-date-titulo { font-weight: 600; font-size: 14px; margin-top: 5px; }
+  .wd-date-nota { font-family: "DM Mono", monospace; font-size: 10px; color: var(--meia-luz); margin-top: 4px; }
+
+  .wd-next-steps { display: grid; gap: 2px; border-top: 1px solid var(--fio); }
+  .wd-next-step { display: flex; gap: 18px; align-items: baseline; padding: 15px 4px; border-bottom: 1px solid var(--fio); }
+  .wd-next-numero { font-family: "Anton", Impact, sans-serif; font-size: 20px; color: var(--luz); width: 30px; flex-shrink: 0; }
+  .wd-next-corpo { flex: 1; font-size: 14px; }
+  .wd-next-corpo small { display: block; color: var(--meia-luz); font-size: 12px; margin-top: 2px; }
+  .wd-next-quando { font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); white-space: nowrap; }
+  @media (max-width: 720px) { .wd-next-quando { display: none; } }
+
+  .wd-progresso {
+    display: flex; align-items: center; gap: 16px; padding: 16px 20px; margin-bottom: 34px;
+    background: var(--mesa); border: 1px solid var(--fio); border-radius: 10px;
+  }
+  .wd-progresso-legenda { font-family: "DM Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); white-space: nowrap; }
+  .wd-progresso-trilha { flex: 1; height: 4px; border-radius: 999px; background: var(--fio); overflow: hidden; min-width: 60px; }
+  .wd-progresso-luz { height: 100%; background: var(--luz); transition: width .3s ease; }
+  .wd-progresso-contagem { font-family: "DM Mono", monospace; font-size: 12px; color: var(--gesso); white-space: nowrap; }
+  .wd-progresso-contagem b { color: var(--luz); }
 `;
