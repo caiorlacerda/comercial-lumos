@@ -247,12 +247,6 @@ async function notificarTime(clientId: string, clientName: string, itemLabel: st
   })))
 }
 
-const ITEM_LABEL: Record<string, string> = {
-  logo: 'o logo',
-  brand_book: 'o brand book',
-  guidelines: 'as guidelines de conteúdo',
-}
-
 // Nome da subpasta no Drive a partir do item_key: maiúsculo, sem acento,
 // espaço vira hífen — mesma normalização que drive-provision usa pra nome
 // de pasta de projeto (slugify), só que aqui aplicada ao item_key.
@@ -355,7 +349,7 @@ serve(async (req) => {
     // pro cliente — mesmo princípio do resto do projeto (pg_net triggers só
     // avisam warning). Isolado do try/catch principal de propósito.
     try {
-      await notificarTime(client.id, client.name, ITEM_LABEL[itemKey])
+      await notificarTime(client.id, client.name, item.titulo)
     } catch (notifyErr) {
       console.error('boas-vindas-upload: notificação falhou (upload já concluído):', notifyErr)
     }
