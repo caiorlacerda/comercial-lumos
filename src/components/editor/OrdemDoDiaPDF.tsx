@@ -373,20 +373,41 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
   const ponto = ordem.ponto_encontro;
 
   // Horário da diária: sai do próprio cronograma, igual à tela. Cada item só
-  // guarda hora-do-dia, sem data — a virada é detectada sozinha, andando
-  // pelos itens na ordem em que já estão salvos: sempre que um horário
-  // "volta pra trás" em relação ao que já rodou, soma 24h dali em diante.
-  // Cobre também um item só que atravessa a virada (ex.: 23:00 → 01:00).
+  // guarda hora-do-dia, sem data. 1ª passada, só pelos itens "principais"
+  // (não paralelos) e na ordem em que estão salvos: assim que um horário
+  // volta pra trás em relação ao que já rodou, soma 24h dali em diante — e
+  // só uma vez (uma diária não passa de uma meia-noite). Itens em paralelo
+  // nascem sempre no fim da lista, com o início de um item que já rodou —
+  // a posição deles não indica quando de fato acontecem, então cada um
+  // herda o offset do item principal com o horário bruto mais próximo do
+  // seu. Cobre também um item só que atravessa a virada (ex.: 23:00 →
+  // 01:00).
   let diaOffsetPdf = 0;
   let ultimoFimPdf = -Infinity;
-  const efetivos = cronograma.map(m => {
+  const ancorasPdf: { rawInicio: number; offset: number }[] = [];
+  const offsetPorIndicePdf = new Map<number, number>();
+  cronograma.forEach((m, i) => {
+    if (m.paralelo) return;
     const iniBruto = emMinutos(m.inicio);
-    const fimBruto = emMinutos(m.fim);
-    if (iniBruto != null && iniBruto + diaOffsetPdf * 1440 < ultimoFimPdf) diaOffsetPdf++;
+    if (iniBruto != null && diaOffsetPdf < 1 && iniBruto < ultimoFimPdf) diaOffsetPdf = 1;
+    offsetPorIndicePdf.set(i, diaOffsetPdf);
     const ini = iniBruto != null ? iniBruto + diaOffsetPdf * 1440 : null;
+    const fimBruto = emMinutos(m.fim);
     let fim = fimBruto != null ? fimBruto + diaOffsetPdf * 1440 : ini;
     if (fim != null && ini != null && fim < ini) fim += 1440;
-    ultimoFimPdf = fim ?? ini ?? ultimoFimPdf;
+    ultimoFimPdf = Math.max(ultimoFimPdf, fim ?? ini ?? ultimoFimPdf);
+    if (iniBruto != null) ancorasPdf.push({ rawInicio: iniBruto, offset: diaOffsetPdf });
+  });
+  const distCircPdf = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, 1440 - d); };
+  const efetivos = cronograma.map((m, i) => {
+    const iniBruto = emMinutos(m.inicio);
+    const fimBruto = emMinutos(m.fim);
+    const offset = offsetPorIndicePdf.get(i) ?? (iniBruto != null && ancorasPdf.length
+      ? ancorasPdf.reduce((best, a) => distCircPdf(a.rawInicio, iniBruto) < distCircPdf(best.rawInicio, iniBruto) ? a : best).offset
+      : 0);
+    const ini = iniBruto != null ? iniBruto + offset * 1440 : null;
+    let fim = fimBruto != null ? fimBruto + offset * 1440 : ini;
+    if (fim != null && ini != null && fim < ini) fim += 1440;
     return { ini, fim };
   });
   const inicios = efetivos.map(e => e.ini).filter((n): n is number => n != null);
