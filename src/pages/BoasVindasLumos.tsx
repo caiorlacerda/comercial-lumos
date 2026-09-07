@@ -20,6 +20,11 @@ const ITENS: { key: ItemKey; nome: string; desc: string; tipo: 'arquivo' | 'manu
 
 const EDGE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/boas-vindas-upload`;
 
+// Mesmo teto que a edge function aplica do lado de lá, pra mensagem bater.
+const MAX_BYTES = 25 * 1024 * 1024;
+const MSG_GRANDE = 'Esse arquivo passa de 25MB. Manda uma versão menor, ou o link do Drive/WeTransfer por WhatsApp.';
+const MSG_LOGIN = 'Você precisa estar logado nesse portal pra enviar isso. Atualiza a página e entra de novo.';
+
 export default function BoasVindasLumos({ token, nomePessoa }: { token: string; nomePessoa: string }) {
   const [itens, setItens] = useState<Record<string, ItemStatus>>({});
   const [carregando, setCarregando] = useState(true);
@@ -47,17 +52,32 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
     setEnviando(key);
     setErro(null);
     try {
+      // Portal com login exigido: a sessão precisa chegar na edge function,
+      // senão ela devolve precisa_login. Sem login (caso comum), não existe
+      // sessão e nenhum header é mandado — igual antes.
+      const { data: { session } } = await supabase.auth.getSession();
       const form = new FormData();
       form.append('token', token);
       form.append('item_key', key);
       form.append('nome_pessoa', nomePessoa);
       form.append('arquivo', arquivo);
-      const res = await fetch(EDGE_FUNCTION_URL, { method: 'POST', body: form });
+      const res = await fetch(EDGE_FUNCTION_URL, {
+        method: 'POST',
+        body: form,
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
       const body = await res.json();
       if (!res.ok || body.error) throw new Error(body.error || 'falha ao enviar');
       await carregar();
     } catch (err) {
-      setErro('Não deu pra enviar agora. Tenta de novo, ou manda por WhatsApp/e-mail enquanto isso.');
+      const codigo = (err as Error)?.message;
+      if (codigo === 'precisa_login' || codigo === 'sem_acesso') {
+        setErro(MSG_LOGIN);
+      } else if (codigo === 'arquivo muito grande, o limite é 25MB') {
+        setErro(MSG_GRANDE);
+      } else {
+        setErro('Não deu pra enviar agora. Tenta de novo, ou manda por WhatsApp/e-mail enquanto isso.');
+      }
     } finally {
       setEnviando(null);
     }
@@ -113,7 +133,8 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
                       type="file"
                       onChange={e => {
                         const f = e.target.files?.[0];
-                        if (f) enviarArquivo(def.key, f);
+                        if (f && f.size > MAX_BYTES) setErro(MSG_GRANDE);
+                        else if (f) enviarArquivo(def.key, f);
                         e.target.value = '';
                       }}
                     />

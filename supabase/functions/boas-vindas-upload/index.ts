@@ -9,9 +9,13 @@
 // Autorização: o token do portal, verificado aqui dentro (client_portals) —
 // não JWT do Supabase, porque a maioria dos clientes acessa sem login. Por
 // isso o deploy é --no-verify-jwt (mesmo motivo do stream-ingest 'auto').
+// Quando o portal tem exige_login = true, o token deixa de bastar: o header
+// Authorization tem que trazer uma sessão válida de um client_users ativo
+// daquele cliente, igual as RPCs do portal fazem com auth.jwt().
 //
 // Secrets: GOOGLE_SERVICE_ACCOUNT_JSON, DRIVE_SHARED_DRIVE_ID,
-// DRIVE_CLIENTES_FOLDER_ID — os mesmos que a drive-provision já usa.
+// DRIVE_CLIENTES_FOLDER_ID, DRIVE_TEMPLATES_FOLDER_ID — os mesmos que a
+// drive-provision já usa.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -20,17 +24,24 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const DRIVE_ID = Deno.env.get('DRIVE_SHARED_DRIVE_ID') ?? ''
 const CLIENTES_FOLDER_ID = Deno.env.get('DRIVE_CLIENTES_FOLDER_ID') ?? ''
+const TEMPLATES_FOLDER_ID = Deno.env.get('DRIVE_TEMPLATES_FOLDER_ID') ?? ''
 const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+
+// Teto de tamanho: o endpoint uploadType=multipart do Google é documentado até
+// ~5MB; acima disso falharia de qualquer jeito, e sem teto nada impede um
+// arquivo gigante. O front checa o mesmo número antes de tentar enviar.
+const MAX_BYTES = 25 * 1024 * 1024
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type',
+  'Access-Control-Allow-Headers': 'content-type, authorization',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
+const SYSTEM_FILES = new Set(['.DS_Store', 'desktop.ini', 'Thumbs.db'])
 
 const SUBPASTA: Record<string, string> = {
   logo: 'LOGOS',
@@ -92,6 +103,22 @@ async function driveFetch(path: string, init: RequestInit = {}, attempt = 1): Pr
   return body
 }
 
+// Idêntica à da drive-provision (duplicada de propósito: cada edge function
+// deste projeto é autocontida).
+async function listChildren(parentId: string): Promise<{ id: string; name: string; mimeType: string }[]> {
+  const items: { id: string; name: string; mimeType: string }[] = []
+  let pageToken = ''
+  do {
+    const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`)
+    const page = await driveFetch(
+      `files?q=${q}&fields=files(id,name,mimeType),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`
+    )
+    items.push(...(page.files || []))
+    pageToken = page.nextPageToken || ''
+  } while (pageToken)
+  return items
+}
+
 async function findChildFolder(parentId: string, name: string): Promise<string | null> {
   const q = encodeURIComponent(`'${parentId}' in parents and trashed=false and mimeType='${FOLDER_MIME}' and name='${name.replace(/'/g, "\\'")}'`)
   const page = await driveFetch(`files?q=${q}&fields=files(id)&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}`)
@@ -120,21 +147,71 @@ async function folderAlive(folderId: string | null): Promise<boolean> {
   }
 }
 
+// Espelha recursivamente um modelo: subpastas são criadas, arquivos são
+// copiados (placeholders/modelos de doc), arquivos de sistema ignorados.
+// Idêntica à da drive-provision — a estrutura da pasta do cliente tem que ficar
+// igual independente de quem criou a pasta primeiro.
+async function mirrorTemplate(templateFolderId: string, targetFolderId: string, targetIsFresh = false): Promise<void> {
+  const children = await listChildren(templateFolderId)
+  await Promise.all(children.map(async (child) => {
+    if (SYSTEM_FILES.has(child.name)) return
+    if (child.mimeType === FOLDER_MIME) {
+      const newId = targetIsFresh
+        ? await createFolder(targetFolderId, child.name)
+        : await ensureFolder(targetFolderId, child.name)
+      // Filhos de uma pasta recém-criada são sempre novos → recursa como fresh.
+      await mirrorTemplate(child.id, newId, true)
+    } else {
+      await driveFetch(`files/${child.id}/copy?fields=id`, {
+        method: 'POST',
+        body: JSON.stringify({ name: child.name, parents: [targetFolderId] }),
+      })
+    }
+  }))
+}
+
 // Garante a pasta do cliente e devolve o id da subpasta _ASSETS dentro dela.
 // Reusa clients.drive_folder_id se ainda existir (auto-cura se foi apagada,
 // igual a drive-provision faz).
 async function ensureClientAssetsFolder(client: { id: string; name: string; drive_folder_id: string | null }): Promise<string> {
   let clientFolderId = client.drive_folder_id
+  let recemCriada = false
   if (!(await folderAlive(clientFolderId))) {
     const folderName = client.name.trim() || 'CLIENTE'
     clientFolderId = await ensureFolder(CLIENTES_FOLDER_ID, folderName)
+    recemCriada = true
     await db.from('clients').update({ drive_folder_id: clientFolderId }).eq('id', client.id)
     await db.from('drive_sync_log').insert([{
       entity_type: 'client', entity_id: client.id, action: 'create_folder',
       detail: `Pasta do cliente "${folderName}" criada por boas-vindas-upload (${clientFolderId})`,
     }])
   }
-  return ensureFolder(clientFolderId!, '_ASSETS')
+
+  const clientAssetsId = await ensureFolder(clientFolderId!, '_ASSETS')
+
+  // Pasta nova: monta a estrutura padrão do jeito que a drive-provision monta
+  // (espelha _TEMPLATES/_ASSETS; sem template, cria as 5 subpastas na mão).
+  // Sem isto, um cliente cujo primeiro contato com o Drive foi um upload de
+  // boas-vindas nunca ganharia a estrutura — o folderAlive() curto-circuita
+  // todas as vezes seguintes.
+  if (recemCriada) {
+    const clienteTemplateId = TEMPLATES_FOLDER_ID
+      ? await findChildFolder(TEMPLATES_FOLDER_ID, '_ASSETS')
+      : null
+    if (clienteTemplateId) {
+      await mirrorTemplate(clienteTemplateId, clientAssetsId)
+    } else {
+      for (const sub of ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS']) {
+        await ensureFolder(clientAssetsId, sub)
+      }
+    }
+  }
+
+  // GUIDELINES não vem do template da organização, mas o checklist precisa
+  // dela — garantida sempre, pasta nova ou antiga.
+  await ensureFolder(clientAssetsId, 'GUIDELINES')
+
+  return clientAssetsId
 }
 
 async function uploadFile(parentId: string, name: string, mimeType: string, bytes: Uint8Array): Promise<string> {
@@ -200,14 +277,36 @@ serve(async (req) => {
   if (!token || !itemKey) return json({ error: 'token e item_key obrigatórios' }, 400)
   if (!SUBPASTA[itemKey]) return json({ error: 'item_key inválido' }, 400)
   if (!(arquivo instanceof File)) return json({ error: 'arquivo obrigatório' }, 400)
+  if (arquivo.size > MAX_BYTES) return json({ error: 'arquivo muito grande, o limite é 25MB' }, 413)
 
   const { data: portal } = await db.from('client_portals')
-    .select('client_id').eq('token', token).eq('active', true).maybeSingle()
+    .select('client_id, exige_login').eq('token', token).eq('active', true).maybeSingle()
   if (!portal) return json({ error: 'token inválido' }, 401)
 
   const { data: client } = await db.from('clients')
     .select('id, name, drive_folder_id').eq('id', portal.client_id).maybeSingle()
   if (!client) return json({ error: 'token inválido' }, 401)
+
+  // Porta: com login ligado, o token do portal sozinho não envia mais nada.
+  // Aqui não dá pra usar auth.jwt() (não é Postgres), então a sessão é
+  // validada de verdade contra o Auth pelo cliente service_role.
+  let assinatura = nomePessoa || null
+  if (portal.exige_login) {
+    const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+    if (!jwt) return json({ error: 'precisa_login' }, 401)
+    const { data: userData, error: authErr } = await db.auth.getUser(jwt)
+    const email = userData?.user?.email
+    if (authErr || !email) return json({ error: 'sem_acesso' }, 401)
+    // Comparação case-insensitive feita aqui, e não com .ilike(): em ilike o
+    // "_" é curinga, e e-mail com underline é comum — casaria com quem não é.
+    const alvo = email.toLowerCase()
+    const { data: pessoas } = await db.from('client_users')
+      .select('nome, email').eq('client_id', client.id).eq('ativo', true)
+    const pessoa = (pessoas ?? []).find(p => (p.email || '').toLowerCase() === alvo)
+    if (!pessoa) return json({ error: 'sem_acesso' }, 401)
+    // Com sessão, quem assina é a sessão, não o texto que o navegador mandou.
+    assinatura = pessoa.nome || alvo.split('@')[0]
+  }
 
   try {
     const assetsId = await ensureClientAssetsFolder(client)
@@ -221,7 +320,7 @@ serve(async (req) => {
       tipo: 'arquivo',
       drive_file_id: fileId,
       nome_arquivo: arquivo.name,
-      concluido_por: nomePessoa || null,
+      concluido_por: assinatura,
       concluido_em: new Date().toISOString(),
     }, { onConflict: 'client_id,item_key' })
     if (upsertError) throw upsertError

@@ -1666,7 +1666,11 @@ export default function PortalCliente() {
 
       {/* ── BEM-VINDO À LUMOS ─────────────────────────────────── */}
       {aba === 'boas_vindas' && (
-        <BoasVindasLumos token={token} nomePessoa={nome || 'cliente'} />
+        <main className="painel">
+          <div className="folha">
+            <BoasVindasLumos token={token} nomePessoa={nome || 'cliente'} />
+          </div>
+        </main>
       )}
     </div>
   );
