@@ -213,6 +213,14 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
 }) {
   const rows = od.plano_acao as Momento[];
   const base = baseDoDia(od.hora_inicio, rows);
+  // A tela sempre mostra em ordem de horário, não importa a ordem em que os
+  // itens foram salvos — sort estável, então empate de horário (ou sem
+  // horário) mantém a ordem que já estava. `i` guarda o índice real em
+  // `rows`, pra editar/apagar/mover mexerem no item certo por trás da vista
+  // ordenada.
+  const ordenadas = rows
+    .map((r, i) => ({ r, i, efetivo: efetivoDoItem(r.inicio, r.fim, base) }))
+    .sort((a, b) => (a.efetivo.ini ?? Infinity) - (b.efetivo.ini ?? Infinity));
   const [pickerAberto, setPickerAberto] = useState(false);
   const [cfg, setCfg] = useState<null | { tipo: TipoMomento; inicio: string; locacao: string; chegada: string; duracao: number; paralelo: boolean; descricao: string; manual: boolean; calculando: boolean }>(null);
   const [alturaRel, setAlturaRel] = useState(() => { try { return localStorage.getItem('lumos_od_altura') === '1'; } catch { return false; } });
@@ -226,13 +234,13 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
   // A agulha do agora: acha em qual linha (ou fronteira) o horário atual cai e
   // mede a posição real no DOM — funciona com e sem altura relativa.
   useEffect(() => {
-    if (!hoje || !rows.length || !wrapRef.current) { setAgulhaTop(null); return; }
+    if (!hoje || !ordenadas.length || !wrapRef.current) { setAgulhaTop(null); return; }
     const nowMin = agora.getHours() * 60 + agora.getMinutes() + agora.getSeconds() / 60;
     const wrapTop = wrapRef.current.getBoundingClientRect().top;
     let top: number | null = null;
-    for (let i = 0; i < rows.length; i++) {
+    for (let i = 0; i < ordenadas.length; i++) {
       const el = rowRefs.current[i]; if (!el) continue;
-      const ri = minutos(rows[i].inicio); const rf = minutos(rows[i].fim);
+      const ri = minutos(ordenadas[i].r.inicio); const rf = minutos(ordenadas[i].r.fim);
       const r = el.getBoundingClientRect();
       if (ri != null && rf != null && rf > ri && nowMin >= ri && nowMin <= rf) {
         top = r.top - wrapTop + ((nowMin - ri) / (rf - ri)) * r.height; break;
@@ -241,7 +249,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
       if (rf != null && nowMin > rf) top = r.bottom - wrapTop;
     }
     setAgulhaTop(top);
-  }, [agora, rows, hoje, alturaRel]);
+  }, [agora, ordenadas, hoje, alturaRel]);
 
   const statusDe = (r: Momento): 'atrasado' | 'agora' | 'pendente' => {
     if (!hoje) return 'pendente';
@@ -347,7 +355,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {ordenadas.length === 0 ? (
         <p className="text-center text-xs text-lumos-text-secondary italic py-8">
           {canManage ? 'Nenhum momento no cronograma ainda. Toque em "Novo momento", ali em cima, pra criar o primeiro.' : 'Nenhum momento no cronograma ainda.'}
         </p>
@@ -358,14 +366,13 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
             <span>Hora</span><span>Duração</span><span>Descrição</span><span>Ações</span><span>Status</span>
           </div>
 
-          {rows.map((r, i) => {
+          {ordenadas.map(({ r, i, efetivo }, k) => {
             const t = TIPOS[(r.tipo as TipoMomento) || 'personalizado'] || TIPOS.personalizado;
             const st = statusDe(r);
-            const efetivo = efetivoDoItem(r.inicio, r.fim, base);
             const dur = efetivo.ini != null && efetivo.fim != null ? Math.max(0, efetivo.fim - efetivo.ini) : null;
             const alturaMin = alturaRel && dur ? Math.min(Math.max(dur * 1.8, 44), 520) : undefined;
             return (
-              <div key={i} ref={el => { rowRefs.current[i] = el; }}
+              <div key={i} ref={el => { rowRefs.current[k] = el; }}
                 style={{ minHeight: alturaMin, borderLeft: `3px solid ${t.cor}` }}
                 className={clsx('grid grid-cols-[192px_76px_1fr_96px_92px] max-lg:grid-cols-[96px_1fr_76px] gap-2 px-4 py-2 border-b border-lumos-border/60 items-start group',
                   r.destaque && 'bg-lumos-yellow/[0.04]')}>
@@ -404,9 +411,12 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                 <span className="min-h-8 flex items-center max-lg:hidden">
                   {canManage && (
                     <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button type="button" disabled={i === 0} onClick={() => { const l = [...rows]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; onChange(l); }}
+                      {/* Move o vizinho na lista ordenada por horário, não o vizinho no array
+                          salvo — só troca de fato a ordem visível quando os dois têm o mesmo
+                          horário (ou nenhum), que é quando a ordem não é dada pelo relógio. */}
+                      <button type="button" disabled={k === 0} onClick={() => { const j = ordenadas[k - 1].i; const l = [...rows]; [l[i], l[j]] = [l[j], l[i]]; onChange(l); }}
                         className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowUp className="w-3.5 h-3.5" /></button>
-                      <button type="button" disabled={i === rows.length - 1} onClick={() => { const l = [...rows]; [l[i + 1], l[i]] = [l[i], l[i + 1]]; onChange(l); }}
+                      <button type="button" disabled={k === ordenadas.length - 1} onClick={() => { const j = ordenadas[k + 1].i; const l = [...rows]; [l[i], l[j]] = [l[j], l[i]]; onChange(l); }}
                         className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5" /></button>
                       <button type="button" onClick={() => editar(i, 'destaque', !r.destaque)} title="Destacar"
                         className={clsx('p-1', r.destaque ? 'text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-yellow')}>★</button>

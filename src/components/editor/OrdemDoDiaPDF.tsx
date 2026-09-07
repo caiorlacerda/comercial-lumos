@@ -401,6 +401,12 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
     if (fim != null && fim < ini) fim += 1440;
     return { ini, fim };
   });
+  // A tabela sai impressa em ordem de horário, não na ordem salva — sort
+  // estável, então empate de horário (ou sem horário) mantém a ordem salva.
+  const cronogramaOrdenado = cronograma
+    .map((m, i) => ({ m, ini: efetivos[i].ini }))
+    .sort((a, b) => (a.ini ?? Infinity) - (b.ini ?? Infinity))
+    .map(x => x.m);
   const inicios = efetivos.map(e => e.ini).filter((n): n is number => n != null);
   const fins = efetivos.map(e => e.fim).filter((n): n is number => n != null);
   const horaInicio = inicios.length ? Math.min(...inicios) : null;
@@ -546,7 +552,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
               <Text style={[styles.cellHeader, { width: '19%' }]}>Local</Text>
               <Text style={[styles.cellHeader, { width: '18%' }]}>Responsável</Text>
             </View>
-            {cronograma.map((m, i) => {
+            {cronogramaOrdenado.map((m, i) => {
               const horario = temTexto(m.fim) ? `${m.inicio} às ${m.fim}` : (m.inicio || '');
               const Celula = m.destaque ? styles.cellBold : styles.cell;
               const rowBg = m.destaque ? styles.tableRowDestaque : (i % 2 === 1 ? styles.tableRowAlt : {});
