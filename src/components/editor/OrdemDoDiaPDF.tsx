@@ -49,6 +49,7 @@ export interface OrdemDoDiaPDFData {
   codigo?: string;
   titulo: string;
   data_producao: string | null;
+  hora_inicio?: string | null;
   data_emissao?: string | null;
   clima?: string | null;
   ponto_encontro?: { nome: string; endereco: string } | null;
@@ -373,41 +374,23 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
   const ponto = ordem.ponto_encontro;
 
   // Horário da diária: sai do próprio cronograma, igual à tela. Cada item só
-  // guarda hora-do-dia, sem data. 1ª passada, só pelos itens "principais"
-  // (não paralelos) e na ordem em que estão salvos: assim que um horário
-  // volta pra trás em relação ao que já rodou, soma 24h dali em diante — e
-  // só uma vez (uma diária não passa de uma meia-noite). Itens em paralelo
-  // nascem sempre no fim da lista, com o início de um item que já rodou —
-  // a posição deles não indica quando de fato acontecem, então cada um
-  // herda o offset do item principal com o horário bruto mais próximo do
-  // seu. Cobre também um item só que atravessa a virada (ex.: 23:00 →
-  // 01:00).
-  let diaOffsetPdf = 0;
-  let ultimoFimPdf = -Infinity;
-  const ancorasPdf: { rawInicio: number; offset: number }[] = [];
-  const offsetPorIndicePdf = new Map<number, number>();
-  cronograma.forEach((m, i) => {
-    if (m.paralelo) return;
-    const iniBruto = emMinutos(m.inicio);
-    if (iniBruto != null && diaOffsetPdf < 1 && iniBruto < ultimoFimPdf) diaOffsetPdf = 1;
-    offsetPorIndicePdf.set(i, diaOffsetPdf);
-    const ini = iniBruto != null ? iniBruto + diaOffsetPdf * 1440 : null;
-    const fimBruto = emMinutos(m.fim);
-    let fim = fimBruto != null ? fimBruto + diaOffsetPdf * 1440 : ini;
-    if (fim != null && ini != null && fim < ini) fim += 1440;
-    ultimoFimPdf = Math.max(ultimoFimPdf, fim ?? ini ?? ultimoFimPdf);
-    if (iniBruto != null) ancorasPdf.push({ rawInicio: iniBruto, offset: diaOffsetPdf });
-  });
-  const distCircPdf = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, 1440 - d); };
-  const efetivos = cronograma.map((m, i) => {
+  // guarda hora-do-dia, sem data — não dá pra saber se é do dia 1 ou já da
+  // madrugada do dia 2 só pela posição na lista (quebra com itens em
+  // paralelo ou fora de ordem). Em vez disso, cada item é classificado
+  // sozinho: hora-do-dia ANTES do início da diária só pode ser porque já
+  // virou a madrugada seguinte. Cobre também um item só que atravessa a
+  // virada (ex.: 23:00 → 01:00).
+  const horaInicioBruta = emMinutos(ordem.hora_inicio);
+  const inicioBrutoDosItens = cronograma.map(m => emMinutos(m.inicio)).filter((n): n is number => n != null);
+  const baseDia = horaInicioBruta ?? (inicioBrutoDosItens.length ? Math.min(...inicioBrutoDosItens) : 0);
+  const efetivos = cronograma.map(m => {
     const iniBruto = emMinutos(m.inicio);
     const fimBruto = emMinutos(m.fim);
-    const offset = offsetPorIndicePdf.get(i) ?? (iniBruto != null && ancorasPdf.length
-      ? ancorasPdf.reduce((best, a) => distCircPdf(a.rawInicio, iniBruto) < distCircPdf(best.rawInicio, iniBruto) ? a : best).offset
-      : 0);
-    const ini = iniBruto != null ? iniBruto + offset * 1440 : null;
-    let fim = fimBruto != null ? fimBruto + offset * 1440 : ini;
-    if (fim != null && ini != null && fim < ini) fim += 1440;
+    if (iniBruto == null) return { ini: null as number | null, fim: fimBruto };
+    const offset = iniBruto < baseDia ? 1440 : 0;
+    const ini = iniBruto + offset;
+    let fim = fimBruto != null ? fimBruto + offset : ini;
+    if (fim != null && fim < ini) fim += 1440;
     return { ini, fim };
   });
   const inicios = efetivos.map(e => e.ini).filter((n): n is number => n != null);

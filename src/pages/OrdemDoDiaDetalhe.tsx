@@ -89,6 +89,30 @@ const hojeLocal = () => {
 };
 const fmtMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
+// Cada item do cronograma só guarda hora-do-dia, sem data — nada indica se um
+// item é do "dia 1" ou já da madrugada do "dia 2" da diária. Em vez de tentar
+// adivinhar pela posição no array (quebra com itens em paralelo ou fora de
+// ordem), compara a hora bruta de cada item com o horário de início da
+// própria diária: quem tem hora-do-dia ANTES do início só pode ser porque já
+// virou a madrugada seguinte. Cada item é classificado sozinho, então
+// funciona igual não importa a ordem ou quantos aconteçam ao mesmo tempo.
+const baseDoDia = (horaInicioDiaria: string | null | undefined, itens: { inicio: string | null }[]) => {
+  const declarado = minutos(horaInicioDiaria);
+  if (declarado != null) return declarado;
+  const brutos = itens.map(r => minutos(r.inicio)).filter((n): n is number => n != null);
+  return brutos.length ? Math.min(...brutos) : 0;
+};
+const efetivoDoItem = (inicio: string | null | undefined, fim: string | null | undefined, base: number) => {
+  const iniBruto = minutos(inicio);
+  const fimBruto = minutos(fim);
+  if (iniBruto == null) return { ini: null as number | null, fim: fimBruto };
+  const offset = iniBruto < base ? 1440 : 0;
+  const ini = iniBruto + offset;
+  let fim2 = fimBruto != null ? fimBruto + offset : null;
+  if (fim2 != null && fim2 < ini) fim2 += 1440;
+  return { ini, fim: fim2 };
+};
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,8 +199,9 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
   confirm: (opts: { title?: string; message: string; confirmLabel?: string; danger?: boolean }) => Promise<boolean>;
 }) {
   const rows = od.plano_acao as Momento[];
+  const base = baseDoDia(od.hora_inicio, rows);
   const [pickerAberto, setPickerAberto] = useState(false);
-  const [cfg, setCfg] = useState<null | { tipo: TipoMomento; locacao: string; chegada: string; duracao: number; paralelo: boolean; descricao: string; manual: boolean; calculando: boolean }>(null);
+  const [cfg, setCfg] = useState<null | { tipo: TipoMomento; inicio: string; locacao: string; chegada: string; duracao: number; paralelo: boolean; descricao: string; manual: boolean; calculando: boolean }>(null);
   const [alturaRel, setAlturaRel] = useState(() => { try { return localStorage.getItem('lumos_od_altura') === '1'; } catch { return false; } });
   const [cfgAberto, setCfgAberto] = useState(false);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -214,9 +239,24 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
     return 'pendente';
   };
 
+  // O "último" pra sugerir horário é o cronologicamente por último (pelo
+  // horário efetivo), não o último do array — a ordem do array não é
+  // garantia de ordem cronológica (itens em paralelo, edições fora de ordem).
+  const ultimoCronologico = (): Momento | null => {
+    if (!rows.length) return null;
+    let melhor = rows[0], melhorChave = -Infinity;
+    for (const r of rows) {
+      const e = efetivoDoItem(r.inicio, r.fim, base);
+      const chave = e.fim ?? e.ini ?? -Infinity;
+      if (chave > melhorChave) { melhorChave = chave; melhor = r; }
+    }
+    return melhor;
+  };
+
   const abrirCfg = (tipo: TipoMomento) => {
     setPickerAberto(false);
-    setCfg({ tipo, locacao: locsAtivas[0]?.nome || '', chegada: locsAtivas[1]?.nome || locsAtivas[0]?.nome || '', duracao: TIPOS[tipo].defMin, paralelo: false, descricao: '', manual: false, calculando: false });
+    const ultimo = ultimoCronologico();
+    setCfg({ tipo, inicio: ultimo?.fim || od.hora_inicio || '08:00', locacao: locsAtivas[0]?.nome || '', chegada: locsAtivas[1]?.nome || locsAtivas[0]?.nome || '', duracao: TIPOS[tipo].defMin, paralelo: false, descricao: '', manual: false, calculando: false });
   };
 
   // Deslocamento: tenta calcular o trajeto de carro (geocode + OSRM, sem chave).
@@ -238,21 +278,24 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
 
   const criar = () => {
     if (!cfg) return;
-    const ultimo = rows[rows.length - 1];
-    const base = cfg.paralelo ? (ultimo?.inicio || od.hora_inicio || '08:00') : (ultimo?.fim || od.hora_inicio || '08:00');
-    const ini = minutos(base) ?? 480;
+    const ini = minutos(cfg.inicio) ?? 480;
     const t = TIPOS[cfg.tipo];
     const desc = cfg.descricao.trim()
       || (cfg.tipo === 'deslocamento' ? `Deslocamento: ${cfg.locacao || '?'} → ${cfg.chegada || '?'}` : t.label + (cfg.locacao ? `, ${cfg.locacao}` : ''));
     const novo: Momento = {
-      inicio: fmtMin(ini), fim: fmtMin(Math.min(ini + Math.max(5, cfg.duracao), 1439)),
+      inicio: fmtMin(ini), fim: fmtMin((ini + Math.max(5, cfg.duracao)) % 1440),
       descricao: desc, responsavel: '', destaque: cfg.tipo === 'gravacao',
       tipo: cfg.tipo, locacao: cfg.tipo === 'deslocamento' ? undefined : (cfg.locacao || undefined),
       chegada: cfg.tipo === 'deslocamento' ? cfg.chegada : undefined,
       paralelo: cfg.paralelo || undefined,
     };
     setCfg(null);
-    onChange([...rows, novo]);
+    // Entra na posição certa pelo horário, em vez de sempre no fim da lista —
+    // sem isso, toda diária virava um reordenamento manual na mão.
+    const efetivoNovo = efetivoDoItem(novo.inicio, novo.fim, base);
+    let idx = rows.findIndex(r => (efetivoDoItem(r.inicio, r.fim, base).ini ?? Infinity) > (efetivoNovo.ini ?? -Infinity));
+    if (idx === -1) idx = rows.length;
+    onChange([...rows.slice(0, idx), novo, ...rows.slice(idx)]);
   };
 
   const editar = (i: number, campo: keyof Momento, valor: unknown) =>
@@ -305,7 +348,8 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
           {rows.map((r, i) => {
             const t = TIPOS[(r.tipo as TipoMomento) || 'personalizado'] || TIPOS.personalizado;
             const st = statusDe(r);
-            const dur = minutos(r.fim) != null && minutos(r.inicio) != null ? Math.max(0, minutos(r.fim)! - minutos(r.inicio)!) : null;
+            const efetivo = efetivoDoItem(r.inicio, r.fim, base);
+            const dur = efetivo.ini != null && efetivo.fim != null ? Math.max(0, efetivo.fim - efetivo.ini) : null;
             const alturaMin = alturaRel && dur ? Math.min(Math.max(dur * 1.8, 44), 520) : undefined;
             return (
               <div key={i} ref={el => { rowRefs.current[i] = el; }}
@@ -412,6 +456,12 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
           <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <p className="text-sm font-black text-lumos-text-primary">Configurar {TIPOS[cfg.tipo].label}</p>
 
+            <div>
+              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Horário de início</label>
+              <input type="time" value={cfg.inicio} onChange={e => setCfg({ ...cfg, inicio: e.target.value })}
+                className="input-lumos w-full h-10 mt-1 text-sm" />
+            </div>
+
             {cfg.tipo === 'deslocamento' ? (
               <>
                 <div>
@@ -451,10 +501,18 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                   className="input-lumos h-9 flex-1 text-center text-sm font-bold" />
                 <button type="button" onClick={() => setCfg({ ...cfg, duracao: cfg.duracao + 5 })} className="w-9 h-9 rounded-lumos border border-lumos-border text-lumos-text-primary font-black">+</button>
               </div>
+              {minutos(cfg.inicio) != null && (
+                <p className="text-[10.5px] text-lumos-text-secondary mt-1">Termina às {fmtMin((minutos(cfg.inicio)! + Math.max(5, cfg.duracao)) % 1440)}</p>
+              )}
             </div>
 
             <label className="flex items-center gap-2 text-[11.5px] font-bold text-lumos-text-primary">
-              <input type="checkbox" checked={cfg.paralelo} onChange={e => setCfg({ ...cfg, paralelo: e.target.checked })} className="accent-lumos-yellow" />
+              <input type="checkbox" checked={cfg.paralelo} onChange={e => {
+                const paralelo = e.target.checked;
+                const ultimo = ultimoCronologico();
+                const sugestao = paralelo ? ultimo?.inicio : ultimo?.fim;
+                setCfg({ ...cfg, paralelo, inicio: sugestao || cfg.inicio });
+              }} className="accent-lumos-yellow" />
               Acontece em paralelo a outro momento
             </label>
 
@@ -817,45 +875,15 @@ export default function OrdemDoDiaDetalhe() {
 
   // ── Derivados do cronograma ───────────────────────────────────────────
   // Vira o dia: cada item do cronograma só guarda hora-do-dia, sem data.
-  // 1ª passada, só pelos itens "principais" (não paralelos) e na ordem em
-  // que estão: assim que um horário volta pra trás em relação ao que já
-  // rodou, soma 24h dali em diante — e só uma vez (uma diária não passa
-  // de uma meia-noite). Itens "em paralelo" nascem sempre no fim do
-  // array, com o início de um item que já rodou — a posição deles no
-  // array não indica quando de fato acontecem, então em vez de segui-la,
-  // cada um herda o offset do item principal com o horário bruto mais
-  // próximo do seu. Cobre também um item só que atravessa a virada
-  // (ex.: 23:00 → 01:00) — o próprio item vira o dia entre o início e o
-  // fim dele.
+  // baseDoDia/efetivoDoItem classificam cada item sozinho (comparando com o
+  // horário de início da diária), sem depender da ordem do array — funciona
+  // igual com itens em paralelo ou fora de ordem.
   const cron = useMemo(() => {
     const itens = (od?.plano_acao || []) as Momento[];
-    let diaOffset = 0;
-    let ultimoFim = -Infinity;
-    const ancoras: { rawInicio: number; offset: number }[] = [];
-    const offsetPorIndice = new Map<number, number>();
-    itens.forEach((r, i) => {
-      if (r.paralelo) return;
-      const iniBruto = minutos(r.inicio);
-      if (iniBruto != null && diaOffset < 1 && iniBruto < ultimoFim) diaOffset = 1;
-      offsetPorIndice.set(i, diaOffset);
-      const iniEfetivo = iniBruto != null ? iniBruto + diaOffset * 1440 : null;
-      const fimBruto = minutos(r.fim);
-      let fimEfetivo = fimBruto != null ? fimBruto + diaOffset * 1440 : null;
-      if (fimEfetivo != null && iniEfetivo != null && fimEfetivo < iniEfetivo) fimEfetivo += 1440;
-      ultimoFim = Math.max(ultimoFim, fimEfetivo ?? iniEfetivo ?? ultimoFim);
-      if (iniBruto != null) ancoras.push({ rawInicio: iniBruto, offset: diaOffset });
-    });
-    const distCirc = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, 1440 - d); };
-    const comEfetivo = itens.map((r, i) => {
-      const iniBruto = minutos(r.inicio);
-      const fimBruto = minutos(r.fim);
-      const offset = offsetPorIndice.get(i) ?? (iniBruto != null && ancoras.length
-        ? ancoras.reduce((best, a) => distCirc(a.rawInicio, iniBruto) < distCirc(best.rawInicio, iniBruto) ? a : best).offset
-        : 0);
-      const iniEfetivo = iniBruto != null ? iniBruto + offset * 1440 : null;
-      let fimEfetivo = fimBruto != null ? fimBruto + offset * 1440 : null;
-      if (fimEfetivo != null && iniEfetivo != null && fimEfetivo < iniEfetivo) fimEfetivo += 1440;
-      return { ...r, iniEfetivo, fimEfetivo };
+    const base = baseDoDia(od?.hora_inicio, itens);
+    const comEfetivo = itens.map(r => {
+      const { ini, fim } = efetivoDoItem(r.inicio, r.fim, base);
+      return { ...r, iniEfetivo: ini, fimEfetivo: fim };
     });
     const rows = comEfetivo.slice().sort((a, b) => (a.iniEfetivo ?? 9999) - (b.iniEfetivo ?? 9999));
     const inicio = rows.length ? rows[0].iniEfetivo : minutos(od?.hora_inicio);
@@ -979,6 +1007,7 @@ export default function OrdemDoDiaDetalhe() {
                   .map(l => ({ nome: l.nome, endereco: l.endereco, observacoes: l.obs || '' }));
                 const ordem = {
                   codigo: od.codigo, titulo: od.titulo, data_producao: od.data_producao,
+                  hora_inicio: od.hora_inicio,
                   data_emissao: new Date().toISOString(), clima: od.clima,
                   ponto_encontro: od.ponto_encontro,
                   call_times: od.call_times,
