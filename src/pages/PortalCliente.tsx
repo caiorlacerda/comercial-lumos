@@ -482,7 +482,7 @@ export default function PortalCliente() {
   const [emailLogin, setEmailLogin] = useState('');
   const [enviandoLink, setEnviandoLink] = useState(false);
   const [linkEnviado, setLinkEnviado] = useState(false);
-  const [aba, setAba] = useState<string>('inicio');
+  const [aba, setAba] = useState<string>('boas_vindas');
   /** Aba de dentro do projeto. Volta pra "geral" ao trocar de projeto: manter
    *  "diarias" ao pular pra outro projeto mostraria o calendário de um projeto
    *  que a pessoa nem olhou ainda. */
@@ -1018,6 +1018,11 @@ export default function PortalCliente() {
         </span>
 
         <nav className="navegacao" aria-label="Seções">
+          <button type="button" className="link" aria-current={aba === 'boas_vindas'}
+            onClick={() => setAba('boas_vindas')}>
+            Bem-vindo à Lumos
+          </button>
+
           <button type="button" className="link" aria-current={aba === 'inicio'}
             onClick={() => setAba('inicio')}>
             Início
@@ -1059,11 +1064,6 @@ export default function PortalCliente() {
           <button type="button" className="link" aria-current={aba === 'atendimento'}
             onClick={() => setAba('atendimento')}>
             Atendimento
-          </button>
-
-          <button type="button" className="link" aria-current={aba === 'boas_vindas'}
-            onClick={() => setAba('boas_vindas')}>
-            Bem-vindo à Lumos
           </button>
         </nav>
 

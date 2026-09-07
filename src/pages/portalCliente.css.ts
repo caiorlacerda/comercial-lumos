@@ -638,6 +638,39 @@ export const PORTAL_CSS = String.raw`
   }
 
   /* ── Bem-vindo à Lumos ──────────────────────────────────────── */
+  /* O hero usa o mesmo feixe de luz de cima que o Início já usa em .chamada
+     (mesmo amarelo, mesmo blur), só maior e centralizado: é a primeira coisa
+     que o cliente vê no portal agora. */
+  .hero-bv {
+    position: relative; text-align: center; overflow: hidden;
+    padding: 74px 0 46px; margin-bottom: 10px;
+  }
+  .hero-bv::before {
+    content: ""; position: absolute; left: 50%; top: -35%; width: 130%; height: 160%;
+    transform: translateX(-50%);
+    background: radial-gradient(45% 55% at 50% 10%, rgba(239,199,0,.30), transparent 72%);
+    pointer-events: none; filter: blur(10px);
+    animation: bv-acende 1s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .hero-bv .feixe {
+    position: absolute; left: 50%; top: 0; width: 2px; height: 130px;
+    transform: translateX(-50%);
+    background: linear-gradient(to bottom, rgba(239,199,0,.85), transparent);
+    filter: blur(.5px);
+  }
+  .hero-bv h1 {
+    position: relative; margin: 0;
+    font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
+    font-size: clamp(38px, 7.5vw, 84px); line-height: .94; letter-spacing: -.01em;
+    animation: bv-sobe .7s cubic-bezier(.2,.7,.3,1) .12s both;
+  }
+  .hero-bv .risca { color: var(--luz); }
+  @keyframes bv-acende { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes bv-sobe { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-bv::before, .hero-bv h1 { animation: none; }
+  }
+
   .boas-vindas .intro { color: var(--meia-luz); max-width: 60ch; margin-bottom: 28px; }
   .boas-vindas .itens { display: grid; gap: 14px; }
   .item-bv {

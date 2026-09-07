@@ -103,6 +103,10 @@ export default function BoasVindasLumos({ token, nomePessoa }: { token: string; 
 
   return (
     <div className="boas-vindas">
+      <div className="hero-bv">
+        <span className="feixe" aria-hidden="true" />
+        <h1>BEM-VINDO<br /><span className="risca">À LUMOS</span></h1>
+      </div>
       <p className="intro">
         Que bom te ter por aqui. Antes de começarmos a gravar, precisamos de algumas coisas
         suas, pra já sair com a cara certa desde o primeiro vídeo. Manda o que puder abaixo,
