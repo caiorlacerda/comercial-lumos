@@ -63,14 +63,38 @@ export default function WelcomeDocPage({ token, nomePessoa }: { token: string; n
     <div className="boas-vindas">
       {secoes.map(secao => {
         switch (secao.type) {
-          case 'lead': return <LeadSection {...secao} />;
-          case 'rows': return <RowsSection {...secao} />;
-          case 'two-panels': return <TwoPanelsSection {...secao} />;
-          case 'steps': return <StepsSection {...secao} />;
-          case 'note': return <NoteSection {...secao} />;
-          case 'tips': return <TipsSection {...secao} />;
-          case 'date-cards': return <DateCardsSection {...secao} />;
-          case 'next-steps': return <NextStepsSection {...secao} />;
+          case 'lead': {
+            const { key, ...rest } = secao;
+            return <LeadSection key={key} {...rest} />;
+          }
+          case 'rows': {
+            const { key, ...rest } = secao;
+            return <RowsSection key={key} {...rest} />;
+          }
+          case 'two-panels': {
+            const { key, ...rest } = secao;
+            return <TwoPanelsSection key={key} {...rest} />;
+          }
+          case 'steps': {
+            const { key, ...rest } = secao;
+            return <StepsSection key={key} {...rest} />;
+          }
+          case 'note': {
+            const { key, ...rest } = secao;
+            return <NoteSection key={key} {...rest} />;
+          }
+          case 'tips': {
+            const { key, ...rest } = secao;
+            return <TipsSection key={key} {...rest} />;
+          }
+          case 'date-cards': {
+            const { key, ...rest } = secao;
+            return <DateCardsSection key={key} {...rest} />;
+          }
+          case 'next-steps': {
+            const { key, ...rest } = secao;
+            return <NextStepsSection key={key} {...rest} />;
+          }
           case 'checklist':
             return (
               <div className="wd-secao" key={secao.key}>
