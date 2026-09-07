@@ -5,7 +5,7 @@ import {
   ArrowLeft, CalendarDays, Check, Clock, CloudRain, Copy, ExternalLink,
   Loader2, MapPin, Pencil, Plus, Shirt, Sun, Trash2, Users2, Video, Package, Camera,
   FileText, ArrowUp, ArrowDown, AlertTriangle, Megaphone, ScrollText, Wrench,
-  Utensils, Coffee, Truck, SlidersHorizontal, FileDown, Eye, Search, UserPlus,
+  Utensils, Coffee, Truck, SlidersHorizontal, FileDown, Eye, Search, UserPlus, BookmarkPlus,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -668,6 +668,9 @@ export default function OrdemDoDiaDetalhe() {
   const [agora, setAgora] = useState(() => new Date());
   const [roteiros, setRoteiros] = useState<{ id: string; name: string; url: string }[]>([]);
   const [projetoNome, setProjetoNome] = useState<string | null>(null);
+  const [clienteId, setClienteId] = useState<string | null>(null);
+  const [clienteNome, setClienteNome] = useState<string | null>(null);
+  const [locacoesCliente, setLocacoesCliente] = useState<{ id: string; nome: string; endereco: string }[]>([]);
   // Formulário rápido do app (nada de prompt() do navegador).
   const [qf, setQf] = useState<null | { title: string; fields: QFField[]; submitLabel?: string; onSubmit: (v: Record<string, string>) => void }>(null);
   const [gerandoPdf, setGerandoPdf] = useState(false);
@@ -729,10 +732,12 @@ export default function OrdemDoDiaDetalhe() {
     if (silencioso) return;
     setLoading(false);
     if (o.project_id) {
-      supabase.from('projects').select('name').eq('id', o.project_id).maybeSingle()
+      supabase.from('projects').select('name, client_id, clients(name)').eq('id', o.project_id).maybeSingle()
         .then(({ data: p, error: errP }) => {
           if (errP) { toast.error('Não foi possível carregar o nome do projeto.'); return; }
           setProjetoNome((p as any)?.name || null);
+          setClienteId((p as any)?.client_id || null);
+          setClienteNome((p as any)?.clients?.name || null);
         });
       supabase.from('project_roteiros').select('id, nome, url').eq('project_id', o.project_id).order('ordem').order('created_at')
         .then(({ data: docs, error: errR }) => {
@@ -748,6 +753,13 @@ export default function OrdemDoDiaDetalhe() {
     const t = setInterval(() => setAgora(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Locações salvas do cliente (biblioteca reutilizável entre diárias).
+  useEffect(() => {
+    if (!clienteId) { setLocacoesCliente([]); return; }
+    supabase.from('client_locations').select('id, nome, endereco').eq('client_id', clienteId).order('nome')
+      .then(({ data, error }) => { if (!error) setLocacoesCliente((data as any[]) || []); });
+  }, [clienteId]);
 
   // Previsão do tempo pela 1ª locação incluída + data.
   useEffect(() => {
@@ -1212,14 +1224,30 @@ export default function OrdemDoDiaDetalhe() {
       {/* ═════════ ABA LOCAÇÕES ═════════ */}
       {aba === 'locacoes' && (
         <div className="space-y-3">
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
             <p className="text-xs font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2"><MapPin className="w-4 h-4 text-lumos-yellow" /> Locações</p>
+            {canManage && locacoesCliente.length > 0 && (
+              <div className="ml-auto w-56">
+                <Select
+                  value=""
+                  onChange={v => {
+                    const salva = locacoesCliente.find(x => x.id === v);
+                    if (!salva) return;
+                    void editarLista('locacoes', [...od.locacoes, { nome: salva.nome, endereco: salva.endereco, incluida: true }]);
+                  }}
+                  placeholder={`Usar locação salva de ${clienteNome || 'cliente'}`}
+                  options={locacoesCliente.map(l => ({ value: l.id, label: l.nome }))}
+                  searchable
+                  className="input-lumos h-9 px-3 text-xs"
+                />
+              </div>
+            )}
             {canManage && (
               <button type="button" onClick={() => setQf({ title: 'Nova locação', submitLabel: 'Criar', fields: [
                 { key: 'nome', label: 'Nome', placeholder: 'Ex.: Praia da Reserva', required: true },
                 { key: 'endereco', label: 'Endereço completo', placeholder: 'Rua, número, bairro, cidade', required: true },
               ], onSubmit: v => void editarLista('locacoes', [...od.locacoes, { nome: v.nome.trim(), endereco: v.endereco.trim(), incluida: true }]) })}
-                className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Criar locação</button>
+                className={clsx('btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5', locacoesCliente.length === 0 && 'ml-auto')}><Plus className="w-3.5 h-3.5" /> Criar locação</button>
             )}
           </div>
           {od.locacoes.length === 0 ? (
@@ -1250,6 +1278,16 @@ export default function OrdemDoDiaDetalhe() {
                       {l.endereco && (
                         <button type="button" onClick={() => { navigator.clipboard.writeText(l.endereco); toast.success('Endereço copiado ✓'); }}
                           className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" /> Copiar endereço</button>
+                      )}
+                      {canManage && clienteId && (
+                        <button type="button" onClick={async () => {
+                          const { data, error } = await supabase.from('client_locations')
+                            .insert({ client_id: clienteId, nome: l.nome, endereco: l.endereco }).select('id, nome, endereco').single();
+                          if (error) { toast.error('Não foi possível salvar pra reusar.'); return; }
+                          setLocacoesCliente(prev => [...prev, data as any].sort((a, b) => a.nome.localeCompare(b.nome)));
+                          toast.success(`Salva pra reusar com ${clienteNome || 'esse cliente'} ✓`);
+                        }}
+                          className="text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-0.5"><BookmarkPlus className="w-2.5 h-2.5" /> Salvar p/ cliente</button>
                       )}
                     </div>
                   </div>
