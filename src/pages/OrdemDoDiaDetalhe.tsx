@@ -17,7 +17,7 @@ import Modal from '@/components/common/Modal';
 import QuickForm, { type QFField } from '@/components/common/QuickForm';
 import Select from '@/components/ui/Select';
 import { useConfirm } from '@/components/ui/useConfirm';
-import { geocode, previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
+import { geocode, previsaoParaDiaria, type PrevisaoDia, type MotivoSemPrevisao } from '@/lib/weather';
 import { notify, getUserIdsWithPermission } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import type { AtividadePlano, MembroEquipe, Talento } from '@/types/ordemDoDia';
@@ -664,6 +664,7 @@ export default function OrdemDoDiaDetalhe() {
     return p;
   }, { replace: true });
   const [clima, setClima] = useState<PrevisaoDia | null>(null);
+  const [climaMotivo, setClimaMotivo] = useState<MotivoSemPrevisao | null>(null);
   const [agora, setAgora] = useState(() => new Date());
   const [roteiros, setRoteiros] = useState<{ id: string; name: string; url: string }[]>([]);
   const [projetoNome, setProjetoNome] = useState<string | null>(null);
@@ -751,8 +752,11 @@ export default function OrdemDoDiaDetalhe() {
   // Previsão do tempo pela 1ª locação incluída + data.
   useEffect(() => {
     const l = od?.locacoes.find(x => x.incluida);
-    if (!l || !od?.data_producao) { setClima(null); return; }
-    previsaoParaDiaria(l.endereco || l.nome, od.data_producao).then(setClima);
+    if (!l || !od?.data_producao) { setClima(null); setClimaMotivo(null); return; }
+    previsaoParaDiaria(l.endereco || l.nome, od.data_producao).then(({ dados, motivo }) => {
+      setClima(dados);
+      setClimaMotivo(motivo ?? null);
+    });
   }, [od?.locacoes, od?.data_producao]);
 
   // ── Persistência campo a campo ────────────────────────────────────────
@@ -1088,6 +1092,8 @@ export default function OrdemDoDiaDetalhe() {
               <p className="text-[12px] text-lumos-text-secondary italic">
                 {!od.data_producao ? 'Defina a data pra buscar a previsão.'
                   : !locsAtivas.length ? 'Cadastre uma locação pra buscar a previsão.'
+                  : climaMotivo === 'endereco_nao_encontrado' ? 'Não encontramos esse endereço. Confira se está completo (rua, número, cidade).'
+                  : climaMotivo === 'erro' ? 'Não deu pra buscar a previsão agora. Tenta de novo daqui a pouco.'
                   : 'Previsão disponível a partir de 15 dias antes.'}
               </p>
             )}

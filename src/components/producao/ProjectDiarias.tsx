@@ -154,7 +154,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   useEffect(() => {
     diarias.forEach(d => {
       if (!d.local || !d.data || clima[d.id] !== undefined) return;
-      previsaoParaDiaria(d.local, d.data).then(p => setClima(c => ({ ...c, [d.id]: p })));
+      previsaoParaDiaria(d.local, d.data).then(({ dados }) => setClima(c => ({ ...c, [d.id]: dados })));
     });
   }, [diarias]); // eslint-disable-line react-hooks/exhaustive-deps
 
