@@ -24,18 +24,6 @@ BEGIN
 
   SELECT name INTO v_client_name FROM clients WHERE id = v_portal.client_id;
 
-  SELECT i.* INTO v_item
-  FROM client_welcome_doc_itens i
-  JOIN client_welcome_docs d ON d.id = i.welcome_doc_id
-  WHERE d.client_id = v_portal.client_id AND d.status = 'published' AND i.item_key = p_item_key;
-
-  IF v_item IS NULL THEN
-    RETURN jsonb_build_object('error', 'item_invalido');
-  END IF;
-  IF v_item.requer_arquivo THEN
-    RETURN jsonb_build_object('error', 'item_precisa_de_arquivo');
-  END IF;
-
   IF v_portal.exige_login THEN
     v_email := lower(COALESCE(auth.jwt() ->> 'email', ''));
     IF v_email = '' THEN
@@ -52,6 +40,18 @@ BEGIN
     v_concluido_por := COALESCE(v_pessoa_nome, split_part(v_pessoa_email, '@', 1));
   ELSE
     v_concluido_por := NULLIF(trim(p_nome_pessoa), '');
+  END IF;
+
+  SELECT i.* INTO v_item
+  FROM client_welcome_doc_itens i
+  JOIN client_welcome_docs d ON d.id = i.welcome_doc_id
+  WHERE d.client_id = v_portal.client_id AND d.status = 'published' AND i.item_key = p_item_key;
+
+  IF v_item IS NULL THEN
+    RETURN jsonb_build_object('error', 'item_invalido');
+  END IF;
+  IF v_item.requer_arquivo THEN
+    RETURN jsonb_build_object('error', 'item_precisa_de_arquivo');
   END IF;
 
   INSERT INTO client_boas_vindas_itens (client_id, item_key, tipo, concluido_por, concluido_em, welcome_doc_item_id)
