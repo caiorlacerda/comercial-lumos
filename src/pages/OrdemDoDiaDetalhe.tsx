@@ -800,23 +800,45 @@ export default function OrdemDoDiaDetalhe() {
   useRealtimeRefetch(['ordens_do_dia'], () => { void load({ silencioso: true }); }, { enabled: !!id && !loading });
 
   // ── Derivados do cronograma ───────────────────────────────────────────
-  // Vira o dia: cada item do cronograma só guarda hora-do-dia, sem data. A
-  // virada é detectada sozinha, andando pelos itens na ordem em que já
-  // estão na tela (a mesma que as setas ↑↓ controlam): sempre que um
-  // horário "volta pra trás" em relação ao que já rodou, soma 24h dali em
-  // diante. Cobre também um item só que atravessa a virada (ex.: 23:00 →
-  // 01:00) — o próprio item vira o dia entre o início e o fim dele.
+  // Vira o dia: cada item do cronograma só guarda hora-do-dia, sem data.
+  // 1ª passada, só pelos itens "principais" (não paralelos) e na ordem em
+  // que estão: assim que um horário volta pra trás em relação ao que já
+  // rodou, soma 24h dali em diante — e só uma vez (uma diária não passa
+  // de uma meia-noite). Itens "em paralelo" nascem sempre no fim do
+  // array, com o início de um item que já rodou — a posição deles no
+  // array não indica quando de fato acontecem, então em vez de segui-la,
+  // cada um herda o offset do item principal com o horário bruto mais
+  // próximo do seu. Cobre também um item só que atravessa a virada
+  // (ex.: 23:00 → 01:00) — o próprio item vira o dia entre o início e o
+  // fim dele.
   const cron = useMemo(() => {
+    const itens = (od?.plano_acao || []) as Momento[];
     let diaOffset = 0;
     let ultimoFim = -Infinity;
-    const comEfetivo = (od?.plano_acao || []).map(r => {
+    const ancoras: { rawInicio: number; offset: number }[] = [];
+    const offsetPorIndice = new Map<number, number>();
+    itens.forEach((r, i) => {
+      if (r.paralelo) return;
       const iniBruto = minutos(r.inicio);
-      const fimBruto = minutos(r.fim);
-      if (iniBruto != null && iniBruto + diaOffset * 1440 < ultimoFim) diaOffset++;
+      if (iniBruto != null && diaOffset < 1 && iniBruto < ultimoFim) diaOffset = 1;
+      offsetPorIndice.set(i, diaOffset);
       const iniEfetivo = iniBruto != null ? iniBruto + diaOffset * 1440 : null;
+      const fimBruto = minutos(r.fim);
       let fimEfetivo = fimBruto != null ? fimBruto + diaOffset * 1440 : null;
       if (fimEfetivo != null && iniEfetivo != null && fimEfetivo < iniEfetivo) fimEfetivo += 1440;
-      ultimoFim = fimEfetivo ?? iniEfetivo ?? ultimoFim;
+      ultimoFim = Math.max(ultimoFim, fimEfetivo ?? iniEfetivo ?? ultimoFim);
+      if (iniBruto != null) ancoras.push({ rawInicio: iniBruto, offset: diaOffset });
+    });
+    const distCirc = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, 1440 - d); };
+    const comEfetivo = itens.map((r, i) => {
+      const iniBruto = minutos(r.inicio);
+      const fimBruto = minutos(r.fim);
+      const offset = offsetPorIndice.get(i) ?? (iniBruto != null && ancoras.length
+        ? ancoras.reduce((best, a) => distCirc(a.rawInicio, iniBruto) < distCirc(best.rawInicio, iniBruto) ? a : best).offset
+        : 0);
+      const iniEfetivo = iniBruto != null ? iniBruto + offset * 1440 : null;
+      let fimEfetivo = fimBruto != null ? fimBruto + offset * 1440 : null;
+      if (fimEfetivo != null && iniEfetivo != null && fimEfetivo < iniEfetivo) fimEfetivo += 1440;
       return { ...r, iniEfetivo, fimEfetivo };
     });
     const rows = comEfetivo.slice().sort((a, b) => (a.iniEfetivo ?? 9999) - (b.iniEfetivo ?? 9999));
@@ -1189,7 +1211,7 @@ export default function OrdemDoDiaDetalhe() {
             {canManage && (
               <button type="button" onClick={() => setQf({ title: 'Nova locação', submitLabel: 'Criar', fields: [
                 { key: 'nome', label: 'Nome', placeholder: 'Ex.: Praia da Reserva', required: true },
-                { key: 'endereco', label: 'Endereço completo', placeholder: 'Rua, número, bairro, cidade' },
+                { key: 'endereco', label: 'Endereço completo', placeholder: 'Rua, número, bairro, cidade', required: true },
               ], onSubmit: v => void editarLista('locacoes', [...od.locacoes, { nome: v.nome.trim(), endereco: v.endereco.trim(), incluida: true }]) })}
                 className="ml-auto btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Criar locação</button>
             )}
@@ -1229,7 +1251,7 @@ export default function OrdemDoDiaDetalhe() {
                     <>
                       <button type="button" onClick={() => setQf({ title: 'Editar locação', fields: [
                         { key: 'nome', label: 'Nome', value: l.nome, required: true },
-                        { key: 'endereco', label: 'Endereço completo', value: l.endereco },
+                        { key: 'endereco', label: 'Endereço completo', value: l.endereco, required: true },
                       ], onSubmit: v => void editarLista('locacoes', od.locacoes.map((x, j) => j === i ? { ...x, nome: v.nome.trim(), endereco: v.endereco.trim() } : x)) })}
                         className="p-1.5 text-lumos-text-secondary hover:text-lumos-yellow opacity-0 group-hover:opacity-100" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
                       <button type="button" onClick={async () => {
