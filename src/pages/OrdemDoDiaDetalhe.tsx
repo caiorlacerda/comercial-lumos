@@ -90,17 +90,30 @@ const hojeLocal = () => {
 const fmtMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 // Cada item do cronograma só guarda hora-do-dia, sem data — nada indica se um
-// item é do "dia 1" ou já da madrugada do "dia 2" da diária. Em vez de tentar
-// adivinhar pela posição no array (quebra com itens em paralelo ou fora de
-// ordem), compara a hora bruta de cada item com o horário de início da
-// própria diária: quem tem hora-do-dia ANTES do início só pode ser porque já
-// virou a madrugada seguinte. Cada item é classificado sozinho, então
-// funciona igual não importa a ordem ou quantos aconteçam ao mesmo tempo.
+// item é do "dia 1" ou já da madrugada do "dia 2" da diária. `hora_inicio` da
+// diária não serve de referência: é um campo legado que raramente é mantido
+// atualizado (pode ficar com um horário de um rascunho antigo, bem diferente
+// do cronograma de verdade) — e nem dá pra saber pela posição no array
+// (quebra com itens em paralelo ou fora de ordem). Em vez disso, o próprio
+// cronograma se auto-descreve: olhando todos os horários de início num
+// relógio de 24h, o maior intervalo vazio entre dois horários consecutivos
+// só pode ser a madrugada (quando nada acontece) — quem vem logo depois
+// desse intervalo é o início do dia 1. Com um intervalo bem maior que os
+// outros (a diária tem começo, meio e fim — não é vinte e quatro horas
+// preenchidas), isso acerta sozinho sem precisar de nenhum campo confiável.
 const baseDoDia = (horaInicioDiaria: string | null | undefined, itens: { inicio: string | null }[]) => {
-  const declarado = minutos(horaInicioDiaria);
-  if (declarado != null) return declarado;
-  const brutos = itens.map(r => minutos(r.inicio)).filter((n): n is number => n != null);
-  return brutos.length ? Math.min(...brutos) : 0;
+  const brutos = Array.from(new Set(itens.map(r => minutos(r.inicio)).filter((n): n is number => n != null))).sort((a, b) => a - b);
+  if (brutos.length === 0) return minutos(horaInicioDiaria) ?? 0;
+  if (brutos.length === 1) return brutos[0];
+  let melhorInicio = brutos[0];
+  let maiorGap = -1;
+  for (let i = 0; i < brutos.length; i++) {
+    const atual = brutos[i];
+    const proximo = brutos[(i + 1) % brutos.length];
+    const gap = proximo > atual ? proximo - atual : proximo + 1440 - atual;
+    if (gap > maiorGap || (gap === maiorGap && proximo < melhorInicio)) { maiorGap = gap; melhorInicio = proximo; }
+  }
+  return melhorInicio;
 };
 const efetivoDoItem = (inicio: string | null | undefined, fim: string | null | undefined, base: number) => {
   const iniBruto = minutos(inicio);
