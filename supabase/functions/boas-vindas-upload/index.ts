@@ -1,6 +1,8 @@
-// Bem-vindo à Lumos: upload dos itens do checklist de onboarding (logo,
-// brand book, guidelines). O item "acessos" não passa por aqui — não tem
-// arquivo, é marcado pela RPC marcar_item_boas_vindas.
+// Bem-vindo à Lumos: upload dos itens do checklist de onboarding. O item_key
+// não é mais um conjunto fixo: é resolvido dinamicamente contra o Welcome Doc
+// publicado do cliente (client_welcome_doc_itens). Item que não pede arquivo
+// (requer_arquivo = false) não passa por aqui — é marcado pela RPC
+// marcar_item_boas_vindas.
 //
 // POST /boas-vindas-upload, corpo multipart/form-data:
 //   token (texto do portal), item_key (qualquer item do doc publicado do
@@ -250,6 +252,12 @@ async function notificarTime(clientId: string, clientName: string, itemLabel: st
 // Nome da subpasta no Drive a partir do item_key: maiúsculo, sem acento,
 // espaço vira hífen — mesma normalização que drive-provision usa pra nome
 // de pasta de projeto (slugify), só que aqui aplicada ao item_key.
+// Exceção legada: a pasta canônica que ensureClientAssetsFolder pré-cria (e
+// que a drive-provision cria também) é LOGOS, no plural — o item_key 'logo'
+// normalizaria pra 'LOGO' e criaria uma pasta nova, órfã, ao lado da certa.
+// Qualquer outro item_key segue pelo nomeSubpasta() normal.
+const PASTA_LEGADO: Record<string, string> = { logo: 'LOGOS' }
+
 function nomeSubpasta(itemKey: string): string {
   return itemKey
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -329,7 +337,7 @@ serve(async (req) => {
 
   try {
     const assetsId = await ensureClientAssetsFolder(client)
-    const subfolderId = await ensureFolder(assetsId, nomeSubpasta(itemKey))
+    const subfolderId = await ensureFolder(assetsId, PASTA_LEGADO[itemKey] ?? nomeSubpasta(itemKey))
     const bytes = new Uint8Array(await arquivo.arrayBuffer())
     const fileId = await uploadFile(subfolderId, arquivo.name, arquivo.type, bytes)
 
