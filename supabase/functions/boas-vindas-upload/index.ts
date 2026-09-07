@@ -3,7 +3,8 @@
 // arquivo, é marcado pela RPC marcar_item_boas_vindas.
 //
 // POST /boas-vindas-upload, corpo multipart/form-data:
-//   token (texto do portal), item_key ('logo'|'brand_book'|'guidelines'),
+//   token (texto do portal), item_key (qualquer item do doc publicado do
+//   cliente em client_welcome_doc_itens com requer_arquivo = true),
 //   nome_pessoa (texto, opcional), arquivo (o arquivo).
 //
 // Autorização: o token do portal, verificado aqui dentro (client_portals) —
@@ -42,12 +43,6 @@ const json = (b: unknown, status = 200) =>
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const SYSTEM_FILES = new Set(['.DS_Store', 'desktop.ini', 'Thumbs.db'])
-
-const SUBPASTA: Record<string, string> = {
-  logo: 'LOGOS',
-  brand_book: 'BRAND-BOOK',
-  guidelines: 'GUIDELINES',
-}
 
 // --- Google auth (idêntico ao drive-provision, duplicado de propósito: cada
 //     edge function neste projeto é autocontida, sem módulo compartilhado) ---
@@ -258,6 +253,31 @@ const ITEM_LABEL: Record<string, string> = {
   guidelines: 'as guidelines de conteúdo',
 }
 
+// Nome da subpasta no Drive a partir do item_key: maiúsculo, sem acento,
+// espaço vira hífen — mesma normalização que drive-provision usa pra nome
+// de pasta de projeto (slugify), só que aqui aplicada ao item_key.
+function nomeSubpasta(itemKey: string): string {
+  return itemKey
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'ARQUIVOS'
+}
+
+// Busca o item no doc publicado do cliente — item_key inválido, item que
+// não existe, ou item que não precisa de arquivo (é do tipo "marcar
+// manualmente", tratado pela RPC marcar_item_boas_vindas, não por aqui)
+// todos voltam null, e o handler responde 400.
+async function buscarItemUpload(clientId: string, itemKey: string): Promise<{ id: string; group_key: string; titulo: string } | null> {
+  const { data: doc } = await db.from('client_welcome_docs')
+    .select('id').eq('client_id', clientId).eq('status', 'published').maybeSingle()
+  if (!doc) return null
+  const { data: item } = await db.from('client_welcome_doc_itens')
+    .select('id, group_key, titulo, requer_arquivo').eq('welcome_doc_id', doc.id).eq('item_key', itemKey).maybeSingle()
+  if (!item || !item.requer_arquivo) return null
+  return { id: item.id, group_key: item.group_key, titulo: item.titulo }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'use POST' }, 405)
@@ -275,7 +295,6 @@ serve(async (req) => {
   const arquivo = form.get('arquivo')
 
   if (!token || !itemKey) return json({ error: 'token e item_key obrigatórios' }, 400)
-  if (!SUBPASTA[itemKey]) return json({ error: 'item_key inválido' }, 400)
   if (!(arquivo instanceof File)) return json({ error: 'arquivo obrigatório' }, 400)
   if (arquivo.size > MAX_BYTES) return json({ error: 'arquivo muito grande, o limite é 25MB' }, 413)
 
@@ -308,15 +327,22 @@ serve(async (req) => {
     assinatura = pessoa.nome || alvo.split('@')[0]
   }
 
+  // item_key só é resolvido depois do portão de login: assim, quem ainda não
+  // provou acesso a um portal com exige_login nunca descobre, pela resposta,
+  // se um item_key existe ou não — o 401 de login vem sempre primeiro.
+  const item = await buscarItemUpload(client.id, itemKey)
+  if (!item) return json({ error: 'item_key inválido' }, 400)
+
   try {
     const assetsId = await ensureClientAssetsFolder(client)
-    const subfolderId = await ensureFolder(assetsId, SUBPASTA[itemKey])
+    const subfolderId = await ensureFolder(assetsId, nomeSubpasta(itemKey))
     const bytes = new Uint8Array(await arquivo.arrayBuffer())
     const fileId = await uploadFile(subfolderId, arquivo.name, arquivo.type, bytes)
 
     const { error: upsertError } = await db.from('client_boas_vindas_itens').upsert({
       client_id: client.id,
       item_key: itemKey,
+      welcome_doc_item_id: item.id,
       tipo: 'arquivo',
       drive_file_id: fileId,
       nome_arquivo: arquivo.name,
