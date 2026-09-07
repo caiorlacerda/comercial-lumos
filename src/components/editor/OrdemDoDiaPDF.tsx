@@ -374,15 +374,23 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
   const ponto = ordem.ponto_encontro;
 
   // Horário da diária: sai do próprio cronograma, igual à tela. Cada item só
-  // guarda hora-do-dia, sem data — não dá pra saber se é do dia 1 ou já da
-  // madrugada do dia 2 só pela posição na lista (quebra com itens em
-  // paralelo ou fora de ordem). Em vez disso, cada item é classificado
-  // sozinho: hora-do-dia ANTES do início da diária só pode ser porque já
-  // virou a madrugada seguinte. Cobre também um item só que atravessa a
+  // guarda hora-do-dia, sem data. `hora_inicio` da diária não serve de
+  // referência (campo legado, raramente atualizado) — o próprio cronograma
+  // se auto-descreve: o maior intervalo vazio entre dois horários de início
+  // consecutivos (num relógio de 24h) só pode ser a madrugada; quem vem logo
+  // depois é o início do dia 1. Cobre também um item só que atravessa a
   // virada (ex.: 23:00 → 01:00).
-  const horaInicioBruta = emMinutos(ordem.hora_inicio);
-  const inicioBrutoDosItens = cronograma.map(m => emMinutos(m.inicio)).filter((n): n is number => n != null);
-  const baseDia = horaInicioBruta ?? (inicioBrutoDosItens.length ? Math.min(...inicioBrutoDosItens) : 0);
+  const brutosOrdenados = Array.from(new Set(cronograma.map(m => emMinutos(m.inicio)).filter((n): n is number => n != null))).sort((a, b) => a - b);
+  let baseDia = brutosOrdenados[0] ?? (emMinutos(ordem.hora_inicio) ?? 0);
+  if (brutosOrdenados.length > 1) {
+    let maiorGap = -1;
+    for (let i = 0; i < brutosOrdenados.length; i++) {
+      const atual = brutosOrdenados[i];
+      const proximo = brutosOrdenados[(i + 1) % brutosOrdenados.length];
+      const gap = proximo > atual ? proximo - atual : proximo + 1440 - atual;
+      if (gap > maiorGap || (gap === maiorGap && proximo < baseDia)) { maiorGap = gap; baseDia = proximo; }
+    }
+  }
   const efetivos = cronograma.map(m => {
     const iniBruto = emMinutos(m.inicio);
     const fimBruto = emMinutos(m.fim);
