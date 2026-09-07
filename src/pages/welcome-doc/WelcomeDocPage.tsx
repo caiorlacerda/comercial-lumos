@@ -33,6 +33,10 @@ export default function WelcomeDocPage({ token, nomePessoa }: { token: string; n
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
 
+  // Recarga falha depois de uma primeira carga boa (o aoAtualizar do checklist)
+  // não pode apagar a página inteira: guarda o erro e deixa o conteúdo que já
+  // está na tela em pé — a mensagem aparece inline, do mesmo jeito que o
+  // BoasVindasLumos já mostra os erros dele.
   const carregar = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_welcome_doc', { p_token: token });
     if (error || data?.error) {
@@ -47,7 +51,7 @@ export default function WelcomeDocPage({ token, nomePessoa }: { token: string; n
   useEffect(() => { carregar(); }, [carregar]);
 
   if (carregando) return <div className="boas-vindas"><p className="wd-lead">Carregando…</p></div>;
-  if (erro) return <div className="boas-vindas"><p className="wd-lead" style={{ color: 'var(--ajuste)' }}>{erro}</p></div>;
+  if (erro && !resposta) return <div className="boas-vindas"><p className="wd-lead" style={{ color: 'var(--ajuste)' }}>{erro}</p></div>;
   if (!resposta?.doc) {
     return (
       <div className="boas-vindas">
@@ -61,6 +65,12 @@ export default function WelcomeDocPage({ token, nomePessoa }: { token: string; n
 
   return (
     <div className="boas-vindas">
+      {/* Marca da página, igual pra todo cliente: mora aqui, não no checklist. */}
+      <div className="hero-bv">
+        <span className="feixe" aria-hidden="true" />
+        <h1>BEM-VINDO<br /><span className="risca">À LUMOS</span></h1>
+      </div>
+      {erro && <p className="intro" style={{ color: 'var(--ajuste)' }}>{erro}</p>}
       {secoes.map(secao => {
         switch (secao.type) {
           case 'lead': {
