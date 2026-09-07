@@ -800,24 +800,42 @@ export default function OrdemDoDiaDetalhe() {
   useRealtimeRefetch(['ordens_do_dia'], () => { void load({ silencioso: true }); }, { enabled: !!id && !loading });
 
   // ── Derivados do cronograma ───────────────────────────────────────────
+  // Vira o dia: cada item do cronograma só guarda hora-do-dia, sem data. A
+  // virada é detectada sozinha, andando pelos itens na ordem em que já
+  // estão na tela (a mesma que as setas ↑↓ controlam): sempre que um
+  // horário "volta pra trás" em relação ao que já rodou, soma 24h dali em
+  // diante. Cobre também um item só que atravessa a virada (ex.: 23:00 →
+  // 01:00) — o próprio item vira o dia entre o início e o fim dele.
   const cron = useMemo(() => {
-    const rows = (od?.plano_acao || []).slice().sort((a, b) => (minutos(a.inicio) ?? 9999) - (minutos(b.inicio) ?? 9999));
-    const inicio = rows.length ? minutos(rows[0].inicio) : minutos(od?.hora_inicio);
-    const fim = rows.length ? Math.max(...rows.map(r => minutos(r.fim) ?? minutos(r.inicio) ?? 0)) : minutos(od?.hora_fim);
+    let diaOffset = 0;
+    let ultimoFim = -Infinity;
+    const comEfetivo = (od?.plano_acao || []).map(r => {
+      const iniBruto = minutos(r.inicio);
+      const fimBruto = minutos(r.fim);
+      if (iniBruto != null && iniBruto + diaOffset * 1440 < ultimoFim) diaOffset++;
+      const iniEfetivo = iniBruto != null ? iniBruto + diaOffset * 1440 : null;
+      let fimEfetivo = fimBruto != null ? fimBruto + diaOffset * 1440 : null;
+      if (fimEfetivo != null && iniEfetivo != null && fimEfetivo < iniEfetivo) fimEfetivo += 1440;
+      ultimoFim = fimEfetivo ?? iniEfetivo ?? ultimoFim;
+      return { ...r, iniEfetivo, fimEfetivo };
+    });
+    const rows = comEfetivo.slice().sort((a, b) => (a.iniEfetivo ?? 9999) - (b.iniEfetivo ?? 9999));
+    const inicio = rows.length ? rows[0].iniEfetivo : minutos(od?.hora_inicio);
+    const fim = rows.length ? Math.max(...rows.map(r => r.fimEfetivo ?? r.iniEfetivo ?? 0)) : minutos(od?.hora_fim);
     const total = inicio != null && fim != null && fim > inicio ? fim - inicio : null;
 
     const hoje = od?.data_producao === hojeLocal();
     const agoraMin = agora.getHours() * 60 + agora.getMinutes() + agora.getSeconds() / 60;
-    let atual: AtividadePlano | null = null;
+    let atual: (typeof rows)[number] | null = null;
     let atrasoSeg = 0; let atrasados = 0;
     if (hoje && rows.length) {
       for (const r of rows) {
-        const ri = minutos(r.inicio); const rf = minutos(r.fim) ?? (ri != null ? ri + 30 : null);
+        const ri = r.iniEfetivo; const rf = r.fimEfetivo ?? (ri != null ? ri + 30 : null);
         if (ri != null && agoraMin >= ri) atual = r;
         if (rf != null && agoraMin > rf) atrasados++;
       }
       if (atual) {
-        const rf = minutos(atual.fim);
+        const rf = atual.fimEfetivo;
         if (rf != null && agoraMin > rf) atrasoSeg = Math.round((agoraMin - rf) * 60);
       }
     }
@@ -903,6 +921,14 @@ export default function OrdemDoDiaDetalhe() {
           </button>
           <button type="button" disabled={gerandoPdf}
             onClick={async () => {
+              // A ficha sai pro set com "Função a definir" escrito de verdade se
+              // alguém da equipe não tiver função — trava aqui antes de gerar,
+              // em vez de deixar o problema pra quem for ler o PDF na mão.
+              const semFuncao = od.equipe.filter(m => !m.funcao?.trim());
+              if (semFuncao.length) {
+                toast.error(`Preenche a função de ${semFuncao.map(m => m.nome).join(', ')} antes de exportar.`);
+                return;
+              }
               setGerandoPdf(true);
               try {
                 const [{ pdf }, { OrdemDoDiaPDF }, React] = await Promise.all([
@@ -985,7 +1011,10 @@ export default function OrdemDoDiaDetalhe() {
             </div>
             {cron.inicio != null && cron.fim != null ? (
               <>
-                <p className="text-[15px] font-black text-lumos-text-primary tabular-nums">{fmtMin(cron.inicio)} → {fmtMin(cron.fim)}</p>
+                <p className="text-[15px] font-black text-lumos-text-primary tabular-nums">
+                  {fmtMin(cron.inicio)} → {fmtMin(cron.fim)}
+                  {cron.fim >= 1440 && <span className="text-[10px] font-bold text-lumos-yellow align-top ml-1">dia seguinte</span>}
+                </p>
                 {cron.total != null && <p className="text-[10.5px] text-lumos-text-secondary">{Math.floor(cron.total / 60)}h {cron.total % 60 ? `${cron.total % 60}min` : ''} no total</p>}
               </>
             ) : (

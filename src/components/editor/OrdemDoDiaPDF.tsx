@@ -372,14 +372,30 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
   const regras = ordem.regras || {};
   const ponto = ordem.ponto_encontro;
 
-  // Horário da diária: sai do próprio cronograma, igual à tela.
-  const inicios = cronograma.map(m => emMinutos(m.inicio)).filter((n): n is number => n != null);
-  const fins = cronograma.map(m => emMinutos(m.fim) ?? emMinutos(m.inicio)).filter((n): n is number => n != null);
+  // Horário da diária: sai do próprio cronograma, igual à tela. Cada item só
+  // guarda hora-do-dia, sem data — a virada é detectada sozinha, andando
+  // pelos itens na ordem em que já estão salvos: sempre que um horário
+  // "volta pra trás" em relação ao que já rodou, soma 24h dali em diante.
+  // Cobre também um item só que atravessa a virada (ex.: 23:00 → 01:00).
+  let diaOffsetPdf = 0;
+  let ultimoFimPdf = -Infinity;
+  const efetivos = cronograma.map(m => {
+    const iniBruto = emMinutos(m.inicio);
+    const fimBruto = emMinutos(m.fim);
+    if (iniBruto != null && iniBruto + diaOffsetPdf * 1440 < ultimoFimPdf) diaOffsetPdf++;
+    const ini = iniBruto != null ? iniBruto + diaOffsetPdf * 1440 : null;
+    let fim = fimBruto != null ? fimBruto + diaOffsetPdf * 1440 : ini;
+    if (fim != null && ini != null && fim < ini) fim += 1440;
+    ultimoFimPdf = fim ?? ini ?? ultimoFimPdf;
+    return { ini, fim };
+  });
+  const inicios = efetivos.map(e => e.ini).filter((n): n is number => n != null);
+  const fins = efetivos.map(e => e.fim).filter((n): n is number => n != null);
   const horaInicio = inicios.length ? Math.min(...inicios) : null;
   const horaFim = fins.length ? Math.max(...fins) : null;
   const totalMin = horaInicio != null && horaFim != null && horaFim > horaInicio ? horaFim - horaInicio : null;
   const horarioTexto = horaInicio != null && horaFim != null
-    ? `${deMinutos(horaInicio)} às ${deMinutos(horaFim)}${totalMin ? `, ${Math.floor(totalMin / 60)}h${totalMin % 60 ? ` ${totalMin % 60}min` : ''} no total` : ''}`
+    ? `${deMinutos(horaInicio)} às ${deMinutos(horaFim)}${horaFim >= 1440 ? ' (dia seguinte)' : ''}${totalMin ? `, ${Math.floor(totalMin / 60)}h${totalMin % 60 ? ` ${totalMin % 60}min` : ''} no total` : ''}`
     : 'A definir no cronograma';
 
   const equipeMid = Math.ceil(equipe.length / 2);
@@ -467,7 +483,47 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
           </Secao>
         )}
 
-        {/* ═══ O DIA ACONTECENDO ═══ */}
+        {/* ═══ QUEM ESTÁ NO SET, ONDE E QUANDO ═══ */}
+
+        {/* Equipe, ficha técnica em duas colunas */}
+        {ligada('equipe') && equipe.length > 0 && (
+          <Secao titulo={`Equipe (${equipe.length})`}>
+            <View style={styles.twoColRow}>
+              <View style={styles.col}>
+                {equipeColA.map((m, i) => (
+                  <View key={i} style={[styles.equipeItem, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
+                    <Text style={styles.equipeFuncao}>{m.funcao || 'Função a definir'}</Text>
+                    <Text style={styles.equipeNome}>{m.nome || ''}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.col}>
+                {equipeColB.map((m, i) => (
+                  <View key={i} style={[styles.equipeItem, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
+                    <Text style={styles.equipeFuncao}>{m.funcao || 'Função a definir'}</Text>
+                    <Text style={styles.equipeNome}>{m.nome || ''}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </Secao>
+        )}
+
+        {/* Locações, todas as incluídas */}
+        {ligada('locacao') && locacoes.length > 0 && (
+          <Secao titulo={locacoes.length > 1 ? `Locações (${locacoes.length})` : 'Locação'}>
+            {locacoes.map((l, i) => (
+              <View key={i} style={styles.locItem} wrap={false}>
+                {locacoes.length > 1 && <Text style={styles.locOrdem}>{i + 1}ª</Text>}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.locNome}>{l.nome}</Text>
+                  {temTexto(l.endereco) && <Text style={styles.locLinha}>{l.endereco}</Text>}
+                  {temTexto(l.observacoes) && <Text style={styles.locLinha}>{l.observacoes}</Text>}
+                </View>
+              </View>
+            ))}
+          </Secao>
+        )}
 
         {/* Cronograma */}
         {ligada('plano_acao') && cronograma.length > 0 && (
@@ -500,22 +556,6 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
           </Secao>
         )}
 
-        {/* Locações, todas as incluídas */}
-        {ligada('locacao') && locacoes.length > 0 && (
-          <Secao titulo={locacoes.length > 1 ? `Locações (${locacoes.length})` : 'Locação'}>
-            {locacoes.map((l, i) => (
-              <View key={i} style={styles.locItem} wrap={false}>
-                {locacoes.length > 1 && <Text style={styles.locOrdem}>{i + 1}ª</Text>}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.locNome}>{l.nome}</Text>
-                  {temTexto(l.endereco) && <Text style={styles.locLinha}>{l.endereco}</Text>}
-                  {temTexto(l.observacoes) && <Text style={styles.locLinha}>{l.observacoes}</Text>}
-                </View>
-              </View>
-            ))}
-          </Secao>
-        )}
-
         {/* ═══ LISTAS DE APOIO ═══ */}
 
         {/* Elenco */}
@@ -537,30 +577,6 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
                 <Text style={[styles.cell, { width: '32%' }]}>{t.obs || ''}</Text>
               </View>
             ))}
-          </Secao>
-        )}
-
-        {/* Equipe, ficha técnica em duas colunas */}
-        {ligada('equipe') && equipe.length > 0 && (
-          <Secao titulo={`Equipe (${equipe.length})`}>
-            <View style={styles.twoColRow}>
-              <View style={styles.col}>
-                {equipeColA.map((m, i) => (
-                  <View key={i} style={[styles.equipeItem, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
-                    <Text style={styles.equipeFuncao}>{m.funcao || 'Função a definir'}</Text>
-                    <Text style={styles.equipeNome}>{m.nome || ''}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.col}>
-                {equipeColB.map((m, i) => (
-                  <View key={i} style={[styles.equipeItem, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
-                    <Text style={styles.equipeFuncao}>{m.funcao || 'Função a definir'}</Text>
-                    <Text style={styles.equipeNome}>{m.nome || ''}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
           </Secao>
         )}
 
