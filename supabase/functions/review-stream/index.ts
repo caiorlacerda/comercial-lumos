@@ -190,10 +190,18 @@ serve(async (req) => {
   headers.set('Server-Timing', `resolver;dur=${msResolver}, gtoken;dur=${msToken}, drive;dur=${Date.now() - t2}`)
   headers.set('Access-Control-Expose-Headers', 'content-range, accept-ranges, content-length, server-timing')
 
-  // Download direto (só se o link permitir): força "salvar como" com o nome real
+  // Download direto (só se o link permitir): força "salvar como" com o nome real.
+  // Content-Disposition só aceita ISO-8859-1 puro no valor "simples" — travessão
+  // (–), aspas curvas ou emoji no nome do arquivo (comum em nome de projeto) faz
+  // o Headers.set do runtime estourar uma exceção não tratada, e a função
+  // inteira vira "Internal Server Error" pro usuário. RFC 6266: manda um nome
+  // de fallback só em ASCII e o nome de verdade em filename* (percent-encoded,
+  // sempre ASCII, então nunca quebra o Headers.set).
   if (wantsDownload && link.allow_download) {
-    const safe = (version.file_name || 'video').replace(/["\\\r\n]/g, '_')
-    headers.set('Content-Disposition', `attachment; filename="${safe}"`)
+    const nomeOriginal = (version.file_name || 'video').replace(/[\r\n]/g, '_')
+    const asciiSeguro = nomeOriginal.replace(/["\\]/g, '_').replace(/[^\x20-\x7E]/g, '_')
+    const utf8Percent = encodeURIComponent(nomeOriginal)
+    headers.set('Content-Disposition', `attachment; filename="${asciiSeguro}"; filename*=UTF-8''${utf8Percent}`)
   }
 
   return new Response(driveRes.body, { status: driveRes.status, headers })
