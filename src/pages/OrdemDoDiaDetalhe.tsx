@@ -222,6 +222,9 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
     .map((r, i) => ({ r, i, efetivo: efetivoDoItem(r.inicio, r.fim, base) }))
     .sort((a, b) => (a.efetivo.ini ?? Infinity) - (b.efetivo.ini ?? Infinity));
   const [pickerAberto, setPickerAberto] = useState(false);
+  // Índice (real, em `rows`) do item cujo "ação" (tipo) está sendo trocado —
+  // null quando fechado. Troca só o tipo, sem mexer no resto do momento.
+  const [tipoEditIdx, setTipoEditIdx] = useState<number | null>(null);
   const [cfg, setCfg] = useState<null | { tipo: TipoMomento; inicio: string; locacao: string; chegada: string; duracao: number; paralelo: boolean; descricao: string; manual: boolean; calculando: boolean }>(null);
   const [alturaRel, setAlturaRel] = useState(() => { try { return localStorage.getItem('lumos_od_altura') === '1'; } catch { return false; } });
   const [cfgAberto, setCfgAberto] = useState(false);
@@ -397,10 +400,18 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                       placeholder="O que acontece nesse bloco" className="input-lumos h-8 text-[12px] w-full" />
                   ) : <span className="text-[12.5px] font-bold text-lumos-text-primary min-h-8 flex items-center">{r.descricao}</span>}
                   <span className="flex flex-wrap items-center gap-1.5 mt-1">
-                    <span className="text-[9px] font-black uppercase tracking-wide rounded-full px-2 py-0.5 flex items-center gap-1"
-                      style={{ color: t.cor, backgroundColor: `${t.cor}1f` }}>
-                      <t.Icon className="w-2.5 h-2.5" /> {t.label}
-                    </span>
+                    {canManage ? (
+                      <button type="button" onClick={() => setTipoEditIdx(i)} title="Trocar a ação"
+                        className="text-[9px] font-black uppercase tracking-wide rounded-full px-2 py-0.5 flex items-center gap-1 hover:brightness-110 transition-[filter]"
+                        style={{ color: t.cor, backgroundColor: `${t.cor}1f` }}>
+                        <t.Icon className="w-2.5 h-2.5" /> {t.label}
+                      </button>
+                    ) : (
+                      <span className="text-[9px] font-black uppercase tracking-wide rounded-full px-2 py-0.5 flex items-center gap-1"
+                        style={{ color: t.cor, backgroundColor: `${t.cor}1f` }}>
+                        <t.Icon className="w-2.5 h-2.5" /> {t.label}
+                      </span>
+                    )}
                     {r.locacao && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{r.locacao}</span>}
                     {r.tipo === 'deslocamento' && r.chegada && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5">→ {r.chegada}</span>}
                     {r.paralelo && <span className="text-[9px] font-black uppercase text-purple-400 bg-purple-500/10 rounded-full px-2 py-0.5">paralelo</span>}
@@ -468,6 +479,28 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                   <span className="text-[10px] font-black text-lumos-text-primary">{TIPOS[k].label}</span>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Trocar a ação (tipo) de um momento já criado — sem apagar nada */}
+      {tipoEditIdx != null && rows[tipoEditIdx] && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={() => setTipoEditIdx(null)}>
+          <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-black text-lumos-text-primary mb-3">Trocar ação de "{rows[tipoEditIdx].descricao || 'este momento'}"</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.keys(TIPOS) as TipoMomento[]).map(k => {
+                const atual = (rows[tipoEditIdx].tipo || 'personalizado') === k;
+                return (
+                  <button key={k} type="button" onClick={() => { editar(tipoEditIdx, 'tipo', k); setTipoEditIdx(null); }}
+                    className={clsx('border rounded-lumos p-3 flex flex-col items-center gap-1.5 transition-colors',
+                      atual ? 'border-lumos-yellow bg-lumos-yellow/[0.08]' : 'border-lumos-border hover:border-lumos-yellow/60 hover:bg-lumos-yellow/[0.05]')}>
+                    {(() => { const I = TIPOS[k].Icon; return <I className="w-4 h-4" style={{ color: TIPOS[k].cor }} />; })()}
+                    <span className="text-[10px] font-black text-lumos-text-primary">{TIPOS[k].label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
