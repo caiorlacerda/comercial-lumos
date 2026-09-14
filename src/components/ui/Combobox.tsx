@@ -59,6 +59,11 @@ export default function Combobox({ value, onChange, options, placeholder = 'Digi
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setQuery(''); setOpen(false); } };
     const onScroll = (e: Event) => {
       if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      // No celular, o próprio input é o gatilho: focar ele pra digitar abre o
+      // teclado virtual, que dispara "resize" — sem esse guard, o menu se
+      // fechava sozinho assim que abria. Só fecha por resize se o foco não
+      // estiver mais no input.
+      if (e.type === 'resize' && wrapRef.current?.contains(document.activeElement)) return;
       commitAndClose();
     };
     document.addEventListener('mousedown', onDoc);

@@ -58,6 +58,11 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
     // ignora o scroll de DENTRO do próprio menu (para dar pra rolar a lista).
     const onScroll = (e: Event) => {
       if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      // No celular, o campo de busca (quando searchable) autofoca e abre o
+      // teclado virtual, que dispara "resize" — sem esse guard, o menu se
+      // fechava sozinho assim que abria. Só fecha por resize se o foco não
+      // estiver mais dentro do menu.
+      if (e.type === 'resize' && menuRef.current?.contains(document.activeElement)) return;
       setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);

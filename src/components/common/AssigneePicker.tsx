@@ -77,6 +77,12 @@ export default function AssigneePicker({ value, onChange, users, freelancers = [
     // Ignora o scroll de dentro do menu (para rolar a lista de pessoas)
     const onScroll = (e: Event) => {
       if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      // No celular, focar o campo de busca (linha acima) abre o teclado
+      // virtual, e isso dispara um "resize" da janela — sem esse guard, o
+      // menu se fechava sozinho assim que abria, porque o resize do próprio
+      // teclado era lido como "a pessoa saiu da tela". Só fecha por resize
+      // se o foco não estiver mais dentro do menu.
+      if (e.type === 'resize' && menuRef.current?.contains(document.activeElement)) return;
       setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
