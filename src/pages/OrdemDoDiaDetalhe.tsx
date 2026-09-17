@@ -800,6 +800,14 @@ export default function OrdemDoDiaDetalhe() {
   // a migração não roda. Serve pra reconhecer o eco do próprio salvamento
   // quando o tempo real avisa da mudança que fomos nós que fizemos.
   const carimboRef = useRef('');
+  // Fila do próprio salvamento: mover um item várias casas no cronograma é
+  // vários cliques rápidos na setinha, cada um chamando `patch`. Sem fila,
+  // o segundo clique lê `versaoRef` antes do primeiro voltar do servidor e
+  // atualizar essa mesma ref — manda a versão velha, e a trava rejeita como
+  // se "outra pessoa" tivesse mexido, quando foi a própria pessoa, um clique
+  // atrás. Encadear em cima da promise anterior garante que cada salvamento
+  // só lê a versão depois que o de antes já a atualizou.
+  const filaPatchRef = useRef<Promise<boolean>>(Promise.resolve(true));
   // Contador de cargas: uma resposta que chega atrasada, depois de um
   // salvamento ou de uma carga mais nova, é descartada em vez de repor dado
   // velho por cima do novo.
@@ -890,7 +898,7 @@ export default function OrdemDoDiaDetalhe() {
   // salvamento leva a trava de versão junto: cada campo salvo manda o objeto
   // inteiro de volta, então sem a trava quem salva por último apaga o trabalho
   // de quem salvou antes.
-  const patch = async (fields: Partial<OD>, silencioso = false): Promise<boolean> => {
+  const patchReal = async (fields: Partial<OD>, silencioso = false): Promise<boolean> => {
     if (!od) return false;
     const prev = od;
     setOd({ ...od, ...fields });
@@ -922,6 +930,14 @@ export default function OrdemDoDiaDetalhe() {
     carimboRef.current = carimboDe(r.linha);
     if (!silencioso) toast.success('Salvo ✓');
     return true;
+  };
+
+  // Encadeia na fila em vez de rodar direto: ver o comentário de `filaPatchRef`
+  // lá em cima. Uma falha num salvamento não pode travar os próximos.
+  const patch = (fields: Partial<OD>, silencioso = false): Promise<boolean> => {
+    const proximo = filaPatchRef.current.then(() => patchReal(fields, silencioso));
+    filaPatchRef.current = proximo.catch(() => false);
+    return proximo;
   };
 
   // ── Tempo real ────────────────────────────────────────────────────────
