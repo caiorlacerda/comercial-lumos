@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { InputHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, Check, Clock, CloudRain, Copy, ExternalLink,
   Loader2, MapPin, Pencil, Plus, Shirt, Sun, Trash2, Users2, Video, Package, Camera,
   FileText, ArrowUp, ArrowDown, AlertTriangle, Megaphone, ScrollText, Wrench,
   Utensils, Coffee, Truck, SlidersHorizontal, FileDown, Eye, Search, UserPlus, BookmarkPlus,
+  GripVertical,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase';
 import { salvarComVersao } from '@/lib/salvarComVersao';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -204,6 +210,38 @@ function CampoAoVivo({ valor, onSalvar, ...resto }: {
   );
 }
 
+// Linha arrastável do cronograma. `id` é o índice real do item em `rows` — dá
+// pra usar como identidade do drag porque um arraste nunca muda a posição
+// física dos itens no array salvo, só troca os horários entre eles (ver
+// `handleDragEnd`). O puxador some do layout de quem não pode editar.
+function SortableCronogramaRow({ id, rowRef, style: estiloExtra, className, children }: {
+  id: number;
+  rowRef: (el: HTMLDivElement | null) => void;
+  style?: CSSProperties;
+  className?: string;
+  children: (puxador: ReactNode) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: CSSProperties = {
+    ...estiloExtra,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+  };
+  const puxador = (
+    <button type="button" {...attributes} {...listeners} title="Arrastar pra reordenar"
+      className="p-1 text-lumos-text-secondary/40 hover:text-lumos-text-secondary cursor-grab active:cursor-grabbing touch-none flex-shrink-0">
+      <GripVertical className="w-3.5 h-3.5" />
+    </button>
+  );
+  return (
+    <div ref={el => { setNodeRef(el); rowRef(el); }} style={style} className={className}>
+      {children(puxador)}
+    </div>
+  );
+}
+
 function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange, confirm }: {
   od: { plano_acao: Momento[]; hora_inicio: string | null };
   canManage: boolean; agora: Date; hoje: boolean;
@@ -221,6 +259,24 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
   const ordenadas = rows
     .map((r, i) => ({ r, i, efetivo: efetivoDoItem(r.inicio, r.fim, base) }))
     .sort((a, b) => (a.efetivo.ini ?? Infinity) - (b.efetivo.ini ?? Infinity));
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // Arrastar reorganiza QUEM ocupa cada horário, não os horários em si — a
+  // lista é sempre ordenada pelo relógio (ver `ordenadas`), então os slots de
+  // horário continuam nos mesmos lugares e só os itens trocam de slot.
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const antigo = ordenadas.findIndex(o => o.i === active.id);
+    const novo = ordenadas.findIndex(o => o.i === over.id);
+    if (antigo === -1 || novo === -1) return;
+    const horariosNaOrdemAtual = ordenadas.map(o => ({ inicio: o.r.inicio, fim: o.r.fim }));
+    const reordenados = arrayMove(ordenadas, antigo, novo);
+    const l = [...rows];
+    reordenados.forEach((entrada, idx) => {
+      l[entrada.i] = { ...entrada.r, inicio: horariosNaOrdemAtual[idx].inicio, fim: horariosNaOrdemAtual[idx].fim };
+    });
+    onChange(l);
+  };
   const [pickerAberto, setPickerAberto] = useState(false);
   // Índice (real, em `rows`) do item cujo "ação" (tipo) está sendo trocado —
   // null quando fechado. Troca só o tipo, sem mexer no resto do momento.
@@ -369,16 +425,19 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
             <span>Hora</span><span>Duração</span><span>Descrição</span><span>Ações</span><span>Status</span>
           </div>
 
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={ordenadas.map(o => o.i)} strategy={verticalListSortingStrategy}>
           {ordenadas.map(({ r, i, efetivo }, k) => {
             const t = TIPOS[(r.tipo as TipoMomento) || 'personalizado'] || TIPOS.personalizado;
             const st = statusDe(r);
             const dur = efetivo.ini != null && efetivo.fim != null ? Math.max(0, efetivo.fim - efetivo.ini) : null;
             const alturaMin = alturaRel && dur ? Math.min(Math.max(dur * 1.8, 44), 520) : undefined;
             return (
-              <div key={i} ref={el => { rowRefs.current[k] = el; }}
+              <SortableCronogramaRow key={i} id={i} rowRef={el => { rowRefs.current[k] = el; }}
                 style={{ minHeight: alturaMin, borderLeft: `3px solid ${t.cor}` }}
                 className={clsx('grid grid-cols-[192px_76px_1fr_96px_92px] max-lg:grid-cols-[96px_1fr_76px] gap-2 px-4 py-2 border-b border-lumos-border/60 items-start group',
                   r.destaque && 'bg-lumos-yellow/[0.04]')}>
+              {puxador => (<>
                 {/* hora: no celular os dois campos empilham, pra caber na coluna estreita */}
                 <span className="flex items-center gap-1 min-h-8 max-lg:flex-col max-lg:items-stretch tabular-nums text-[11.5px] font-black text-lumos-text-primary">
                   {canManage ? (
@@ -422,13 +481,9 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                 <span className="min-h-8 flex items-center max-lg:hidden">
                   {canManage && (
                     <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Move o vizinho na lista ordenada por horário, não o vizinho no array
-                          salvo — só troca de fato a ordem visível quando os dois têm o mesmo
-                          horário (ou nenhum), que é quando a ordem não é dada pelo relógio. */}
-                      <button type="button" disabled={k === 0} onClick={() => { const j = ordenadas[k - 1].i; const l = [...rows]; [l[i], l[j]] = [l[j], l[i]]; onChange(l); }}
-                        className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowUp className="w-3.5 h-3.5" /></button>
-                      <button type="button" disabled={k === ordenadas.length - 1} onClick={() => { const j = ordenadas[k + 1].i; const l = [...rows]; [l[i], l[j]] = [l[j], l[i]]; onChange(l); }}
-                        className="p-1 text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5" /></button>
+                      {/* Arrastar troca QUEM ocupa cada horário — os horários (slots) ficam
+                          onde estavam, só o conteúdo muda de lugar (ver `handleDragEnd`). */}
+                      {puxador}
                       <button type="button" onClick={() => editar(i, 'destaque', !r.destaque)} title="Destacar"
                         className={clsx('p-1', r.destaque ? 'text-lumos-yellow' : 'text-lumos-text-secondary hover:text-lumos-yellow')}>★</button>
                       <button type="button" onClick={async () => {
@@ -445,9 +500,12 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                   <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', st === 'atrasado' ? 'bg-red-500' : st === 'agora' ? 'bg-lumos-yellow animate-pulse' : 'bg-lumos-text-secondary/40')} />
                   {st === 'atrasado' ? 'Atrasado' : st === 'agora' ? 'Agora' : 'Pendente'}
                 </span>
-              </div>
+              </>)}
+              </SortableCronogramaRow>
             );
           })}
+          </SortableContext>
+          </DndContext>
 
           {/* A agulha do horário atual */}
           {agulhaTop != null && (
