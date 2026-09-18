@@ -41,6 +41,10 @@ export interface BudgetVersion {
   logistics_time?: string | null;
   logistics_location?: string | null;
   public_token?: string | null;
+  /** Novas propostas: o imposto reajusta o preço pra manter a margem líquida
+   *  pretendida (ver calcFinancials). Propostas antigas ficam com `false`
+   *  pra continuar exatamente como sempre foram — não é recalculado. */
+  imposto_reajusta_preco?: boolean;
 }
 
 export interface VersionFinancials {
@@ -82,16 +86,32 @@ export function calcFinancials(items: BudgetItem[], version: BudgetVersion): Ver
   // Então o preço nasce do custo dividido pelo que sobra, e não do custo
   // multiplicado pela margem — com 40% pedidos, 40% do preço é margem.
   const marginPct = Math.min(Math.max(Number(version?.margin_pct || 0), 0), MARGEM_MAX);
-  const base = totalCusto > 0 ? totalCusto / (1 - marginPct) : 0;
+  const nfPct = Number(version?.nf_pct || 0);
+
+  // Duas contas possíveis pro preço, escolhidas por proposta (não por regra
+  // global) — `imposto_reajusta_preco` trava no momento em que a proposta
+  // nasce e nunca muda depois, pra não reprecificar o que já existe:
+  //
+  // - Antiga (`false`/ausente): o imposto é só informativo — sai de DENTRO da
+  //   margem, sem mexer no preço. Mudar o imposto não muda o total do cliente.
+  // - Nova (`true`): o preço já embute o imposto, pra sobrar a margem
+  //   pretendida DEPOIS de pagar o imposto. Custo / (1 − margem − imposto) —
+  //   quanto maior o imposto, maior o preço, na mesma proporção.
+  const reajustaComImposto = version?.imposto_reajusta_preco === true;
+  const denom = reajustaComImposto
+    ? Math.max(1 - marginPct - nfPct, 0.05)
+    : Math.max(1 - marginPct, 0.05);
+  const base = totalCusto > 0 ? totalCusto / denom : 0;
 
   // Desconto entra depois, e come a margem: o custo direto não muda.
   const valorFinal = Math.max(base - Number(version?.discount_value || 0), 0);
 
   const margem = valorFinal - totalCusto;
 
-  // O imposto é uma fatia da NOTA, não um acréscimo por cima dela — 18% de
-  // imposto significa 18% do que o cliente paga, e esse dinheiro sai da margem.
-  const nfPct = Number(version?.nf_pct || 0);
+  // O imposto é uma fatia da NOTA (18% do que o cliente paga), não um
+  // acréscimo — na conta nova, o preço já foi calculado pra essa fatia caber
+  // e ainda sobrar a margem pretendida; na antiga, essa fatia só é descontada
+  // do lucro pra fins de acompanhamento, sem já ter sido embutida no preço.
   const nf = valorFinal * nfPct;
 
   const lucro = margem - nf;

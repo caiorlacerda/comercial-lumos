@@ -92,6 +92,7 @@ export default function Dashboard() {
             margin_pct,
             nf_pct,
             discount_value,
+            imposto_reajusta_preco,
             items:budget_items!version_id (id, unit_cost, quantity, item_group)
           ),
           versions:budget_versions!budget_id (
@@ -101,6 +102,7 @@ export default function Dashboard() {
             margin_pct,
             nf_pct,
             discount_value,
+            imposto_reajusta_preco,
             items:budget_items!version_id (id, unit_cost, quantity, item_group)
           )
         `)

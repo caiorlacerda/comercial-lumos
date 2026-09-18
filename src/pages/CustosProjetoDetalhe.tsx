@@ -277,7 +277,7 @@ export default function CustosProjetoDetalhe() {
       if (budgetId) {
         const { data: budgetData } = await supabase
           .from('budgets')
-          .select('active_version_id, active_version:budget_versions!active_version_id(id, margin_pct, nf_pct, discount_value), receivable:receivables(total_amount)')
+          .select('active_version_id, active_version:budget_versions!active_version_id(id, margin_pct, nf_pct, discount_value, imposto_reajusta_preco), receivable:receivables(total_amount)')
           .eq('id', budgetId)
           .single();
 

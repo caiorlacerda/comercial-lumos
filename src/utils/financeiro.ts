@@ -40,7 +40,7 @@ export async function syncBudgetApprovalFlow(budgetId: string, optionalTotalAmou
   let totalAmount = optionalTotalAmount;
   if (totalAmount === undefined && budget.active_version_id) {
     const [versionRes, itemsRes] = await Promise.all([
-      supabase.from('budget_versions').select('id, margin_pct, nf_pct, discount_value').eq('id', budget.active_version_id).single(),
+      supabase.from('budget_versions').select('id, margin_pct, nf_pct, discount_value, imposto_reajusta_preco').eq('id', budget.active_version_id).single(),
       supabase.from('budget_items').select('item_group, unit_cost, quantity').eq('version_id', budget.active_version_id),
     ]);
     if (versionRes.data && itemsRes.data) {
