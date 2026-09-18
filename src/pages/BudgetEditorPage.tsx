@@ -650,7 +650,11 @@ export default function BudgetEditorPage() {
           validity_days: version.validity_days,
           logistics_date: version.logistics_date || null,
           logistics_time: version.logistics_time || null,
-          logistics_location: version.logistics_location || null
+          logistics_location: version.logistics_location || null,
+          // Nova versão da MESMA proposta herda a conta da versão anterior —
+          // só proposta nova de verdade (nasce sem isso, cai no default do
+          // banco) ganha a conta nova sozinha.
+          imposto_reajusta_preco: version.imposto_reajusta_preco === true
         })
         .select()
         .single();
