@@ -361,7 +361,11 @@ export default function BudgetEditorPage() {
         nf_pct: 0.18,
         discount_value: 0,
         validity_days: 7,
-        payment_terms: '30 dias após a emissão da nota'
+        payment_terms: '30 dias após a emissão da nota',
+        // O rascunho só vira linha no banco quando salvar (pega o default lá
+        // = true). Até lá, a tela calcula com o objeto local — sem isso aqui,
+        // a prévia da proposta nova mostraria a conta antiga por engano.
+        imposto_reajusta_preco: true
       };
       
       setBudget(draftBudget);
