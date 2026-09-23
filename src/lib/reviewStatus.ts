@@ -46,16 +46,18 @@ export function taskStatusToVideo(taskStatus: string, current: ReviewStatus): Re
     case 'alteracoes':
       // Mantém a fase em que o vídeo já está (não joga um vídeo do cliente para o interno).
       return naFaseDoCliente ? 'ALTERACOES_CLIENTE' : 'ALTERACOES_INTERNAS';
-    case 'entregue':
-    case 'concluido':
-      return 'APROVADO';
     case 'aprov_interna':
       // Aprovado internamente = pronto para o cliente ver.
       return 'EM_REVISAO_CLIENTE';
     default:
-      // iniciar, pausado, na_fila, em_progresso, aguard_* : o vídeo ainda está em
-      // revisão interna. Só puxamos para lá se ele ainda não passou para o cliente,
-      // para não desfazer um envio que já aconteceu.
+      // iniciar, pausado, na_fila, em_progresso, aguard_*, entregue, concluido:
+      // o vídeo ainda está em revisão interna. 'entregue'/'concluido' também
+      // caem aqui de propósito — a tarefa pode ter chegado nesse status por um
+      // motivo que não tem nada a ver com o vídeo (ex.: o roteiro da mesma
+      // tarefa foi aprovado antes de existir vídeo nenhum), e aprovar um vídeo
+      // é decisão de quem revisa O VÍDEO, nunca herdada assim. Só puxamos para
+      // revisão interna se ele ainda não passou para o cliente ou já foi
+      // aprovado de verdade, para não desfazer um envio que já aconteceu.
       return naFaseDoCliente || current === 'APROVADO' ? null : 'EM_REVISAO_INTERNA';
   }
 }
