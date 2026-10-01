@@ -64,7 +64,7 @@ BEGIN
   RETURN v_criadas;
 END; $$;
 
-GRANT EXECUTE ON FUNCTION public.gerar_parcelas_fee_mensal(uuid, uuid, uuid, uuid, text, date, date, numeric, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.gerar_parcelas_fee_mensal(uuid, uuid, uuid, uuid, text, date, date, numeric, jsonb) FROM PUBLIC;
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- 2) Financeiro configura do zero (quando não veio pronto da proposta)
@@ -104,6 +104,11 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'nada_gerado');
   END IF;
 
+  UPDATE projetos_financeiro
+  SET valor_vendido = (SELECT COALESCE(sum(total_amount), 0) FROM receivables WHERE budget_id = p_budget_id AND status <> 'cancelado'),
+      updated_at = now()
+  WHERE proposta_id = p_budget_id;
+
   UPDATE budget_versions
   SET payment_plan = 'fee_mensal',
       fee_mensal_inicio = p_inicio, fee_mensal_fim = p_fim,
@@ -113,6 +118,7 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'parcelas_criadas', v_criadas);
 END; $$;
 
+REVOKE ALL ON FUNCTION public.definir_fee_mensal(uuid, date, date, numeric, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.definir_fee_mensal(uuid, date, date, numeric, jsonb) TO authenticated;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -148,9 +154,15 @@ BEGIN
 
   UPDATE receivables SET parcela_total = v_prox WHERE budget_id = p_budget_id AND origem = 'fee_mensal';
 
+  UPDATE projetos_financeiro
+  SET valor_vendido = (SELECT COALESCE(sum(total_amount), 0) FROM receivables WHERE budget_id = p_budget_id AND status <> 'cancelado'),
+      updated_at = now()
+  WHERE proposta_id = p_budget_id;
+
   RETURN jsonb_build_object('ok', true);
 END; $$;
 
+REVOKE ALL ON FUNCTION public.adicionar_parcela_fee_mensal(uuid, date, numeric, boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.adicionar_parcela_fee_mensal(uuid, date, numeric, boolean) TO authenticated;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -236,6 +248,15 @@ BEGIN
         v_versao.fee_mensal_inicio, v_versao.fee_mensal_fim,
         v_versao.fee_mensal_valor, v_versao.fee_mensal_adendos
       );
+      IF v_criadas = 0 THEN
+        -- fee mensal mal configurado (datas/valor faltando): não deixa o
+        -- dinheiro sumir do radar, nasce "a definir" igual ao plano nulo.
+        INSERT INTO receivables (budget_id, budget_version_id, project_id, description, client_id,
+                                 total_amount, due_date, status, parcela_numero, parcela_total, origem)
+        VALUES (b.id, b.active_version_id, v_project, b.project_name, b.client_id,
+                v_total, NULL, 'aguardando', 1, 1, 'proposta');
+        v_criadas := 1;
+      END IF;
     ELSIF v_plan IS NULL THEN
       INSERT INTO receivables (budget_id, budget_version_id, project_id, description, client_id,
                                total_amount, due_date, status, parcela_numero, parcela_total, origem)
