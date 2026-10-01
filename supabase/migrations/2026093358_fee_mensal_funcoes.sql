@@ -228,7 +228,7 @@ BEGIN
       -- recalcula da proposta, pra não desfazer extensão/adendo que o
       -- Financeiro já tiver feito.
       SELECT COALESCE(sum(total_amount), 0) INTO v_total
-      FROM receivables WHERE budget_id = p_budget_id AND status <> 'cancelado';
+      FROM receivables WHERE budget_id = p_budget_id AND origem = 'fee_mensal' AND status <> 'cancelado';
     ELSE
       v_total := COALESCE(v_versao.fee_mensal_valor, 0) * GREATEST(
         (extract(year from v_versao.fee_mensal_fim)::int - extract(year from v_versao.fee_mensal_inicio)::int) * 12
