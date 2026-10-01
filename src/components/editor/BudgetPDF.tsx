@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { BudgetItem, BudgetVersion, VersionFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logo from '../../assets/Logotipo-Preto-Alpha.png';
 import { renderRichNotes } from '@/components/editor/richTextPdf';
@@ -592,6 +592,40 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
             <Text style={styles.conditionText}>3.1. O pagamento deverá ocorrer de acordo com prazo de pagamento combinado entre o CLIENTE e a LUMOS no ato do aceite da presente Proposta Comercial, dentro das opções disponíveis nesta.</Text>
             <Text style={styles.conditionText}>3.2. O atraso no pagamento sujeitará o CLIENTE à multa de 10% (dez por cento) e juros de 1% a.m. sobre o valor do débito.</Text>
           </View>
+
+          {version.payment_plan === 'fee_mensal' && version.fee_mensal_mostrar_na_proposta
+            && version.fee_mensal_inicio && version.fee_mensal_fim && (
+            <View style={{ marginTop: 2, marginBottom: 10 }} wrap={false}>
+              <Text style={[styles.conditionText, { fontWeight: 700, marginBottom: 4 }]}>Cronograma de pagamento (fee mensal)</Text>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderCell, { width: '40%' }]}>Mês</Text>
+                <Text style={[styles.tableHeaderCell, { width: '30%', textAlign: 'right' }]}>Valor mensal</Text>
+                <Text style={[styles.tableHeaderCell, { width: '30%', textAlign: 'right' }]}>Adendo</Text>
+              </View>
+              {(() => {
+                const linhas: { mes: string; adendo: number }[] = [];
+                let cursor = parseISO(version.fee_mensal_inicio as string);
+                const fim = parseISO(version.fee_mensal_fim as string);
+                let guard = 0;
+                while (cursor <= fim && guard < 60) {
+                  const mesKey = format(cursor, 'yyyy-MM');
+                  const adendo = (version.fee_mensal_adendos || [])
+                    .filter(a => a.mes === mesKey)
+                    .reduce((s, a) => s + Number(a.valor || 0), 0);
+                  linhas.push({ mes: mesKey, adendo });
+                  cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+                  guard++;
+                }
+                return linhas.map((l, idx) => (
+                  <View key={l.mes} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowEven : {}]}>
+                    <Text style={[styles.tableCell, { width: '40%' }]}>{format(parseISO(`${l.mes}-01`), 'MMM/yyyy', { locale: ptBR })}</Text>
+                    <Text style={[styles.tableCell, { width: '30%', textAlign: 'right' }]}>{formatCurrency(version.fee_mensal_valor || 0)}</Text>
+                    <Text style={[styles.tableCell, { width: '30%', textAlign: 'right' }]}>{l.adendo > 0 ? formatCurrency(l.adendo) : '—'}</Text>
+                  </View>
+                ));
+              })()}
+            </View>
+          )}
 
           {/* Item 4 */}
           <View style={styles.conditionSection}>
