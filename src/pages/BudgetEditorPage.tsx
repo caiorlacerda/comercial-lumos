@@ -517,7 +517,7 @@ export default function BudgetEditorPage() {
             fee_mensal_inicio: version.fee_mensal_inicio || null,
             fee_mensal_fim: version.fee_mensal_fim || null,
             fee_mensal_valor: version.fee_mensal_valor || null,
-            fee_mensal_adendos: version.fee_mensal_adendos || [],
+            fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
             fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
           })
           .select()
@@ -560,7 +560,7 @@ export default function BudgetEditorPage() {
             fee_mensal_inicio: version.fee_mensal_inicio || null,
             fee_mensal_fim: version.fee_mensal_fim || null,
             fee_mensal_valor: version.fee_mensal_valor || null,
-            fee_mensal_adendos: version.fee_mensal_adendos || [],
+            fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
             fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
           }).eq('id', version.id),
           supabase.from('budgets').update({
@@ -677,7 +677,7 @@ export default function BudgetEditorPage() {
           fee_mensal_inicio: version.fee_mensal_inicio || null,
           fee_mensal_fim: version.fee_mensal_fim || null,
           fee_mensal_valor: version.fee_mensal_valor || null,
-          fee_mensal_adendos: version.fee_mensal_adendos || [],
+          fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
           fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
         })
         .select()

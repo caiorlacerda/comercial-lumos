@@ -47,6 +47,9 @@ BEGIN
   -- uma conta extra por adendo, no mês certo
   FOR v_adendo IN SELECT * FROM jsonb_array_elements(COALESCE(p_adendos, '[]'::jsonb))
   LOOP
+    IF NOT (v_adendo->>'mes' ~ '^\d{4}-\d{2}$') OR COALESCE((v_adendo->>'valor')::numeric, 0) <= 0 THEN
+      CONTINUE;
+    END IF;
     v_mes_adendo := to_date(v_adendo->>'mes', 'YYYY-MM');
     v_prox := v_prox + 1;
     INSERT INTO receivables (budget_id, budget_version_id, project_id, description, client_id,
@@ -65,6 +68,13 @@ BEGIN
 END; $$;
 
 REVOKE ALL ON FUNCTION public.gerar_parcelas_fee_mensal(uuid, uuid, uuid, uuid, text, date, date, numeric, jsonb) FROM PUBLIC;
+-- Supabase concede EXECUTE em funções novas do schema public direto a anon/
+-- authenticated (não por herança de PUBLIC) — REVOKE ... FROM PUBLIC sozinho
+-- não bloqueia ninguém. Este helper é 100% interno (só é chamado de dentro
+-- de outras funções SECURITY DEFINER, que já correm como o owner): nenhum
+-- papel externo deve conseguir chamá-lo direto.
+REVOKE ALL ON FUNCTION public.gerar_parcelas_fee_mensal(uuid, uuid, uuid, uuid, text, date, date, numeric, jsonb) FROM anon;
+REVOKE ALL ON FUNCTION public.gerar_parcelas_fee_mensal(uuid, uuid, uuid, uuid, text, date, date, numeric, jsonb) FROM authenticated;
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- 2) Financeiro configura do zero (quando não veio pronto da proposta)
@@ -119,6 +129,8 @@ BEGIN
 END; $$;
 
 REVOKE ALL ON FUNCTION public.definir_fee_mensal(uuid, date, date, numeric, jsonb) FROM PUBLIC;
+-- idem: PUBLIC não cobre anon no Supabase, precisa revogar explicitamente.
+REVOKE ALL ON FUNCTION public.definir_fee_mensal(uuid, date, date, numeric, jsonb) FROM anon;
 GRANT EXECUTE ON FUNCTION public.definir_fee_mensal(uuid, date, date, numeric, jsonb) TO authenticated;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -163,6 +175,8 @@ BEGIN
 END; $$;
 
 REVOKE ALL ON FUNCTION public.adicionar_parcela_fee_mensal(uuid, date, numeric, boolean) FROM PUBLIC;
+-- idem: PUBLIC não cobre anon no Supabase, precisa revogar explicitamente.
+REVOKE ALL ON FUNCTION public.adicionar_parcela_fee_mensal(uuid, date, numeric, boolean) FROM anon;
 GRANT EXECUTE ON FUNCTION public.adicionar_parcela_fee_mensal(uuid, date, numeric, boolean) TO authenticated;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -193,19 +207,41 @@ BEGIN
 
   SELECT * INTO v_versao FROM budget_versions WHERE id = b.active_version_id;
   v_plan := v_versao.payment_plan;
+  IF v_plan = 'fee_mensal' AND (
+    v_versao.fee_mensal_inicio IS NULL OR v_versao.fee_mensal_fim IS NULL
+    OR v_versao.fee_mensal_valor IS NULL OR v_versao.fee_mensal_valor <= 0
+    OR v_versao.fee_mensal_fim < v_versao.fee_mensal_inicio
+  ) THEN
+    -- fee mensal marcado mas ainda sem os números: trata como "a definir",
+    -- igual a uma proposta sem nenhum plano de pagamento escolhido ainda.
+    -- Nunca deixa o dinheiro sumir do radar só porque faltou preencher.
+    v_plan := NULL;
+  END IF;
 
   IF v_plan = 'fee_mensal' THEN
     -- fee mensal: o valor vendido é a soma do cronograma (fixo × meses +
     -- adendos) — é o que foi contratado de verdade, não a fórmula de
     -- margem (que não se aplica a um valor fixo recorrente).
-    v_total := COALESCE(v_versao.fee_mensal_valor, 0) * GREATEST(
-      (extract(year from v_versao.fee_mensal_fim)::int - extract(year from v_versao.fee_mensal_inicio)::int) * 12
-      + (extract(month from v_versao.fee_mensal_fim)::int - extract(month from v_versao.fee_mensal_inicio)::int) + 1,
-      0);
-    FOR v_adendo IN SELECT * FROM jsonb_array_elements(COALESCE(v_versao.fee_mensal_adendos, '[]'::jsonb))
-    LOOP
-      v_total := v_total + COALESCE((v_adendo->>'valor')::numeric, 0);
-    END LOOP;
+    IF EXISTS (SELECT 1 FROM receivables WHERE budget_id = p_budget_id AND origem = 'fee_mensal') THEN
+      -- Já existe cronograma real (aprovação anterior, ou o Financeiro
+      -- configurou/estendeu depois) — usa a soma de verdade, nunca
+      -- recalcula da proposta, pra não desfazer extensão/adendo que o
+      -- Financeiro já tiver feito.
+      SELECT COALESCE(sum(total_amount), 0) INTO v_total
+      FROM receivables WHERE budget_id = p_budget_id AND status <> 'cancelado';
+    ELSE
+      v_total := COALESCE(v_versao.fee_mensal_valor, 0) * GREATEST(
+        (extract(year from v_versao.fee_mensal_fim)::int - extract(year from v_versao.fee_mensal_inicio)::int) * 12
+        + (extract(month from v_versao.fee_mensal_fim)::int - extract(month from v_versao.fee_mensal_inicio)::int) + 1,
+        0);
+      FOR v_adendo IN SELECT * FROM jsonb_array_elements(COALESCE(v_versao.fee_mensal_adendos, '[]'::jsonb))
+      LOOP
+        IF NOT (v_adendo->>'mes' ~ '^\d{4}-\d{2}$') OR COALESCE((v_adendo->>'valor')::numeric, 0) <= 0 THEN
+          CONTINUE;
+        END IF;
+        v_total := v_total + COALESCE((v_adendo->>'valor')::numeric, 0);
+      END LOOP;
+    END IF;
   ELSE
     -- valor de venda pela mesma fórmula do app:
     -- conta antiga: custo / (1 - margem) - desconto.
