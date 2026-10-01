@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Save,
   Plus,
+  Check,
   Trash2,
   Copy,
   FileDown, ListChecks,
@@ -141,6 +142,7 @@ export default function BudgetEditorPage() {
   const [activeGroup, setActiveGroup] = useState<BudgetItem['item_group'] | null>(null);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   const [catalogSearch, setCatalogSearch] = useState('');
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState<Set<string>>(new Set());
 
   const [clients, setClients] = useState<any[]>([]);
   // Criar cliente novo direto do dropdown
@@ -916,6 +918,7 @@ export default function BudgetEditorPage() {
   useEffect(() => {
     if (isCatalogOpen) {
       setCatalogSearch('');
+      setSelectedCatalogIds(new Set());
       fetchCatalogItems();
       // Short delay to ensure modal is rendered before focusing
       setTimeout(() => catalogSearchRef.current?.focus(), 100);
@@ -950,9 +953,21 @@ export default function BudgetEditorPage() {
     }
   };
 
-  const addCatalogItem = async (catItem: any) => {
-    if (isReadOnly) return;
-    const newItem: BudgetItem = {
+  const toggleCatalogSelect = (id: string) => {
+    setSelectedCatalogIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Adiciona todos os itens marcados de uma vez, em vez de um a um fechando
+  // a janela a cada clique — útil pra montar uma equipe/lista de
+  // equipamentos inteira de uma vez só a partir do catálogo.
+  const addSelectedCatalogItems = async () => {
+    if (isReadOnly || selectedCatalogIds.size === 0) return;
+    const toAdd = catalogItems.filter(c => selectedCatalogIds.has(c.id));
+    const newItems: BudgetItem[] = toAdd.map((catItem, i) => ({
       id: crypto.randomUUID(),
       item_group: activeGroup!,
       name: catItem.name,
@@ -960,20 +975,20 @@ export default function BudgetEditorPage() {
       quantity: 1,
       unit_label: catItem.unit_label || 'diaria',
       description: catItem.description || '',
-      sort_order: items.length,
+      sort_order: items.length + i,
       catalog_item_id: catItem.id
-    };
+    }));
 
-    const updatedItems = [...items, newItem];
+    const updatedItems = [...items, ...newItems];
     setItems(updatedItems);
-    
-    // Immediate save for catalog adds
+
     if (!isDraft && version) {
-      await syncItem(newItem);
+      await Promise.all(newItems.map(ni => syncItem(ni)));
     } else {
       isDirty.current = true;
     }
-    
+
+    setSelectedCatalogIds(new Set());
     setIsCatalogOpen(false);
   };
 
@@ -2047,16 +2062,29 @@ export default function BudgetEditorPage() {
                 {catalogItems
                   .filter(c => c.item_group === activeGroup && c.name.toLowerCase().includes(catalogSearch.toLowerCase()))
                   .map(c => (
-                    <button 
-                      key={c.id} 
-                      onClick={() => addCatalogItem(c)}
-                      className="w-full text-left p-5 rounded-lumos hover:bg-lumos-bg border border-transparent hover:border-lumos-border flex items-center justify-between group transition-all"
+                    <button
+                      key={c.id}
+                      onClick={() => toggleCatalogSelect(c.id)}
+                      className={clsx(
+                        "w-full text-left p-5 rounded-lumos border flex items-center justify-between group transition-all",
+                        selectedCatalogIds.has(c.id)
+                          ? "bg-lumos-yellow/10 border-lumos-yellow/40"
+                          : "hover:bg-lumos-bg border-transparent hover:border-lumos-border"
+                      )}
                     >
-                      <div className="flex flex-col">
-                        <span className="font-bold text-lumos-text-primary text-sm group-hover:text-lumos-yellow transition-colors">{c.name}</span>
-                        <span className="text-[9px] font-black text-lumos-text-secondary uppercase tracking-tight">{c.subcategory}</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={clsx(
+                          "w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                          selectedCatalogIds.has(c.id) ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg" : "border-lumos-border"
+                        )}>
+                          {selectedCatalogIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-lumos-text-primary text-sm group-hover:text-lumos-yellow transition-colors truncate">{c.name}</span>
+                          <span className="text-[9px] font-black text-lumos-text-secondary uppercase tracking-tight">{c.subcategory}</span>
+                        </div>
                       </div>
-                      <div className="text-right flex flex-col items-end">
+                      <div className="text-right flex flex-col items-end flex-shrink-0">
                         <span className="text-sm font-black text-lumos-text-primary">{c.default_unit_cost ? formatCurrency(c.default_unit_cost) : 'A definir'}</span>
                         <span className="text-[9px] font-black text-lumos-text-secondary uppercase">{c.unit_label}</span>
                       </div>
@@ -2064,6 +2092,17 @@ export default function BudgetEditorPage() {
                   ))}
               </div>
             </div>
+
+            {selectedCatalogIds.size > 0 && (
+              <div className="p-4 border-t border-lumos-border bg-lumos-bg/30 flex items-center justify-between gap-3">
+                <span className="text-xs font-bold text-lumos-text-secondary">
+                  {selectedCatalogIds.size} {selectedCatalogIds.size === 1 ? 'item selecionado' : 'itens selecionados'}
+                </span>
+                <button onClick={addSelectedCatalogItems} className="btn-primary h-10 px-6">
+                  Adicionar {selectedCatalogIds.size} {selectedCatalogIds.size === 1 ? 'item' : 'itens'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
