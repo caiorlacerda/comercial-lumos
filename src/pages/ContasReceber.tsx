@@ -86,17 +86,19 @@ export default function ContasReceber() {
   });
   // Menu de status por linha (mesmo padrão do dropdown de status dos Orçamentos).
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
-  // Status clicáveis (fluxo). "Em atraso" NÃO entra aqui: é derivado do
-  // vencimento (statusOf) e aparece sozinho em vermelho quando vence.
+  // Status clicáveis (fluxo). "Em atraso" também entra aqui como marcação
+  // manual (enum 'inadimplente', nunca usado até então) — além de aparecer
+  // sozinho em vermelho quando o vencimento já passou (ver statusOf).
   const statusOptions = [
     { value: 'aguardando', label: 'Aguardando', color: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20' },
     { value: 'emitir_nf', label: 'Emitir NF', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' },
     { value: 'nf_emitida', label: 'NF Emitida', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
     { value: 'recebido', label: 'Recebido', color: 'text-green-500 bg-green-500/10 border-green-500/20' },
+    { value: 'inadimplente', label: 'Em atraso', color: 'text-red-500 bg-red-500/10 border-red-500/20' },
   ];
   const statusLabels: Record<string, string> = {
     aguardando: 'Aguardando', emitir_nf: 'Emitir NF', nf_emitida: 'NF Emitida',
-    recebido: 'Recebido', atrasado: 'Em atraso', parcial: 'Parcial',
+    recebido: 'Recebido', atrasado: 'Em atraso', inadimplente: 'Em atraso', parcial: 'Parcial',
   };
   const statusLabel = (s: string) => statusLabels[s] || s;
   const statusPillClass = (s: string) =>
@@ -339,17 +341,18 @@ export default function ContasReceber() {
     setSelectedIds(next);
   };
 
+  // "Atrasado" é um recebível não recebido cujo vencimento já passou, OU
+  // marcado manualmente como tal (status 'inadimplente'). Tratamos os dois
+  // casos como o mesmo balde — statusOf é a fonte única pra exibição/filtro.
+  const isOverdue = (r: any) => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date();
+
+  const statusOf = (r: any): string => (r.status === 'inadimplente' || isOverdue(r)) ? 'atrasado' : r.status;
+
   const stats = {
     toReceive: receivables.filter(r => r.status !== 'recebido').reduce((acc, r) => acc + (r.total_amount - r.received_amount), 0),
     receivedMonth: receivables.filter(r => r.received_at && new Date(r.received_at).getMonth() === new Date().getMonth()).reduce((acc, r) => acc + r.received_amount, 0),
-    overdue: receivables.filter(r => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date()).length
+    overdue: receivables.filter(r => statusOf(r) === 'atrasado').length
   };
-
-  // "Atrasado" não é um status na tabela — é um recebível não recebido cujo
-  // vencimento já passou. Tratamos como um filtro derivado.
-  const isOverdue = (r: any) => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date();
-
-  const statusOf = (r: any): string => (isOverdue(r) ? 'atrasado' : r.status);
 
   // Código do projeto (#2026-XXX) via orçamento vinculado.
   const codeOf = (r: any): string | null => (r.budget?.code ? formatBudgetCode(r.budget.code) : null);
@@ -371,7 +374,7 @@ export default function ContasReceber() {
         || (codeOf(r) || '').toLowerCase().includes(q))
     );
     if (statusFilter !== 'todos') {
-      list = list.filter(r => (statusFilter === 'atrasado' ? isOverdue(r) : r.status === statusFilter && !isOverdue(r)));
+      list = list.filter(r => (statusFilter === 'atrasado' ? statusOf(r) === 'atrasado' : r.status === statusFilter && statusOf(r) !== 'atrasado'));
     }
     const dir = sortConfig.direction === 'asc' ? 1 : -1;
     return [...list].sort((a, b) => {
@@ -613,7 +616,7 @@ export default function ContasReceber() {
           <input type="text" placeholder="Buscar por código, projeto ou cliente..." className="input-lumos pl-10 w-full h-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
 
-        {/* Filtro por status (Atrasado é derivado do vencimento) + agrupar por cliente */}
+        {/* Filtro por status (Atrasado = vencido ou marcado na mão) + agrupar por cliente */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setGroupByClient(v => !v)}
@@ -638,8 +641,8 @@ export default function ContasReceber() {
             const count = key === 'todos'
               ? receivables.length
               : key === 'atrasado'
-                ? receivables.filter(isOverdue).length
-                : receivables.filter(r => r.status === key && !isOverdue(r)).length;
+                ? receivables.filter(r => statusOf(r) === 'atrasado').length
+                : receivables.filter(r => r.status === key && statusOf(r) !== 'atrasado').length;
             const active = statusFilter === key;
             const danger = key === 'atrasado';
             return (
