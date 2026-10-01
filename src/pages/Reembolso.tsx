@@ -226,7 +226,11 @@ export default function Reembolso() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
-    
+    if (!formData.project_id) {
+      toast.error("Selecione um projeto. Se não for de um projeto específico, escolha 'Produtora Lumos'.");
+      return;
+    }
+
     try {
       setUploading(true);
       let attachmentData = null;
@@ -732,7 +736,7 @@ export default function Reembolso() {
             <input required type="text" className="input-lumos w-full" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
           </div>
           <div className="space-y-2 relative">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto (Opcional)</label>
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto</label>
             <div className="relative">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
