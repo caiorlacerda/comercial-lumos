@@ -34,9 +34,16 @@ export interface BudgetVersion {
   payment_terms?: string | null;
   validity_days?: number | null;
   /** Como o cliente paga (Fase 2): gera as parcelas na aprovação. */
-  payment_plan?: 'a_vista' | 'entrada_saldo' | null;
+  payment_plan?: 'a_vista' | 'entrada_saldo' | 'fee_mensal' | null;
   payment_days?: number | null;
   payment_entry_pct?: number | null;
+  /** Fee mensal: contrato recorrente com fim definido, valor fixo por mês
+   *  e adendos pontuais. Preenchido só quando payment_plan = 'fee_mensal'. */
+  fee_mensal_inicio?: string | null;
+  fee_mensal_fim?: string | null;
+  fee_mensal_valor?: number | null;
+  fee_mensal_adendos?: { mes: string; valor: number }[];
+  fee_mensal_mostrar_na_proposta?: boolean;
   logistics_date?: string | null;
   logistics_time?: string | null;
   logistics_location?: string | null;
