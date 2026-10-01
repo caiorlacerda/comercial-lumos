@@ -170,10 +170,37 @@ export default function Reembolso() {
       reader.readAsDataURL(file);
     });
 
+  const downscaleForExtraction = (file: File): Promise<File> => {
+    if (!file.type.startsWith('image/')) return Promise.resolve(file);
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1568;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(file); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          resolve(blob ? new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }) : file);
+        }, 'image/jpeg', 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  };
+
   const extractReceiptData = async (file: File) => {
     setExtracting(true);
     try {
-      const { base64, mime } = await fileToBase64(file);
+      const forExtraction = await downscaleForExtraction(file);
+      const { base64, mime } = await fileToBase64(forExtraction);
       const { data, error } = await supabase.functions.invoke('extract-receipt', {
         body: { file_base64: base64, mime_type: mime },
       });
@@ -873,7 +900,6 @@ export default function Reembolso() {
                 type="file"
                 className="hidden"
                 id="receipt-upload"
-                capture="environment"
                 onChange={e => {
                   const file = e.target.files?.[0] || null;
                   setFormData(prev => ({ ...prev, attachment: file }));
