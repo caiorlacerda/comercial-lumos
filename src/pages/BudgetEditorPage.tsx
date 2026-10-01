@@ -1651,7 +1651,7 @@ export default function BudgetEditorPage() {
                   if (e.target.checked) {
                     setVersion(vv => vv ? { ...vv, payment_plan: 'fee_mensal' } : null);
                   } else {
-                    setVersion(vv => vv ? { ...vv, payment_plan: null, fee_mensal_inicio: null, fee_mensal_fim: null, fee_mensal_valor: null, fee_mensal_adendos: [] } : null);
+                    setVersion(vv => vv ? { ...vv, payment_plan: null, fee_mensal_inicio: null, fee_mensal_fim: null, fee_mensal_valor: null, fee_mensal_adendos: [], fee_mensal_mostrar_na_proposta: false } : null);
                   }
                   isDirty.current = true;
                 }}
