@@ -36,15 +36,20 @@ serve(async (req) => {
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 
     // 1. Autoriza: qualquer funcionário ativo (não precisa ser admin).
-    const authHeader = req.headers.get('Authorization') ?? ''
-    if (!authHeader) return json({ error: 'Não autenticado.' }, 401)
-    const callerClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } })
-    const { data: { user: caller } } = await callerClient.auth.getUser()
-    if (!caller) return json({ error: 'Sessão inválida.' }, 401)
-    const { data: callerProfile } = await callerClient
-      .from('app_users').select('id, status').eq('auth_user_id', caller.id).single()
-    if (!callerProfile || callerProfile.status !== 'ativo') {
-      return json({ error: 'Usuário inativo.' }, 403)
+    try {
+      const authHeader = req.headers.get('Authorization') ?? ''
+      if (!authHeader) return json({ error: 'Não autenticado.' }, 401)
+      const callerClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } })
+      const { data: { user: caller } } = await callerClient.auth.getUser()
+      if (!caller) return json({ error: 'Sessão inválida.' }, 401)
+      const { data: callerProfile } = await callerClient
+        .from('app_users').select('id, status').eq('auth_user_id', caller.id).single()
+      if (!callerProfile || callerProfile.status !== 'ativo') {
+        return json({ error: 'Usuário inativo.' }, 403)
+      }
+    } catch (authErr) {
+      console.error('extract-receipt: erro de autenticação', authErr)
+      return json({ error: 'Sessão inválida.' }, 401)
     }
 
     // 2. Corpo: arquivo em base64 + mime type.
