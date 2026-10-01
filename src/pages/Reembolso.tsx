@@ -53,6 +53,22 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
+const EXPENSE_CATEGORY_OPTIONS = [
+  { value: 'alimentacao', label: 'Alimentação' },
+  { value: 'transporte', label: 'Transporte' },
+  { value: 'hospedagem', label: 'Hospedagem' },
+  { value: 'equipamento', label: 'Equipamento' },
+  { value: 'equipe', label: 'Equipe' },
+  { value: 'locacao', label: 'Locação' },
+  { value: 'software', label: 'Software' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'servicos_terceiros', label: 'Serviços de terceiros' },
+  { value: 'manutencao', label: 'Manutenção' },
+  { value: 'impostos', label: 'Impostos' },
+  { value: 'outro', label: 'Outro' },
+];
+const categoryLabel = (value: string) => EXPENSE_CATEGORY_OPTIONS.find(o => o.value === value)?.label || value;
+
 export default function Reembolso() {
   const { profile, isAdmin } = useAuth();
   const toast = useToast();
@@ -71,9 +87,12 @@ export default function Reembolso() {
     project_id: '',
     payment_method: 'pix',
     notes: '',
-    attachment: null as File | null
+    attachment: null as File | null,
+    supplier: '',
+    category: ''
   });
   const [uploading, setUploading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [projectSearch, setProjectSearch] = useState('');
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -139,6 +158,71 @@ export default function Reembolso() {
     }
   };
 
+  const fileToBase64 = (file: File): Promise<{ base64: string; mime: string }> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1] || '';
+        resolve({ base64, mime: file.type || 'application/octet-stream' });
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+  const downscaleForExtraction = (file: File): Promise<File> => {
+    if (!file.type.startsWith('image/')) return Promise.resolve(file);
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1568;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(file); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          resolve(blob ? new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }) : file);
+        }, 'image/jpeg', 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  };
+
+  const extractReceiptData = async (file: File) => {
+    setExtracting(true);
+    try {
+      const forExtraction = await downscaleForExtraction(file);
+      const { base64, mime } = await fileToBase64(forExtraction);
+      const { data, error } = await supabase.functions.invoke('extract-receipt', {
+        body: { file_base64: base64, mime_type: mime },
+      });
+      if (error) throw error;
+      setFormData(prev => ({
+        ...prev,
+        supplier: data?.supplier || prev.supplier,
+        amount: typeof data?.amount === 'number' ? data.amount : prev.amount,
+        expense_date: data?.expense_date || prev.expense_date,
+        category: data?.category || prev.category,
+      }));
+      if (!data?.supplier && data?.amount == null && !data?.expense_date && !data?.category) {
+        toast.error('Não consegui ler os dados automaticamente, preenche os campos.');
+      }
+    } catch (err) {
+      console.error('extract-receipt falhou:', err);
+      toast.error('Não consegui ler os dados automaticamente, preenche os campos.');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
@@ -175,8 +259,10 @@ export default function Reembolso() {
         payment_method: formData.payment_method,
         notes: formData.project_id === 'interno' ? `${formData.notes}\n[Gasto Interno]`.trim() : formData.notes,
         attachments: formData.project_id === 'interno' && attachmentData
-          ? attachmentData.map((a: any) => ({ ...a, interno: true })) 
+          ? attachmentData.map((a: any) => ({ ...a, interno: true }))
           : attachmentData,
+        supplier: formData.supplier || null,
+        category: formData.category || null,
         status: 'pendente'
       }]);
       if (error) throw error;
@@ -369,7 +455,7 @@ export default function Reembolso() {
   };
 
   const resetForm = () => {
-    setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], project_id: '', payment_method: 'pix', notes: '', attachment: null });
+    setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], project_id: '', payment_method: 'pix', notes: '', attachment: null, supplier: '', category: '' });
     setProjectSearch('');
   };
 
@@ -408,6 +494,8 @@ export default function Reembolso() {
                 {isAdmin && <th className="px-6 py-4">Funcionário</th>}
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Descrição</th>
+                <th className="px-6 py-4">Fornecedor</th>
+                <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4">Valor</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-right">Ações</th>
@@ -415,9 +503,9 @@ export default function Reembolso() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={isAdmin ? 7 : 5} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <tr><td colSpan={isAdmin ? 9 : 7} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
               ) : reimbursements.length === 0 ? (
-                <tr><td colSpan={isAdmin ? 7 : 5} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
+                <tr><td colSpan={isAdmin ? 9 : 7} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
               ) : (
                 reimbursements.map((r) => (
                   <tr 
@@ -453,6 +541,14 @@ export default function Reembolso() {
                           <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest">Projeto: {r.project.name}</span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-lumos-text-secondary">{r.supplier || '—'}</td>
+                    <td className="px-6 py-4">
+                      {r.category ? (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-lumos-text-secondary bg-lumos-text-primary/5 border border-lumos-border rounded-full px-2 py-0.5">
+                          {categoryLabel(r.category)}
+                        </span>
+                      ) : '—'}
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}</td>
                     <td className="px-6 py-4 text-center"><StatusBadge status={r.status} /></td>
@@ -504,6 +600,16 @@ export default function Reembolso() {
                 <div className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate">{r.description}</div>
                 {r.project && (
                   <div className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest truncate mt-0.5">Projeto: {r.project.name}</div>
+                )}
+                {(r.supplier || r.category) && (
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {r.supplier && <span className="text-[10px] text-lumos-text-secondary truncate">{r.supplier}</span>}
+                    {r.category && (
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-lumos-text-secondary bg-lumos-text-primary/5 border border-lumos-border rounded-full px-1.5 py-0.5">
+                        {categoryLabel(r.category)}
+                      </span>
+                    )}
+                  </div>
                 )}
                 <div className="flex items-center justify-between gap-3 mt-2">
                   <div className="flex items-baseline gap-2">
@@ -622,7 +728,7 @@ export default function Reembolso() {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Solicitar Reembolso">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase">Descrição</label>
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase">Motivo do gasto</label>
             <input required type="text" className="input-lumos w-full" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
           </div>
           <div className="space-y-2 relative">
@@ -766,6 +872,19 @@ export default function Reembolso() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Fornecedor</label>
+              <input type="text" className="input-lumos w-full" placeholder="Ex.: Cabana Burger"
+                value={formData.supplier} onChange={e => setFormData({ ...formData, supplier: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Tipo de despesa</label>
+              <Select value={formData.category} onChange={v => setFormData({ ...formData, category: v })}
+                className="input-lumos w-full" placeholder="Selecione"
+                options={EXPENSE_CATEGORY_OPTIONS} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <label className="text-xs font-bold text-lumos-text-secondary uppercase">Valor (R$)</label>
               <CurrencyInput className="input-lumos w-full font-bold" value={formData.amount} onChange={(val: number) => setFormData({...formData, amount: val})} />
             </div>
@@ -777,11 +896,15 @@ export default function Reembolso() {
           <div className="space-y-2">
             <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Comprovante</label>
             <div className="relative group">
-              <input 
-                type="file" 
-                className="hidden" 
-                id="receipt-upload" 
-                onChange={e => setFormData({...formData, attachment: e.target.files?.[0] || null})}
+              <input
+                type="file"
+                className="hidden"
+                id="receipt-upload"
+                onChange={e => {
+                  const file = e.target.files?.[0] || null;
+                  setFormData(prev => ({ ...prev, attachment: file }));
+                  if (file) void extractReceiptData(file);
+                }}
                 accept="image/*,application/pdf"
               />
               <label 
@@ -801,6 +924,12 @@ export default function Reembolso() {
                 )}
               </label>
             </div>
+            {extracting && (
+              <p className="text-[10px] text-lumos-yellow flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 border-2 border-lumos-yellow/30 border-t-lumos-yellow rounded-full animate-spin" />
+                Lendo a nota com IA…
+              </p>
+            )}
             {isAuthenticated() ? (
               <p className="text-[10px] text-green-500 flex items-center gap-1"><CheckCircle2 className="w-2 h-2" /> Google Drive Conectado</p>
             ) : (
