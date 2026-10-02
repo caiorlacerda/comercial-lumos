@@ -15,6 +15,14 @@ ALTER TABLE public.team_members
 COMMENT ON COLUMN public.team_members.slack IS
   'Link do perfil no Slack (https://…slack.com/team/U…) ou o @ da pessoa.';
 
+-- app_users.phone nunca teve migration própria (src/pages/Settings.tsx e
+-- src/pages/Equipe.tsx já tratam profile.phone como campo real há tempos —
+-- criada direto no Studio em algum momento). As duas queries logo abaixo
+-- (a função e a conferência) dependem dela existir; sem isso não dava pra
+-- recriar o banco do zero (descoberto só agora).
+ALTER TABLE public.app_users
+  ADD COLUMN IF NOT EXISTS phone text;
+
 CREATE OR REPLACE FUNCTION public.get_client_portal_v2(p_token text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE

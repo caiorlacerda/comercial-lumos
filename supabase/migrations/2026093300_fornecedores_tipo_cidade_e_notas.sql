@@ -50,6 +50,14 @@ CREATE POLICY "nota_requests all" ON public.nota_requests
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- ── 3. Custo com fornecedor agenda a cobrança sozinho ─────────────────────
+-- fornecedor_id só ganha migration própria (com a FK formal) em
+-- 2026093308_fase0_fundacao_verdade.sql / 2026093309_fase1_elo_pagamentos.sql,
+-- mas o gatilho abaixo já referencia a coluna — sem isso, não dava pra
+-- recriar o banco do zero (descoberto só agora). ADD COLUMN IF NOT EXISTS é
+-- idempotente: a migration posterior não duplica nem conflita.
+ALTER TABLE public.project_costs
+  ADD COLUMN IF NOT EXISTS fornecedor_id uuid REFERENCES public.fornecedores(id) ON DELETE SET NULL;
+
 CREATE OR REPLACE FUNCTION public.fn_agendar_nota_do_custo()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE

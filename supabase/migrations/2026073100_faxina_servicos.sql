@@ -2,6 +2,19 @@
 -- nomes padrão do catálogo. Casa por texto minúsculo + sem espaços nas pontas,
 -- então pega variações de caixa. Só toca nas linhas que batem (as demais ficam).
 -- REVISE a lista antes de rodar; ajuste/retire o que não fizer sentido no seu caso.
+--
+-- Guard de existência: esta migration é mais recente no calendário do que
+-- 2026093308_fase0_fundacao_verdade.sql (que cria fornecedor_servicos), mas
+-- tem timestamp menor — nunca dava pra recriar o banco do zero com
+-- `supabase start`/`supabase db reset` sem isso (descoberto só agora, ao
+-- rodar pela primeira vez). Num banco já em produção a tabela existe e a
+-- faxina roda normal; num banco novo não tem dado bagunçado mesmo, então
+-- pular é o comportamento certo, não um workaround.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'fornecedor_servicos') THEN
+    RETURN;
+  END IF;
 
 UPDATE public.fornecedor_servicos
 SET tipo_servico = CASE lower(btrim(tipo_servico))
@@ -38,6 +51,7 @@ WHERE lower(btrim(tipo_servico)) IN (
   'técnico de áudio', 'técnico de audio', 'técnico de som', 'coordenação técnica',
   'op câmera, cinegrafista', 'produção', 'assist. filmmaker'
 );
+END $$;
 
 -- Já estavam no padrão (não precisam mudar): Storymaker, Filmmaker, Som direto,
 -- Operador de câmera, Cinegrafista, Motoboy, DTV.
