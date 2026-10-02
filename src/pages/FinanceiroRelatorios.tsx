@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
+import { TITULO_LABEL, LABEL_ATRASO } from '@/lib/statusRecebimento';
 import {
   BarChart3,
   PieChart,
@@ -395,14 +396,14 @@ export default function FinanceiroRelatorios() {
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Status NF</label>
             <Select className="input-lumos w-full h-9 text-xs" value={selectedStatusNF} onChange={setSelectedStatusNF}
-              options={[{ value: '', label: 'Todos' }, { value: 'emitir_nf', label: 'A Emitir NF' }, { value: 'pedido_nf_feito', label: 'Pedido NF Feito' }]} />
+              options={[{ value: '', label: 'Todos' }, { value: 'emitir_nf', label: TITULO_LABEL.emitir_nf }, { value: 'pedido_nf_feito', label: TITULO_LABEL.pedido_nf_feito }]} />
           </div>
 
           {/* Status Pagamento */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider block">Status Pagamento</label>
             <Select className="input-lumos w-full h-9 text-xs" value={selectedStatusPayment} onChange={setSelectedStatusPayment}
-              options={[{ value: '', label: 'Todos' }, { value: 'esperando', label: 'Aguardando Pgto' }, { value: 'atraso', label: 'Pagamento em Atraso' }, { value: 'recebido', label: 'Pago/Recebido' }]} />
+              options={[{ value: '', label: 'Todos' }, { value: 'esperando', label: TITULO_LABEL.esperando_pagamento }, { value: 'atraso', label: LABEL_ATRASO }, { value: 'recebido', label: TITULO_LABEL.pagamento_recebido }]} />
           </div>
 
           {/* Período / Ano */}
@@ -580,10 +581,9 @@ export default function FinanceiroRelatorios() {
                               {proj.status_titulo === 'emitir_nf' && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />}
                               {proj.status_titulo === 'pedido_nf_feito' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
                               {proj.status_titulo === 'esperando_pagamento' && !proj.vencido && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                              {proj.status_titulo === 'pagamento_recebido' ? 'Recebido' :
-                               proj.status_titulo === 'pagamento_atraso' || proj.vencido ? 'Atrasado' :
-                               proj.status_titulo === 'emitir_nf' ? 'Emitir NF' :
-                               proj.status_titulo === 'pedido_nf_feito' ? 'NF Solicitada' : 'Esperando Pgto'}
+                              {proj.status_titulo === 'pagamento_recebido' ? TITULO_LABEL.pagamento_recebido :
+                               (proj.status_titulo === 'pagamento_atraso' || proj.vencido) ? LABEL_ATRASO :
+                               (TITULO_LABEL[proj.status_titulo] || '—')}
                               {proj.data_recebimento_negociada && ` · Vence ${new Date(proj.data_recebimento_negociada + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                             </p>
                           </td>

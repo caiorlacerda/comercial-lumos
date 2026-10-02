@@ -25,6 +25,7 @@ import {
 , Landmark } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
+import { TITULO_LABEL, LABEL_ATRASO } from '@/lib/statusRecebimento';
 import {
   DndContext,
   closestCenter,
@@ -1154,10 +1155,9 @@ export default function FinanceiroDashboard() {
                                         {proj.statusTitulo === 'emitir_nf' && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />}
                                         {proj.statusTitulo === 'pedido_nf_feito' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
                                         {proj.statusTitulo === 'esperando_pagamento' && !proj.vencido && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                                        {proj.statusTitulo === 'pagamento_recebido' ? 'Recebido' :
-                                         proj.statusTitulo === 'pagamento_atraso' || proj.vencido ? 'Atrasado' :
-                                         proj.statusTitulo === 'emitir_nf' ? 'Emitir NF' :
-                                         proj.statusTitulo === 'pedido_nf_feito' ? 'NF Solicitada' : 'Esperando Pgto'}
+                                        {proj.statusTitulo === 'pagamento_recebido' ? TITULO_LABEL.pagamento_recebido :
+                                         (proj.statusTitulo === 'pagamento_atraso' || proj.vencido) ? LABEL_ATRASO :
+                                         (TITULO_LABEL[proj.statusTitulo] || '—')}
                                         {proj.dataRecebimento && ` · Vence ${new Date(proj.dataRecebimento + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                                       </p>
                                     </td>

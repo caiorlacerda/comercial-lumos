@@ -30,6 +30,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+import { RECEBIVEL_LABEL, dataRecebimentoExibida } from '@/lib/statusRecebimento';
 import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 
@@ -90,16 +91,13 @@ export default function ContasReceber() {
   // manual (enum 'inadimplente', nunca usado até então) — além de aparecer
   // sozinho em vermelho quando o vencimento já passou (ver statusOf).
   const statusOptions = [
-    { value: 'aguardando', label: 'Aguardando', color: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20' },
-    { value: 'emitir_nf', label: 'Emitir NF', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' },
-    { value: 'nf_emitida', label: 'NF Emitida', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
-    { value: 'recebido', label: 'Recebido', color: 'text-green-500 bg-green-500/10 border-green-500/20' },
-    { value: 'inadimplente', label: 'Em atraso', color: 'text-red-500 bg-red-500/10 border-red-500/20' },
+    { value: 'aguardando', label: RECEBIVEL_LABEL.aguardando, color: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20' },
+    { value: 'emitir_nf', label: RECEBIVEL_LABEL.emitir_nf, color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' },
+    { value: 'nf_emitida', label: RECEBIVEL_LABEL.nf_emitida, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
+    { value: 'recebido', label: RECEBIVEL_LABEL.recebido, color: 'text-green-500 bg-green-500/10 border-green-500/20' },
+    { value: 'inadimplente', label: RECEBIVEL_LABEL.inadimplente, color: 'text-red-500 bg-red-500/10 border-red-500/20' },
   ];
-  const statusLabels: Record<string, string> = {
-    aguardando: 'Aguardando', emitir_nf: 'Emitir NF', nf_emitida: 'NF Emitida',
-    recebido: 'Recebido', atrasado: 'Em atraso', inadimplente: 'Em atraso', parcial: 'Parcial',
-  };
+  const statusLabels = RECEBIVEL_LABEL;
   const statusLabel = (s: string) => statusLabels[s] || s;
   const statusPillClass = (s: string) =>
     s === 'recebido' ? 'text-green-500 bg-green-500/10 border-green-500/20'
@@ -360,6 +358,10 @@ export default function ContasReceber() {
   const lucroOf = (r: any): number | null => (r.budget_id != null && lucroByBudget[r.budget_id] != null ? lucroByBudget[r.budget_id] : null);
   // Data sem fuso: received_at é timestamptz (meia-noite UTC); formatar pela parte
   // da data evita o "1 dia antes" no fuso do Brasil.
+  // Coluna "Recebimento": a data em que o dinheiro entrou, quando já entrou;
+  // senão o vencimento previsto — igual à coluna de Custos de Projeto.
+  const dataExibida = (r: any): string | null =>
+    dataRecebimentoExibida(r.status === 'recebido', r.received_at ? String(r.received_at).slice(0, 10) : null, r.due_date);
   const fmtDate = (d: any): string => {
     if (!d) return '—';
     const [y, m, day] = String(d).slice(0, 10).split('-');
@@ -391,8 +393,8 @@ export default function ContasReceber() {
         case 'cliente': return (a.client?.name || '').localeCompare(b.client?.name || '', 'pt-BR', { sensitivity: 'base' }) * dir;
         case 'data': {
           // Sem data sempre por último, independente da direção.
-          const av = a.received_at ? String(a.received_at).slice(0, 10) : '';
-          const bv = b.received_at ? String(b.received_at).slice(0, 10) : '';
+          const av = dataExibida(a) ? String(dataExibida(a)).slice(0, 10) : '';
+          const bv = dataExibida(b) ? String(dataExibida(b)).slice(0, 10) : '';
           if (!av && !bv) return 0;
           if (!av) return 1;
           if (!bv) return -1;
@@ -505,7 +507,11 @@ export default function ContasReceber() {
           )}
         </div>
       </td>
-      <td className="px-6 py-4 text-sm text-lumos-text-secondary whitespace-nowrap">{fmtDate(r.received_at)}</td>
+      <td
+        title={r.status === 'recebido' ? 'Recebido em' : 'Vencimento previsto'}
+        className={clsx('px-6 py-4 text-sm whitespace-nowrap',
+          r.status === 'recebido' ? 'text-green-500' : statusOf(r) === 'atrasado' ? 'text-red-500' : 'text-lumos-text-secondary')}
+      >{fmtDate(dataExibida(r))}</td>
       <td className="px-6 py-4 text-right">
         <div className="flex justify-end items-center gap-1" onClick={e => e.stopPropagation()}>
           {r.budget_id && (
@@ -556,7 +562,7 @@ export default function ContasReceber() {
             </span>
           )}
         </div>
-        <span className="text-[11px] text-lumos-text-secondary whitespace-nowrap">{fmtDate(r.received_at)}</span>
+        <span className="text-[11px] text-lumos-text-secondary whitespace-nowrap">{fmtDate(dataExibida(r))}</span>
       </div>
     </MobileCard>
   );
@@ -578,7 +584,7 @@ export default function ContasReceber() {
                 'Valor (R$)': r.total_amount,
                 'Lucro Líquido (R$)': lucroOf(r) ?? '',
                 'Status': statusLabel(statusOf(r)).toUpperCase(),
-                'Recebimento': fmtDate(r.received_at),
+                'Recebimento': fmtDate(dataExibida(r)),
               }));
               const ws = XLSX.utils.json_to_sheet(rows);
               const wb = XLSX.utils.book_new();
@@ -632,11 +638,11 @@ export default function ContasReceber() {
           </button>
           {([
             ['todos', 'Todos'],
-            ['aguardando', 'Aguardando'],
-            ['emitir_nf', 'Emitir NF'],
-            ['nf_emitida', 'NF Emitida'],
-            ['recebido', 'Recebido'],
-            ['atrasado', 'Em atraso'],
+            ['aguardando', RECEBIVEL_LABEL.aguardando],
+            ['emitir_nf', RECEBIVEL_LABEL.emitir_nf],
+            ['nf_emitida', RECEBIVEL_LABEL.nf_emitida],
+            ['recebido', RECEBIVEL_LABEL.recebido],
+            ['atrasado', RECEBIVEL_LABEL.atrasado],
           ] as const).map(([key, label]) => {
             const count = key === 'todos'
               ? receivables.length
