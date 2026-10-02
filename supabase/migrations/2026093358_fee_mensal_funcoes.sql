@@ -382,6 +382,16 @@ BEGIN
   RETURN NEW;
 END; $$;
 
+-- Religa o gatilho na tabela. Descoberto durante a aplicação desta migration
+-- que esta função nunca existiu de fato no banco em produção (só o código-fonte
+-- desta migration, nunca aplicado) — então o gatilho também nunca existiu.
+-- Sem isso, CREATE OR REPLACE acima não tem efeito nenhum: a função fica
+-- pronta mas nunca é chamada.
+DROP TRIGGER IF EXISTS trg_versao_reajusta_parcelas ON public.budget_versions;
+CREATE TRIGGER trg_versao_reajusta_parcelas
+  AFTER UPDATE OF margin_pct, discount_value ON public.budget_versions
+  FOR EACH ROW EXECUTE FUNCTION public.fn_versao_reajusta_parcelas();
+
 -- Conferência: as três funções novas têm que existir, e aprovar_orcamento/
 -- fn_versao_reajusta_parcelas têm que estar com a definição atualizada
 -- (procure 'fee_mensal' no corpo — tem que aparecer nas duas).

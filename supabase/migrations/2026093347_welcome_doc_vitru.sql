@@ -97,7 +97,10 @@ VALUES (
 )
 ON CONFLICT (vertical, version) DO NOTHING;
 
--- Publica pra Vitru, com os valores reais do mockup.
+-- Publica pra Vitru, com os valores reais do mockup. Dado real de produção —
+-- o guard EXISTS faz isso virar no-op num banco novo/local, onde esse
+-- cliente não existe (sem isso não dava pra recriar o banco do zero,
+-- descoberto só agora).
 INSERT INTO client_welcome_docs (client_id, template_id, values, status, published_at)
 SELECT '4298cbde-99fe-4465-ae14-a6ec70d88122'::uuid, t.id, '{
     "CLIENTE": "Vitru",
@@ -113,7 +116,9 @@ SELECT '4298cbde-99fe-4465-ae14-a6ec70d88122'::uuid, t.id, '{
     "CANAL": "Slack compartilhado",
     "DIA_GRAVACAO": "11/09"
   }'::jsonb, 'published', now()
-FROM client_welcome_doc_templates t WHERE t.vertical = 'digital' AND t.version = 1
+FROM client_welcome_doc_templates t
+WHERE t.vertical = 'digital' AND t.version = 1
+  AND EXISTS (SELECT 1 FROM public.clients WHERE id = '4298cbde-99fe-4465-ae14-a6ec70d88122'::uuid)
 ON CONFLICT (client_id) DO NOTHING;
 
 INSERT INTO client_welcome_doc_itens (welcome_doc_id, item_key, group_key, titulo, descricao, requer_arquivo, sort_order)
