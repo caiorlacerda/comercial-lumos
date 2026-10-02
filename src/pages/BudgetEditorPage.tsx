@@ -64,6 +64,7 @@ import { getPdfFileName } from '@/utils/pdfFileName';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
+import DatePicker from '@/components/ui/DatePicker';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 
@@ -1666,24 +1667,22 @@ export default function BudgetEditorPage() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Início</label>
-                    <input
-                      type="month" disabled={isReadOnly}
-                      className="input-lumos w-full text-xs disabled:opacity-70"
-                      value={version?.fee_mensal_inicio ? version.fee_mensal_inicio.slice(0, 7) : ''}
-                      onChange={(e) => {
-                        setVersion(vv => vv ? { ...vv, fee_mensal_inicio: e.target.value ? `${e.target.value}-01` : null } : null);
+                    <DatePicker
+                      mode="month" disabled={isReadOnly}
+                      value={version?.fee_mensal_inicio}
+                      onChange={(v) => {
+                        setVersion(vv => vv ? { ...vv, fee_mensal_inicio: v } : null);
                         isDirty.current = true;
                       }}
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Fim</label>
-                    <input
-                      type="month" disabled={isReadOnly}
-                      className="input-lumos w-full text-xs disabled:opacity-70"
-                      value={version?.fee_mensal_fim ? version.fee_mensal_fim.slice(0, 7) : ''}
-                      onChange={(e) => {
-                        setVersion(vv => vv ? { ...vv, fee_mensal_fim: e.target.value ? `${e.target.value}-01` : null } : null);
+                    <DatePicker
+                      mode="month" disabled={isReadOnly}
+                      value={version?.fee_mensal_fim}
+                      onChange={(v) => {
+                        setVersion(vv => vv ? { ...vv, fee_mensal_fim: v } : null);
                         isDirty.current = true;
                       }}
                     />
@@ -1706,13 +1705,12 @@ export default function BudgetEditorPage() {
                   <label className="text-[10px] font-bold text-lumos-text-secondary uppercase block">Adendos pontuais (opcional)</label>
                   {(version?.fee_mensal_adendos || []).map((ad, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="month" disabled={isReadOnly}
-                        className="input-lumos text-xs disabled:opacity-70"
+                      <DatePicker
+                        mode="month" disabled={isReadOnly} className="input-lumos flex-1 text-xs"
                         value={ad.mes}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const next = [...(version?.fee_mensal_adendos || [])];
-                          next[idx] = { ...next[idx], mes: e.target.value };
+                          next[idx] = { ...next[idx], mes: v ? v.slice(0, 7) : '' };
                           setVersion(vv => vv ? { ...vv, fee_mensal_adendos: next } : null);
                           isDirty.current = true;
                         }}

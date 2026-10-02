@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
+import DatePicker from '@/components/ui/DatePicker';
 
 /**
  * PARCELAMENTO — mora no Financeiro de propósito: o comercial fecha a venda,
@@ -205,7 +206,8 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
             <div className="rounded-lumos bg-lumos-text-secondary/5 border border-lumos-border p-3 space-y-2">
               <p className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary">Estender o contrato com mais um mês</p>
               <div className="flex items-center gap-2">
-                <input type="month" className="input-lumos h-9 text-xs flex-1" value={fmNovoMesExtra} onChange={e => setFmNovoMesExtra(e.target.value)} />
+                <DatePicker mode="month" className="input-lumos h-9 text-xs flex-1" value={fmNovoMesExtra}
+                  onChange={v => setFmNovoMesExtra(v ? v.slice(0, 7) : '')} />
                 <button onClick={estenderContrato} disabled={salvando} className="btn-primary h-9 px-3 text-xs">Estender</button>
               </div>
             </div>
@@ -247,11 +249,11 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
                 <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Início</label>
-                    <input type="month" value={fmInicio} onChange={e => setFmInicio(e.target.value)} className="input-lumos w-full h-10 text-sm" />
+                    <DatePicker mode="month" value={fmInicio} onChange={v => setFmInicio(v ? v.slice(0, 7) : '')} className="input-lumos w-full h-10 text-sm" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Fim</label>
-                    <input type="month" value={fmFim} onChange={e => setFmFim(e.target.value)} className="input-lumos w-full h-10 text-sm" />
+                    <DatePicker mode="month" value={fmFim} onChange={v => setFmFim(v ? v.slice(0, 7) : '')} className="input-lumos w-full h-10 text-sm" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Valor mensal</label>
@@ -262,8 +264,8 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Adendos pontuais (opcional)</label>
                   {fmAdendos.map((ad, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <input type="month" value={ad.mes} onChange={e => {
-                        const next = [...fmAdendos]; next[idx] = { ...next[idx], mes: e.target.value }; setFmAdendos(next);
+                      <DatePicker mode="month" value={ad.mes} onChange={v => {
+                        const next = [...fmAdendos]; next[idx] = { ...next[idx], mes: v ? v.slice(0, 7) : '' }; setFmAdendos(next);
                       }} className="input-lumos h-9 text-xs flex-1" />
                       <input type="number" min={0} placeholder="Valor" value={ad.valor || ''} onChange={e => {
                         const next = [...fmAdendos]; next[idx] = { ...next[idx], valor: Number(e.target.value) || 0 }; setFmAdendos(next);
@@ -296,7 +298,7 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">A partir de</label>
-                  <input type="date" value={base} onChange={e => setBase(e.target.value)}
+                  <DatePicker mode="date" value={base} onChange={v => setBase(v || new Date().toISOString().slice(0, 10))}
                     className="input-lumos w-full h-10 text-sm" />
                 </div>
               </div>
