@@ -14,6 +14,7 @@ import { formatBudgetCode } from '@/utils/formatters';
 import { useViewPrefs } from '@/hooks/useViewPrefs';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
+import { TITULO_LABEL, LABEL_ATRASO, dataRecebimentoExibida } from '@/lib/statusRecebimento';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,13 +42,6 @@ const badgeMargem = (p: any) => {
   return 'bg-red-500/10 text-red-500 border border-red-500/20';
 };
 
-const TITULO_LABEL: Record<string, string> = {
-  emitir_nf: 'Emitir NF',
-  pedido_nf_feito: 'NF pedida',
-  esperando_pagamento: 'Aguardando',
-  pagamento_atraso: 'Em atraso',
-  pagamento_recebido: 'Recebido',
-};
 
 /**
  * Catálogo das colunas da lista (só ADM). Cada pessoa liga e desliga o que
@@ -80,16 +74,26 @@ const COLUNAS: Coluna[] = [
       </span>
     ) },
   { key: 'titulo', label: 'Status do título', sort: 'status_titulo',
+    render: p => {
+      // Mesma regra de Contas a Receber: não recebeu e venceu = "Em atraso".
+      const recebido = p.status_titulo === 'pagamento_recebido';
+      const atrasado = !recebido && (p.vencido || p.status_titulo === 'pagamento_atraso');
+      return (
+        <span className={clsx('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black',
+          recebido ? 'bg-green-500/10 text-green-500'
+            : atrasado ? 'bg-red-500/10 text-red-500'
+            : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
+          {atrasado ? LABEL_ATRASO : (TITULO_LABEL[p.status_titulo] || '—')}
+        </span>
+      );
+    } },
+  { key: 'recebimento', label: 'Recebimento', sort: 'data_recebimento_exibida',
     render: p => (
-      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black',
-        p.status_titulo === 'pagamento_recebido' ? 'bg-green-500/10 text-green-500'
-          : p.status_titulo === 'pagamento_atraso' ? 'bg-red-500/10 text-red-500'
-          : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
-        {TITULO_LABEL[p.status_titulo] || '—'}
-      </span>
+      <span
+        title={p.status_titulo === 'pagamento_recebido' && p.data_recebido ? 'Recebido em' : 'Vencimento previsto'}
+        className={clsx(p.vencido ? 'text-red-500' : p.status_titulo === 'pagamento_recebido' ? 'text-green-500' : 'text-lumos-text-primary')}
+      >{fmtDia(p.data_recebimento_exibida)}</span>
     ) },
-  { key: 'recebimento', label: 'Recebimento', sort: 'data_recebimento_negociada',
-    render: p => <span className={clsx(p.vencido ? 'text-red-500' : 'text-lumos-text-primary')}>{fmtDia(p.data_recebimento_negociada)}</span> },
 ];
 
 const COLUNAS_PADRAO = ['vendido', 'custos', 'saldo', 'lucro', 'margem'];
@@ -110,7 +114,7 @@ export default function CustosProjeto() {
   // Ordenação por coluna clicável (mesmo padrão de Contas a Pagar/Orçamentos):
   // clicar no título alterna crescente/decrescente. O dropdown do modo grade
   // alimenta o mesmo estado.
-  type SortKey = 'recente' | 'code' | 'name' | 'totalProductionValue' | 'totalCosts' | 'saldoProducao' | 'margin' | 'marginPercent' | 'tetoCustos' | 'consumoTetoPct' | 'status_titulo' | 'data_recebimento_negociada';
+  type SortKey = 'recente' | 'code' | 'name' | 'totalProductionValue' | 'totalCosts' | 'saldoProducao' | 'margin' | 'marginPercent' | 'tetoCustos' | 'consumoTetoPct' | 'status_titulo' | 'data_recebimento_exibida';
   const NUMERIC_SORT_KEYS = new Set<SortKey>(['totalProductionValue', 'totalCosts', 'saldoProducao', 'margin', 'marginPercent', 'tetoCustos', 'consumoTetoPct']);
   // Padrão: por número do projeto (código), mais recente no topo. Antes era por
   // data de criação, que não bate com a ordem dos números e parecia aleatório.
@@ -303,6 +307,8 @@ export default function CustosProjeto() {
           vencido: p.vencido,
           encerrado_em: p.encerrado_em || null,
           data_recebimento_negociada: p.data_recebimento_negociada || null,
+          data_recebido: p.data_recebido || null,
+          data_recebimento_exibida: dataRecebimentoExibida(p.status_titulo === 'pagamento_recebido', p.data_recebido, p.data_recebimento_negociada),
           pendente_preenchimento: p.pendente_preenchimento,
           tetoCustos,
           saldoProducao,

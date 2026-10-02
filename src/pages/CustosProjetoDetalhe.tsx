@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { MobileCardList, MobileCard, MobileCardEmpty } from '@/components/ui/MobileCards';
+import { TITULO_LABEL, LABEL_ATRASO } from '@/lib/statusRecebimento';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1541,7 +1542,7 @@ export default function CustosProjetoDetalhe() {
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Status do Título *</label>
                     <Select className="input-lumos w-full" value={financeForm.status_titulo} onChange={v => setFinanceForm({ ...financeForm, status_titulo: v })}
-                      options={[{ value: 'emitir_nf', label: 'Emitir NF' }, { value: 'pedido_nf_feito', label: 'Pedido de NF Feito' }, { value: 'esperando_pagamento', label: 'Esperando Pagamento' }, { value: 'pagamento_atraso', label: 'Pagamento em Atraso' }, { value: 'pagamento_recebido', label: 'Pagamento Recebido' }]} />
+                      options={['emitir_nf', 'pedido_nf_feito', 'esperando_pagamento', 'pagamento_atraso', 'pagamento_recebido'].map(v => ({ value: v, label: TITULO_LABEL[v] }))} />
                   </div>
 
                   {financeForm.status_titulo === 'pagamento_recebido' && (
@@ -1585,12 +1586,7 @@ export default function CustosProjetoDetalhe() {
                         projectFinanceiro.status_titulo === 'pagamento_atraso' || projectFinanceiro.vencido ? 'bg-red-500/10 text-red-500' :
                         'bg-yellow-500/10 text-yellow-500'
                       )}>
-                        {projectFinanceiro.vencido ? 'Atrasado' :
-                         projectFinanceiro.status_titulo === 'emitir_nf' ? 'Emitir NF' :
-                         projectFinanceiro.status_titulo === 'pedido_nf_feito' ? 'Pedido NF Feito' :
-                         projectFinanceiro.status_titulo === 'esperando_pagamento' ? 'Aguardando Pgto' :
-                         projectFinanceiro.status_titulo === 'pagamento_atraso' ? 'Atrasado' :
-                         projectFinanceiro.status_titulo === 'pagamento_recebido' ? 'Recebido' : '—'}
+                        {projectFinanceiro.vencido ? LABEL_ATRASO : (TITULO_LABEL[projectFinanceiro.status_titulo] || '—')}
                       </span>
                     </div>
                   </div>
