@@ -512,11 +512,17 @@ export default function BudgetEditorPage() {
             validity_days: version.validity_days,
             logistics_date: version.logistics_date || null,
             logistics_time: version.logistics_time || null,
-            logistics_location: version.logistics_location || null
+            logistics_location: version.logistics_location || null,
+            payment_plan: version.payment_plan || null,
+            fee_mensal_inicio: version.fee_mensal_inicio || null,
+            fee_mensal_fim: version.fee_mensal_fim || null,
+            fee_mensal_valor: version.fee_mensal_valor || null,
+            fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
+            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
           })
           .select()
           .single();
-        
+
         if (vError) throw vError;
         currentVersionId = vData.id;
 
@@ -549,7 +555,13 @@ export default function BudgetEditorPage() {
             validity_days: version.validity_days,
             logistics_date: version.logistics_date || null,
             logistics_time: version.logistics_time || null,
-            logistics_location: version.logistics_location || null
+            logistics_location: version.logistics_location || null,
+            payment_plan: version.payment_plan || null,
+            fee_mensal_inicio: version.fee_mensal_inicio || null,
+            fee_mensal_fim: version.fee_mensal_fim || null,
+            fee_mensal_valor: version.fee_mensal_valor || null,
+            fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
+            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
           }).eq('id', version.id),
           supabase.from('budgets').update({
             code: budget.code,
@@ -660,7 +672,13 @@ export default function BudgetEditorPage() {
           // Nova versão da MESMA proposta herda a conta da versão anterior —
           // só proposta nova de verdade (nasce sem isso, cai no default do
           // banco) ganha a conta nova sozinha.
-          imposto_reajusta_preco: version.imposto_reajusta_preco === true
+          imposto_reajusta_preco: version.imposto_reajusta_preco === true,
+          payment_plan: version.payment_plan || null,
+          fee_mensal_inicio: version.fee_mensal_inicio || null,
+          fee_mensal_fim: version.fee_mensal_fim || null,
+          fee_mensal_valor: version.fee_mensal_valor || null,
+          fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
+          fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
         })
         .select()
         .single();
@@ -1620,6 +1638,139 @@ export default function BudgetEditorPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                type="checkbox"
+                id="fee-mensal-toggle"
+                disabled={isReadOnly}
+                checked={version?.payment_plan === 'fee_mensal'}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setVersion(vv => vv ? { ...vv, payment_plan: 'fee_mensal' } : null);
+                  } else {
+                    setVersion(vv => vv ? { ...vv, payment_plan: null, fee_mensal_inicio: null, fee_mensal_fim: null, fee_mensal_valor: null, fee_mensal_adendos: [], fee_mensal_mostrar_na_proposta: false } : null);
+                  }
+                  isDirty.current = true;
+                }}
+                className="w-4 h-4"
+              />
+              <label htmlFor="fee-mensal-toggle" className="font-bold text-sm text-lumos-text-primary cursor-pointer">
+                Este projeto é fee mensal?
+              </label>
+            </div>
+            {version?.payment_plan === 'fee_mensal' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Início</label>
+                    <input
+                      type="month" disabled={isReadOnly}
+                      className="input-lumos w-full text-xs disabled:opacity-70"
+                      value={version?.fee_mensal_inicio ? version.fee_mensal_inicio.slice(0, 7) : ''}
+                      onChange={(e) => {
+                        setVersion(vv => vv ? { ...vv, fee_mensal_inicio: e.target.value ? `${e.target.value}-01` : null } : null);
+                        isDirty.current = true;
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Fim</label>
+                    <input
+                      type="month" disabled={isReadOnly}
+                      className="input-lumos w-full text-xs disabled:opacity-70"
+                      value={version?.fee_mensal_fim ? version.fee_mensal_fim.slice(0, 7) : ''}
+                      onChange={(e) => {
+                        setVersion(vv => vv ? { ...vv, fee_mensal_fim: e.target.value ? `${e.target.value}-01` : null } : null);
+                        isDirty.current = true;
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block">Valor mensal fixo</label>
+                    <input
+                      type="number" min={0} disabled={isReadOnly}
+                      className="input-lumos w-full text-xs disabled:opacity-70"
+                      value={version?.fee_mensal_valor || ''}
+                      onChange={(e) => {
+                        setVersion(vv => vv ? { ...vv, fee_mensal_valor: Number(e.target.value) || 0 } : null);
+                        isDirty.current = true;
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase block">Adendos pontuais (opcional)</label>
+                  {(version?.fee_mensal_adendos || []).map((ad, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="month" disabled={isReadOnly}
+                        className="input-lumos text-xs disabled:opacity-70"
+                        value={ad.mes}
+                        onChange={(e) => {
+                          const next = [...(version?.fee_mensal_adendos || [])];
+                          next[idx] = { ...next[idx], mes: e.target.value };
+                          setVersion(vv => vv ? { ...vv, fee_mensal_adendos: next } : null);
+                          isDirty.current = true;
+                        }}
+                      />
+                      <input
+                        type="number" min={0} disabled={isReadOnly} placeholder="Valor"
+                        className="input-lumos w-32 text-xs disabled:opacity-70"
+                        value={ad.valor || ''}
+                        onChange={(e) => {
+                          const next = [...(version?.fee_mensal_adendos || [])];
+                          next[idx] = { ...next[idx], valor: Number(e.target.value) || 0 };
+                          setVersion(vv => vv ? { ...vv, fee_mensal_adendos: next } : null);
+                          isDirty.current = true;
+                        }}
+                      />
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = (version?.fee_mensal_adendos || []).filter((_, i) => i !== idx);
+                            setVersion(vv => vv ? { ...vv, fee_mensal_adendos: next } : null);
+                            isDirty.current = true;
+                          }}
+                          className="text-red-500 text-xs font-bold"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = [...(version?.fee_mensal_adendos || []), { mes: '', valor: 0 }];
+                        setVersion(vv => vv ? { ...vv, fee_mensal_adendos: next } : null);
+                        isDirty.current = true;
+                      }}
+                      className="text-[11px] font-bold text-lumos-yellow"
+                    >
+                      + Adicionar adendo
+                    </button>
+                  )}
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-lumos-text-secondary">
+                  <input
+                    type="checkbox" disabled={isReadOnly}
+                    checked={!!version?.fee_mensal_mostrar_na_proposta}
+                    onChange={(e) => {
+                      setVersion(vv => vv ? { ...vv, fee_mensal_mostrar_na_proposta: e.target.checked } : null);
+                      isDirty.current = true;
+                    }}
+                  />
+                  Mostrar essa divisão no PDF da proposta
+                </label>
+              </div>
+            )}
           </div>
 
           {(['equipe', 'equipamentos', 'producao', 'edicao'] as const).map(group => {
