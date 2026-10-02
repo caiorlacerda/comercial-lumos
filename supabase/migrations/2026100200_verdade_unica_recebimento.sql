@@ -93,6 +93,11 @@ REVOKE ALL ON SEQUENCE public.reconciliacao_recebimento_log_id_seq FROM PUBLIC, 
 -- ───────────────────────────────────────────────────────────────────────────
 -- 3) "Atrasado" igual nas duas telas: não recebeu e o vencimento já passou
 -- ───────────────────────────────────────────────────────────────────────────
+-- Os gatilhos abaixo gravam updated_at em projetos_financeiro (coluna criada em
+-- 2026100100); aqui só garantimos que ela existe, sem depender da ordem.
+ALTER TABLE public.projetos_financeiro
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
 DROP VIEW IF EXISTS vw_rentabilidade;
 CREATE VIEW vw_rentabilidade AS
 SELECT
