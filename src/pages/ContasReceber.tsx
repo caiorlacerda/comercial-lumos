@@ -137,14 +137,23 @@ export default function ContasReceber() {
 
   // Edição de um recebível (descrição, cliente, valor, vencimento, data de recebimento).
   const [editing, setEditing] = useState<any | null>(null);
-  const [editData, setEditData] = useState({ description: '', client_id: '', total_amount: 0, received_at: '' });
+  const [editData, setEditData] = useState({ description: '', client_id: '', total_amount: 0, data: '' });
+
+  // A data do modal é a mesma que a coluna "Recebimento" mostra: recebido ->
+  // data em que o dinheiro entrou (received_at); em aberto -> vencimento
+  // previsto (due_date). Previsão antiga que ficou gravada em received_at num
+  // título em aberto (e sem nada recebido) aparece aqui e migra pro vencimento.
+  const previsaoAntiga = (r: any): string | null =>
+    r.status !== 'recebido' && !Number(r.received_amount || 0) && r.received_at ? String(r.received_at).slice(0, 10) : null;
 
   const openEdit = (r: any) => {
+    const recebido = r.status === 'recebido';
+    const data = recebido ? r.received_at : (r.due_date || previsaoAntiga(r));
     setEditData({
       description: r.description || '',
       client_id: r.client_id || '',
       total_amount: Number(r.total_amount || 0),
-      received_at: r.received_at ? r.received_at.slice(0, 10) : '',
+      data: data ? String(data).slice(0, 10) : '',
     });
     setEditing(r);
   };
@@ -153,11 +162,17 @@ export default function ContasReceber() {
     e.preventDefault();
     if (!editing) return;
     try {
+      const recebido = editing.status === 'recebido';
       const { error } = await supabase.from('receivables').update({
         description: editData.description.trim(),
         client_id: editData.client_id || null,
         total_amount: editData.total_amount,
-        received_at: editData.received_at || null,      // só a DATA; não mexe no status/valor recebido
+        // só a DATA; não mexe no status/valor recebido. Recebido -> data do
+        // recebimento; em aberto -> vencimento previsto (e limpa previsão
+        // antiga que estivesse em received_at, se nada foi recebido).
+        ...(recebido
+          ? { received_at: editData.data || null }
+          : { due_date: editData.data || null, ...(previsaoAntiga(editing) ? { received_at: null } : {}) }),
       }).eq('id', editing.id);
       if (error) throw error;
       toast.success('Recebível atualizado.');
@@ -947,11 +962,17 @@ export default function ContasReceber() {
                 <CurrencyInput className="input-lumos w-full h-10 text-sm font-bold" value={editData.total_amount} onChange={(val: number) => setEditData({ ...editData, total_amount: val })} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Data de recebimento</label>
-                <input type="date" className="input-lumos w-full h-10 text-sm" value={editData.received_at} onChange={e => setEditData({ ...editData, received_at: e.target.value })} />
+                <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
+                  {editing?.status === 'recebido' ? 'Data do recebimento' : 'Vencimento previsto'}
+                </label>
+                <input type="date" className="input-lumos w-full h-10 text-sm" value={editData.data} onChange={e => setEditData({ ...editData, data: e.target.value })} />
               </div>
             </div>
-            <p className="text-[10px] text-lumos-text-secondary/60 -mt-1">Quando o valor será/foi recebido. Para marcar como recebido, use o status.</p>
+            <p className="text-[10px] text-lumos-text-secondary/60 -mt-1">
+              {editing?.status === 'recebido'
+                ? 'Quando o valor foi recebido.'
+                : 'Quando o valor deve ser recebido (é o vencimento, o mesmo de Custos de Projeto). Para marcar como recebido, use o status.'}
+            </p>
 
             <div className="flex gap-3 pt-1">
               <button type="button" onClick={() => setEditing(null)} className="btn-secondary flex-1 h-10 text-sm">Cancelar</button>
