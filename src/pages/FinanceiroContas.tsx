@@ -41,10 +41,11 @@ export default function FinanceiroContas() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const abaParam = searchParams.get('tab') as Aba | null;
-  const [aba, setAba] = useState<Aba>(abaParam === 'pagar' || abaParam === 'receber' ? abaParam : 'bancos');
+  // A primeira aba é a que abre quando o link não diz qual (ex.: menu lateral).
+  const [aba, setAba] = useState<Aba>(abaParam === 'pagar' || abaParam === 'bancos' ? abaParam : 'receber');
   const mudarAba = (a: Aba) => {
     setAba(a);
-    setSearchParams(a === 'bancos' ? {} : { tab: a }, { replace: true });
+    setSearchParams(a === 'receber' ? {} : { tab: a }, { replace: true });
   };
 
   const [contas, setContas] = useState<Conta[]>([]);
@@ -116,9 +117,9 @@ export default function FinanceiroContas() {
   };
 
   const TABS: { id: Aba; label: string }[] = [
-    { id: 'bancos', label: 'Bancos' },
-    { id: 'pagar', label: 'A Pagar' },
     { id: 'receber', label: 'A Receber' },
+    { id: 'pagar', label: 'A Pagar' },
+    { id: 'bancos', label: 'Bancos' },
   ];
 
   return (
