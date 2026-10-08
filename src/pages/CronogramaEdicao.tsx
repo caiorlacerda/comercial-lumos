@@ -122,7 +122,9 @@ export default function CronogramaEdicao() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   useEffect(() => { fetchData(); }, []);
-  useRealtimeRefetch(['project_tasks', 'project_task_tags', 'app_users'], () => fetchData(true));
+  // app_users fica de fora de propósito: o heartbeat grava last_seen a cada 30s por
+  // pessoa online, e cada gravação refazia as 4-5 consultas desta tela.
+  useRealtimeRefetch(['project_tasks', 'project_task_tags'], () => fetchData(true));
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
