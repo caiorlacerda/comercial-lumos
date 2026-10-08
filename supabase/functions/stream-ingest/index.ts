@@ -12,7 +12,8 @@
 // Ações (POST, JSON):
 //   { action: 'testar' }                    confere as credenciais
 //   { action: 'enviar', version_id }        manda uma versão
-//   { action: 'lote', limite }              manda as que ainda não foram
+//   { action: 'lote', limite }              manda as que ainda não foram (as com erro
+//                                            só entram com incluirErros: true)
 //   { action: 'conferir' }                  atualiza o status do que está processando
 //   { action: 'situacao' }                  quanto já migrou
 //   { action: 'auto', version_id }          o gatilho do banco chama isto sozinho
@@ -165,10 +166,19 @@ serve(async (req) => {
       // Poucos por vez: o Stream busca cada arquivo pela nossa função, e não
       // adianta empilhar trabalho que a conta vai processar em fila mesmo.
       const limite = Math.min(Number(corpo.limite || 10), 25)
+      // Os que deram erro ficam de fora, a não ser que se peça de propósito
+      // (incluirErros). Cada tentativa faz o Stream puxar o arquivo INTEIRO pela
+      // review-stream, o que sai da cota de egress do Supabase; e como o "Migrar
+      // acervo" repete o lote até acabar, um vídeo com erro era puxado de novo a
+      // cada rodada — com arquivo de ~1,5 GB, isso pesa. Resolva o erro (veja
+      // stream_error) e então reenvie por 'enviar' ou com incluirErros: true.
+      const filtroStatus = corpo.incluirErros === true
+        ? 'stream_status.is.null,stream_status.eq.erro'
+        : 'stream_status.is.null'
       const { data: pendentes } = await db.from('video_versions')
         .select('id, file_name')
         .is('stream_uid', null)
-        .or('stream_status.is.null,stream_status.eq.erro')
+        .or(filtroStatus)
         .order('created_at', { ascending: false })
         .limit(limite)
       const feitos = []
