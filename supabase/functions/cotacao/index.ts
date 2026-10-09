@@ -10,7 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { escolherCotacao, urlPtax } from "./ptax.ts"
+import { escolherCotacao, urlPtax, type CotacaoPtax } from "./ptax.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,22 +47,31 @@ serve(async (req) => {
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
     // 2. Banco Central (com limite de tempo).
-    let cot = null
+    let cot: CotacaoPtax | null = null
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 8000)
-      const r = await fetch(urlPtax(new Date()), { signal: ctrl.signal })
-      clearTimeout(timer)
-      if (r.ok) cot = escolherCotacao(await r.json())
+      try {
+        const r = await fetch(urlPtax(new Date()), { signal: ctrl.signal })
+        if (r.ok) cot = escolherCotacao(await r.json())
+      } finally {
+        clearTimeout(timer)
+      }
     } catch (e) {
       console.error('cotacao: falha ao consultar o Banco Central', e)
     }
 
     if (cot) {
-      await db.from('cotacoes_dia').upsert(
-        { data: cot.data, compra: cot.compra, venda: cot.venda, fonte: 'ptax', buscado_em: new Date().toISOString() },
-        { onConflict: 'data' },
-      )
+      // Guardar é só cache: se falhar, a cotação fresca ainda é devolvida.
+      try {
+        const { error: upErr } = await db.from('cotacoes_dia').upsert(
+          { data: cot.data, compra: cot.compra, venda: cot.venda, fonte: 'ptax', buscado_em: new Date().toISOString() },
+          { onConflict: 'data' },
+        )
+        if (upErr) console.error('cotacao: não consegui guardar a cotação do dia', upErr)
+      } catch (e) {
+        console.error('cotacao: não consegui guardar a cotação do dia', e)
+      }
       return json({ data: cot.data, compra: cot.compra, venda: cot.venda, fonte: 'ptax', do_cache: false })
     }
 
