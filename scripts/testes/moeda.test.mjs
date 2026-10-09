@@ -79,17 +79,32 @@ test('título sem versão em dólar não tem referência em US$', () => {
 test('lê valores em reais digitados à brasileira', () => {
   assert.equal(parseValorBR('51.200,50'), 51200.5);
   assert.equal(parseValorBR('51200,5'), 51200.5);
+  assert.equal(parseValorBR('1,5'), 1.5);
   assert.equal(parseValorBR('R$ 51.200,00'), 51200);
+  assert.equal(parseValorBR('R$\u00a051.200,00'), 51200); // NBSP
   assert.equal(parseValorBR('51.200'), 51200);     // ponto de milhar
+  assert.equal(parseValorBR('1.234.567'), 1234567);
   assert.equal(parseValorBR('51200.5'), 51200.5);  // ponto decimal
   assert.equal(parseValorBR('1.5'), 1.5);
-  assert.equal(parseValorBR('1.234.567'), 1234567);
+  assert.equal(parseValorBR('1000'), 1000);
+  assert.equal(parseValorBR('1.000.000,25'), 1000000.25);
 });
 
-test('valor digitado inválido vira null', () => {
+test('valor digitado inválido ou ambíguo vira null', () => {
   assert.equal(parseValorBR(''), null);
   assert.equal(parseValorBR('   '), null);
   assert.equal(parseValorBR('abc'), null);
   assert.equal(parseValorBR('0'), null);
   assert.equal(parseValorBR('-5'), null);
+  assert.equal(parseValorBR('0,004'), null);     // arredonda para 0
+  assert.equal(parseValorBR('1e3'), null);
+  assert.equal(parseValorBR('0x10'), null);
+  assert.equal(parseValorBR('51,200.50'), null); // formato americano
+  assert.equal(parseValorBR('1,234.56'), null);
+  assert.equal(parseValorBR('2,600'), null);     // 3 dígitos após a vírgula: ambíguo
+  assert.equal(parseValorBR('1.234,5.6'), null);
+  assert.equal(parseValorBR('1,5,5'), null);
+  assert.equal(parseValorBR('1.2345'), null);
+  assert.equal(parseValorBR('12.34.56'), null);
+  assert.equal(parseValorBR('1234.567'), null);  // 4 dígitos antes do ponto: não é milhar válido nem decimal de 2 casas
 });

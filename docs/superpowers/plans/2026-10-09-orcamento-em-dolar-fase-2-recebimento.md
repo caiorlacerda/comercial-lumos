@@ -25,7 +25,7 @@
 - Só entra em `recebido` quem não está `cancelado` nem `recebido`. Valor recebido > 0. Valores com 2 casas.
 - SQL **só o Caio roda em produção**; testes de SQL só no banco **local**. Sem downloads reais de arquivos nos testes de tela. Tokens `lumos-*`, sem cores cruas (as classes `text-red-500`/`text-green-500`/`text-amber-500` já usadas na tela são aceitas). Desktop não regride.
 - Commits terminam com `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` (exatamente este nome de modelo). PR termina com `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
-- **Ordem de produção:** migration → merge do front. Se o front subir antes, a consulta de Contas a Receber que lê `valor_previsto`/`budget_version` não quebra (a coluna só é lida via `select('*')`), mas o botão do modal falharia sem a RPC; portanto: migration primeiro.
+- **Ordem de produção:** a consulta de Contas a Receber agora embute `budget_versions(currency, fx_rate)` (`budget_version:budget_versions!budget_version_id(...)`), então a migration da Fase 1 `2026100900` PRECISA já estar aplicada em produção (está: aplicada pelo Caio em 2026-10-09). Se faltasse, a lista de Contas a Receber renderizaria VAZIA em silêncio (o erro só vai para `console.error`). Ordem: confirmar que `2026100900` está aplicada → aplicar `2026101000` (coluna `valor_previsto` + RPC) → merge do front. Se o front subir antes da `2026101000`, o botão do modal falharia sem a RPC; portanto: migration primeiro.
 
 ## File Structure
 
@@ -831,4 +831,6 @@ gh pr create --base main --head feat/dolar-fase-2-recebimento --title "feat: or�
 **Limitações conhecidas (para o PR e para o Caio):**
 - Marcar "Pagamento recebido" em **Custos de Projeto**, usar o **lote** em títulos em reais, ou a reconciliação por SQL quitam o título pelo valor **previsto**, sem pedir o valor em reais. Para propostas em dólar, o caminho certo é o menu de status de Contas a Receber.
 - O `valor_vendido` do projeto (e portanto Rentabilidade, relatórios e dashboard) continua o valor **previsto**; a variação cambial real aparece no título. Re-aprovar o orçamento reescreve o `valor_vendido` com o previsto.
-- Reabrir um título já recebido em dólar pelo menu de status devolve o status, mas o `total_amount` continua o valor real (o previsto segue guardado em `valor_previsto`).
+- Reabrir um título já recebido em dólar pelo menu de status devolve o status e restaura o `total_amount` para o previsto (`valor_previsto`, que segue guardado); o `valor_vendido` do projeto nunca é alterado pelo recebimento.
+- `definir_parcelamento` calcula o saldo como `valor_vendido` − soma de `received_amount`; refazer o parcelamento de um projeto em dólar depois de um recebimento parcial carrega a variação cambial para a nova parcela (precisa de acompanhamento).
+- Se o embed da versão do título vier nulo (versão apagada), o título é tratado como R$ e segue o caminho direto antigo.

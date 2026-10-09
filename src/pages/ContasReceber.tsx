@@ -123,7 +123,12 @@ export default function ContasReceber() {
     try {
       const patch = newStatus === 'recebido'
         ? { status: 'recebido', received_amount: Number(r.total_amount || 0), received_at: (r.received_at || new Date().toISOString().split('T')[0]) }
-        : { status: newStatus, received_amount: 0, received_at: null };
+        : {
+            status: newStatus, received_amount: 0, received_at: null,
+            // Reabrir um título em dólar já recebido volta ao total contratado em reais
+            // (o recebimento tinha trocado o total pelo valor real); o previsto fica guardado.
+            ...(emDolar(r) && r.valor_previsto != null ? { total_amount: Number(r.valor_previsto) } : {}),
+          };
       // Atualização otimista: muda só a linha na hora, sem recarregar a tela toda.
       setReceivables((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patch } : x)));
       const { error } = await supabase.from('receivables').update(patch).eq('id', r.id);

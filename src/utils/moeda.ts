@@ -100,17 +100,34 @@ export function usdDoTitulo(
 
 /**
  * Lê um valor em reais digitado à brasileira ("51.200,50", "51200,5", "R$ 51.200").
- * Com vírgula, os pontos são milhar e a vírgula é o decimal. Sem vírgula, pontos
- * seguidos de exatamente 3 dígitos são milhar ("51.200" = 51200); caso contrário o
- * ponto é decimal ("51200.5"). Devolve null se não houver valor positivo.
+ * Lê com segurança ou devolve null: nunca um número silenciosamente errado.
+ * - Tira "R$" e todo espaço (inclusive NBSP); se sobrar algo além de dígitos, "." e ",",
+ *   é null ("1e3", "0x10", "abc", "-5").
+ * - Com vírgula: só uma, com 1 ou 2 dígitos depois; antes dela, só dígitos ou milhar
+ *   com ponto ("51.200,50", "51200,5", "1,5"). Ponto depois da vírgula, formato
+ *   americano ("1,234.56") e 3 dígitos depois da vírgula ("2,600") são ambíguos: null.
+ * - Sem vírgula: "1.234.567" é milhar; "51200.5" / "1.5" / "1000" são decimais de até
+ *   2 casas; qualquer outro ("1.2345") é null.
+ * - Arredonda para 2 casas ANTES de exigir valor positivo ("0,004" → null).
  */
 export function parseValorBR(texto: string): number | null {
   const t = String(texto ?? '').replace(/R\$|\s/g, '');
-  if (!t) return null;
+  if (!t || /[^\d.,]/.test(t)) return null;
   let normal: string;
-  if (t.includes(',')) normal = t.replace(/\./g, '').replace(',', '.');
-  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) normal = t.replace(/\./g, '');
-  else normal = t;
-  const n = Number(normal);
-  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+  if (t.includes(',')) {
+    const partes = t.split(',');
+    if (partes.length !== 2) return null;
+    const [inteira, frac] = partes;
+    if (!/^\d{1,2}$/.test(frac)) return null;
+    if (!(/^\d+$/.test(inteira) || /^\d{1,3}(\.\d{3})+$/.test(inteira))) return null;
+    normal = `${inteira.replace(/\./g, '')}.${frac}`;
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(t)) {
+    normal = t.replace(/\./g, '');
+  } else if (/^\d+(\.\d{1,2})?$/.test(t)) {
+    normal = t;
+  } else {
+    return null;
+  }
+  const n = Math.round(Number(normal) * 100) / 100;
+  return Number.isFinite(n) && n > 0 ? n : null;
 }

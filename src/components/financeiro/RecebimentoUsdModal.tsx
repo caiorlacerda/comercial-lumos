@@ -104,7 +104,7 @@ export default function RecebimentoUsdModal({ titulo, onClose, onDone }: Props) 
           <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">
             Data em que o dinheiro entrou
           </label>
-          <DatePicker value={data} onChange={setData} />
+          <DatePicker value={data} onChange={setData} max={hoje()} />
         </div>
 
         <p className="text-[11px] text-lumos-text-secondary">

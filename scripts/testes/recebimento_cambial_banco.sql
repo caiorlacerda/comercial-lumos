@@ -3,11 +3,14 @@
 -- Rodar: docker exec -i supabase_db_proposta-lumos psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/testes/recebimento_cambial_banco.sql
 BEGIN;
 
-CREATE FUNCTION pg_temp.deve_falhar(p_sql text, p_msg text) RETURNS void LANGUAGE plpgsql AS $$
+CREATE FUNCTION pg_temp.deve_falhar(p_sql text, p_msg text, p_sqlstate text DEFAULT NULL) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   BEGIN
     EXECUTE p_sql;
   EXCEPTION WHEN OTHERS THEN
+    IF p_sqlstate IS NOT NULL AND SQLSTATE <> p_sqlstate THEN
+      RAISE EXCEPTION 'FALHOU: % (esperava SQLSTATE %, veio % - %)', p_msg, p_sqlstate, SQLSTATE, SQLERRM;
+    END IF;
     RAISE NOTICE 'OK   %', p_msg;
     RETURN;
   END;
@@ -17,8 +20,8 @@ END $$;
 DO $$
 DECLARE
   v_admin uuid; v_cli uuid;
-  v_b uuid; v_v uuid; v_b2 uuid; v_v2 uuid;
-  v_r1 uuid; v_r2 uuid; v_r3 uuid;
+  v_b uuid; v_v uuid; v_b2 uuid; v_v2 uuid; v_b3 uuid; v_v3 uuid;
+  v_r1 uuid; v_r2 uuid; v_r3 uuid; v_r4 uuid; v_vv numeric;
   v_res jsonb; v_tot numeric; v_rec numeric; v_st text; v_prev numeric; v_dt date; v_n int; v_proj text;
 BEGIN
   SELECT auth_user_id INTO v_admin FROM app_users
@@ -58,7 +61,7 @@ BEGIN
   -- 2) Quem não é do financeiro é recusado.
   PERFORM set_config('request.jwt.claim.sub', gen_random_uuid()::text, true);
   PERFORM set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid()::text, 'role', 'authenticated')::text, true);
-  PERFORM pg_temp.deve_falhar(format('SELECT registrar_recebimento_cambial(%L, 2600, ''2026-10-09'')', v_r1), 'usuário sem permissão é recusado');
+  PERFORM pg_temp.deve_falhar(format('SELECT registrar_recebimento_cambial(%L, 2600, ''2026-10-09'')', v_r1), 'usuário sem permissão é recusado (SQLSTATE 42501)', '42501');
 
   -- A partir daqui, como admin.
   PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
@@ -73,6 +76,15 @@ BEGIN
   IF (v_res->>'ok')::boolean OR v_res->>'error' <> 'nao_encontrado' THEN RAISE EXCEPTION 'FALHOU: id inexistente: %', v_res; END IF;
   v_res := registrar_recebimento_cambial(v_r3, 1000, '2026-10-09');
   IF (v_res->>'ok')::boolean OR v_res->>'error' <> 'nao_e_dolar' THEN RAISE EXCEPTION 'FALHOU: título em reais: %', v_res; END IF;
+  v_res := registrar_recebimento_cambial(v_r1, 0.004, '2026-10-09');
+  IF (v_res->>'ok')::boolean OR v_res->>'error' <> 'valor_invalido' THEN RAISE EXCEPTION 'FALHOU: valor 0,004 (arredonda para 0): %', v_res; END IF;
+  v_res := registrar_recebimento_cambial(v_r1, 2600, '1996-09-01');
+  IF (v_res->>'ok')::boolean OR v_res->>'error' <> 'data_invalida' THEN RAISE EXCEPTION 'FALHOU: data 1996-09-01: %', v_res; END IF;
+  v_res := registrar_recebimento_cambial(v_r1, 2600, current_date + 30);
+  IF (v_res->>'ok')::boolean OR v_res->>'error' <> 'data_invalida' THEN RAISE EXCEPTION 'FALHOU: data no futuro: %', v_res; END IF;
+  SELECT status::text INTO v_st FROM receivables WHERE id = v_r1;
+  IF v_st = 'recebido' THEN RAISE EXCEPTION 'FALHOU: entrada inválida não pode gravar o recebimento'; END IF;
+  RAISE NOTICE 'OK   valor 0,004, data 1996-09-01 e data no futuro são recusados sem gravar';
   RAISE NOTICE 'OK   entradas inválidas e título em reais são recusados';
 
   -- 4) Recebimento ACIMA do previsto (2600 > 2500): ajusta total e recebido, guarda o previsto.
@@ -107,7 +119,7 @@ BEGIN
   RAISE NOTICE 'OK   título já recebido é recusado e o previsto não muda';
 
   -- 8) Recebimento ABAIXO do previsto (2300 < 2500) na última parcela: o projeto fecha.
-  v_res := registrar_recebimento_cambial(v_r2, 2300, '2026-10-12');
+  v_res := registrar_recebimento_cambial(v_r2, 2300, '2026-10-08');
   IF NOT (v_res->>'ok')::boolean OR (v_res->>'diferenca')::numeric <> -200 THEN RAISE EXCEPTION 'FALHOU: recebimento abaixo do previsto: %', v_res; END IF;
   SELECT status::text, total_amount, received_amount INTO v_st, v_tot, v_rec FROM receivables WHERE id = v_r2;
   IF v_st <> 'recebido' OR v_tot <> 2300 OR v_rec <> 2300 THEN RAISE EXCEPTION 'FALHOU: parcela 2: % % %', v_st, v_tot, v_rec; END IF;
@@ -117,9 +129,31 @@ BEGIN
 
   -- 9) Título cancelado: recusa (a checagem de status vem antes da de moeda).
   UPDATE receivables SET status = 'cancelado' WHERE id = v_r3;
-  v_res := registrar_recebimento_cambial(v_r3, 100, '2026-10-12');
+  v_res := registrar_recebimento_cambial(v_r3, 100, '2026-10-08');
   IF (v_res->>'ok')::boolean OR v_res->>'error' <> 'status_invalido' THEN RAISE EXCEPTION 'FALHOU: título cancelado: %', v_res; END IF;
   RAISE NOTICE 'OK   título cancelado é recusado';
+
+  -- 10) O valor vendido do projeto não muda com os recebimentos (continua o previsto em reais).
+  SELECT valor_vendido INTO v_vv FROM projetos_financeiro WHERE proposta_id = v_b;
+  IF v_vv <> 5000 THEN RAISE EXCEPTION 'FALHOU: valor_vendido mudou (veio %)', v_vv; END IF;
+  RAISE NOTICE 'OK   valor_vendido do projeto segue 5000 após os recebimentos';
+
+  -- 11) Projeto em US$ com UMA parcela: receber fecha o projeto com a data informada.
+  INSERT INTO budgets (code, project_name, category, status, client_id)
+  VALUES ('TESTE-RCB3', 'Teste parcela única', 'digital', 'em_negociacao', v_cli) RETURNING id INTO v_b3;
+  INSERT INTO budget_versions (budget_id, version_number, currency, fx_market_rate, fx_rate, fx_source)
+  VALUES (v_b3, 1, 'USD', 5, 4.85, 'manual') RETURNING id INTO v_v3;
+  INSERT INTO projetos_financeiro (proposta_id, cliente_id, valor_vendido, nf_percent, status_titulo)
+  VALUES (v_b3, v_cli, 3000, 0.18, 'esperando_pagamento');
+  INSERT INTO receivables (budget_id, budget_version_id, description, client_id, total_amount, status, origem, parcela_numero, parcela_total)
+  VALUES (v_b3, v_v3, 'Parcela única', v_cli, 3000, 'aguardando', 'proposta', 1, 1) RETURNING id INTO v_r4;
+  v_res := registrar_recebimento_cambial(v_r4, 3123.45, '2026-10-07');
+  IF NOT (v_res->>'ok')::boolean THEN RAISE EXCEPTION 'FALHOU: parcela única: %', v_res; END IF;
+  SELECT status_titulo::text, data_recebido, valor_vendido INTO v_proj, v_dt, v_vv FROM projetos_financeiro WHERE proposta_id = v_b3;
+  IF v_proj <> 'pagamento_recebido' OR v_dt <> '2026-10-07' OR v_vv <> 3000 THEN
+    RAISE EXCEPTION 'FALHOU: projeto de parcela única: status %, data_recebido %, valor_vendido %', v_proj, v_dt, v_vv;
+  END IF;
+  RAISE NOTICE 'OK   parcela única em US$ fecha o projeto (pagamento_recebido, data_recebido = data informada, valor_vendido intacto)';
 END $$;
 
 ROLLBACK;

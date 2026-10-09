@@ -44,10 +44,16 @@ BEGIN
   IF p_valor_brl IS NULL OR p_valor_brl <= 0 THEN
     RETURN jsonb_build_object('ok', false, 'error', 'valor_invalido');
   END IF;
-  IF p_data IS NULL THEN
+  v_valor := round(p_valor_brl, 2);
+  IF v_valor <= 0 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'valor_invalido');
+  END IF;
+  -- data_recebimento_valida devolve a própria data se for plausível (2020 em
+  -- diante, até 5 anos à frente) ou NULL se for lixo de digitação.
+  -- Dinheiro não entra no futuro: tolera 1 dia (fuso horário) além do helper.
+  IF public.data_recebimento_valida(p_data) IS NULL OR p_data > current_date + 1 THEN
     RETURN jsonb_build_object('ok', false, 'error', 'data_invalida');
   END IF;
-  v_valor := round(p_valor_brl, 2);
 
   SELECT * INTO r FROM receivables WHERE id = p_receivable_id FOR UPDATE;
   IF NOT FOUND THEN
