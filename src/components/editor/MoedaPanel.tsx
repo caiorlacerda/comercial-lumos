@@ -5,7 +5,7 @@ import Select from '@/components/ui/Select';
 import { useToast } from '@/context/ToastContext';
 import type { BudgetVersion } from '@/utils/financials';
 import { buscarCotacao } from '@/lib/cotacao';
-import { SPREAD_PADRAO, calcCotacaoTravada, diasDesde, formatarMoeda, moedaDaVersao } from '@/utils/moeda';
+import { SPREAD_PADRAO, calcCotacaoTravada, diasDesde, moedaDaVersao } from '@/utils/moeda';
 
 interface Props {
   version: BudgetVersion;
@@ -24,6 +24,11 @@ const dataBR = (iso?: string | null) => {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
 };
 
+// A cotação tem 4 casas no banco e o total em US$ sai dela: mostrar 4 casas para a conta bater à mão.
+const cotacaoBR = new Intl.NumberFormat('pt-BR', {
+  style: 'currency', currency: 'BRL', minimumFractionDigits: 4, maximumFractionDigits: 4,
+});
+
 export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onChange }: Props) {
   const toast = useToast();
   const [buscando, setBuscando] = useState(false);
@@ -37,13 +42,14 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
   const velha = idade !== null && idade > (version.validity_days ?? 7);
 
   // Uma única chamada com os seis campos: o banco só aceita USD junto de uma cotação.
-  const aplicar = (mercado: number, fonte: 'ptax' | 'manual') => {
+  const aplicar = (mercado: number, fonte: 'ptax' | 'manual', quandoISO?: string) => {
+    const m = Math.round(mercado * 10000) / 10000; // coluna numeric(12,4)
     onChange({
       currency: 'USD',
-      fx_market_rate: mercado,
+      fx_market_rate: m,
       fx_spread_pct: spread,
-      fx_rate: calcCotacaoTravada(mercado, spread),
-      fx_rate_at: new Date().toISOString(),
+      fx_rate: calcCotacaoTravada(m, spread),
+      fx_rate_at: quandoISO ?? new Date().toISOString(),
       fx_source: fonte,
     });
   };
@@ -52,7 +58,7 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
     setBuscando(true);
     try {
       const c = await buscarCotacao();
-      aplicar(c.compra, 'ptax');
+      aplicar(c.compra, 'ptax', c.do_cache ? `${c.data}T12:00:00-03:00` : undefined);
       setManualAberto(false);
       if (c.do_cache) toast.warning(`Banco Central indisponível agora. Usei a última cotação guardada (${dataBR(c.data)}).`);
     } catch {
@@ -109,7 +115,7 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
           <div className="grid grid-cols-2 gap-3">
             <div>
               <span className="text-lumos-text-secondary uppercase font-black block mb-1">Cotação de mercado</span>
-              <span className="text-lumos-text-primary text-xs">{formatarMoeda(Number(version.fx_market_rate) || 0)}</span>
+              <span className="text-lumos-text-primary text-xs">{cotacaoBR.format(Number(version.fx_market_rate) || 0)}</span>
             </div>
             <div>
               <label className="text-lumos-text-secondary uppercase font-black block mb-1">Margem de segurança</label>
@@ -128,7 +134,7 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
 
           <div className="flex justify-between items-center">
             <span className="text-lumos-text-secondary uppercase font-black">Cotação travada</span>
-            <span className="text-lumos-text-primary text-sm font-black">{formatarMoeda(Number(version.fx_rate) || 0)}</span>
+            <span className="text-lumos-text-primary text-sm font-black">{cotacaoBR.format(Number(version.fx_rate) || 0)}</span>
           </div>
 
           <div className="flex items-center justify-between gap-2">
