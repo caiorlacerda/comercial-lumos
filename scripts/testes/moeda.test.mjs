@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   SPREAD_PADRAO, calcCotacaoTravada, converterValor, formatarMoeda,
   formatarValorDaVersao, moedaDaVersao, taxaDaVersao, camposDeMoeda, diasDesde,
+  usdDoTitulo, parseValorBR,
 } from '../../src/utils/moeda.ts';
 
 const semNbsp = (s) => s.replace(/ /g, ' ');
@@ -59,4 +60,36 @@ test('dias desde a cotação', () => {
   assert.equal(diasDesde('2026-10-01T00:00:00Z', new Date('2026-10-09T00:00:00Z')), 8);
   assert.equal(diasDesde(null), null);
   assert.equal(diasDesde('lixo'), null);
+});
+
+test('referência em US$ de um título: previsto em reais ÷ cotação travada', () => {
+  assert.equal(usdDoTitulo({ total_amount: 5000 }, usd), 1030.93);
+  // depois do recebimento, total_amount vira o valor real; o US$ continua o contratado (valor_previsto)
+  assert.equal(usdDoTitulo({ total_amount: 5300, valor_previsto: 5000 }, usd), 1030.93);
+  assert.equal(usdDoTitulo({ total_amount: '5000', valor_previsto: null }, usd), 1030.93);
+});
+
+test('título sem versão em dólar não tem referência em US$', () => {
+  assert.equal(usdDoTitulo({ total_amount: 5000 }, { currency: 'BRL', fx_rate: 4.85 }), null);
+  assert.equal(usdDoTitulo({ total_amount: 5000 }, null), null);
+  assert.equal(usdDoTitulo({ total_amount: 5000 }, { currency: 'USD', fx_rate: null }), null);
+  assert.equal(usdDoTitulo({ total_amount: null, valor_previsto: null }, usd), null);
+});
+
+test('lê valores em reais digitados à brasileira', () => {
+  assert.equal(parseValorBR('51.200,50'), 51200.5);
+  assert.equal(parseValorBR('51200,5'), 51200.5);
+  assert.equal(parseValorBR('R$ 51.200,00'), 51200);
+  assert.equal(parseValorBR('51.200'), 51200);     // ponto de milhar
+  assert.equal(parseValorBR('51200.5'), 51200.5);  // ponto decimal
+  assert.equal(parseValorBR('1.5'), 1.5);
+  assert.equal(parseValorBR('1.234.567'), 1234567);
+});
+
+test('valor digitado inválido vira null', () => {
+  assert.equal(parseValorBR(''), null);
+  assert.equal(parseValorBR('   '), null);
+  assert.equal(parseValorBR('abc'), null);
+  assert.equal(parseValorBR('0'), null);
+  assert.equal(parseValorBR('-5'), null);
 });

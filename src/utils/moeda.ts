@@ -80,3 +80,37 @@ export function diasDesde(iso?: string | null, agora: Date = new Date()): number
   if (Number.isNaN(t)) return null;
   return Math.floor((agora.getTime() - t) / 86400000);
 }
+
+/**
+ * Referência em US$ de um título (parcela) de proposta em dólar: o valor PREVISTO
+ * em reais ÷ cotação travada da versão. Depois do recebimento o `total_amount`
+ * passa a ser o valor real; o previsto fica em `valor_previsto`, então o US$
+ * contratado continua o mesmo. null se a versão não for em dólar.
+ */
+export function usdDoTitulo(
+  titulo: { total_amount?: number | string | null; valor_previsto?: number | string | null },
+  versao?: VersaoMoeda | null,
+): number | null {
+  if (moedaDaVersao(versao) !== 'USD') return null;
+  const bruto = titulo.valor_previsto ?? titulo.total_amount;
+  if (bruto == null) return null;
+  const base = Number(bruto);
+  return Number.isFinite(base) ? converterValor(base, versao) : null;
+}
+
+/**
+ * Lê um valor em reais digitado à brasileira ("51.200,50", "51200,5", "R$ 51.200").
+ * Com vírgula, os pontos são milhar e a vírgula é o decimal. Sem vírgula, pontos
+ * seguidos de exatamente 3 dígitos são milhar ("51.200" = 51200); caso contrário o
+ * ponto é decimal ("51200.5"). Devolve null se não houver valor positivo.
+ */
+export function parseValorBR(texto: string): number | null {
+  const t = String(texto ?? '').replace(/R\$|\s/g, '');
+  if (!t) return null;
+  let normal: string;
+  if (t.includes(',')) normal = t.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) normal = t.replace(/\./g, '');
+  else normal = t;
+  const n = Number(normal);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+}
