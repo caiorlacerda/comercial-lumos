@@ -71,3 +71,30 @@ test('camposDeIdioma: padrão pt e sem traduções', () => {
     { pdf_language: 'en', translations: { versao: 1, textos: {} } });
   assert.equal(camposDeIdioma({ pdf_language: 'xx' }).pdf_language, 'pt');
 });
+
+test('sanitizarTraducao remove emoji da BMP e seletor de variação, preserva pontuação', () => {
+  assert.equal(sanitizarTraducao('Done ✅ ✨ ⭐ ❤️ ok'), 'Done ok');
+  assert.equal(sanitizarTraducao('A • B — C™'), 'A • B — C™');
+  assert.equal(sanitizarTraducao('Café “ok” … ®©'), 'Café “ok” … ®©');
+});
+
+test('constructor e toString não contam como traduzidos', () => {
+  const coletados = coletarTextos(null, [{ name: 'constructor' }, { name: 'toString' }]);
+  const tr = { versao: 1, textos: {} };
+  assert.deepEqual(faltantes(coletados, tr).map((x) => x.origem), ['constructor', 'toString']);
+  assert.equal(traduzir(tr, 'constructor'), 'constructor');
+  assert.equal(traduzir(tr, 'toString'), 'toString');
+  assert.equal(faltantes(coletados, null).length, 2);
+});
+
+test('mesclar não apaga tradução boa com valor que fica vazio', () => {
+  const base = { versao: 1, textos: { 'Edição': 'Editing' } };
+  assert.equal(mesclar(base, { 'Edição': '  ' }).textos['Edição'], 'Editing');
+  assert.equal(mesclar(base, { 'Edição': '✅' }).textos['Edição'], 'Editing');
+});
+
+test('notes_client só com espaços não entra; item sem sort_order entra', () => {
+  assert.deepEqual(coletarTextos({ notes_client: '   ' }, []), []);
+  const t = coletarTextos({ notes_client: '  ' }, [{ name: 'Sem ordem' }, { name: 'Com ordem', sort_order: 1 }]);
+  assert.deepEqual(t.map((x) => x.origem), ['Sem ordem', 'Com ordem']);
+});

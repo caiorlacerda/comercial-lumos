@@ -197,7 +197,7 @@ const en: TextosPdf = {
   condicoesTitulo: 'GENERAL TERMS AND CONDITIONS',
   clausulas: [
     {
-      titulo: '1. Term and Changes',
+      titulo: '1. Validity and Changes',
       itens: [
         '1.1. This Commercial Proposal will remain valid for seven (7) calendar days from the date the agreement between the parties is executed. After that period, the fees stated herein are subject to change.',
         '1.2. Any change to the scope of work to be performed may result in a change to the price set forth in this Commercial Proposal.',
@@ -206,7 +206,7 @@ const en: TextosPdf = {
     {
       titulo: '2. Cancellation and Termination',
       itens: [
-        '2.1. Once this Commercial Proposal has been approved, if CLIENT cancels the services for any reason, CLIENT shall pay LUMOS a cancellation fee equal to seventy percent (70%) of the total amount owed by CLIENT, without prejudice to reimbursement of all expenses already incurred by LUMOS in performing the services covered by this Commercial Proposal.',
+        "2.1. Once this Commercial Proposal has been approved, if CLIENT cancels the services for any reason, CLIENT shall pay LUMOS a cancellation fee equal to seventy percent (70%) of the total amount owed by CLIENT, in addition to CLIENT's obligation to reimburse all expenses already incurred by LUMOS in performing the services covered by this Commercial Proposal.",
         '2.2. For all purposes, this Commercial Proposal shall be deemed accepted by CLIENT upon any expression of acceptance of its terms and conditions, whether by email or by other means (including, without limitation, messaging apps and text messages), or by implied acceptance, where CLIENT is aware that LUMOS has begun performing its obligations under this Commercial Proposal and does not object.',
       ],
     },
@@ -214,13 +214,13 @@ const en: TextosPdf = {
       titulo: '3. Payment',
       itens: [
         '3.1. Payment shall be made in accordance with the payment terms agreed between CLIENT and LUMOS upon acceptance of this Commercial Proposal, from among the options available herein.',
-        '3.2. Late payments shall be subject to a late fee of ten percent (10%) plus interest at one percent (1%) per month on the outstanding balance.',
+        '3.2. If CLIENT pays late, CLIENT shall pay a late fee of ten percent (10%) plus interest at one percent (1%) per month on the outstanding balance.',
       ],
     },
     {
       titulo: '4. Rescheduling Fee',
       itens: [
-        '4.1. If CLIENT changes the scheduled date of service without giving at least 48 hours prior notice, a rescheduling fee will be charged in a minimum amount of {taxaRemarcacao} or 20% of the total project price.',
+        "4.1. If CLIENT changes the scheduled date of service without giving at least 48 hours' prior notice, CLIENT shall pay a rescheduling fee in a minimum amount of {taxaRemarcacao} or 20% of the total project price.",
       ],
     },
     {
@@ -237,9 +237,9 @@ const en: TextosPdf = {
       ],
     },
     {
-      titulo: '7. Responsibilities',
+      titulo: '7. Liability',
       itens: [
-        '7.1. LUMOS shall not be liable for delays or impediments caused by factors beyond its reasonable control, such as weather conditions, location restrictions, or delays by CLIENT in delivering materials necessary for production.',
+        '7.1. LUMOS shall not be liable for delays or impediments caused by factors beyond its control, such as weather conditions, location restrictions, or delays by CLIENT in delivering materials necessary for production.',
       ],
     },
   ],
@@ -252,8 +252,8 @@ const en: TextosPdf = {
 
   termoTitulo: 'Acceptance and Approval',
   aprovadoPor: 'Approved by:',
-  contatoFallback: 'CONTACT NAME',
-  dataLinha: 'DATE: ____/____/____',
+  contatoFallback: 'SIGNATORY NAME',
+  dataLinha: 'DATE (MM/DD/YYYY): ____/____/____',
   produtoraLumos: 'Produtora Lumos',
   equipeFallback: 'Production Team',
 };

@@ -59,36 +59,51 @@ export function coletarTextos(version: VersaoTextos | null | undefined, items: I
   return out;
 }
 
+/**
+ * Lê a tradução de uma chave só se ela for PRÓPRIA do glossário. Sem isso, uma
+ * chave como "constructor" ou "toString" pegaria a propriedade herdada do objeto.
+ */
+const lerTraducao = (traducoes: Traducoes | null | undefined, k: string): string | undefined => {
+  const textos = traducoes?.textos;
+  return textos && Object.hasOwn(textos, k) ? textos[k] : undefined;
+};
+
 /** O que ainda não tem tradução (ausente ou só espaços). */
 export function faltantes(coletados: TextoParaTraduzir[], traducoes: Traducoes | null | undefined): TextoParaTraduzir[] {
-  return coletados.filter((c) => chave(traducoes?.textos?.[c.origem]) === '');
+  return coletados.filter((c) => chave(lerTraducao(traducoes, c.origem)) === '');
 }
 
 /** Tradução do texto, ou o próprio texto se não houver. */
 export function traduzir(traducoes: Traducoes | null | undefined, origem?: string | null): string {
   const o = String(origem ?? '');
-  const t = traducoes?.textos?.[chave(o)];
-  return t && chave(t) !== '' ? t : o;
+  const t = lerTraducao(traducoes, chave(o));
+  return t !== undefined && chave(t) !== '' ? t : o;
 }
 
 /**
- * Tira o que as fontes do PDF (Poppins/Work Sans, subset latin) não cobre:
- * setas e símbolos matemáticos viram ASCII; emoji e seletores de variação somem.
+ * Tira o que as fontes do PDF (Poppins/Work Sans, subset latin) não cobre.
+ * Ordem: setas e símbolos matemáticos viram ASCII; depois somem os símbolos
+ * (U+2600-U+27BF e U+2B00-U+2BFF, que incluem marcas de check, emoji e estrelas), o joiner
+ * (U+200D), o seletor de variação (U+FE0F) e tudo a partir de U+10000.
+ * Pontuação (U+2000-U+206F), ™ ® © e letras acentuadas são preservadas.
  */
 export function sanitizarTraducao(s: string): string {
   return String(s ?? '')
-    .replace(/→/g, '->')
-    .replace(/←/g, '<-')
-    .replace(/≥/g, '>=')
-    .replace(/≤/g, '<=')
-    .replace(/[✓✔]/g, '')
+    .replace(/\u2192/g, '->')
+    .replace(/\u2190/g, '<-')
+    .replace(/\u2265/g, '>=')
+    .replace(/\u2264/g, '<=')
+    .replace(/[\u2600-\u27BF\u2B00-\u2BFF\u200D\uFE0F]/g, '')
     .replace(/[\u{10000}-\u{10FFFF}]/gu, '')
-    .replace(/️/g, '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 
-/** Junta traduções novas às existentes (sanitizadas), sem mutar a entrada. */
+/**
+ * Junta traduções novas às existentes (sanitizadas), sem mutar a entrada.
+ * Uma nova tradução que fica vazia depois de sanitizar é ignorada: nunca
+ * apaga uma tradução boa que já existia.
+ */
 export function mesclar(
   base: Traducoes | null | undefined,
   novas: Record<string, string>,
@@ -96,7 +111,11 @@ export function mesclar(
   modelo?: string,
 ): Traducoes {
   const textos: Record<string, string> = { ...(base?.textos ?? {}) };
-  for (const [origem, en] of Object.entries(novas)) textos[chave(origem)] = sanitizarTraducao(en);
+  for (const [origem, en] of Object.entries(novas)) {
+    const limpa = sanitizarTraducao(en);
+    if (limpa === '') continue;
+    textos[chave(origem)] = limpa;
+  }
   return {
     versao: 1,
     textos,
