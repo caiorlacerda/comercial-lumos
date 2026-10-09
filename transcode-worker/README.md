@@ -100,7 +100,36 @@ Suba um `.mov` ProRes na revisão. Em ~1–3 min (depende do tamanho) o
 `transcode_status` vira `ready` e o vídeo toca no player. Enquanto processa, o
 player mostra o aviso de "não foi possível exibir" (o proxy ainda não ficou pronto).
 
+## Rota `/pull` — cópia para o Cloudflare Stream sem passar pelo Supabase
+
+Além de converter vídeos, o worker entrega o arquivo ao Cloudflare Stream. Antes, o
+Stream buscava o vídeo numa URL da Edge Function `review-stream`, e o arquivo inteiro
+saía pela cota de egress do Supabase. Agora a `stream-ingest` aponta o Stream para
+`<URL do worker>/pull?v=…&exp=…&sig=…` e os bytes vão Drive → Cloud Run → Cloudflare.
+
+A assinatura é a mesma da `review-stream` (HMAC-SHA256 de `<versão>.<exp>`), válida
+para uma versão e por pouco tempo. Usa o proxy MP4 quando existe e está pronto, senão o
+original, e responde a `Range` e a `HEAD`.
+
+Para ligar (nesta ordem; sem o passo 2 tudo segue pelo caminho antigo, nada quebra):
+
+1. **No `env.yaml`**, acrescente `PULL_SECRET` com o MESMO valor do secret
+   `DRIVE_WEBHOOK_SECRET` das Edge Functions, e refaça o deploy (o mesmo comando do
+   passo 3 acima). A Service URL não muda.
+2. **No Supabase** (Edge Functions → Secrets), crie `PULL_BASE_URL` com a Service URL do
+   worker, sem barra no final, e refaça o deploy da `stream-ingest`.
+3. Teste com UM vídeo novo antes de rodar "Migrar acervo".
+
+Atenção: o worker roda com `--concurrency 1`, então cada cópia ocupa uma instância
+inteira enquanto o Stream baixa. Com `--max-instances 3`, três cópias/conversões ao
+mesmo tempo esgotam o limite e as seguintes esperam. Se isso incomodar, aumente
+`--max-instances`.
+
 ## Custo
 
 Cloud Run cobra por uso. Free tier mensal cobre ~centenas de transcodes curtos.
 `--max-instances 3` limita gastos em caso de fila. Sem uso, custa R$ 0.
+
+Com a rota `/pull`, a banda de saída dos vídeos enviados ao Cloudflare passa a ser
+cobrada pelo Google Cloud (e não mais descontada da cota do Supabase). Acompanhe o
+primeiro mês em Billing → Reports e confira o preço atual de saída de dados do Cloud Run.

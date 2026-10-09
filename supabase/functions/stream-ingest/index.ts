@@ -34,6 +34,7 @@ const db = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') 
 const CF_ACCOUNT = Deno.env.get('CLOUDFLARE_ACCOUNT_ID') ?? ''
 const CF_TOKEN = Deno.env.get('CLOUDFLARE_STREAM_TOKEN') ?? ''
 const PULL_SECRET = Deno.env.get('DRIVE_WEBHOOK_SECRET') ?? ''
+const PULL_BASE_URL = Deno.env.get('PULL_BASE_URL') ?? ''
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -62,7 +63,12 @@ async function urlAssinada(versionId: string, minutos = 120): Promise<string> {
   )
   const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${versionId}.${exp}`))
   const sig = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, '0')).join('')
-  return `${SUPABASE_URL}/functions/v1/review-stream?v=${versionId}&exp=${exp}&sig=${sig}`
+  // Com PULL_BASE_URL configurado (URL do worker no Cloud Run, sem barra no
+  // final), o Stream busca o vídeo lá: os bytes não passam pelo Supabase e não
+  // contam na cota de egress dele. Sem a variável, segue o caminho antigo pela
+  // review-stream, que funciona mas gasta a cota.
+  const base = PULL_BASE_URL ? `${PULL_BASE_URL.replace(/\/+$/, '')}/pull` : `${SUPABASE_URL}/functions/v1/review-stream`
+  return `${base}?v=${versionId}&exp=${exp}&sig=${sig}`
 }
 
 // Só admin ativo mexe nisso: é o que gasta a conta do Stream.
