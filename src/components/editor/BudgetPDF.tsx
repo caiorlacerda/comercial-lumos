@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { BudgetItem, BudgetVersion, VersionFinancials, formatCurrency } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
+import { formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import logo from '../../assets/Logotipo-Preto-Alpha.png';
@@ -378,6 +379,11 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
 
   const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   const markupMultiplier = financials.valorFinal / (financials.totalCusto || 1);
+
+  // Em proposta em dólar o PDF mostra SÓ US$ (sem cotação e sem reais). Cada valor
+  // é convertido e arredondado sozinho; o total é convertido uma única vez.
+  const fmt = (valorBRL: number) => formatarValorDaVersao(valorBRL, version);
+  const taxaRemarcacao = moedaDaVersao(version) === 'USD' ? fmt(2000) : 'R$2.000,00';
   
   // Format Category to Title Case
   const categoryFormatted = budget.category 
@@ -514,11 +520,11 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
                   <Text style={[styles.tableCell, detalhado ? styles.colQtyD : styles.colQty]}>{item.quantity}</Text>
                   <Text style={[styles.tableCell, detalhado ? styles.colUnitD : styles.colUnit]}>{item.unit_label}</Text>
                   {detalhado && (
-                    <Text style={[styles.tableCell, styles.colValorD]}>{formatCurrency(valorUnitario)}</Text>
+                    <Text style={[styles.tableCell, styles.colValorD]}>{fmt(valorUnitario)}</Text>
                   )}
                   {detalhado && (
                     <Text style={[styles.tableCell, styles.colTotalD, { fontWeight: 700 }]}>
-                      {formatCurrency(valorUnitario * item.quantity)}
+                      {fmt(valorUnitario * item.quantity)}
                     </Text>
                   )}
                 </View>
@@ -536,13 +542,13 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
 
                 <View style={styles.groupSubtotalRow}>
                   <Text style={styles.groupSubtotalText}>Subtotal {groupLabels[group]}</Text>
-                  <Text style={styles.groupSubtotalValue}>{formatCurrency(groupSum)}</Text>
+                  <Text style={styles.groupSubtotalValue}>{fmt(groupSum)}</Text>
                 </View>
 
                 {isLastGroup && (
                   <View style={styles.totalContainer} wrap={false} minPresenceAhead={80}>
                     <Text style={styles.totalLabel}>Investimento Total do Projeto</Text>
-                    <Text style={styles.totalValue}>{formatCurrency(financials.valorFinal)}</Text>
+                    <Text style={styles.totalValue}>{fmt(financials.valorFinal)}</Text>
                   </View>
                 )}
               </View>
@@ -630,7 +636,7 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
           {/* Item 4 */}
           <View style={styles.conditionSection}>
             <Text style={styles.conditionTitle}>4. Taxa de Remarcação</Text>
-            <Text style={styles.conditionText}>4.1. Caso o CLIENTE altere a data prevista para a execução do serviço, sem respeitar o prazo máximo de 48 horas de antecedência, será cobrada uma taxa de remarcação no valor mínimo de R$2.000,00 ou 20% do valor total do projeto.</Text>
+            <Text style={styles.conditionText}>4.1. Caso o CLIENTE altere a data prevista para a execução do serviço, sem respeitar o prazo máximo de 48 horas de antecedência, será cobrada uma taxa de remarcação no valor mínimo de {taxaRemarcacao} ou 20% do valor total do projeto.</Text>
           </View>
 
           {/* Item 5 */}
