@@ -1,6 +1,6 @@
 # Orçamento em dólar (proposta em US$, financeiro em R$) — design
 
-Data: 2026-10-09 · Status: aguardando revisão do Caio
+Data: 2026-10-09 · Status: decisões fechadas; aguardando aprovação final para o plano
 
 ## Objetivo
 
@@ -110,8 +110,8 @@ Modo apresentação (`PrivacyContext.tsx`) passa a borrar também `US$ …` e `$
   dos reais. **Cada valor é arredondado sozinho, então a soma dos itens pode diferir
   alguns centavos do total**; o total é sempre o convertido uma vez.
 - Cláusula "taxa de remarcação no valor mínimo de **R$ 2.000,00**" (também em
-  `AprovacaoPublica.tsx`): em US$ vira o equivalente pela cotação travada, **arredondado
-  para o múltiplo de US$ 50 mais próximo**, para não expor reais.
+  `AprovacaoPublica.tsx`): em US$ vira a **conversão direta** pela cotação travada
+  (`2000 / fx_rate`, duas casas), sem expor reais. Exemplo: cotação 4,85 → US$ 412,37.
 - O restante do PDF (textos, CNPJ, data) fica em português na Fase 1.
 
 ## 6. Página pública (`AprovacaoPublica.tsx` + RPC)
@@ -164,18 +164,19 @@ igual (`insert_budget_approval`, `syncBudgetApprovalFlow` com `valorFinal` em re
   aprovado travado, nova versão, duplicar e template, PDF padrão e detalhado, página
   pública.
 
-## Pontos abertos para o Caio
+## Decisões fechadas em 2026-10-09 (Caio)
 
-1. Cláusula de remarcação em US$: arredondar para **múltiplos de US$ 50** serve?
-2. Usar a **PTAX de compra** (a Lumos vende os dólares) em vez da de venda?
-3. No recebimento, **ajustar o `total_amount` do título** ao valor real recebido é
-   aceitável (previsto fica no log)?
+1. Cláusula de remarcação em US$: **conversão direta**, sem arredondar para múltiplos.
+2. Cotação: **PTAX de compra** (a Lumos vende os dólares ao banco).
+3. Recebimento de título em US$: **ajusta o `total_amount` do título** ao valor real
+   recebido em reais; o previsto fica no log.
 
 ## Observações fora de escopo (para conhecimento)
 
 - A RPC pública `get_public_budget_by_token` já devolve a **qualquer pessoa com o link**
   `unit_cost` (custo), `margin_pct`, `nf_pct` e `discount_value`. O cliente consegue ver
-  custo e margem da Lumos inspecionando a rede. Merece decisão à parte.
+  custo e margem da Lumos inspecionando a rede. **O Caio avaliou que a página é pouco
+  usada e aceitou o risco por ora**; nada será feito aqui.
 - `ClientProfile.tsx` usa `versions[0]` em vez da versão ativa; "salvar como template",
   duplicar e `Templates.tsx` não copiam `payment_plan`, fee mensal nem
   `imposto_reajusta_preco`.
