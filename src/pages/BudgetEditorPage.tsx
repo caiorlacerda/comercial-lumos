@@ -71,6 +71,8 @@ import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import Modal from '@/components/common/Modal';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import Select from '@/components/ui/Select';
+import MoedaPanel from '@/components/editor/MoedaPanel';
+import { camposDeMoeda, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 
 const PAYMENT_PRESETS = [
   '7 dias após a emissão da nota',
@@ -519,7 +521,8 @@ export default function BudgetEditorPage() {
             fee_mensal_fim: version.fee_mensal_fim || null,
             fee_mensal_valor: version.fee_mensal_valor || null,
             fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
-            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
+            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
+            ...camposDeMoeda(version)
           })
           .select()
           .single();
@@ -562,7 +565,8 @@ export default function BudgetEditorPage() {
             fee_mensal_fim: version.fee_mensal_fim || null,
             fee_mensal_valor: version.fee_mensal_valor || null,
             fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
-            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
+            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
+            ...camposDeMoeda(version)
           }).eq('id', version.id),
           supabase.from('budgets').update({
             code: budget.code,
@@ -679,7 +683,8 @@ export default function BudgetEditorPage() {
           fee_mensal_fim: version.fee_mensal_fim || null,
           fee_mensal_valor: version.fee_mensal_valor || null,
           fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
-          fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
+          fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
+          ...camposDeMoeda(version)
         })
         .select()
         .single();
@@ -1646,7 +1651,8 @@ export default function BudgetEditorPage() {
               <input
                 type="checkbox"
                 id="fee-mensal-toggle"
-                disabled={isReadOnly}
+                disabled={isReadOnly || moedaDaVersao(version) === 'USD'}
+                title={moedaDaVersao(version) === 'USD' ? 'Fee mensal não aceita dólar nesta versão.' : undefined}
                 checked={version?.payment_plan === 'fee_mensal'}
                 onChange={(e) => {
                   if (e.target.checked) {
@@ -1971,6 +1977,16 @@ export default function BudgetEditorPage() {
                   </div>
                 </div>
 
+                {version && (
+                  <MoedaPanel
+                    version={version}
+                    disabled={isReadOnly}
+                    aprovado={budget?.status === 'aprovado'}
+                    feeMensal={version.payment_plan === 'fee_mensal'}
+                    onChange={updateVersion}
+                  />
+                )}
+
                 <div>
                   <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-2 block">Status Proposta</label>
                   <Select
@@ -1991,7 +2007,12 @@ export default function BudgetEditorPage() {
               <div className="pt-6 mt-6 border-t border-lumos-yellow/20 bg-lumos-yellow/5 -mx-6 px-6 pb-6">
                 <div className="flex flex-col gap-1 mb-4">
                   <span className="text-[10px] text-lumos-text-secondary font-black uppercase">Valor de Venda Final</span>
-                  <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatCurrency(financials?.valorFinal || 0)}</span>
+                  <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatarValorDaVersao(financials?.valorFinal || 0, version)}</span>
+                  {moedaDaVersao(version) === 'USD' && (
+                    <span className="text-[10px] text-lumos-text-secondary font-bold uppercase mt-1">
+                      Interno (só a equipe vê): {formatCurrency(financials?.valorFinal || 0)}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
