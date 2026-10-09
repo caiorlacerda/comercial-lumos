@@ -72,6 +72,9 @@ import Modal from '@/components/common/Modal';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import Select from '@/components/ui/Select';
 import MoedaPanel from '@/components/editor/MoedaPanel';
+import IdiomaPanel from '@/components/editor/IdiomaPanel';
+import { camposDeIdioma } from '@/utils/idioma';
+import { coletarTextos, faltantes } from '@/lib/traducaoCore';
 import { camposDeMoeda, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 
 const PAYMENT_PRESETS = [
@@ -522,7 +525,8 @@ export default function BudgetEditorPage() {
             fee_mensal_valor: version.fee_mensal_valor || null,
             fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
             fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
-            ...camposDeMoeda(version)
+            ...camposDeMoeda(version),
+            ...camposDeIdioma(version)
           })
           .select()
           .single();
@@ -566,7 +570,8 @@ export default function BudgetEditorPage() {
             fee_mensal_valor: version.fee_mensal_valor || null,
             fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
             fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
-            ...camposDeMoeda(version)
+            ...camposDeMoeda(version),
+            ...camposDeIdioma(version)
           }).eq('id', version.id),
           supabase.from('budgets').update({
             code: budget.code,
@@ -698,7 +703,8 @@ export default function BudgetEditorPage() {
           fee_mensal_valor: version.fee_mensal_valor || null,
           fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
           fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
-          ...camposDeMoeda(version)
+          ...camposDeMoeda(version),
+          ...camposDeIdioma(version)
         })
         .select()
         .single();
@@ -1078,6 +1084,10 @@ export default function BudgetEditorPage() {
 
   const handleGenerateAndBackup = async (shouldBackup: boolean = true, detalhado: boolean = false) => {
     if (!financials || !budget || !version) return;
+    if (version.pdf_language === 'en') {
+      const faltam = faltantes(coletarTextos(version, items), version.translations).length;
+      if (faltam > 0) toast.warning(`${faltam} texto(s) sem tradução saem em português neste PDF em inglês.`);
+    }
     
     if (detalhado) setIsGeneratingPDFDetalhado(true); else setIsGeneratingPDF(true);
     try {
@@ -1997,6 +2007,15 @@ export default function BudgetEditorPage() {
                     disabled={isReadOnly}
                     aprovado={budget?.status === 'aprovado'}
                     feeMensal={version.payment_plan === 'fee_mensal'}
+                    onChange={updateVersion}
+                  />
+                )}
+
+                {version && (
+                  <IdiomaPanel
+                    version={version}
+                    items={items}
+                    disabled={isReadOnly}
                     onChange={updateVersion}
                   />
                 )}
