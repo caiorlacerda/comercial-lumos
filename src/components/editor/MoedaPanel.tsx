@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 import Select from '@/components/ui/Select';
@@ -37,6 +37,9 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
 
   const moeda = moedaDaVersao(version);
   const bloqueado = disabled || aprovado || feeMensal;
+  // Valor mais recente de `bloqueado`: a busca é assíncrona e pode terminar depois de o orçamento ser travado.
+  const bloqueadoRef = useRef(bloqueado);
+  bloqueadoRef.current = bloqueado;
   const spread = Number(version.fx_spread_pct ?? SPREAD_PADRAO);
   const idade = diasDesde(version.fx_rate_at);
   const velha = idade !== null && idade > (version.validity_days ?? 7);
@@ -58,6 +61,10 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
     setBuscando(true);
     try {
       const c = await buscarCotacao();
+      if (bloqueadoRef.current) {
+        toast.warning('A moeda ficou travada enquanto a cotação era buscada. Nada foi alterado.');
+        return;
+      }
       aplicar(c.compra, 'ptax', c.do_cache ? `${c.data}T12:00:00-03:00` : undefined);
       setManualAberto(false);
       if (c.do_cache) toast.warning(`Banco Central indisponível agora. Usei a última cotação guardada (${dataBR(c.data)}).`);
@@ -103,7 +110,7 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
         {feeMensal && (
           <p className="text-[10px] text-lumos-text-secondary mt-1">Fee mensal não aceita dólar nesta versão.</p>
         )}
-        {aprovado && moeda === 'USD' && (
+        {aprovado && (
           <p className="text-[10px] text-lumos-text-secondary mt-1">
             Moeda e cotação travadas: o orçamento está aprovado. Volte para "Em Negociação" para alterar.
           </p>

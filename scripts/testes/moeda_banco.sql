@@ -56,6 +56,15 @@ BEGIN
   END IF;
   RAISE NOTICE 'OK   RPC pública devolve currency e fx_rate';
 
+  -- 4b) em BRL a RPC não expõe cotação; depois volta para USD para os testes de trava
+  UPDATE budget_versions SET currency = 'BRL' WHERE id = v_v;
+  v_json := get_public_budget_by_token((SELECT public_token FROM budget_versions WHERE id = v_v));
+  IF v_json->>'currency' <> 'BRL' OR v_json->>'fx_rate' IS NOT NULL THEN
+    RAISE EXCEPTION 'FALHOU: RPC pública em BRL não deveria devolver fx_rate: %', v_json;
+  END IF;
+  RAISE NOTICE 'OK   RPC pública em BRL devolve fx_rate nulo';
+  UPDATE budget_versions SET currency = 'USD' WHERE id = v_v;
+
   -- 5) orçamento aprovado: moeda e cotação travadas
   UPDATE budgets SET status = 'aprovado' WHERE id = v_b;
   PERFORM pg_temp.deve_falhar(format('UPDATE budget_versions SET fx_rate = 4.80 WHERE id = %L', v_v), 'cotação travada com orçamento aprovado');

@@ -54,6 +54,7 @@ serve(async (req) => {
       try {
         const r = await fetch(urlPtax(new Date()), { signal: ctrl.signal })
         if (r.ok) cot = escolherCotacao(await r.json())
+        else console.error('cotacao: Banco Central respondeu', r.status)
       } finally {
         clearTimeout(timer)
       }

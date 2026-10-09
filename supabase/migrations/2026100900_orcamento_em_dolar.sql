@@ -99,7 +99,7 @@ BEGIN
     'imposto_reajusta_preco', bv.imposto_reajusta_preco,
     'discount_value', bv.discount_value,
     'currency', bv.currency,
-    'fx_rate', bv.fx_rate,
+    'fx_rate', CASE WHEN bv.currency = 'USD' THEN bv.fx_rate END,
     'notes_client', bv.notes_client,
     'payment_terms', bv.payment_terms,
     'validity_days', bv.validity_days,

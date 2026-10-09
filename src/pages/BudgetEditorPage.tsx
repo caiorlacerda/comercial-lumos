@@ -547,7 +547,7 @@ export default function BudgetEditorPage() {
         navigate(`/orcamentos/${currentBudgetId}`, { replace: true });
 
       } else {
-        await Promise.all([
+        const [versaoRes, orcamentoRes] = await Promise.all([
           supabase.from('budget_versions').update({
             contact_id: version.contact_id || null,
             margin_pct: version.margin_pct,
@@ -576,6 +576,8 @@ export default function BudgetEditorPage() {
             client_id: budget.client_id || null
           }).eq('id', budget.id)
         ]);
+        const saveError = versaoRes.error || orcamentoRes.error;
+        if (saveError) throw saveError;
       }
 
       if (items.length > 0) {
@@ -648,6 +650,18 @@ export default function BudgetEditorPage() {
     } catch (err) {
       console.error('Partial version save error:', err);
       notifySaveStatus('error');
+      const mexeuNaMoeda = ['currency', 'fx_market_rate', 'fx_spread_pct', 'fx_rate', 'fx_rate_at', 'fx_source']
+        .some(k => k in updates);
+      if (mexeuNaMoeda) {
+        // Devolve só os campos de moeda/cotação ao valor do banco, sem mexer em outras edições ainda não salvas.
+        const { data } = await supabase
+          .from('budget_versions')
+          .select('currency, fx_market_rate, fx_spread_pct, fx_rate, fx_rate_at, fx_source')
+          .eq('id', version.id)
+          .single();
+        if (data) setVersion(prev => prev ? { ...prev, ...data } : prev);
+        toast.error('Não foi possível alterar a moeda/cotação. O orçamento pode estar aprovado: volte para "Em Negociação" e tente de novo.');
+      }
     }
   };
 
