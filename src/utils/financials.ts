@@ -52,6 +52,14 @@ export interface BudgetVersion {
    *  pretendida (ver calcFinancials). Propostas antigas ficam com `false`
    *  pra continuar exatamente como sempre foram — não é recalculado. */
   imposto_reajusta_preco?: boolean;
+  /** Moeda da proposta (padrão 'BRL'). Em 'USD' o preço é convertido pela
+   *  cotação travada — ver src/utils/moeda.ts. O financeiro segue em reais. */
+  currency?: 'BRL' | 'USD';
+  fx_market_rate?: number | null;
+  fx_spread_pct?: number;
+  fx_rate?: number | null;
+  fx_rate_at?: string | null;
+  fx_source?: 'ptax' | 'manual' | null;
 }
 
 export interface VersionFinancials {
