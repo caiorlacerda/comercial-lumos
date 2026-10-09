@@ -593,7 +593,7 @@ export default function ContasReceber() {
         <Building2 className="w-3 h-3 flex-shrink-0" /> {r.client?.name || '—'}
       </div>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-baseline gap-2 min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
           <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">{brl(Number(r.total_amount || 0))}</span>
           {usdOf(r) != null && (
             <span className="text-[10px] font-semibold text-lumos-text-secondary whitespace-nowrap">{formatarMoeda(usdOf(r) as number, 'USD')}</span>
@@ -1027,6 +1027,7 @@ export default function ContasReceber() {
             const r = usdReceber;
             setUsdReceber(null);
             toast.success('Recebimento registrado ✓');
+            fetchReceivables(true);
             try {
               // Financeiro é sensível: só quem acessa a página (admins) é avisado.
               const admins = await getAdminUserIds();
@@ -1038,7 +1039,6 @@ export default function ContasReceber() {
                 link: '/financeiro/contas-receber',
               });
             } catch { /* o aviso não pode desfazer o recebimento já gravado */ }
-            fetchReceivables(true);
           }}
         />
       )}
