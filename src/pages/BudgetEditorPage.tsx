@@ -71,6 +71,8 @@ import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import Modal from '@/components/common/Modal';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import Select from '@/components/ui/Select';
+import MoedaPanel from '@/components/editor/MoedaPanel';
+import { camposDeMoeda, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 
 const PAYMENT_PRESETS = [
   '7 dias após a emissão da nota',
@@ -519,7 +521,8 @@ export default function BudgetEditorPage() {
             fee_mensal_fim: version.fee_mensal_fim || null,
             fee_mensal_valor: version.fee_mensal_valor || null,
             fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
-            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
+            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
+            ...camposDeMoeda(version)
           })
           .select()
           .single();
@@ -544,7 +547,7 @@ export default function BudgetEditorPage() {
         navigate(`/orcamentos/${currentBudgetId}`, { replace: true });
 
       } else {
-        await Promise.all([
+        const [versaoRes, orcamentoRes] = await Promise.all([
           supabase.from('budget_versions').update({
             contact_id: version.contact_id || null,
             margin_pct: version.margin_pct,
@@ -562,7 +565,8 @@ export default function BudgetEditorPage() {
             fee_mensal_fim: version.fee_mensal_fim || null,
             fee_mensal_valor: version.fee_mensal_valor || null,
             fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
-            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
+            fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
+            ...camposDeMoeda(version)
           }).eq('id', version.id),
           supabase.from('budgets').update({
             code: budget.code,
@@ -572,6 +576,8 @@ export default function BudgetEditorPage() {
             client_id: budget.client_id || null
           }).eq('id', budget.id)
         ]);
+        const saveError = versaoRes.error || orcamentoRes.error;
+        if (saveError) throw saveError;
       }
 
       if (items.length > 0) {
@@ -644,6 +650,18 @@ export default function BudgetEditorPage() {
     } catch (err) {
       console.error('Partial version save error:', err);
       notifySaveStatus('error');
+      const mexeuNaMoeda = ['currency', 'fx_market_rate', 'fx_spread_pct', 'fx_rate', 'fx_rate_at', 'fx_source']
+        .some(k => k in updates);
+      if (mexeuNaMoeda) {
+        // Devolve só os campos de moeda/cotação ao valor do banco, sem mexer em outras edições ainda não salvas.
+        const { data } = await supabase
+          .from('budget_versions')
+          .select('currency, fx_market_rate, fx_spread_pct, fx_rate, fx_rate_at, fx_source')
+          .eq('id', version.id)
+          .single();
+        if (data) setVersion(prev => prev ? { ...prev, ...data } : prev);
+        toast.error('Não foi possível alterar a moeda/cotação. O orçamento pode estar aprovado: volte para "Em Negociação" e tente de novo.');
+      }
     }
   };
 
@@ -679,7 +697,8 @@ export default function BudgetEditorPage() {
           fee_mensal_fim: version.fee_mensal_fim || null,
           fee_mensal_valor: version.fee_mensal_valor || null,
           fee_mensal_adendos: (version.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
-          fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false
+          fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
+          ...camposDeMoeda(version)
         })
         .select()
         .single();
@@ -1646,7 +1665,8 @@ export default function BudgetEditorPage() {
               <input
                 type="checkbox"
                 id="fee-mensal-toggle"
-                disabled={isReadOnly}
+                disabled={isReadOnly || moedaDaVersao(version) === 'USD'}
+                title={moedaDaVersao(version) === 'USD' ? 'Fee mensal não aceita dólar nesta versão.' : undefined}
                 checked={version?.payment_plan === 'fee_mensal'}
                 onChange={(e) => {
                   if (e.target.checked) {
@@ -1971,6 +1991,16 @@ export default function BudgetEditorPage() {
                   </div>
                 </div>
 
+                {version && (
+                  <MoedaPanel
+                    version={version}
+                    disabled={isReadOnly}
+                    aprovado={budget?.status === 'aprovado'}
+                    feeMensal={version.payment_plan === 'fee_mensal'}
+                    onChange={updateVersion}
+                  />
+                )}
+
                 <div>
                   <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-2 block">Status Proposta</label>
                   <Select
@@ -1991,7 +2021,12 @@ export default function BudgetEditorPage() {
               <div className="pt-6 mt-6 border-t border-lumos-yellow/20 bg-lumos-yellow/5 -mx-6 px-6 pb-6">
                 <div className="flex flex-col gap-1 mb-4">
                   <span className="text-[10px] text-lumos-text-secondary font-black uppercase">Valor de Venda Final</span>
-                  <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatCurrency(financials?.valorFinal || 0)}</span>
+                  <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatarValorDaVersao(financials?.valorFinal || 0, version)}</span>
+                  {moedaDaVersao(version) === 'USD' && (
+                    <span className="text-[10px] text-lumos-text-secondary font-bold uppercase mt-1">
+                      Interno (só a equipe vê): {formatCurrency(financials?.valorFinal || 0)}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="space-y-2">

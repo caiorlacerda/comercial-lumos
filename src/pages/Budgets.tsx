@@ -33,7 +33,8 @@ import { pdf } from '@react-pdf/renderer';
 import Modal from '@/components/common/Modal';
 import Pagination from '@/components/common/Pagination';
 import { BudgetPDF } from '@/components/editor/BudgetPDF';
-import { calcFinancials, formatCurrency } from '@/utils/financials';
+import { calcFinancials } from '@/utils/financials';
+import { formatarValorDaVersao } from '@/utils/moeda';
 import { syncBudgetApprovalFlow } from '@/utils/financeiro';
 import { celebrateNewProject } from '@/components/common/NewProjectCelebration';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -163,6 +164,8 @@ export default function Budgets() {
             nf_pct,
             discount_value,
             imposto_reajusta_preco,
+            currency,
+            fx_rate,
             items:budget_items!version_id (id, unit_cost, quantity, item_group)
           ),
           versions:budget_versions!budget_id (
@@ -173,6 +176,8 @@ export default function Budgets() {
             nf_pct,
             discount_value,
             imposto_reajusta_preco,
+            currency,
+            fx_rate,
             items:budget_items!version_id (id, unit_cost, quantity, item_group)
           )
         `)
@@ -842,7 +847,7 @@ export default function Budgets() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-black text-lumos-text-primary text-sm font-mono">
-                      {formatCurrency((budget as any).valorFinal || 0)}
+                      {formatarValorDaVersao((budget as any).valorFinal || 0, (budget as any).active_version)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-col items-end">
@@ -976,7 +981,7 @@ export default function Budgets() {
                       {format(new Date(budget.updated_at), 'dd/MM/yy', { locale: ptBR })}
                     </span>
                     <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">
-                      {formatCurrency((budget as any).valorFinal || 0)}
+                      {formatarValorDaVersao((budget as any).valorFinal || 0, (budget as any).active_version)}
                     </span>
                   </div>
                 </div>

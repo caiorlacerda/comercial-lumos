@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { calcFinancials, formatCurrency } from '@/utils/financials';
+import { calcFinancials } from '@/utils/financials';
+import { formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 import { syncBudgetApprovalFlow } from '@/utils/financeiro';
 import type { BudgetVersion, BudgetItem } from '@/utils/financials';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
@@ -219,6 +220,9 @@ export default function AprovacaoPublica() {
   if (!budget || !version) return null;
 
   const financials = calcFinancials(items, version);
+  // Proposta em dólar: o cliente vê SÓ US$ (sem cotação e sem reais), no mesmo valor do editor.
+  const fmt = (valorBRL: number) => formatarValorDaVersao(valorBRL, version);
+  const taxaRemarcacao = moedaDaVersao(version) === 'USD' ? fmt(2000) : 'R$2.000,00';
   const markupMultiplier = financials.totalCusto > 0 ? financials.valorFinal / financials.totalCusto : 1;
   const emissao = createdAt ? new Date(createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const codeTitle = `#${budget.code} | Lumos + ${budget.clients?.name || ''} | ${budget.project_name}`;
@@ -365,7 +369,7 @@ export default function AprovacaoPublica() {
                               Subtotal {label}
                             </span>
                             <span style={{ fontWeight: 800, color: '#222', whiteSpace: 'nowrap', fontSize: 13 }}>
-                              {formatCurrency(groupTotal)}
+                              {fmt(groupTotal)}
                             </span>
                           </div>
                         </td>
@@ -382,7 +386,7 @@ export default function AprovacaoPublica() {
         <div className="ap-total-bar">
           <span style={s.totalLabel}>Investimento Total do Projeto</span>
           <span className="ap-total-value" style={{ fontWeight: 900, fontSize: 30, color: '#111' }}>
-            {formatCurrency(financials.valorFinal)}
+            {fmt(financials.valorFinal)}
           </span>
         </div>
 
@@ -432,7 +436,7 @@ export default function AprovacaoPublica() {
             {
               title: '4. Taxa de Remarcação',
               items: [
-                'Caso o CLIENTE altere a data prevista para a execução do serviço, sem respeitar o prazo máximo de 48 horas de antecedência, será cobrada uma taxa de remarcação no valor mínimo de R$2.000,00 ou 20% do valor total do projeto.',
+                `Caso o CLIENTE altere a data prevista para a execução do serviço, sem respeitar o prazo máximo de 48 horas de antecedência, será cobrada uma taxa de remarcação no valor mínimo de ${taxaRemarcacao} ou 20% do valor total do projeto.`,
               ],
             },
             {

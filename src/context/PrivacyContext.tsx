@@ -15,8 +15,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 const CHAVE = 'lumos_valores_ocultos';
 const CLASSE = 'lumos-valor-oculto';
 
-// "R$ 1.234,56", "-R$ 90,00", "R$ 0"
-const MOEDA = /R\$\s*-?[\d.,]+/;
+// "R$ 1.234,56", "-R$ 90,00", "R$ 0", "US$ 10.309,28"
+const MOEDA = /(?:R|US)\$\s*-?[\d.,]+/;
 // "38,5%", "-12%" — só dentro do Financeiro, pra não borrar barra de progresso
 const PERCENTUAL = /-?\d+([.,]\d+)?\s*%/;
 
