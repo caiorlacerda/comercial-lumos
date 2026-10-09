@@ -80,3 +80,54 @@ export function diasDesde(iso?: string | null, agora: Date = new Date()): number
   if (Number.isNaN(t)) return null;
   return Math.floor((agora.getTime() - t) / 86400000);
 }
+
+/**
+ * Referência em US$ de um título (parcela) de proposta em dólar: o valor PREVISTO
+ * em reais ÷ cotação travada da versão. Depois do recebimento o `total_amount`
+ * passa a ser o valor real; o previsto fica em `valor_previsto`, então o US$
+ * contratado continua o mesmo. null se a versão não for em dólar.
+ */
+export function usdDoTitulo(
+  titulo: { total_amount?: number | string | null; valor_previsto?: number | string | null },
+  versao?: VersaoMoeda | null,
+): number | null {
+  if (moedaDaVersao(versao) !== 'USD') return null;
+  const bruto = titulo.valor_previsto ?? titulo.total_amount;
+  if (bruto == null) return null;
+  const base = Number(bruto);
+  return Number.isFinite(base) ? converterValor(base, versao) : null;
+}
+
+/**
+ * Lê um valor em reais digitado à brasileira ("51.200,50", "51200,5", "R$ 51.200").
+ * Lê com segurança ou devolve null: nunca um número silenciosamente errado.
+ * - Tira "R$" e todo espaço (inclusive NBSP); se sobrar algo além de dígitos, "." e ",",
+ *   é null ("1e3", "0x10", "abc", "-5").
+ * - Com vírgula: só uma, com 1 ou 2 dígitos depois; antes dela, só dígitos ou milhar
+ *   com ponto ("51.200,50", "51200,5", "1,5"). Ponto depois da vírgula, formato
+ *   americano ("1,234.56") e 3 dígitos depois da vírgula ("2,600") são ambíguos: null.
+ * - Sem vírgula: "1.234.567" é milhar; "51200.5" / "1.5" / "1000" são decimais de até
+ *   2 casas; qualquer outro ("1.2345") é null.
+ * - Arredonda para 2 casas ANTES de exigir valor positivo ("0,004" → null).
+ */
+export function parseValorBR(texto: string): number | null {
+  const t = String(texto ?? '').replace(/R\$|\s/g, '');
+  if (!t || /[^\d.,]/.test(t)) return null;
+  let normal: string;
+  if (t.includes(',')) {
+    const partes = t.split(',');
+    if (partes.length !== 2) return null;
+    const [inteira, frac] = partes;
+    if (!/^\d{1,2}$/.test(frac)) return null;
+    if (!(/^\d+$/.test(inteira) || /^\d{1,3}(\.\d{3})+$/.test(inteira))) return null;
+    normal = `${inteira.replace(/\./g, '')}.${frac}`;
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(t)) {
+    normal = t.replace(/\./g, '');
+  } else if (/^\d+(\.\d{1,2})?$/.test(t)) {
+    normal = t;
+  } else {
+    return null;
+  }
+  const n = Math.round(Number(normal) * 100) / 100;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}

@@ -31,6 +31,8 @@ import { useToast } from '@/context/ToastContext';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import { RECEBIVEL_LABEL, dataRecebimentoExibida } from '@/lib/statusRecebimento';
+import RecebimentoUsdModal from '@/components/financeiro/RecebimentoUsdModal';
+import { formatarMoeda, moedaDaVersao, usdDoTitulo } from '@/utils/moeda';
 import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 
@@ -58,6 +60,8 @@ export default function ContasReceber() {
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [parcelando, setParcelando] = useState<{ budgetId: string; nome?: string } | null>(null);
+  // Título de proposta em dólar que está sendo recebido (abre o modal do valor em reais).
+  const [usdReceber, setUsdReceber] = useState<any | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newReceivableData, setNewReceivableData] = useState({
     description: '',
@@ -110,10 +114,21 @@ export default function ContasReceber() {
   // (aguardando, emitir_nf, nf_emitida) são diretos e zeram o recebido.
   const applyStatus = async (r: any, newStatus: string) => {
     setStatusMenuOpen(null);
+    // Proposta em dólar: o que entra é o valor em reais JÁ CONVERTIDO, que só quem
+    // recebeu sabe. Abre o modal em vez de gravar o previsto.
+    if (newStatus === 'recebido' && r.status !== 'recebido' && emDolar(r)) {
+      setUsdReceber(r);
+      return;
+    }
     try {
       const patch = newStatus === 'recebido'
         ? { status: 'recebido', received_amount: Number(r.total_amount || 0), received_at: (r.received_at || new Date().toISOString().split('T')[0]) }
-        : { status: newStatus, received_amount: 0, received_at: null };
+        : {
+            status: newStatus, received_amount: 0, received_at: null,
+            // Reabrir um título em dólar já recebido volta ao total contratado em reais
+            // (o recebimento tinha trocado o total pelo valor real); o previsto fica guardado.
+            ...(emDolar(r) && r.valor_previsto != null ? { total_amount: Number(r.valor_previsto) } : {}),
+          };
       // Atualização otimista: muda só a linha na hora, sem recarregar a tela toda.
       setReceivables((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patch } : x)));
       const { error } = await supabase.from('receivables').update(patch).eq('id', r.id);
@@ -198,7 +213,7 @@ export default function ContasReceber() {
     try {
       if (!silent) setLoading(true);
       const [rec, rent] = await Promise.all([
-        supabase.from('receivables').select('*, client:clients(name), budget:budgets(id, project_name, code)').order('due_date', { ascending: true }),
+        supabase.from('receivables').select('*, client:clients(name), budget:budgets(id, project_name, code), budget_version:budget_versions!budget_version_id(id, currency, fx_rate)').order('due_date', { ascending: true }),
         supabase.from('vw_rentabilidade').select('proposta_id, lucro_liquido'),
       ]);
       if (rec.error) throw rec.error;
@@ -289,7 +304,13 @@ export default function ContasReceber() {
   };
 
   const handleBatchReceive = async () => {
-    const toReceive = filtered.filter(r => selectedIds.has(r.id) && r.status !== 'recebido');
+    const selecionados = filtered.filter(r => selectedIds.has(r.id) && r.status !== 'recebido');
+    // Título em dólar precisa do valor recebido em reais: não entra no lote.
+    const emDolarSel = selecionados.filter(emDolar);
+    if (emDolarSel.length > 0) {
+      toast.warning(`${emDolarSel.length} título(s) em dólar ficaram de fora: registre o valor recebido em reais de cada um pelo menu de status.`);
+    }
+    const toReceive = selecionados.filter(r => !emDolar(r));
     if (toReceive.length === 0) return;
 
     try {
@@ -371,6 +392,9 @@ export default function ContasReceber() {
   const codeOf = (r: any): string | null => (r.budget?.code ? formatBudgetCode(r.budget.code) : null);
   // Lucro líquido do recebível (via orçamento vinculado).
   const lucroOf = (r: any): number | null => (r.budget_id != null && lucroByBudget[r.budget_id] != null ? lucroByBudget[r.budget_id] : null);
+  // Referência em US$ (só propostas em dólar): previsto em reais ÷ cotação travada da versão.
+  const usdOf = (r: any): number | null => usdDoTitulo(r, r.budget_version);
+  const emDolar = (r: any): boolean => moedaDaVersao(r.budget_version) === 'USD';
   // Data sem fuso: received_at é timestamptz (meia-noite UTC); formatar pela parte
   // da data evita o "1 dia antes" no fuso do Brasil.
   // Coluna "Recebimento": a data em que o dinheiro entrou, quando já entrou;
@@ -489,7 +513,12 @@ export default function ContasReceber() {
       <td className="px-6 py-4">
         <span className="text-xs text-lumos-text-secondary flex items-center gap-1"><Building2 className="w-3 h-3 flex-shrink-0" /> {r.client?.name || '—'}</span>
       </td>
-      <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary whitespace-nowrap">{brl(Number(r.total_amount || 0))}</td>
+      <td className="px-6 py-4 text-right text-sm font-bold text-lumos-text-primary whitespace-nowrap">
+        {brl(Number(r.total_amount || 0))}
+        {usdOf(r) != null && (
+          <div className="text-[10px] font-semibold text-lumos-text-secondary">{formatarMoeda(usdOf(r) as number, 'USD')}</div>
+        )}
+      </td>
       <td className="px-6 py-4 text-right whitespace-nowrap">
         {lucroOf(r) != null
           ? <span className={clsx('text-sm font-black', (lucroOf(r) as number) >= 0 ? 'text-green-500' : 'text-red-500')}>{brl(lucroOf(r) as number)}</span>
@@ -569,8 +598,11 @@ export default function ContasReceber() {
         <Building2 className="w-3 h-3 flex-shrink-0" /> {r.client?.name || '—'}
       </div>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-baseline gap-2 min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
           <span className="font-black font-mono text-sm text-lumos-text-primary whitespace-nowrap">{brl(Number(r.total_amount || 0))}</span>
+          {usdOf(r) != null && (
+            <span className="text-[10px] font-semibold text-lumos-text-secondary whitespace-nowrap">{formatarMoeda(usdOf(r) as number, 'USD')}</span>
+          )}
           {lucroOf(r) != null && (
             <span className={clsx('text-[11px] font-bold whitespace-nowrap', (lucroOf(r) as number) >= 0 ? 'text-green-500' : 'text-red-500')}>
               {brl(lucroOf(r) as number)}
@@ -597,6 +629,7 @@ export default function ContasReceber() {
                 'Projeto': r.description || '',
                 'Cliente': r.client?.name || '',
                 'Valor (R$)': r.total_amount,
+                'Valor (US$)': usdOf(r) ?? '',
                 'Lucro Líquido (R$)': lucroOf(r) ?? '',
                 'Status': statusLabel(statusOf(r)).toUpperCase(),
                 'Recebimento': fmtDate(dataExibida(r)),
@@ -988,6 +1021,30 @@ export default function ContasReceber() {
           nomeProjeto={parcelando.nome}
           onClose={() => setParcelando(null)}
           onDone={() => fetchReceivables(true)}
+        />
+      )}
+
+      {usdReceber && (
+        <RecebimentoUsdModal
+          titulo={usdReceber}
+          onClose={() => setUsdReceber(null)}
+          onDone={async ({ recebido }) => {
+            const r = usdReceber;
+            setUsdReceber(null);
+            toast.success('Recebimento registrado ✓');
+            fetchReceivables(true);
+            try {
+              // Financeiro é sensível: só quem acessa a página (admins) é avisado.
+              const admins = await getAdminUserIds();
+              await notify({
+                userIds: admins,
+                event: NOTIFICATION_EVENTS.PAGAMENTO_RECEBIDO,
+                title: 'Pagamento recebido',
+                body: `${brl(recebido)} recebido de "${r?.client?.name || 'Cliente'}" para: ${r?.description}.`,
+                link: '/financeiro/contas-receber',
+              });
+            } catch { /* o aviso não pode desfazer o recebimento já gravado */ }
+          }}
         />
       )}
 
