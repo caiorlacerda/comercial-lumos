@@ -5,6 +5,12 @@ import type { TextoParaTraduzir } from '@/lib/traducaoCore';
 const ITENS_POR_CHAMADA = 60;
 const CARACTERES_POR_CHAMADA = 30000;
 
+/**
+ * Maior texto aceito pela IA. Espelha LIMITES.caracteresPorItem da Edge Function, que o cliente
+ * não pode importar: um texto maior faria o servidor recusar o pedido inteiro.
+ */
+export const LIMITE_TEXTO_IA = 8000;
+
 /** Divide em grupos (itens e caracteres) mantendo a ordem. */
 function agrupar(itens: TextoParaTraduzir[]): TextoParaTraduzir[][] {
   const grupos: TextoParaTraduzir[][] = [];
@@ -30,10 +36,13 @@ function definirPropriedade(obj: Record<string, string>, chave: string, valor: s
  * Pede à função `traduzir-orcamento` a tradução (inglês americano) dos textos.
  * Devolve um mapa texto original → tradução. Os textos são enviados em grupos, um
  * por vez. Lança Error com a mensagem do servidor (ou uma mensagem amigável) se algo
- * falhar; nunca devolve resultado parcial.
+ * falhar; nunca devolve resultado parcial. Textos acima de LIMITE_TEXTO_IA não vão à IA:
+ * voltam em `ignorados` para a pessoa traduzir à mão.
  */
-export async function traduzirTextos(itens: TextoParaTraduzir[]): Promise<{ traducoes: Record<string, string>; modelo: string }> {
-  if (itens.length === 0) return { traducoes: {}, modelo: '' };
+export async function traduzirTextos(todos: TextoParaTraduzir[]): Promise<{ traducoes: Record<string, string>; modelo: string; ignorados: TextoParaTraduzir[] }> {
+  const ignorados = todos.filter((it) => it.origem.length > LIMITE_TEXTO_IA);
+  const itens = todos.filter((it) => it.origem.length <= LIMITE_TEXTO_IA);
+  if (itens.length === 0) return { traducoes: {}, modelo: '', ignorados };
 
   const traducoes: Record<string, string> = {};
   let modelo = '';
@@ -57,5 +66,5 @@ export async function traduzirTextos(itens: TextoParaTraduzir[]): Promise<{ trad
     }
     modelo = String(d.modelo || modelo);
   }
-  return { traducoes, modelo };
+  return { traducoes, modelo, ignorados };
 }

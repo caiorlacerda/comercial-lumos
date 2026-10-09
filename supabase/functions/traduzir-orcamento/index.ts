@@ -13,7 +13,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { FERRAMENTA, LIMITES, MODELO, NOME_FERRAMENTA, SISTEMA, definirPropriedade, dividirEmLotes, lerResposta, validarPedido } from "./core.ts"
+import { LIMITES, MODELO, definirPropriedade, dividirEmLotes, lerResposta, montarCorpo, validarPedido } from "./core.ts"
 import type { PedidoItem } from "./core.ts"
 
 const corsHeaders = {
@@ -28,10 +28,34 @@ function json(body: unknown, status = 200) {
 class ErroTraducao extends Error {
   status: number
   mensagem: string
-  constructor(status: number, mensagem: string) {
+  /** A IA respondeu sem chamar a ferramenta: vale uma nova tentativa. */
+  semFerramenta: boolean
+  constructor(status: number, mensagem: string, semFerramenta = false) {
     super(mensagem)
     this.status = status
     this.mensagem = mensagem
+    this.semFerramenta = semFerramenta
+  }
+}
+
+/** Folga mínima (ms) do prazo total para ainda valer uma nova tentativa. */
+const FOLGA_MINIMA_RETENTATIVA_MS = 15000
+
+/**
+ * Traduz um lote. Se a IA responder sem chamar a ferramenta (tool_choice 'auto' não garante),
+ * tenta UMA vez mais com o mesmo corpo, respeitando o prazo total; qualquer outra falha é imediata.
+ */
+async function traduzirLoteComRetentativa(lote: PedidoItem[], ANTHROPIC_API_KEY: string, limite: number): Promise<Record<string, string>> {
+  const timeoutDe = () => Math.min(LIMITES.timeoutPorChamadaMs, limite - Date.now())
+  try {
+    return await traduzirLote(lote, ANTHROPIC_API_KEY, timeoutDe())
+  } catch (e) {
+    if (!(e instanceof ErroTraducao) || !e.semFerramenta) throw e
+    if (limite - Date.now() < FOLGA_MINIMA_RETENTATIVA_MS) {
+      throw new ErroTraducao(504, 'A tradução demorou demais. Traduza menos textos de cada vez.')
+    }
+    console.error('traduzir-orcamento: IA respondeu sem a ferramenta, tentando de novo')
+    return await traduzirLote(lote, ANTHROPIC_API_KEY, timeoutDe())
   }
 }
 
@@ -50,14 +74,7 @@ async function traduzirLote(lote: PedidoItem[], ANTHROPIC_API_KEY: string, timeo
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
         },
-        body: JSON.stringify({
-          model: MODELO,
-          max_tokens: 8192,
-          system: SISTEMA,
-          tools: [FERRAMENTA],
-          tool_choice: { type: 'tool', name: NOME_FERRAMENTA },
-          messages: [{ role: 'user', content: JSON.stringify({ itens: lote }) }],
-        }),
+        body: JSON.stringify(montarCorpo(lote)),
       })
     } catch (e) {
       console.error('traduzir-orcamento: falha de rede com a Anthropic', e)
@@ -71,7 +88,7 @@ async function traduzirLote(lote: PedidoItem[], ANTHROPIC_API_KEY: string, timeo
       throw new ErroTraducao(502, 'O serviço de tradução recusou o pedido. Tente de novo.')
     }
     const lido = lerResposta(await resp.json().catch(() => null), lote.map((i) => i.id))
-    if (!lido.ok) throw new ErroTraducao(502, lido.erro)
+    if (!lido.ok) throw new ErroTraducao(502, lido.erro, lido.semFerramenta === true)
     return lido.traducoes
   } finally {
     clearTimeout(timer)
@@ -123,7 +140,7 @@ serve(async (req) => {
         const onda = lotes.slice(i, i + LIMITES.concorrencia)
         // Promise.all rejeita com o primeiro erro de uma onda: falha rápido, sem esperar as outras.
         const resultados = await Promise.all(
-          onda.map((lote) => traduzirLote(lote, ANTHROPIC_API_KEY, Math.min(LIMITES.timeoutPorChamadaMs, restante))),
+          onda.map((lote) => traduzirLoteComRetentativa(lote, ANTHROPIC_API_KEY, limite)),
         )
         for (const r of resultados) {
           for (const id of Object.keys(r)) definirPropriedade(traducoes, id, r[id])

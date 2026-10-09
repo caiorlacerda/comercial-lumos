@@ -1,7 +1,7 @@
 // Rodar: node --test scripts/testes/traduzirCore.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LIMITES, validarPedido, dividirEmLotes, lerResposta, MODELO } from '../../supabase/functions/traduzir-orcamento/core.ts';
+import { LIMITES, validarPedido, dividirEmLotes, lerResposta, montarCorpo, MODELO } from '../../supabase/functions/traduzir-orcamento/core.ts';
 
 const item = (id, origem, tipo = 'texto') => ({ id, tipo, origem });
 
@@ -105,6 +105,38 @@ test('lerResposta: stop_reason max_tokens vira erro mesmo com tool_use completo'
   const r = lerResposta(json, ['t0']);
   assert.equal(r.ok, false);
   assert.match(r.erro, /cortada/i);
+});
+
+test('montarCorpo: pedido aceito pelo claude-sonnet-5-5 (tool_choice auto, thinking mínimo, ferramenta estrita)', () => {
+  const lote = [item('t0', 'Diária de câmera'), item('t1', '<p>Oi</p>', 'html')];
+  const corpo = montarCorpo(lote);
+  assert.equal(corpo.model, 'claude-sonnet-5-5');
+  assert.equal(corpo.max_tokens, 8192);
+  assert.deepEqual(corpo.thinking, { type: 'between_tools' });
+  assert.deepEqual(corpo.tool_choice, { type: 'auto' });
+  assert.equal(corpo.tools.length, 1);
+  assert.equal(corpo.tools[0].strict, true);
+  assert.equal(corpo.tools[0].name, 'registrar_traducoes');
+  assert.equal(corpo.tools[0].input_schema.additionalProperties, false);
+  assert.equal(corpo.tools[0].input_schema.properties.traducoes.items.additionalProperties, false);
+  assert.deepEqual(corpo.tools[0].input_schema.properties.traducoes.items.required, ['id', 'en']);
+  assert.deepEqual(corpo.messages, [{ role: 'user', content: JSON.stringify({ itens: lote }) }]);
+  assert.match(corpo.system, /exactly once/);
+  for (const proibido of ['temperature', 'top_p', 'top_k']) {
+    assert.equal(Object.hasOwn(corpo, proibido), false);
+  }
+});
+
+test('lerResposta: só texto (sem tool_use) dá erro marcado semFerramenta; outros erros não', () => {
+  const r = lerResposta({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Here are the translations...' }] }, ['t0']);
+  assert.equal(r.ok, false);
+  assert.equal(r.semFerramenta, true);
+  assert.equal(r.erro, 'A IA não devolveu as traduções.');
+  const incompleta = lerResposta({ content: [{ type: 'tool_use', input: { traducoes: [] } }] }, ['t0']);
+  assert.equal(incompleta.ok, false);
+  assert.equal(incompleta.semFerramenta, undefined);
+  const cortada = lerResposta({ stop_reason: 'max_tokens', content: [{ type: 'text', text: 'x' }] }, ['t0']);
+  assert.equal(cortada.semFerramenta, undefined);
 });
 
 test('lerResposta: id constructor pedido e omitido continua sendo erro', () => {

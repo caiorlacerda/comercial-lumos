@@ -1,7 +1,7 @@
 // Rodar: node --test scripts/testes/traducaoCore.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chave, coletarTextos, faltantes, traduzir, sanitizarTraducao, mesclar } from '../../src/lib/traducaoCore.ts';
+import { chave, coletarTextos, faltantes, traduzir, sanitizarTraducao, mesclar, vazia } from '../../src/lib/traducaoCore.ts';
 import { camposDeIdioma } from '../../src/utils/idioma.ts';
 
 const version = {
@@ -91,6 +91,42 @@ test('mesclar não apaga tradução boa com valor que fica vazio', () => {
   const base = { versao: 1, textos: { 'Edição': 'Editing' } };
   assert.equal(mesclar(base, { 'Edição': '  ' }).textos['Edição'], 'Editing');
   assert.equal(mesclar(base, { 'Edição': '✅' }).textos['Edição'], 'Editing');
+});
+
+test('só o briefing (notes_client) é html; nome com "<" continua texto simples', () => {
+  const t = coletarTextos(
+    { notes_client: 'Briefing simples' },
+    [{ name: 'Lente 24-70 <opcional>', description: '<b>forte</b>', sort_order: 1 }],
+  );
+  assert.equal(t.find((x) => x.origem === 'Briefing simples').tipo, 'html');
+  assert.equal(t.find((x) => x.origem === 'Lente 24-70 <opcional>').tipo, 'texto');
+  assert.equal(t.find((x) => x.origem === '<b>forte</b>').tipo, 'texto');
+});
+
+test('vazia: texto vazio, só espaços ou html sem conteúdo', () => {
+  assert.equal(vazia('<p></p>'), true);
+  assert.equal(vazia('<p>&nbsp;</p>'), true);
+  assert.equal(vazia('<p>&NBSP;</p>'), true);
+  assert.equal(vazia('  '), true);
+  assert.equal(vazia(''), true);
+  assert.equal(vazia(null), true);
+  assert.equal(vazia(undefined), true);
+  assert.equal(vazia('<p>Oi</p>'), false);
+  assert.equal(vazia('Oi'), false);
+});
+
+test('html vazio guardado ("<p></p>") conta como sem tradução', () => {
+  const tr = { versao: 1, textos: { 'Briefing': '<p></p>' } };
+  assert.equal(traduzir(tr, 'Briefing'), 'Briefing');
+  const coletados = coletarTextos({ notes_client: 'Briefing' }, []);
+  assert.deepEqual(faltantes(coletados, tr).map((x) => x.origem), ['Briefing']);
+});
+
+test('mesclar ignora tradução nova que é html vazio', () => {
+  const base = { versao: 1, textos: { 'Briefing': '<p>Brief</p>' } };
+  const r = mesclar(base, { 'Briefing': '<p></p>', 'Outro': '<p>&nbsp;</p>' });
+  assert.equal(r.textos['Briefing'], '<p>Brief</p>');
+  assert.equal(Object.hasOwn(r.textos, 'Outro'), false);
 });
 
 test('notes_client só com espaços não entra; item sem sort_order entra', () => {

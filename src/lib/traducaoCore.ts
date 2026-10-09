@@ -31,21 +31,28 @@ interface ItemTextos {
 /** Chave do glossário: o texto sem espaços nas pontas. */
 export const chave = (s?: string | null): string => String(s ?? '').trim();
 
-const ehHtml = (s: string) => /<\/?[a-z][^>]*>/i.test(s);
+/**
+ * True quando o texto não tem conteúdo: vazio, só espaços, ou só tags/&nbsp; (o editor rico
+ * devolve "<p></p>" quando está vazio). Sem DOM, para rodar também nos testes de linha de comando.
+ */
+export function vazia(s?: string | null): boolean {
+  return String(s ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() === '';
+}
 
 /**
  * Todos os textos do orçamento que o PDF em inglês precisa traduzir, sem repetição,
  * na ordem em que aparecem: logística, briefing (HTML) e itens (nome, descrição).
+ * Só o briefing (notes_client) é HTML; o resto é sempre texto simples, mesmo que contenha "<".
  * Unidade e categoria saem de um mapa fixo (pdfTextos), não daqui.
  */
 export function coletarTextos(version: VersaoTextos | null | undefined, items: ItemTextos[] | null | undefined): TextoParaTraduzir[] {
   const vistos = new Set<string>();
   const out: TextoParaTraduzir[] = [];
-  const add = (texto: string | null | undefined, forcarHtml = false) => {
+  const add = (texto: string | null | undefined, html = false) => {
     const o = chave(texto);
     if (!o || vistos.has(o)) return;
     vistos.add(o);
-    out.push({ origem: o, tipo: forcarHtml || ehHtml(o) ? 'html' : 'texto' });
+    out.push({ origem: o, tipo: html ? 'html' : 'texto' });
   };
   add(version?.logistics_date);
   add(version?.logistics_time);
@@ -68,16 +75,16 @@ const lerTraducao = (traducoes: Traducoes | null | undefined, k: string): string
   return textos && Object.hasOwn(textos, k) ? textos[k] : undefined;
 };
 
-/** O que ainda não tem tradução (ausente ou só espaços). */
+/** O que ainda não tem tradução (ausente, só espaços ou HTML vazio como "<p></p>"). */
 export function faltantes(coletados: TextoParaTraduzir[], traducoes: Traducoes | null | undefined): TextoParaTraduzir[] {
-  return coletados.filter((c) => chave(lerTraducao(traducoes, c.origem)) === '');
+  return coletados.filter((c) => vazia(lerTraducao(traducoes, c.origem)));
 }
 
-/** Tradução do texto, ou o próprio texto se não houver. */
+/** Tradução do texto, ou o próprio texto se não houver (ou se a guardada for vazia). */
 export function traduzir(traducoes: Traducoes | null | undefined, origem?: string | null): string {
   const o = String(origem ?? '');
   const t = lerTraducao(traducoes, chave(o));
-  return t !== undefined && chave(t) !== '' ? t : o;
+  return t !== undefined && !vazia(t) ? t : o;
 }
 
 /**
@@ -113,7 +120,7 @@ export function mesclar(
   const textos: Record<string, string> = { ...(base?.textos ?? {}) };
   for (const [origem, en] of Object.entries(novas)) {
     const limpa = sanitizarTraducao(en);
-    if (limpa === '') continue;
+    if (limpa === '' || vazia(limpa)) continue;
     textos[chave(origem)] = limpa;
   }
   return {

@@ -5,8 +5,8 @@ import Modal from '@/components/common/Modal';
 import RichTextEditor from '@/components/common/RichTextEditor';
 import { useToast } from '@/context/ToastContext';
 import type { BudgetItem, BudgetVersion } from '@/utils/financials';
-import { chave, coletarTextos, faltantes, mesclar, type Traducoes } from '@/lib/traducaoCore';
-import { traduzirTextos } from '@/lib/traducao';
+import { chave, coletarTextos, faltantes, mesclar, vazia, type Traducoes } from '@/lib/traducaoCore';
+import { traduzirTextos, LIMITE_TEXTO_IA } from '@/lib/traducao';
 
 interface Props {
   version: BudgetVersion;
@@ -23,20 +23,15 @@ const textoSimples = (html: string) => {
   } catch { return html; }
 };
 
-// O editor rico devolve "<p></p>" quando está vazio (e emite isso ao abrir); isso não é uma tradução.
-const htmlVazio = (html: string) => {
-  if (chave(html) === '') return true;
-  try { return (new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '').trim() === ''; } catch { return false; }
-};
-
 export default function TraducaoModal({ version, items, onClose, onSave }: Props) {
   const toast = useToast();
   const coletados = useMemo(() => coletarTextos(version, items), [version, items]);
   const [rascunho, setRascunho] = useState<Record<string, string>>(() => ({ ...(version.translations?.textos ?? {}) }));
   const [modelo, setModelo] = useState<string | undefined>(version.translations?.modelo);
+  const [traduzidoEm, setTraduzidoEm] = useState<string | undefined>(version.translations?.traduzido_em);
   const [traduzindo, setTraduzindo] = useState(false);
 
-  const comoTraducoes = (): Traducoes => ({ versao: 1, textos: rascunho, traduzido_em: version.translations?.traduzido_em, modelo });
+  const comoTraducoes = (): Traducoes => ({ versao: 1, textos: rascunho, traduzido_em: traduzidoEm, modelo });
   const faltam = faltantes(coletados, comoTraducoes());
 
   const traduzirComIA = async (somenteFaltantes: boolean) => {
@@ -45,10 +40,17 @@ export default function TraducaoModal({ version, items, onClose, onSave }: Props
     setTraduzindo(true);
     try {
       const r = await traduzirTextos(alvo);
-      const mesclado = mesclar(comoTraducoes(), r.traducoes, new Date().toISOString(), r.modelo);
-      setRascunho(mesclado.textos);
-      setModelo(mesclado.modelo);
-      toast.success(`${Object.keys(r.traducoes).length} texto(s) traduzido(s). Revise antes de salvar.`);
+      const n = Object.keys(r.traducoes).length;
+      if (n > 0) {
+        const mesclado = mesclar(comoTraducoes(), r.traducoes, new Date().toISOString(), r.modelo);
+        setRascunho(mesclado.textos);
+        setModelo(mesclado.modelo);
+        setTraduzidoEm(mesclado.traduzido_em);
+        toast.success(`${n} texto(s) traduzido(s). Revise antes de salvar.`);
+      }
+      if (r.ignorados.length > 0) {
+        toast.warning(`${r.ignorados.length} texto(s) são longos demais para a tradução automática (mais de 8.000 caracteres). Traduza à mão, ou divida o texto.`);
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Não foi possível traduzir agora.');
     } finally {
@@ -57,18 +59,17 @@ export default function TraducaoModal({ version, items, onClose, onSave }: Props
   };
 
   const mudar = (origem: string, en: string, html = false) =>
-    setRascunho((p) => ({ ...p, [chave(origem)]: html && htmlVazio(en) ? '' : en }));
+    setRascunho((p) => ({ ...p, [chave(origem)]: html && vazia(en) ? '' : en }));
 
   const salvar = () => {
     // Só guarda o que ainda é texto do orçamento (limpa traduções de textos que já não existem).
     const tipos = new Map(coletados.map((c) => [c.origem, c.tipo]));
     const textos: Record<string, string> = {};
     for (const [o, en] of Object.entries(rascunho)) {
-      if (!tipos.has(o) || chave(en) === '') continue;
-      if (tipos.get(o) === 'html' && htmlVazio(en)) continue;
+      if (!tipos.has(o) || vazia(en)) continue;
       textos[o] = en;
     }
-    onSave({ versao: 1, textos, traduzido_em: version.translations?.traduzido_em ?? new Date().toISOString(), modelo });
+    onSave({ versao: 1, textos, traduzido_em: traduzidoEm ?? new Date().toISOString(), modelo });
   };
 
   return (
@@ -99,7 +100,7 @@ export default function TraducaoModal({ version, items, onClose, onSave }: Props
 
         <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-3">
           {coletados.map((c) => {
-            const falta = chave(rascunho[c.origem]) === '';
+            const falta = vazia(rascunho[c.origem]);
             return (
               <div key={c.origem} className={clsx('grid grid-cols-1 md:grid-cols-2 gap-3 rounded-lumos border p-3',
                 falta ? 'border-amber-500/40' : 'border-lumos-border')}>
@@ -116,6 +117,9 @@ export default function TraducaoModal({ version, items, onClose, onSave }: Props
                   ) : (
                     <textarea rows={c.origem.length > 60 ? 3 : 1} className="input-lumos w-full text-sm"
                       value={rascunho[c.origem] ?? ''} onChange={(e) => mudar(c.origem, e.target.value)} />
+                  )}
+                  {c.origem.length > LIMITE_TEXTO_IA && (
+                    <p className="text-[11px] text-amber-500 mt-1">texto longo: traduza à mão</p>
                   )}
                 </div>
               </div>
