@@ -47,7 +47,11 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
   // Uma única chamada com os seis campos: o banco só aceita USD junto de uma cotação.
   const aplicar = (mercado: number, fonte: 'ptax' | 'manual', quandoISO?: string) => {
     const m = Math.round(mercado * 10000) / 10000; // coluna numeric(12,4)
+    // Ao passar de real para dólar o PDF já vai para inglês (para ninguém esquecer); a pessoa pode
+    // voltar para português no painel de idioma. Atualizar a cotação não mexe no idioma escolhido.
+    const virouDolar = moeda !== 'USD';
     onChange({
+      ...(virouDolar ? { pdf_language: 'en' as const } : {}),
       currency: 'USD',
       fx_market_rate: m,
       fx_spread_pct: spread,
@@ -55,6 +59,7 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
       fx_rate_at: quandoISO ?? new Date().toISOString(),
       fx_source: fonte,
     });
+    if (virouDolar) toast.info('PDF em inglês selecionado. Para enviar em português, troque em "Idioma do PDF".');
   };
 
   const atualizar = async () => {

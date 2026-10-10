@@ -44,8 +44,8 @@ export function converterValor(valorBRL: number, v?: VersaoMoeda | null): number
   return taxa ? arredondar2(valorBRL / taxa) : valorBRL;
 }
 
-export function formatarMoeda(valor: number, moeda: Moeda = 'BRL'): string {
-  return new Intl.NumberFormat('pt-BR', {
+export function formatarMoeda(valor: number, moeda: Moeda = 'BRL', locale: string = 'pt-BR'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: moeda,
     minimumFractionDigits: 2,
@@ -54,8 +54,8 @@ export function formatarMoeda(valor: number, moeda: Moeda = 'BRL'): string {
 }
 
 /** Converte (se for dólar) e formata, num passo só. */
-export function formatarValorDaVersao(valorBRL: number, v?: VersaoMoeda | null): string {
-  return formatarMoeda(converterValor(valorBRL, v), moedaDaVersao(v));
+export function formatarValorDaVersao(valorBRL: number, v?: VersaoMoeda | null, locale: string = 'pt-BR'): string {
+  return formatarMoeda(converterValor(valorBRL, v), moedaDaVersao(v), locale);
 }
 
 /**

@@ -1,9 +1,12 @@
+import { Fragment } from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
-import { BudgetItem, BudgetVersion, VersionFinancials, formatCurrency } from '@/utils/financials';
+import { BudgetItem, BudgetVersion, VersionFinancials } from '@/utils/financials';
 import { formatBudgetCode } from '@/utils/formatters';
-import { formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
+import { formatarMoeda, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
+import { getTextos } from '@/lib/pdfTextos';
+import { traduzir } from '@/lib/traducaoCore';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { enUS, ptBR } from 'date-fns/locale';
 import logo from '../../assets/Logotipo-Preto-Alpha.png';
 import { renderRichNotes } from '@/components/editor/richTextPdf';
 
@@ -377,55 +380,99 @@ interface BudgetPDFProps {
 export const BudgetPDF = ({ budget, version, contact, items, financials, userName, detalhado = false }: BudgetPDFProps) => {
   if (!budget || !version || !financials) return null;
 
-  const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+  // Idioma do PDF (independente da moeda). Em português a saída é idêntica à de sempre.
+  const lang = version.pdf_language === 'en' ? 'en' : 'pt';
+  const t = getTextos(lang);
+  const dateLocale = lang === 'en' ? enUS : ptBR;
+  // Textos do orçamento: em inglês vêm do glossário revisado guardado na versão;
+  // sem tradução saem no original. Em português passam direto.
+  const tr = (s?: string | null): string => (lang === 'en' ? traduzir(version.translations, s) : String(s ?? ''));
+
+  const dateStr = format(new Date(), t.formatoData, { locale: dateLocale });
   const markupMultiplier = financials.valorFinal / (financials.totalCusto || 1);
 
   // Em proposta em dólar o PDF mostra SÓ US$ (sem cotação e sem reais). Cada valor
   // é convertido e arredondado sozinho; o total é convertido uma única vez.
-  const fmt = (valorBRL: number) => formatarValorDaVersao(valorBRL, version);
-  const taxaRemarcacao = moedaDaVersao(version) === 'USD' ? fmt(2000) : 'R$2.000,00';
-  
-  // Format Category to Title Case
-  const categoryFormatted = budget.category 
-    ? budget.category.charAt(0).toUpperCase() + budget.category.slice(1).toLowerCase()
-    : '—';
+  const fmt = (valorBRL: number) => formatarValorDaVersao(valorBRL, version, t.locale);
+  const taxaRemarcacao = moedaDaVersao(version) === 'USD' ? fmt(2000) : t.taxaRemarcacaoBRL;
 
-  const groupLabels: Record<string, string> = {
-    'equipe': 'Equipe',
-    'equipamentos': 'Equipamentos',
-    'producao': 'Produção',
-    'edicao': 'Pós-produção'
-  };
+  // Categoria: mapa do idioma, ou o slug capitalizado (como sempre foi em português).
+  const categoryFormatted = budget.category
+    ? (t.categorias[budget.category] ?? budget.category.charAt(0).toUpperCase() + budget.category.slice(1).toLowerCase())
+    : '—';
 
   const groups = ['equipe', 'equipamentos', 'producao', 'edicao'] as const;
 
   // Novo padrão de nomenclatura: [CODE] | Lumos + [AGÊNCIA] [CLIENTE] | [NOME DO PROJETO]
-  const clientDisplayName = budget.clients?.agency_name 
+  const clientDisplayName = budget.clients?.agency_name
     ? `${budget.clients.agency_name} + ${budget.clients.name}`
-    : (budget.clients?.name || 'Cliente');
-    
+    : (budget.clients?.name || t.clienteFallback);
+
   const formattedCode = formatBudgetCode(budget.code);
   const nomenclatureHeader = `${formattedCode} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
   const proposalTag = nomenclatureHeader;
 
+  const cabecalho = (
+    <>
+      <View style={styles.header}>
+        <Image src={logo} style={{ width: 144 }} />
+        <View style={styles.companyInfo}>
+          <Text style={{ fontWeight: 700 }}>Produtora Lumos Audiovisual Ltda.</Text>
+          <Text>CNPJ: 51.253.010/0001-70</Text>
+          <Text>R. Jaceru, 384 - Cj. 1604 - Vila Gertrudes</Text>
+          <Text>São Paulo - SP, 04705-000</Text>
+          <Text>comercial@produtoralumos.com.br</Text>
+          <Text>+55 (11) 98667-6747</Text>
+          <Text>www.produtoralumos.com.br</Text>
+        </View>
+      </View>
+      <View style={styles.headerLine} />
+    </>
+  );
+
+  // Cronograma do fee mensal (fee mensal nunca existe em US$): valores sempre em R$.
+  // `null` explícito quando não se aplica: um '' solto dentro de uma <View> quebraria o react-pdf.
+  const mostrarFee = version.payment_plan === 'fee_mensal' && !!version.fee_mensal_mostrar_na_proposta
+    && !!version.fee_mensal_inicio && !!version.fee_mensal_fim;
+  const feeMensal = !mostrarFee ? null : (
+    <View style={{ marginTop: 2, marginBottom: 10 }} wrap={false}>
+      <Text style={[styles.conditionText, { fontWeight: 700, marginBottom: 4 }]}>{t.feeTitulo}</Text>
+      <View style={styles.tableHeader}>
+        <Text style={[styles.tableHeaderCell, { width: '40%' }]}>{t.feeMes}</Text>
+        <Text style={[styles.tableHeaderCell, { width: '30%', textAlign: 'right' }]}>{t.feeValorMensal}</Text>
+        <Text style={[styles.tableHeaderCell, { width: '30%', textAlign: 'right' }]}>{t.feeAdendo}</Text>
+      </View>
+      {(() => {
+        const linhas: { mes: string; adendo: number }[] = [];
+        let cursor = parseISO(version.fee_mensal_inicio as string);
+        const fim = parseISO(version.fee_mensal_fim as string);
+        let guard = 0;
+        while (cursor <= fim && guard < 60) {
+          const mesKey = format(cursor, 'yyyy-MM');
+          const adendo = (version.fee_mensal_adendos || [])
+            .filter(a => a.mes === mesKey)
+            .reduce((s, a) => s + Number(a.valor || 0), 0);
+          linhas.push({ mes: mesKey, adendo });
+          cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+          guard++;
+        }
+        return linhas.map((l, idx) => (
+          <View key={l.mes} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowEven : {}]}>
+            <Text style={[styles.tableCell, { width: '40%' }]}>{format(parseISO(`${l.mes}-01`), t.formatoMes, { locale: dateLocale })}</Text>
+            <Text style={[styles.tableCell, { width: '30%', textAlign: 'right' }]}>{formatarMoeda(version.fee_mensal_valor || 0, 'BRL', t.locale)}</Text>
+            <Text style={[styles.tableCell, { width: '30%', textAlign: 'right' }]}>{l.adendo > 0 ? formatarMoeda(l.adendo, 'BRL', t.locale) : '—'}</Text>
+          </View>
+        ));
+      })()}
+    </View>
+  );
+
   return (
-    <Document title={`PROPOSTA_LUMOS_${formattedCode.replace('#', '')}${detalhado ? '_DETALHADA' : ''}`}>
+    <Document title={t.tituloDocumento(formattedCode.replace('#', ''), detalhado)}>
       {/* PÁGINA 1: PROPOSTA FINANCEIRA */}
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho */}
-        <View style={styles.header}>
-          <Image src={logo} style={{ width: 144 }} />
-          <View style={styles.companyInfo}>
-            <Text style={{ fontWeight: 700 }}>Produtora Lumos Audiovisual Ltda.</Text>
-            <Text>CNPJ: 51.253.010/0001-70</Text>
-            <Text>R. Jaceru, 384 - Cj. 1604 - Vila Gertrudes</Text>
-            <Text>São Paulo - SP, 04705-000</Text>
-            <Text>comercial@produtoralumos.com.br</Text>
-            <Text>+55 (11) 98667-6747</Text>
-            <Text>www.produtoralumos.com.br</Text>
-          </View>
-        </View>
-        <View style={styles.headerLine} />
+        {cabecalho}
 
         {/* Nomenclatura acima do bloco */}
         <Text style={styles.nomenclatureTag}>{proposalTag}</Text>
@@ -433,20 +480,20 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
         {/* Bloco de Identificação */}
         <View style={styles.idBlock}>
           <View style={styles.idRow}>
-            <View style={styles.idLabelCol}><Text>Projeto</Text></View>
+            <View style={styles.idLabelCol}><Text>{t.projeto}</Text></View>
             <View style={styles.idValueCol}><Text style={{ fontWeight: 700 }}>{budget.project_name}</Text></View>
             <View style={[styles.idMetaCol, { borderLeftWidth: 0.5, borderLeftColor: '#dcdcdc' }]}>
-               <Text style={styles.idDate}>Emissão: {dateStr}</Text>
+               <Text style={styles.idDate}>{t.emissao}: {dateStr}</Text>
             </View>
           </View>
           <View style={styles.idRow}>
-            <View style={styles.idLabelCol}><Text>Cliente</Text></View>
+            <View style={styles.idLabelCol}><Text>{t.cliente}</Text></View>
             <View style={styles.idValueCol}><Text>{clientDisplayName}</Text></View>
-            <View style={[styles.idLabelCol, { borderLeftWidth: 0.5, borderLeftColor: '#dcdcdc' }]}><Text>Categoria</Text></View>
+            <View style={[styles.idLabelCol, { borderLeftWidth: 0.5, borderLeftColor: '#dcdcdc' }]}><Text>{t.categoria}</Text></View>
             <View style={styles.idValueCol}><Text>{categoryFormatted}</Text></View>
           </View>
           <View style={[styles.idRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.idLabelCol}><Text>Contato</Text></View>
+            <View style={styles.idLabelCol}><Text>{t.contato}</Text></View>
             <View style={{ width: '85%', padding: 4 }}>
               <Text>{contact?.name || '—'}  ·  {contact?.email || '—'}</Text>
             </View>
@@ -456,34 +503,34 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
         {/* Escopo e Briefing */}
         {(version.notes_client || version.logistics_date || version.logistics_time || version.logistics_location) && (
           <View>
-            <Text style={styles.sectionTitle}>Escopo e Briefing</Text>
-            
+            <Text style={styles.sectionTitle}>{t.escopo}</Text>
+
             {/* Bloco de Logística se preenchido */}
             {(version.logistics_date || version.logistics_time || version.logistics_location) && (
               <View style={styles.logisticsBlock}>
                 {version.logistics_date && (
                   <View style={styles.logisticsItem}>
-                    <Text style={styles.logisticsLabel}>Data(s)</Text>
-                    <Text style={styles.logisticsValue}>{version.logistics_date}</Text>
+                    <Text style={styles.logisticsLabel}>{t.datas}</Text>
+                    <Text style={styles.logisticsValue}>{tr(version.logistics_date)}</Text>
                   </View>
                 )}
                 {version.logistics_time && (
                   <View style={styles.logisticsItem}>
-                    <Text style={styles.logisticsLabel}>Horário</Text>
-                    <Text style={styles.logisticsValue}>{version.logistics_time}</Text>
+                    <Text style={styles.logisticsLabel}>{t.horario}</Text>
+                    <Text style={styles.logisticsValue}>{tr(version.logistics_time)}</Text>
                   </View>
                 )}
                 {version.logistics_location && (
                   <View style={[styles.logisticsItem, { flex: 2 }]}>
-                    <Text style={styles.logisticsLabel}>Local / Endereço</Text>
-                    <Text style={styles.logisticsValue}>{version.logistics_location}</Text>
+                    <Text style={styles.logisticsLabel}>{t.local}</Text>
+                    <Text style={styles.logisticsValue}>{tr(version.logistics_location)}</Text>
                   </View>
                 )}
               </View>
             )}
 
             {version.notes_client && (
-              <View style={{ marginBottom: 12 }}>{renderRichNotes(version.notes_client)}</View>
+              <View style={{ marginBottom: 12 }}>{renderRichNotes(tr(version.notes_client))}</View>
             )}
           </View>
         )}
@@ -491,14 +538,14 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
         {/* Proposta Financeira — sempre começa numa nova página */}
         <View break>
           <View wrap={false}>
-            <Text style={styles.sectionTitle}>Proposta Financeira Detalhada</Text>
+            <Text style={styles.sectionTitle}>{t.tituloFinanceiro}</Text>
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderCell, detalhado ? styles.colNameD : styles.colName]}>Item / Serviço</Text>
-              <Text style={[styles.tableHeaderCell, detalhado ? styles.colDescD : styles.colDesc]}>Descrição</Text>
-              <Text style={[styles.tableHeaderCell, detalhado ? styles.colQtyD : styles.colQty]}>Qtd</Text>
-              <Text style={[styles.tableHeaderCell, detalhado ? styles.colUnitD : styles.colUnit]}>Unid.</Text>
-              {detalhado && <Text style={[styles.tableHeaderCell, styles.colValorD]}>Valor unit.</Text>}
-              {detalhado && <Text style={[styles.tableHeaderCell, styles.colTotalD]}>Total</Text>}
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colNameD : styles.colName]}>{t.colItem}</Text>
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colDescD : styles.colDesc]}>{t.colDescricao}</Text>
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colQtyD : styles.colQty]}>{t.colQtd}</Text>
+              <Text style={[styles.tableHeaderCell, detalhado ? styles.colUnitD : styles.colUnit]}>{t.colUnid}</Text>
+              {detalhado && <Text style={[styles.tableHeaderCell, styles.colValorD]}>{t.colValorUnit}</Text>}
+              {detalhado && <Text style={[styles.tableHeaderCell, styles.colTotalD]}>{t.colTotal}</Text>}
             </View>
           </View>
 
@@ -513,12 +560,12 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
               const valorUnitario = item.unit_cost * markupMultiplier;
               return (
                 <View key={item.id} style={[styles.tableRow, index % 2 === 1 ? styles.tableRowEven : {}]} wrap={false}>
-                  <Text style={[styles.tableCell, detalhado ? styles.colNameD : styles.colName]}>{item.name}</Text>
+                  <Text style={[styles.tableCell, detalhado ? styles.colNameD : styles.colName]}>{tr(item.name)}</Text>
                   <Text style={[styles.tableCell, detalhado ? styles.colDescD : styles.colDesc, { color: '#888', fontSize: 7, lineHeight: 1.4 }]}>
-                    {item.description || ''}
+                    {tr(item.description)}
                   </Text>
                   <Text style={[styles.tableCell, detalhado ? styles.colQtyD : styles.colQty]}>{item.quantity}</Text>
-                  <Text style={[styles.tableCell, detalhado ? styles.colUnitD : styles.colUnit]}>{item.unit_label}</Text>
+                  <Text style={[styles.tableCell, detalhado ? styles.colUnitD : styles.colUnit]}>{t.unidades[item.unit_label] ?? item.unit_label}</Text>
                   {detalhado && (
                     <Text style={[styles.tableCell, styles.colValorD]}>{fmt(valorUnitario)}</Text>
                   )}
@@ -535,19 +582,19 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
               /* wrap={false} mantém o grupo inteiro numa só página, evitando divisões no meio da categoria */
               <View key={group} wrap={false}>
                 <View style={styles.groupHeader}>
-                  <Text>{groupLabels[group]}</Text>
+                  <Text>{t.grupos[group]}</Text>
                 </View>
 
                 {groupItems.map((item, index) => renderItemRow(item, index))}
 
                 <View style={styles.groupSubtotalRow}>
-                  <Text style={styles.groupSubtotalText}>Subtotal {groupLabels[group]}</Text>
+                  <Text style={styles.groupSubtotalText}>{t.subtotal} {t.grupos[group]}</Text>
                   <Text style={styles.groupSubtotalValue}>{fmt(groupSum)}</Text>
                 </View>
 
                 {isLastGroup && (
                   <View style={styles.totalContainer} wrap={false} minPresenceAhead={80}>
-                    <Text style={styles.totalLabel}>Investimento Total do Projeto</Text>
+                    <Text style={styles.totalLabel}>{t.totalProjeto}</Text>
                     <Text style={styles.totalValue}>{fmt(financials.valorFinal)}</Text>
                   </View>
                 )}
@@ -562,117 +609,38 @@ export const BudgetPDF = ({ budget, version, contact, items, financials, userNam
       {/* PÁGINA DE CONDIÇÕES E ASSINATURAS */}
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho Página 2 */}
-        <View style={styles.header}>
-          <Image src={logo} style={{ width: 144 }} />
-          <View style={styles.companyInfo}>
-            <Text style={{ fontWeight: 700 }}>Produtora Lumos Audiovisual Ltda.</Text>
-            <Text>CNPJ: 51.253.010/0001-70</Text>
-            <Text>R. Jaceru, 384 - Cj. 1604 - Vila Gertrudes</Text>
-            <Text>São Paulo - SP, 04705-000</Text>
-            <Text>comercial@produtoralumos.com.br</Text>
-            <Text>+55 (11) 98667-6747</Text>
-            <Text>www.produtoralumos.com.br</Text>
-          </View>
-        </View>
-        <View style={styles.headerLine} />
+        {cabecalho}
 
-        <Text style={styles.sectionTitle}>CONDIÇÕES GERAIS</Text>
+        <Text style={styles.sectionTitle}>{t.condicoesTitulo}</Text>
         <View style={styles.conditionsList}>
-          {/* Item 1 */}
-          <View style={styles.conditionSection}>
-            <Text style={styles.conditionTitle}>1. Prazos e alterações</Text>
-            <Text style={styles.conditionText}>1.1. Esta Proposta Comercial terá validade por 7 dias corridos, a partir da celebração do contrato entre as partes. Após este período, os investimentos estarão sujeitos a alterações.</Text>
-            <Text style={styles.conditionText}>1.2. Eventuais alterações nas especificações dos trabalhos a serem realizados podem alterar o valor desta Proposta Comercial.</Text>
-          </View>
-
-          {/* Item 2 */}
-          <View style={styles.conditionSection}>
-            <Text style={styles.conditionTitle}>2. Cancelamento e rescisão</Text>
-            <Text style={styles.conditionText}>2.1. Aprovada esta Proposta Comercial, em qualquer hipótese de cancelamento da prestação dos serviços, por parte do CLIENTE, será devida multa, em favor da LUMOS, em valor correspondente a 70% (setenta por cento) do valor total devido pelo CLIENTE, sem prejuízo do pagamento de todas as despesas já realizadas pela LUMOS, na execução dos serviços objeto da presente Proposta Comercial.</Text>
-            <Text style={styles.conditionText}>2.2. Para quaisquer finalidades que se façam necessárias, a presente Proposta Comercial, considerar-se-á aprovada pelo CLIENTE, em qualquer hipótese de manifestação deste, concordando com seus termos e condições, seja por concordância manifestada por e-mail ou outros meios, tais como mas não limitados a aplicativos de troca de mensagens, mensagens de texto, etc., seja por manifestação tácita da vontade do CLIENTE, no sentido deste ter ciência do início do cumprimento das obrigações constantes da Proposta Comercial, pela LUMOS, sem que se manifeste em contrário.</Text>
-          </View>
-
-          {/* Item 3 */}
-          <View style={styles.conditionSection}>
-            <Text style={styles.conditionTitle}>3. Pagamento</Text>
-            <Text style={styles.conditionText}>3.1. O pagamento deverá ocorrer de acordo com prazo de pagamento combinado entre o CLIENTE e a LUMOS no ato do aceite da presente Proposta Comercial, dentro das opções disponíveis nesta.</Text>
-            <Text style={styles.conditionText}>3.2. O atraso no pagamento sujeitará o CLIENTE à multa de 10% (dez por cento) e juros de 1% a.m. sobre o valor do débito.</Text>
-          </View>
-
-          {version.payment_plan === 'fee_mensal' && version.fee_mensal_mostrar_na_proposta
-            && version.fee_mensal_inicio && version.fee_mensal_fim && (
-            <View style={{ marginTop: 2, marginBottom: 10 }} wrap={false}>
-              <Text style={[styles.conditionText, { fontWeight: 700, marginBottom: 4 }]}>Cronograma de pagamento (fee mensal)</Text>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderCell, { width: '40%' }]}>Mês</Text>
-                <Text style={[styles.tableHeaderCell, { width: '30%', textAlign: 'right' }]}>Valor mensal</Text>
-                <Text style={[styles.tableHeaderCell, { width: '30%', textAlign: 'right' }]}>Adendo</Text>
+          {t.clausulas.map((c, ci) => (
+            <Fragment key={ci}>
+              <View style={styles.conditionSection}>
+                <Text style={styles.conditionTitle}>{c.titulo}</Text>
+                {c.itens.map((txt, ii) => (
+                  <Text key={ii} style={styles.conditionText}>{txt.replace('{taxaRemarcacao}', () => taxaRemarcacao)}</Text>
+                ))}
               </View>
-              {(() => {
-                const linhas: { mes: string; adendo: number }[] = [];
-                let cursor = parseISO(version.fee_mensal_inicio as string);
-                const fim = parseISO(version.fee_mensal_fim as string);
-                let guard = 0;
-                while (cursor <= fim && guard < 60) {
-                  const mesKey = format(cursor, 'yyyy-MM');
-                  const adendo = (version.fee_mensal_adendos || [])
-                    .filter(a => a.mes === mesKey)
-                    .reduce((s, a) => s + Number(a.valor || 0), 0);
-                  linhas.push({ mes: mesKey, adendo });
-                  cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-                  guard++;
-                }
-                return linhas.map((l, idx) => (
-                  <View key={l.mes} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowEven : {}]}>
-                    <Text style={[styles.tableCell, { width: '40%' }]}>{format(parseISO(`${l.mes}-01`), 'MMM/yyyy', { locale: ptBR })}</Text>
-                    <Text style={[styles.tableCell, { width: '30%', textAlign: 'right' }]}>{formatCurrency(version.fee_mensal_valor || 0)}</Text>
-                    <Text style={[styles.tableCell, { width: '30%', textAlign: 'right' }]}>{l.adendo > 0 ? formatCurrency(l.adendo) : '—'}</Text>
-                  </View>
-                ));
-              })()}
-            </View>
-          )}
-
-          {/* Item 4 */}
-          <View style={styles.conditionSection}>
-            <Text style={styles.conditionTitle}>4. Taxa de Remarcação</Text>
-            <Text style={styles.conditionText}>4.1. Caso o CLIENTE altere a data prevista para a execução do serviço, sem respeitar o prazo máximo de 48 horas de antecedência, será cobrada uma taxa de remarcação no valor mínimo de {taxaRemarcacao} ou 20% do valor total do projeto.</Text>
-          </View>
-
-          {/* Item 5 */}
-          <View style={styles.conditionSection}>
-            <Text style={styles.conditionTitle}>5. Direitos autorais e uso</Text>
-            <Text style={styles.conditionText}>5.1. Todo o material produzido pela LUMOS permanece de propriedade desta até a quitação integral do valor contratado.</Text>
-            <Text style={styles.conditionText}>5.2. A cessão de direitos de uso do material produzido está limitada ao território e período de veiculação descritos nesta Proposta.</Text>
-          </View>
-
-          {/* Item 6 */}
-          <View style={styles.conditionSection}>
-            <Text style={styles.conditionTitle}>6. Créditos</Text>
-            <Text style={styles.conditionText}>6.1. A LUMOS reserva-se o direito de utilizar o material produzido em seu portfólio e materiais de divulgação, salvo expressa proibição do CLIENTE formalizada por escrito.</Text>
-          </View>
-
-          {/* Item 7 */}
-          <View style={styles.conditionSection}>
-            <Text style={styles.conditionTitle}>7. Responsabilidades</Text>
-            <Text style={styles.conditionText}>7.1. A LUMOS não se responsabiliza por atrasos ou impedimentos causados por fatores externos ao seu controle, como condições climáticas, restrições de locação ou atrasos por parte do CLIENTE na entrega de materiais necessários à produção.</Text>
-          </View>
+              {/* O cronograma do fee mensal fica logo depois da cláusula 3 (Pagamento). */}
+              {ci === 2 && feeMensal}
+            </Fragment>
+          ))}
         </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Termo de Aceite e Aprovação</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 10 }]}>{t.termoTitulo}</Text>
         <View style={styles.signatureContainer}>
           <View style={styles.signatureBox}>
-            <Text style={styles.signatureTitle}>Aprovado por:</Text>
+            <Text style={styles.signatureTitle}>{t.aprovadoPor}</Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>{clientDisplayName}</Text>
-            <Text style={styles.signatureLabel}>{contact?.name || 'NOME DO RESPONSÁVEL'}</Text>
-            <Text style={styles.signatureLabel}>DATA: ____/____/____</Text>
+            <Text style={styles.signatureLabel}>{contact?.name || t.contatoFallback}</Text>
+            <Text style={styles.signatureLabel}>{t.dataLinha}</Text>
           </View>
           <View style={styles.signatureBox}>
-            <Text style={styles.signatureTitle}>Produtora Lumos</Text>
+            <Text style={styles.signatureTitle}>{t.produtoraLumos}</Text>
             <View style={styles.signatureLine} />
-            <Text style={[styles.signatureLabel, styles.signatureName]}>{userName || 'Equipe de Produção'}</Text>
-            <Text style={styles.signatureLabel}>DATA: ____/____/____</Text>
+            <Text style={[styles.signatureLabel, styles.signatureName]}>{userName || t.equipeFallback}</Text>
+            <Text style={styles.signatureLabel}>{t.dataLinha}</Text>
           </View>
         </View>
 

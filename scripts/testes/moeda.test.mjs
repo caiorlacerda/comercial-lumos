@@ -108,3 +108,11 @@ test('valor digitado inválido ou ambíguo vira null', () => {
   assert.equal(parseValorBR('12.34.56'), null);
   assert.equal(parseValorBR('1234.567'), null);  // 4 dígitos antes do ponto: não é milhar válido nem decimal de 2 casas
 });
+
+test('locale em inglês: US$ vira $ e a ordem dos separadores muda', () => {
+  assert.equal(formatarMoeda(10309.28, 'USD', 'en-US'), '$10,309.28');
+  assert.equal(semNbsp(formatarMoeda(10309.28, 'USD')), 'US$ 10.309,28'); // padrão continua pt-BR
+  assert.equal(formatarMoeda(1234.5, 'BRL', 'en-US'), 'R$1,234.50');
+  assert.equal(formatarValorDaVersao(50000, usd, 'en-US'), '$10,309.28');
+  assert.equal(semNbsp(formatarValorDaVersao(50000, usd)), 'US$ 10.309,28');
+});

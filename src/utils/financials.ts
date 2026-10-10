@@ -60,6 +60,10 @@ export interface BudgetVersion {
   fx_rate?: number | null;
   fx_rate_at?: string | null;
   fx_source?: 'ptax' | 'manual' | null;
+  /** Idioma do PDF da proposta (padrão 'pt'). Independente da moeda. */
+  pdf_language?: 'pt' | 'en';
+  /** Glossário texto original → inglês (ver src/lib/traducaoCore.ts). */
+  translations?: { versao: 1; textos: Record<string, string>; traduzido_em?: string; modelo?: string } | null;
 }
 
 export interface VersionFinancials {

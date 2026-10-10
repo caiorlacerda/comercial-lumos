@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -11,6 +12,9 @@ interface ModalProps {
   maxWidth?: string;
   className?: string;
   padding?: string;
+  bodyClassName?: string;
+  /** Renderiza direto no <body>: cobre a tela inteira, inclusive a barra lateral. */
+  portal?: boolean;
 }
 
 export default function Modal({ 
@@ -21,7 +25,9 @@ export default function Modal({
   footer,
   maxWidth = '',
   className,
-  padding = 'p-6'
+  padding = 'p-6',
+  bodyClassName,
+  portal = false
 }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
@@ -36,7 +42,7 @@ export default function Modal({
 
   if (!isOpen) return null;
 
-  return (
+  const conteudo = (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
@@ -59,7 +65,7 @@ export default function Modal({
           </button>
         </div>
         
-        <div className={padding}>
+        <div className={clsx(padding, bodyClassName)}>
           {children}
         </div>
 
@@ -71,4 +77,6 @@ export default function Modal({
       </div>
     </div>
   );
+
+  return portal ? createPortal(conteudo, document.body) : conteudo;
 }
