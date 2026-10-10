@@ -19,9 +19,15 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const PORT = process.env.PORT || 8080;
 const SECRET = process.env.TRANSCODE_SECRET || '';
+// Mesmo valor do secret DRIVE_WEBHOOK_SECRET das Edge Functions: é com ele que a
+// stream-ingest assina o endereço temporário que o Cloudflare Stream usa pra
+// buscar o vídeo (rota /pull abaixo).
+const PULL_SECRET = process.env.PULL_SECRET || '';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SA = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
@@ -144,6 +150,79 @@ const app = express();
 app.use(express.json());
 
 app.get('/', (_req, res) => res.send('lumos transcode worker ok'));
+
+// --- Busca assinada: o Cloudflare Stream puxa o vídeo por aqui ---------------
+// Antes o Stream buscava o arquivo pela Edge Function review-stream, e o arquivo
+// inteiro saía pela cota de egress do Supabase. Aqui os bytes vão Drive → Cloud
+// Run → Cloudflare, sem passar pelo Supabase. Mesma assinatura da review-stream:
+// HMAC-SHA256 hex de `${versionId}.${exp}`, válida só pra UMA versão e por pouco
+// tempo. Responde a Range (o Stream pode pedir em pedaços) e a HEAD.
+function assinaturaPull(versionId, exp) {
+  return createHmac('sha256', PULL_SECRET).update(`${versionId}.${exp}`).digest('hex');
+}
+
+app.get('/pull', async (req, res) => {
+  const { v: versionId, exp, sig } = req.query;
+  if (!PULL_SECRET) return res.status(503).send('pull desabilitado');
+  if (typeof versionId !== 'string' || typeof exp !== 'string' || typeof sig !== 'string') {
+    return res.status(400).send('parâmetros faltando');
+  }
+  if (!(Number(exp) >= Date.now())) return res.status(403).send('link expirado');
+  const esperada = Buffer.from(assinaturaPull(versionId, exp));
+  const recebida = Buffer.from(sig);
+  if (esperada.length !== recebida.length || !timingSafeEqual(esperada, recebida)) {
+    return res.status(403).send('assinatura inválida');
+  }
+
+  const abort = new AbortController();
+  res.on('close', () => abort.abort());
+
+  try {
+    const { data: v } = await supa
+      .from('video_versions')
+      .select('drive_file_id, proxy_file_id, transcode_status')
+      .eq('id', versionId)
+      .maybeSingle();
+    if (!v?.drive_file_id) return res.status(404).send('not found');
+    // Mesma regra da review-stream: se o proxy MP4 está pronto, ele é mais leve.
+    const usaProxy = !!v.proxy_file_id && v.transcode_status === 'ready';
+    const fileId = usaProxy ? v.proxy_file_id : v.drive_file_id;
+
+    const token = await driveToken();
+    const ehHead = req.method === 'HEAD';
+    // HEAD: pede só 1 byte ao Drive e deduz o tamanho total; não baixa o vídeo.
+    const range = ehHead ? 'bytes=0-0' : req.headers.range;
+    const driveRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
+      {
+        headers: { Authorization: `Bearer ${token}`, ...(range ? { Range: range } : {}) },
+        signal: abort.signal,
+      }
+    );
+
+    res.status(ehHead ? 200 : driveRes.status);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+    const contentRange = driveRes.headers.get('content-range');
+    if (ehHead) {
+      const total = contentRange?.split('/')[1] ?? driveRes.headers.get('content-length');
+      if (total && total !== '*') res.setHeader('Content-Length', total);
+      await driveRes.body?.cancel().catch(() => {});
+      return res.end();
+    }
+    if (contentRange) res.setHeader('Content-Range', contentRange);
+    const contentLength = driveRes.headers.get('content-length');
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    if (!driveRes.body) return res.end();
+    await pipeline(Readable.fromWeb(driveRes.body), res);
+  } catch (err) {
+    // Cliente que desistiu (o Stream fecha a conexão) não é erro nosso.
+    if (abort.signal.aborted) return;
+    console.error('pull error', versionId, err);
+    if (!res.headersSent) res.status(502).send('falha ao buscar o vídeo');
+    else res.destroy();
+  }
+});
 
 app.post('/transcode', (req, res) => {
   if ((req.headers['x-transcode-secret'] || '') !== SECRET) {
