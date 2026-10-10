@@ -73,8 +73,9 @@ export default function TraducaoModal({ version, items, onClose, onSave }: Props
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Traduzir e revisar (inglês)" maxWidth="max-w-4xl">
-      <div className="space-y-4">
+    <Modal isOpen onClose={onClose} title="Traduzir e revisar (inglês)" maxWidth="max-w-none" portal
+      className="h-full flex flex-col" bodyClassName="flex-1 min-h-0">
+      <div className="h-full flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-lumos-text-secondary">
             Traduza com a IA e <span className="font-bold text-lumos-text-primary">revise cada texto</span> antes de salvar.
@@ -98,7 +99,7 @@ export default function TraducaoModal({ version, items, onClose, onSave }: Props
           <p className="text-sm text-lumos-text-secondary">Este orçamento ainda não tem textos para traduzir.</p>
         )}
 
-        <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
           {coletados.map((c) => {
             const falta = vazia(rascunho[c.origem]);
             return (
@@ -127,7 +128,7 @@ export default function TraducaoModal({ version, items, onClose, onSave }: Props
           })}
         </div>
 
-        <div className="flex gap-3 pt-1">
+        <div className="flex gap-3">
           <button type="button" onClick={onClose} className="btn-secondary flex-1 h-10 text-sm">Cancelar</button>
           <button type="button" onClick={salvar} className="btn-primary flex-1 h-10 text-sm font-bold">Salvar traduções</button>
         </div>
