@@ -112,7 +112,10 @@ export default function Equipe() {
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
-  useRealtimeRefetch(['app_users', 'team_members'], () => load(true));
+  // app_users fica de fora de propósito: o heartbeat grava last_seen a cada 30s por
+  // pessoa online, e cada gravação refazia esta tela inteira. O last_seen vem do
+  // poll de 60s abaixo.
+  useRealtimeRefetch(['team_members'], () => load(true));
   // Poll de fallback: mantém o last_seen fresco mesmo se o realtime não conectar.
   useEffect(() => { const t = setInterval(() => load(true), 60_000); return () => clearInterval(t); }, [load]);
 

@@ -81,7 +81,10 @@ export default function MonitoramentoEquipe() {
   }, [period]);
 
   useEffect(() => { load(); }, []);
-  useRealtimeRefetch(['project_tasks', 'app_users', 'team_members', 'projects'], () => load(true));
+  // app_users fica de fora de propósito: o heartbeat grava last_seen a cada 30s por
+  // pessoa online, e cada gravação refazia esta tela inteira (todas as tarefas). O
+  // last_seen vem do poll de 60s abaixo.
+  useRealtimeRefetch(['project_tasks', 'team_members', 'projects'], () => load(true));
   // Poll de fallback: last_seen fresco mesmo sem realtime.
   useEffect(() => { const t = setInterval(() => load(true), 60_000); return () => clearInterval(t); }, []);
 
