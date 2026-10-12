@@ -9,7 +9,7 @@ import { useToast } from '@/context/ToastContext';
 import UserAvatar from '@/components/common/UserAvatar';
 import { COLORS, SPEEDS, STREAM_BASE, timecode, estimarFps, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
 import { STATUS_UI, type ReviewStatus } from '@/lib/reviewStatus';
-import { captureVideoThumb } from '@/lib/videoThumb';
+import { captureVideoThumb, capaDoStream, valeCapturarCapa, capaJaFalhou, marcarCapaFalhou } from '@/lib/videoThumb';
 import { useVideoFonte } from '@/hooks/useVideoFonte';
 import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
 import ColarComentarios from '@/components/producao/ColarComentarios';
@@ -192,13 +192,19 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data } = await supabase.from('video_versions').select('thumb_url, drive_web_link, drive_file_id, stream_hls, stream_status').eq('id', versionId).maybeSingle();
+      const { data } = await supabase.from('video_versions').select('thumb_url, drive_web_link, drive_file_id, stream_hls, stream_status, size_bytes, file_name, mime_type').eq('id', versionId).maybeSingle();
       if (!alive) return;
       if ((data as any)?.stream_status === 'pronto') setHlsUrl((data as any)?.stream_hls || null);
       setDriveLink((data as any)?.drive_web_link || ((data as any)?.drive_file_id ? `https://drive.google.com/file/d/${(data as any).drive_file_id}/view` : null));
       if (data?.thumb_url) { setPoster(data.thumb_url); return; }
+      // Já no Stream: usa a capa de lá. Arquivo grande, .mov ou captura que já falhou:
+      // não baixa o vídeo só para isso (sai da cota de egress do Supabase).
+      const doStream = capaDoStream((data as any)?.stream_hls, (data as any)?.stream_status);
+      if (doStream) { setPoster(doStream); return; }
+      if (!data || !valeCapturarCapa(data as any) || capaJaFalhou(versionId)) return;
       const thumb = await captureVideoThumb(streamUrl);
-      if (!alive || !thumb) return;
+      if (!thumb) { marcarCapaFalhou(versionId); return; }
+      if (!alive) return;
       setPoster(thumb);
       await supabase.from('video_versions').update({ thumb_url: thumb }).eq('id', versionId);
     })();

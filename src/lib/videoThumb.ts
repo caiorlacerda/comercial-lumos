@@ -48,3 +48,39 @@ export async function captureVideoThumb(src: string): Promise<string | null> {
     setTimeout(() => finish(null), 15000);
   });
 }
+
+// ── Quando NÃO baixar o vídeo para tirar a capa ─────────────────────────────
+// Capturar um frame significa baixar o vídeo pela review-stream, e isso sai da
+// cota de egress do Supabase. Três regras para não gastar à toa:
+//  1) vídeo já no Cloudflare Stream usa a capa do próprio Stream (sem Supabase);
+//  2) arquivo grande ou .mov (ProRes) não vale a captura: pesa e quase sempre falha;
+//  3) quem já falhou neste navegador não é tentado de novo a cada visita.
+
+/** Capa do Cloudflare Stream a partir do endereço do manifesto HLS, ou null se o vídeo não está pronto lá. */
+export function capaDoStream(hls?: string | null, status?: string | null): string | null {
+  if (status !== 'pronto' || !hls) return null;
+  const m = hls.match(/^(https:\/\/[^/]+\/[^/]+)\/manifest\//);
+  return m ? `${m[1]}/thumbnails/thumbnail.jpg?time=1s&height=270` : null;
+}
+
+const LIMITE_CAPA_BYTES = 300 * 1024 * 1024;
+
+/** Vale a pena baixar este arquivo só para tirar uma capa? */
+export function valeCapturarCapa(v: { size_bytes?: number | null; file_name?: string | null; mime_type?: string | null }): boolean {
+  if (v.size_bytes && v.size_bytes > LIMITE_CAPA_BYTES) return false;
+  if (/\.mov$/i.test(v.file_name || '') || /quicktime/i.test(v.mime_type || '')) return false;
+  return true;
+}
+
+const CHAVE_FALHAS = 'lumos:capa-falhou';
+const lerFalhas = (): string[] => {
+  try { const j = JSON.parse(localStorage.getItem(CHAVE_FALHAS) || '[]'); return Array.isArray(j) ? j : []; }
+  catch { return []; }
+};
+export const capaJaFalhou = (id: string) => lerFalhas().includes(id);
+export function marcarCapaFalhou(id: string) {
+  try {
+    const l = lerFalhas();
+    if (!l.includes(id)) localStorage.setItem(CHAVE_FALHAS, JSON.stringify([...l, id].slice(-500)));
+  } catch { /* sem localStorage: segue sem lembrar */ }
+}

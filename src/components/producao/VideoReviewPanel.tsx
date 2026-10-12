@@ -9,7 +9,7 @@ import InternalReviewModal from './InternalReviewModal';
 import Select from '@/components/ui/Select';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
 import { sincronizarTarefa } from '@/lib/reviewTransition';
-import { captureVideoThumb } from '@/lib/videoThumb';
+import { captureVideoThumb, capaDoStream, valeCapturarCapa, capaJaFalhou, marcarCapaFalhou } from '@/lib/videoThumb';
 import { moverEtapa, mensagemDaEtapa } from '@/lib/reviewTransition';
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
@@ -40,6 +40,8 @@ interface VideoVersion {
   fps: number | null;
   /** Não vem na consulta da lista: é imagem inteira dentro da linha. Ver `capas`. */
   thumb_url?: string | null;
+  stream_status?: string | null;
+  stream_hls?: string | null;
   client_decision: string | null;
   client_decided_by: string | null;
   client_decided_at: string | null;
@@ -154,7 +156,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     // desenhar a lista. Sem ela são 15 KB, e as capas entram em seguida.
     const COLUNAS = 'id, project_id, task_id, group_id, versao, file_name, drive_file_id, drive_web_link, '
       + 'status, approved_file_id, created_at, updated_at, width, height, duration_ms, size_bytes, mime_type, '
-      + 'uploaded_by, uploaded_at, fps, client_decision, client_decided_by, client_decided_at';
+      + 'uploaded_by, uploaded_at, fps, client_decision, client_decided_by, client_decided_at, stream_status, stream_hls';
     const { data, error } = await supabase
       .from('video_versions').select(COLUNAS).eq('project_id', projectId).order('versao', { ascending: false });
     if (!error) {
@@ -611,6 +613,9 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownGroups]);
 
+  // Capa a mostrar: a salva no banco, senão a do Cloudflare Stream (que não passa pelo Supabase).
+  const capaDe = (v: VideoVersion) => capas[v.id] || capaDoStream(v.stream_hls, v.stream_status);
+
   // Todas as capas da tela já foram perguntadas ao banco?
   const capasProntas = shownGroups.every(g => g.current.id in capas);
 
@@ -628,7 +633,12 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         // capas[id] === null é "perguntamos e não tem". Sem essa checagem, a
         // fila sairia recapturando vídeo que já tem capa, agora que a consulta
         // da lista não traz mais a imagem.
-        .filter(g => capas[g.current.id] === null && !thumbTriedRef.current.has(g.current.id))
+        .filter(g => capas[g.current.id] === null && !thumbTriedRef.current.has(g.current.id)
+          // Sem baixar o vídeo à toa: o que já está no Stream tem capa lá; arquivo grande
+          // ou .mov quase sempre falha; e quem já falhou aqui não é tentado de novo.
+          && !capaDoStream(g.current.stream_hls, g.current.stream_status)
+          && valeCapturarCapa(g.current)
+          && !capaJaFalhou(g.current.id))
         .slice(0, 12);   // teto por rodada: não sai baixando 39 vídeos de uma vez
       if (!alvo.length) return;
       setThumbRunning(alvo.length);
@@ -651,6 +661,8 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
           if (thumb) {
             await supabase.from('video_versions').update({ thumb_url: thumb }).eq('id', g.current.id);
             setCapas(prev => ({ ...prev, [g.current.id]: thumb }));
+          } else {
+            marcarCapaFalhou(g.current.id);
           }
         } catch { /* segue pro próximo: thumb é enfeite, não pode travar a tela */ }
         finally { if (alive) setThumbRunning(n => Math.max(0, n - 1)); }
@@ -870,8 +882,9 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         {/* Thumb */}
         <button type="button" onClick={() => openReview(g)} disabled={isBusy}
           className="relative aspect-[16/10] bg-lumos-bg/70 flex items-center justify-center group/thumb overflow-hidden">
-          {capas[v.id]
-            ? <img src={capas[v.id]!} alt="" loading="lazy" className="w-full h-full object-cover" />
+          {capaDe(v)
+            ? <img src={capaDe(v)!} alt="" loading="lazy" className="w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             : <Film className="w-8 h-8 text-lumos-text-secondary/25" />}
           <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/25 transition-colors flex items-center justify-center">
             <span className="w-10 h-10 rounded-full bg-lumos-yellow/90 text-black flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
@@ -991,7 +1004,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         {/* Thumb pequena */}
         <button type="button" onClick={() => openReview(g)}
           className="relative w-16 h-10 rounded bg-lumos-bg/70 flex items-center justify-center overflow-hidden flex-shrink-0 group/thumb">
-          {capas[v.id] ? <img src={capas[v.id]!} alt="" loading="lazy" className="w-full h-full object-cover" /> : <Film className="w-4 h-4 text-lumos-text-secondary/25" />}
+          {capaDe(v) ? <img src={capaDe(v)!} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <Film className="w-4 h-4 text-lumos-text-secondary/25" />}
           <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/30 transition-colors flex items-center justify-center">
             <Play className="w-3 h-3 text-white opacity-0 group-hover/thumb:opacity-100" fill="currentColor" />
           </span>
