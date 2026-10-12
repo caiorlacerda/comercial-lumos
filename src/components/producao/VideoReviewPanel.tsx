@@ -883,7 +883,8 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         <button type="button" onClick={() => openReview(g)} disabled={isBusy}
           className="relative aspect-[16/10] bg-lumos-bg/70 flex items-center justify-center group/thumb overflow-hidden">
           {capaDe(v)
-            ? <img src={capaDe(v)!} alt="" loading="lazy" className="w-full h-full object-cover" />
+            ? <img src={capaDe(v)!} alt="" loading="lazy" className="w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             : <Film className="w-8 h-8 text-lumos-text-secondary/25" />}
           <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/25 transition-colors flex items-center justify-center">
             <span className="w-10 h-10 rounded-full bg-lumos-yellow/90 text-black flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
@@ -1003,7 +1004,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         {/* Thumb pequena */}
         <button type="button" onClick={() => openReview(g)}
           className="relative w-16 h-10 rounded bg-lumos-bg/70 flex items-center justify-center overflow-hidden flex-shrink-0 group/thumb">
-          {capaDe(v) ? <img src={capaDe(v)!} alt="" loading="lazy" className="w-full h-full object-cover" /> : <Film className="w-4 h-4 text-lumos-text-secondary/25" />}
+          {capaDe(v) ? <img src={capaDe(v)!} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <Film className="w-4 h-4 text-lumos-text-secondary/25" />}
           <span className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/30 transition-colors flex items-center justify-center">
             <Play className="w-3 h-3 text-white opacity-0 group-hover/thumb:opacity-100" fill="currentColor" />
           </span>
