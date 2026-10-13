@@ -1,9 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogIn } from 'lucide-react';
-import { useTheme } from '@/context/ThemeContext';
-import { clsx } from 'clsx';
+
+// Visual do pitch deck da Lumos (skill lumos-pitch-deck): fundo de vidro canelado com luz
+// dourada, cartão de vidro, DM Sans para texto e JetBrains Mono para rótulos. A tela é
+// sempre escura, independente do tema do app. As fontes carregam só aqui.
+const DM = "'DM Sans', Arial, sans-serif";
+const MONO = "'JetBrains Mono', 'Courier New', monospace";
+const FONTES = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300..700&family=JetBrains+Mono:wght@400..600&display=swap';
+
+const rotulo = 'block text-[11px] uppercase tracking-[3px] text-[#d5d3d0] mb-2';
+const campo = 'w-full h-12 rounded-2xl px-4 text-[15px] text-white placeholder:text-white/35 bg-[#161616]/55 '
+  + 'border border-white/[0.22] outline-none transition-colors focus:border-[#efc700]';
+const botaoAmarelo = 'flex items-center justify-center gap-2 rounded-full bg-[#efc700] text-[#161616] font-semibold '
+  + 'transition hover:brightness-110 disabled:opacity-60';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -20,7 +30,6 @@ export default function Login() {
   const [forgotSent, setForgotSent] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme } = useTheme();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -28,6 +37,16 @@ export default function Login() {
       setTimeoutMessage(true);
     }
   }, [location]);
+
+  // DM Sans e JetBrains Mono só para esta tela (o resto do app segue com Poppins/Work Sans).
+  useEffect(() => {
+    if (document.getElementById('fontes-login')) return;
+    const link = document.createElement('link');
+    link.id = 'fontes-login';
+    link.rel = 'stylesheet';
+    link.href = FONTES;
+    document.head.appendChild(link);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,142 +78,174 @@ export default function Login() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg px-4 transition-colors duration-300">
-      <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-700">
-        {/* Logo/Brand */}
-        <div className="text-center mb-10 flex flex-col items-center">
-          <img 
-            src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"} 
-            alt="Lumos Logo" 
-            className="h-14 transition-all duration-300" 
-          />
-        </div>
+    <div className="relative min-h-[100dvh] overflow-hidden bg-[#161616] text-white" style={{ fontFamily: DM }}>
+      {/* Fundo: vidro canelado com a luz da Lumos */}
+      <img
+        src="/login/fundo-1920.jpg"
+        srcSet="/login/fundo-1280.jpg 1280w, /login/fundo-1920.jpg 1920w"
+        sizes="100vw"
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ objectPosition: '68% 50%' }}
+      />
+      <div className="absolute inset-x-0 top-0 h-[300px] pointer-events-none" style={{ background: 'linear-gradient(180deg, #161616b3 0%, #16161600 100%)' }} />
+      <div className="absolute inset-x-0 bottom-0 h-[300px] pointer-events-none" style={{ background: 'linear-gradient(180deg, #16161600 0%, #16161699 100%)' }} />
+      {/* Leitura do texto à esquerda (no celular escurece tudo um pouco) */}
+      <div className="absolute inset-0 pointer-events-none bg-[#161616]/35 lg:bg-transparent" />
+      <div className="absolute inset-0 pointer-events-none hidden lg:block" style={{ background: 'linear-gradient(90deg, #161616cc 0%, #16161600 55%)' }} />
 
-        {/* Login Card */}
-        <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-10 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-lumos-yellow" />
-          
-          <h2 className="text-2xl font-black mb-8 flex items-center gap-3 text-lumos-text-primary tracking-tight">
-            <LogIn className="w-6 h-6 text-lumos-yellow" />
-            Entrar
-          </h2>
+      <main
+        className="relative z-10 flex min-h-[100dvh] flex-col px-6 sm:px-10 lg:px-32"
+        style={{ paddingTop: 'max(2rem, env(safe-area-inset-top))', paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+      >
+        {/* Topo: logotipo, linha fina e ano */}
+        <header className="flex items-center gap-5 lg:gap-8">
+          <img src="/login/logo-lumos-branco.svg" alt="Lumos" className="h-8 sm:h-10 w-auto" />
+          <div className="h-px flex-1 bg-white/70" />
+          <span className="text-sm sm:text-lg tracking-[3px]" style={{ fontFamily: MONO }}>{new Date().getFullYear()}</span>
+        </header>
 
-          {timeoutMessage && (
-            <div className="mb-6 p-4 bg-lumos-yellow/10 border border-lumos-yellow/30 rounded-lumos text-lumos-yellow text-xs font-bold animate-in fade-in slide-in-from-top-2">
-              Sua sessão expirou por inatividade. Por favor, faça login novamente.
+        <div className="flex flex-1 flex-col justify-center gap-10 py-10 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
+          {/* Título */}
+          <div className="max-w-2xl animate-in fade-in duration-700">
+            <div className="mb-6 flex items-center gap-4">
+              <span className="block h-3 w-3 bg-[#efc700]" />
+              <span className="text-[13px] uppercase tracking-[4px]" style={{ fontFamily: MONO }}>Acesso restrito</span>
             </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className="block text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest mb-2">
-                E-mail
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input-lumos w-full h-12"
-                placeholder="seu@email.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest mb-2">
-                Senha
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-lumos w-full h-12"
-                placeholder="••••••••"
-              />
-            </div>
-
-            {error && (
-              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lumos text-red-500 text-sm font-medium animate-in shake-in duration-300">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full flex items-center justify-center gap-2 h-12 text-sm font-black uppercase tracking-widest shadow-lg shadow-lumos-yellow/20"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-              ) : (
-                'Acessar Painel'
-              )}
-            </button>
-          </form>
-
-          {/* Entrada do robô de testes — SÓ em dev (import.meta.env.DEV) e só se
-              .env.local tiver VITE_TEST_EMAIL/VITE_TEST_PASSWORD. Nunca aparece
-              em produção nem em preview: o build da Vercel não é DEV e não tem
-              essas variáveis. Serve pra IA testar logada sem tocar em senha. */}
-          {import.meta.env.DEV && import.meta.env.VITE_TEST_EMAIL && import.meta.env.VITE_TEST_PASSWORD && (
-            <button
-              type="button"
-              onClick={async () => {
-                const { error } = await supabase.auth.signInWithPassword({
-                  email: import.meta.env.VITE_TEST_EMAIL as string,
-                  password: import.meta.env.VITE_TEST_PASSWORD as string,
-                });
-                if (error) setError('Robô de testes: ' + error.message);
-                else navigate('/');
-              }}
-              className="mt-3 w-full h-10 text-xs font-black uppercase tracking-widest border border-dashed border-lumos-yellow/50 text-lumos-yellow rounded-lumos hover:bg-lumos-yellow/10"
-            >
-              🤖 Entrar como robô de testes
-            </button>
-          )}
-
-          {/* Esqueci minha senha */}
-          <div className="mt-5">
-            {!forgotOpen ? (
-              <button
-                type="button"
-                onClick={() => { setForgotOpen(true); setForgotEmail(email); setForgotSent(false); }}
-                className="w-full text-center text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-yellow transition-colors underline underline-offset-4"
-              >
-                Esqueci minha senha
-              </button>
-            ) : forgotSent ? (
-              <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lumos text-green-500 text-xs font-bold animate-in fade-in slide-in-from-top-2">
-                Se este e-mail estiver cadastrado, o link chega em instantes. Olhe também a caixa de spam. Se o seu convite estava pendente, vai chegar um convite novo.
-              </div>
-            ) : (
-              <form onSubmit={handleForgot} className="p-4 bg-lumos-bg/40 border border-lumos-border rounded-lumos space-y-3 animate-in fade-in slide-in-from-top-2">
-                <p className="text-[11px] font-bold text-lumos-text-primary">Digite seu e-mail e enviamos um link pra criar uma senha nova.</p>
-                <input
-                  type="email"
-                  required
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="input-lumos w-full h-10 text-sm"
-                  placeholder="seu@email.com"
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setForgotOpen(false)} className="btn-secondary flex-1 h-9 text-xs">Cancelar</button>
-                  <button type="submit" disabled={forgotSending} className="btn-primary flex-1 h-9 text-xs font-black flex items-center justify-center gap-2">
-                    {forgotSending ? <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : 'Enviar link'}
-                  </button>
-                </div>
-              </form>
-            )}
+            <h1 className="text-[56px] font-medium leading-[0.95] tracking-[-0.035em] sm:text-[84px] lg:text-[112px]" style={{ fontFamily: DM }}>
+              Intranet<br />Lumos
+            </h1>
+            <p className="mt-6 max-w-md text-lg leading-snug text-white/80 sm:text-xl">
+              Comercial, financeiro, produção e administração no mesmo lugar.
+            </p>
           </div>
 
-          <p className="mt-6 text-center text-[10px] font-bold text-lumos-text-secondary uppercase tracking-tighter opacity-50">
-            Acesso restrito a administradores Produtora Lumos.
-          </p>
+          {/* Cartão de vidro */}
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-700 lg:w-[440px] lg:shrink-0">
+            <div className="rounded-[28px] border border-white/[0.22] bg-white/[0.08] p-7 sm:p-9 backdrop-blur-[20px]">
+              <h2 className="mb-7 text-3xl font-semibold tracking-tight" style={{ fontFamily: DM }}>Entrar</h2>
+
+              {timeoutMessage && (
+                <div className="mb-6 rounded-2xl border border-[#efc700]/40 bg-[#efc700]/10 p-4 text-sm font-medium text-[#efc700] animate-in fade-in slide-in-from-top-2">
+                  Sua sessão expirou por inatividade. Por favor, faça login novamente.
+                </div>
+              )}
+
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div>
+                  <label className={rotulo} style={{ fontFamily: MONO }}>E-mail</label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={campo}
+                    placeholder="seu@email.com"
+                  />
+                </div>
+
+                <div>
+                  <label className={rotulo} style={{ fontFamily: MONO }}>Senha</label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={campo}
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                {error && (
+                  <div className="rounded-2xl border border-red-400/40 bg-red-500/15 p-4 text-sm font-medium text-red-200 animate-in shake-in duration-300">
+                    {error}
+                  </div>
+                )}
+
+                <button type="submit" disabled={loading} className={`${botaoAmarelo} h-12 w-full text-[15px] tracking-[2px] uppercase`}>
+                  {loading ? (
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                  ) : (
+                    'Acessar painel'
+                  )}
+                </button>
+              </form>
+
+              {/* Entrada do robô de testes — SÓ em dev (import.meta.env.DEV) e só se
+                  .env.local tiver VITE_TEST_EMAIL/VITE_TEST_PASSWORD. Nunca aparece
+                  em produção nem em preview: o build da Vercel não é DEV e não tem
+                  essas variáveis. Serve pra IA testar logada sem tocar em senha. */}
+              {import.meta.env.DEV && import.meta.env.VITE_TEST_EMAIL && import.meta.env.VITE_TEST_PASSWORD && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { error } = await supabase.auth.signInWithPassword({
+                      email: import.meta.env.VITE_TEST_EMAIL as string,
+                      password: import.meta.env.VITE_TEST_PASSWORD as string,
+                    });
+                    if (error) setError('Robô de testes: ' + error.message);
+                    else navigate('/');
+                  }}
+                  className="mt-3 h-10 w-full rounded-full border border-dashed border-[#efc700]/50 text-xs uppercase tracking-[2px] text-[#efc700] hover:bg-[#efc700]/10"
+                  style={{ fontFamily: MONO }}
+                >
+                  🤖 Entrar como robô de testes
+                </button>
+              )}
+
+              {/* Esqueci minha senha */}
+              <div className="mt-6">
+                {!forgotOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => { setForgotOpen(true); setForgotEmail(email); setForgotSent(false); }}
+                    className="w-full text-center text-xs uppercase tracking-[2px] text-[#d5d3d0] underline underline-offset-4 transition-colors hover:text-[#efc700]"
+                    style={{ fontFamily: MONO }}
+                  >
+                    Esqueci minha senha
+                  </button>
+                ) : forgotSent ? (
+                  <div className="rounded-2xl border border-green-400/40 bg-green-500/15 p-4 text-sm font-medium text-green-200 animate-in fade-in slide-in-from-top-2">
+                    Se este e-mail estiver cadastrado, o link chega em instantes. Olhe também a caixa de spam. Se o seu convite estava pendente, vai chegar um convite novo.
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgot} className="space-y-3 rounded-2xl border border-white/[0.22] bg-[#161616]/40 p-4 animate-in fade-in slide-in-from-top-2">
+                    <p className="text-sm font-medium text-white/90">Digite seu e-mail e enviamos um link pra criar uma senha nova.</p>
+                    <input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className={`${campo} h-11 text-sm`}
+                      placeholder="seu@email.com"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setForgotOpen(false)}
+                        className="h-10 flex-1 rounded-full border border-white/[0.22] text-xs uppercase tracking-[2px] text-white/90 transition-colors hover:bg-white/10"
+                        style={{ fontFamily: MONO }}
+                      >
+                        Cancelar
+                      </button>
+                      <button type="submit" disabled={forgotSending} className={`${botaoAmarelo} h-10 flex-1 text-xs tracking-[2px] uppercase`}>
+                        {forgotSending ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" /> : 'Enviar link'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* Rodapé */}
+        <footer className="flex items-center justify-between gap-4 text-[11px] uppercase tracking-[2px] text-[#d5d3d0] sm:text-xs" style={{ fontFamily: MONO }}>
+          <span>Produtora Lumos · Intranet</span>
+          <span className="text-right">Acesso restrito a administradores</span>
+        </footer>
+      </main>
     </div>
   );
 }
