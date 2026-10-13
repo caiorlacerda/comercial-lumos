@@ -100,23 +100,23 @@ export default function Login() {
       >
         {/* Topo: logotipo, linha fina e ano */}
         <header className="flex items-center gap-5 lg:gap-8">
-          <img src="/login/logo-lumos-branco.svg" alt="Lumos" className="h-8 sm:h-10 w-auto" />
+          <img src="/login/logo-lumos-branco.svg" alt="Lumos" className="h-5 w-auto" />
           <div className="h-px flex-1 bg-white/70" />
-          <span className="text-sm sm:text-lg tracking-[3px]" style={{ fontFamily: MONO }}>{new Date().getFullYear()}</span>
+          <span className="text-xs sm:text-sm tracking-[3px]" style={{ fontFamily: MONO }}>{new Date().getFullYear()}</span>
         </header>
 
         <div className="flex flex-1 flex-col justify-center gap-10 py-10 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
           {/* Título */}
           <div className="max-w-2xl animate-in fade-in duration-700">
-            <div className="mb-6 flex items-center gap-4">
-              <span className="block h-3 w-3 bg-[#efc700]" />
-              <span className="text-[13px] uppercase tracking-[4px]" style={{ fontFamily: MONO }}>Acesso restrito</span>
+            <div className="mb-4 flex items-center gap-3">
+              <span className="block h-2 w-2 bg-[#efc700]" />
+              <span className="text-[11px] uppercase tracking-[3px]" style={{ fontFamily: MONO }}>Acesso restrito</span>
             </div>
-            <h1 className="text-[56px] font-medium leading-[0.95] tracking-[-0.035em] sm:text-[84px] lg:text-[112px]" style={{ fontFamily: DM }}>
-              Intranet<br />Lumos
+            <h1 className="text-[38px] font-medium leading-[0.98] tracking-[-0.03em] sm:text-[48px] lg:text-[56px]" style={{ fontFamily: DM }}>
+              Propagar<br />a luz.
             </h1>
-            <p className="mt-6 max-w-md text-lg leading-snug text-white/80 sm:text-xl">
-              Comercial, financeiro, produção e administração no mesmo lugar.
+            <p className="mt-4 max-w-md text-sm leading-snug text-white/80 sm:text-base">
+              Filmes, Digital e Live.
             </p>
           </div>
 
@@ -241,8 +241,8 @@ export default function Login() {
         </div>
 
         {/* Rodapé */}
-        <footer className="flex items-center justify-between gap-4 text-[11px] uppercase tracking-[2px] text-[#d5d3d0] sm:text-xs" style={{ fontFamily: MONO }}>
-          <span>Produtora Lumos · Intranet</span>
+        <footer className="flex items-center justify-between gap-4 text-[10px] uppercase tracking-[2px] text-[#d5d3d0] sm:text-[11px]" style={{ fontFamily: MONO }}>
+          <span className="whitespace-nowrap">Produtora Lumos</span>
           <span className="text-right">Acesso restrito a administradores</span>
         </footer>
       </main>
