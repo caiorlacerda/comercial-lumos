@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { carregarFontesDeck } from '@/lib/fontesDeck';
 
 // Visual do pitch deck da Lumos (skill lumos-pitch-deck): fundo de vidro canelado com luz
 // dourada, cartão de vidro, DM Sans para texto e JetBrains Mono para rótulos. A tela é
 // sempre escura, independente do tema do app. As fontes carregam só aqui.
 const DM = "'DM Sans', Arial, sans-serif";
 const MONO = "'JetBrains Mono', 'Courier New', monospace";
-const FONTES = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300..700&family=JetBrains+Mono:wght@400..600&display=swap';
 
 const rotulo = 'block text-[11px] uppercase tracking-[3px] text-[#d5d3d0] mb-2';
 const campo = 'w-full h-12 rounded-2xl px-4 text-[15px] text-white placeholder:text-white/35 bg-[#161616]/55 '
@@ -39,14 +39,7 @@ export default function Login() {
   }, [location]);
 
   // DM Sans e JetBrains Mono só para esta tela (o resto do app segue com Poppins/Work Sans).
-  useEffect(() => {
-    if (document.getElementById('fontes-login')) return;
-    const link = document.createElement('link');
-    link.id = 'fontes-login';
-    link.rel = 'stylesheet';
-    link.href = FONTES;
-    document.head.appendChild(link);
-  }, []);
+  useEffect(() => { carregarFontesDeck(); }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

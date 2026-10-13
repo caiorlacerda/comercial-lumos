@@ -373,3 +373,32 @@ body {
 @media (prefers-reduced-motion: reduce) {
   [data-valores-ocultos='1'] .lumos-valor-oculto { transition: none; }
 }
+
+/* ── Visual do pitch deck da Lumos (skill lumos-pitch-deck) ───────────────────────
+   Escopo `.lumos-deck`: usado pela Home (e, depois, por outras telas). Redefine os
+   tokens para vidro sobre o fundo de vidro canelado, troca as fontes para DM Sans e
+   JetBrains Mono e arredonda os cartões. Fora do escopo nada muda. */
+.lumos-deck {
+  --color-lumos-surface: rgba(255, 255, 255, 0.55);
+  --color-lumos-border: rgba(255, 255, 255, 0.7);
+  --color-lumos-text-primary: #161616;
+  --color-lumos-text-secondary: #4a4a45;
+  font-family: 'DM Sans', Arial, sans-serif;
+}
+.dark .lumos-deck {
+  --color-lumos-surface: rgba(255, 255, 255, 0.08);
+  --color-lumos-border: rgba(255, 255, 255, 0.22);
+  --color-lumos-text-primary: #ffffff;
+  --color-lumos-text-secondary: #d5d3d0;
+}
+.lumos-deck h1, .lumos-deck h2, .lumos-deck h3, .lumos-deck h4 { font-family: 'DM Sans', Arial, sans-serif; }
+/* Rótulos em caixa alta viram mono com espaçamento, como no deck */
+.lumos-deck .uppercase { font-family: 'JetBrains Mono', 'Courier New', monospace; font-weight: 500; }
+.lumos-deck .bg-lumos-surface {
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+.lumos-deck .rounded-lumos { border-radius: 22px; }
+@media (max-width: 1023px) {
+  .lumos-deck .bg-lumos-surface { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+}

@@ -9,14 +9,11 @@ import {
   ClipboardList, 
   Clock, 
   CalendarDays, 
-  AlertTriangle, 
-  Bell, 
-  CheckCheck, 
-  ChevronRight, 
-  Flame, 
-  ExternalLink,
-  CheckCircle2,
-  Newspaper
+  AlertTriangle,
+  CheckCheck,
+  ChevronRight,
+  Flame,
+  CheckCircle2
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MuralFeed } from '@/components/mural/MuralFeed';
@@ -24,6 +21,8 @@ import Confetti from '@/components/common/Confetti';
 import UserAvatar from '@/components/common/UserAvatar';
 import OnboardingGate from '@/components/common/OnboardingGate';
 import WelcomeTour from '@/components/common/WelcomeTour';
+import FundoDeck from '@/components/common/FundoDeck';
+import { carregarFontesDeck } from '@/lib/fontesDeck';
 
 interface Birthday { id: string; app_user_id: string | null; full_name: string; photo_url: string | null; }
 
@@ -50,6 +49,9 @@ export default function Home() {
   const navigate = useNavigate();
   const toast = useToast();
   const { items: notifications, markAsRead, markAllAsRead } = useNotifications();
+
+  // DM Sans e JetBrains Mono do visual do deck (só carregam nas telas que usam esse visual).
+  useEffect(() => { carregarFontesDeck(); }, []);
 
   const [tasks, setTasks] = useState<TaskWithProject[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
@@ -227,13 +229,17 @@ export default function Home() {
   const birthdayNames = birthdays.map(b => b.full_name.split(' ')[0]).join(', ').replace(/, ([^,]*)$/, ' e $1');
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto font-work-sans text-lumos-text-primary pb-10">
-
-      {/* Tour de boas-vindas (só no 1º login) + onboarding de dados */}
+    <>
+      {/* Tour de boas-vindas (só no 1º login) + onboarding de dados. Ficam fora do escopo
+          de vidro (.lumos-deck) porque são modais e precisam do fundo sólido de sempre. */}
       <WelcomeTour />
       <OnboardingGate />
 
       {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
+
+      <FundoDeck />
+
+    <div className="lumos-deck relative z-10 space-y-6 max-w-7xl mx-auto text-lumos-text-primary pb-10">
 
       {/* Banner de aniversário 🎂 */}
       {birthdays.length > 0 && !bannerClosed && (
@@ -261,19 +267,19 @@ export default function Home() {
       )}
 
       {/* Welcome Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-lumos-surface border border-lumos-border/50 rounded-lumos p-6 relative overflow-hidden shadow-sm">
-        <div className="absolute top-0 left-0 h-full w-1 bg-lumos-yellow" />
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-lumos-surface border border-lumos-border rounded-[28px] p-6 md:p-8 relative overflow-hidden">
         <div>
-          <h1 className="text-xl md:text-2xl font-black text-lumos-text-primary tracking-tight">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="block h-2 w-2 bg-lumos-yellow" />
+            <span className="text-[11px] uppercase tracking-[3px] text-lumos-text-secondary">{formattedDate}</span>
+          </div>
+          <h1 className="text-3xl md:text-5xl font-medium text-lumos-text-primary tracking-[-0.03em] leading-[1.05]">
             Olá, {profile?.full_name || 'Membro Lumos'}! 👋
           </h1>
-          <p className="text-xs text-lumos-text-secondary mt-1 font-semibold uppercase tracking-wider">
-            {formattedDate}
-          </p>
         </div>
-        <div className="flex items-center gap-2 self-start md:self-center bg-lumos-yellow/10 border border-lumos-yellow/20 px-3.5 py-1.5 rounded-full">
+        <div className="flex items-center gap-2 self-start md:self-center bg-[#161616]/40 border border-white/25 px-4 py-2 rounded-full">
           <Flame className="w-4 h-4 text-lumos-yellow animate-pulse" />
-          <span className="text-[10px] font-black uppercase tracking-wider text-lumos-yellow">
+          <span className="text-[10px] uppercase tracking-[2px] text-white">
             Tudo Pronto Para Produzir
           </span>
         </div>
@@ -343,8 +349,8 @@ export default function Home() {
       {/* Mural de Recados (feed do time) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between pb-1.5">
-          <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2">
-            <Newspaper className="w-4 h-4 text-lumos-yellow" /> Mural de Recados
+          <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
+            <span className="block h-2 w-2 bg-lumos-yellow" /> Mural de Recados
           </h2>
           <button
             onClick={() => navigate('/mural')}
@@ -362,8 +368,8 @@ export default function Home() {
         {/* Left / Main: Tasks List */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between pb-1.5">
-            <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-lumos-yellow" /> Minhas Tarefas Pendentes
+            <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
+              <span className="block h-2 w-2 bg-lumos-yellow" /> Minhas Tarefas Pendentes
             </h2>
             <span className="text-[10px] font-black uppercase bg-lumos-yellow/10 text-lumos-yellow px-2 py-0.5 rounded">
               {tasks.length} ativas
@@ -463,8 +469,8 @@ export default function Home() {
           {/* Recent Notifications */}
           <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-4 space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-lumos-border/50 pb-2.5">
-              <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2">
-                <Bell className="w-4 h-4 text-lumos-yellow" /> Notificações
+              <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
+                <span className="block h-2 w-2 bg-lumos-yellow" /> Notificações
               </h2>
               {notifications.filter(n => !n.read_at).length > 0 && (
                 <button
@@ -512,8 +518,8 @@ export default function Home() {
 
           {/* Quick Shortcuts */}
           <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-4 space-y-4 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-widest text-lumos-text-primary flex items-center gap-2 border-b border-lumos-border/50 pb-2.5">
-              <ExternalLink className="w-4 h-4 text-lumos-yellow" /> Atalhos Rápidos
+            <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3 border-b border-lumos-border/50 pb-2.5">
+              <span className="block h-2 w-2 bg-lumos-yellow" /> Atalhos Rápidos
             </h2>
 
             {shortcuts.length === 0 ? (
@@ -541,5 +547,6 @@ export default function Home() {
       </div>
 
     </div>
+    </>
   );
 }
