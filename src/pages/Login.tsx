@@ -105,15 +105,20 @@ export default function Login() {
           <span className="text-[11px] sm:text-[13.5px] tracking-[3px]" style={{ fontFamily: MONO }}>{new Date().getFullYear()}</span>
         </header>
 
-        <div className="flex flex-1 flex-col justify-center gap-10 py-10 xl:flex-row xl:items-center xl:justify-between xl:gap-16">
+        {/* Texto e cartão ficam mais para dentro da tela que o logotipo e o rodapé (a partir de 1280px, 11% de cada lado) */}
+        <div className="flex flex-1 flex-col justify-center gap-10 py-10 xl:flex-row xl:items-center xl:justify-between xl:gap-12 xl:px-[calc(11vw_-_128px)]">
           {/* Título */}
-          <div className="max-w-2xl animate-in fade-in duration-700">
+          <div className="animate-in fade-in duration-700">
             <div className="mb-[18px] flex items-center gap-3">
               <span className="block h-[9px] w-[9px] bg-[#efc700]" />
               <span className="text-[10px] uppercase tracking-[3px]" style={{ fontFamily: MONO }}>Acesso restrito</span>
             </div>
-            <h1 className="font-medium leading-[0.98] tracking-[-0.03em]" style={{ fontFamily: DM, fontSize: 'clamp(34px, 5.4vw, 84px)' }}>
-              Seja bem-vindo(a)<br />à Lulu, o App<br />da Lumos.
+            {/* Duas linhas. O tamanho acompanha a largura livre ao lado do cartão para a primeira linha caber. */}
+            <h1
+              className="whitespace-nowrap font-medium leading-[1.02] tracking-[-0.03em] text-[clamp(24px,calc((100vw_-_48px)/12.8),64px)] xl:text-[clamp(40px,calc((78vw_-_488px)/12.6),84px)]"
+              style={{ fontFamily: DM }}
+            >
+              Seja bem-vindo(a) à Lulu,<br />o App da Lumos.
             </h1>
           </div>
 
