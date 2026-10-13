@@ -91,37 +91,34 @@ export default function Login() {
       <div className="absolute inset-x-0 top-0 h-[300px] pointer-events-none" style={{ background: 'linear-gradient(180deg, #161616b3 0%, #16161600 100%)' }} />
       <div className="absolute inset-x-0 bottom-0 h-[300px] pointer-events-none" style={{ background: 'linear-gradient(180deg, #16161600 0%, #16161699 100%)' }} />
       {/* Leitura do texto à esquerda (no celular escurece tudo um pouco) */}
-      <div className="absolute inset-0 pointer-events-none bg-[#161616]/35 lg:bg-transparent" />
-      <div className="absolute inset-0 pointer-events-none hidden lg:block" style={{ background: 'linear-gradient(90deg, #161616cc 0%, #16161600 55%)' }} />
+      <div className="absolute inset-0 pointer-events-none bg-[#161616]/35 xl:bg-transparent" />
+      <div className="absolute inset-0 pointer-events-none hidden xl:block" style={{ background: 'linear-gradient(90deg, #161616cc 0%, #16161600 55%)' }} />
 
       <main
-        className="relative z-10 flex min-h-[100dvh] flex-col px-6 sm:px-10 lg:px-32"
+        className="relative z-10 flex min-h-[100dvh] flex-col px-6 sm:px-10 xl:px-32"
         style={{ paddingTop: 'max(2rem, env(safe-area-inset-top))', paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
       >
         {/* Topo: logotipo, linha fina e ano */}
-        <header className="flex items-center gap-5 lg:gap-8">
-          <img src="/login/logo-lumos-branco.svg" alt="Lumos" className="h-5 w-auto" />
+        <header className="flex items-center gap-5 xl:gap-8">
+          <img src="/login/logo-lumos-branco.svg" alt="Lumos" className="h-6 w-auto sm:h-[30px]" />
           <div className="h-px flex-1 bg-white/70" />
-          <span className="text-xs sm:text-sm tracking-[3px]" style={{ fontFamily: MONO }}>{new Date().getFullYear()}</span>
+          <span className="text-[11px] sm:text-[13.5px] tracking-[3px]" style={{ fontFamily: MONO }}>{new Date().getFullYear()}</span>
         </header>
 
-        <div className="flex flex-1 flex-col justify-center gap-10 py-10 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
+        <div className="flex flex-1 flex-col justify-center gap-10 py-10 xl:flex-row xl:items-center xl:justify-between xl:gap-16">
           {/* Título */}
           <div className="max-w-2xl animate-in fade-in duration-700">
-            <div className="mb-4 flex items-center gap-3">
-              <span className="block h-2 w-2 bg-[#efc700]" />
-              <span className="text-[11px] uppercase tracking-[3px]" style={{ fontFamily: MONO }}>Acesso restrito</span>
+            <div className="mb-[18px] flex items-center gap-3">
+              <span className="block h-[9px] w-[9px] bg-[#efc700]" />
+              <span className="text-[10px] uppercase tracking-[3px]" style={{ fontFamily: MONO }}>Acesso restrito</span>
             </div>
-            <h1 className="text-[38px] font-medium leading-[0.98] tracking-[-0.03em] sm:text-[48px] lg:text-[56px]" style={{ fontFamily: DM }}>
-              Propagar<br />a luz.
+            <h1 className="font-medium leading-[0.98] tracking-[-0.03em]" style={{ fontFamily: DM, fontSize: 'clamp(34px, 5.4vw, 84px)' }}>
+              Seja bem-vindo(a)<br />à Lulu, o App<br />da Lumos.
             </h1>
-            <p className="mt-4 max-w-md text-sm leading-snug text-white/80 sm:text-base">
-              Filmes, Digital e Live.
-            </p>
           </div>
 
           {/* Cartão de vidro */}
-          <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-700 lg:w-[440px] lg:shrink-0">
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-700 xl:w-[440px] xl:shrink-0">
             <div className="rounded-[28px] border border-white/[0.22] bg-white/[0.08] p-7 sm:p-9 backdrop-blur-[20px]">
               <h2 className="mb-7 text-3xl font-semibold tracking-tight" style={{ fontFamily: DM }}>Entrar</h2>
 
