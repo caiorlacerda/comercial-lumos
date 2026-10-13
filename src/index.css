@@ -398,7 +398,9 @@ body {
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
 }
-.lumos-deck .rounded-lumos { border-radius: 22px; }
+/* Pesos do deck: 500 a 600, nada de 900 */
+.lumos-deck .font-black { font-weight: 600; }
+.lumos-deck .rounded-lumos { border-radius: 20px; }
 @media (max-width: 1023px) {
   .lumos-deck .bg-lumos-surface { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 }

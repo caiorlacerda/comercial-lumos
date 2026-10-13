@@ -239,7 +239,7 @@ export default function Home() {
 
       <FundoDeck />
 
-    <div className="lumos-deck relative z-10 space-y-6 max-w-7xl mx-auto text-lumos-text-primary pb-10">
+    <div className="lumos-deck relative z-10 space-y-5 max-w-7xl mx-auto text-lumos-text-primary pb-10">
 
       {/* Banner de aniversário 🎂 */}
       {birthdays.length > 0 && !bannerClosed && (
@@ -267,17 +267,17 @@ export default function Home() {
       )}
 
       {/* Welcome Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-lumos-surface border border-lumos-border rounded-[28px] p-6 md:p-8 relative overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-lumos-surface border border-lumos-border rounded-[28px] p-5 md:p-6 relative overflow-hidden">
         <div>
           <div className="flex items-center gap-3 mb-3">
             <span className="block h-2 w-2 bg-lumos-yellow" />
-            <span className="text-[11px] uppercase tracking-[3px] text-lumos-text-secondary">{formattedDate}</span>
+            <span className="text-[10px] uppercase tracking-[3px] text-lumos-text-secondary">{formattedDate}</span>
           </div>
-          <h1 className="text-3xl md:text-5xl font-medium text-lumos-text-primary tracking-[-0.03em] leading-[1.05]">
+          <h1 className="text-2xl md:text-[34px] font-medium text-lumos-text-primary tracking-[-0.03em] leading-[1.05]">
             Olá, {profile?.full_name || 'Membro Lumos'}! 👋
           </h1>
         </div>
-        <div className="flex items-center gap-2 self-start md:self-center bg-[#161616]/40 border border-white/25 px-4 py-2 rounded-full">
+        <div className="flex items-center gap-2 self-start md:self-center bg-[#161616]/40 border border-white/25 px-3.5 py-1.5 rounded-full">
           <Flame className="w-4 h-4 text-lumos-yellow animate-pulse" />
           <span className="text-[10px] uppercase tracking-[2px] text-white">
             Tudo Pronto Para Produzir
@@ -286,60 +286,60 @@ export default function Home() {
       </div>
 
       {/* Resumo do Dia Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Total Pending */}
-        <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-4 hover:border-lumos-yellow/30 transition-all flex items-center gap-4 group">
-          <div className="p-3 bg-lumos-yellow/5 group-hover:bg-lumos-yellow/10 rounded-lg border border-lumos-yellow/15 transition-all">
-            <ClipboardList className="w-5 h-5 text-lumos-yellow" />
+        <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3.5 hover:border-lumos-yellow/30 transition-all flex items-center gap-3 group">
+          <div className="p-2.5 bg-lumos-yellow/5 group-hover:bg-lumos-yellow/10 rounded-lg border border-lumos-yellow/15 transition-all">
+            <ClipboardList className="w-4 h-4 text-lumos-yellow" />
           </div>
           <div>
             <span className="block text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Minhas Tarefas</span>
-            <span className="text-xl md:text-2xl font-black text-lumos-text-primary">{stats.pending}</span>
+            <span className="text-lg md:text-xl font-semibold text-lumos-text-primary">{stats.pending}</span>
           </div>
         </div>
 
         {/* Card 2: Due Today */}
         <div className={clsx(
-          "border rounded-lumos p-4 transition-all flex items-center gap-4 group",
+          "border rounded-lumos p-3.5 transition-all flex items-center gap-3 group",
           stats.dueToday > 0 ? "bg-lumos-yellow/5 border-lumos-yellow/30" : "bg-lumos-surface border-lumos-border hover:border-lumos-yellow/30"
         )}>
           <div className={clsx(
-            "p-3 rounded-lg border transition-all",
+            "p-2.5 rounded-lg border transition-all",
             stats.dueToday > 0 ? "bg-lumos-yellow/10 border-lumos-yellow/30" : "bg-lumos-yellow/5 group-hover:bg-lumos-yellow/10 border-lumos-yellow/15"
           )}>
-            <Clock className="w-5 h-5 text-lumos-yellow" />
+            <Clock className="w-4 h-4 text-lumos-yellow" />
           </div>
           <div>
             <span className="block text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Vencem Hoje</span>
-            <span className="text-xl md:text-2xl font-black text-lumos-text-primary">{stats.dueToday}</span>
+            <span className="text-lg md:text-xl font-semibold text-lumos-text-primary">{stats.dueToday}</span>
           </div>
         </div>
 
         {/* Card 3: Due This Week */}
-        <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-4 hover:border-lumos-yellow/30 transition-all flex items-center gap-4 group">
-          <div className="p-3 bg-lumos-yellow/5 group-hover:bg-lumos-yellow/10 rounded-lg border border-lumos-yellow/15 transition-all">
-            <CalendarDays className="w-5 h-5 text-lumos-yellow" />
+        <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3.5 hover:border-lumos-yellow/30 transition-all flex items-center gap-3 group">
+          <div className="p-2.5 bg-lumos-yellow/5 group-hover:bg-lumos-yellow/10 rounded-lg border border-lumos-yellow/15 transition-all">
+            <CalendarDays className="w-4 h-4 text-lumos-yellow" />
           </div>
           <div>
             <span className="block text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Esta Semana</span>
-            <span className="text-xl md:text-2xl font-black text-lumos-text-primary">{stats.dueThisWeek}</span>
+            <span className="text-lg md:text-xl font-semibold text-lumos-text-primary">{stats.dueThisWeek}</span>
           </div>
         </div>
 
         {/* Card 4: Overdue */}
         <div className={clsx(
-          "border rounded-lumos p-4 transition-all flex items-center gap-4 group",
+          "border rounded-lumos p-3.5 transition-all flex items-center gap-3 group",
           stats.overdue > 0 ? "bg-red-500/5 border-red-500/30" : "bg-lumos-surface border-lumos-border hover:border-red-500/30"
         )}>
           <div className={clsx(
-            "p-3 rounded-lg border transition-all",
+            "p-2.5 rounded-lg border transition-all",
             stats.overdue > 0 ? "bg-red-500/10 border-red-500/30" : "bg-red-500/5 group-hover:bg-red-500/10 border-red-500/15"
           )}>
-            <AlertTriangle className={clsx("w-5 h-5", stats.overdue > 0 ? "text-red-500" : "text-red-400")} />
+            <AlertTriangle className={clsx("w-4 h-4", stats.overdue > 0 ? "text-red-500" : "text-red-400")} />
           </div>
           <div>
             <span className="block text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Atrasadas</span>
-            <span className={clsx("text-xl md:text-2xl font-black", stats.overdue > 0 ? "text-red-500" : "text-lumos-text-primary")}>
+            <span className={clsx("text-lg md:text-xl font-semibold", stats.overdue > 0 ? "text-red-500" : "text-lumos-text-primary")}>
               {stats.overdue}
             </span>
           </div>
@@ -349,7 +349,7 @@ export default function Home() {
       {/* Mural de Recados (feed do time) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between pb-1.5">
-          <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
+          <h2 className="text-[11px] uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
             <span className="block h-2 w-2 bg-lumos-yellow" /> Mural de Recados
           </h2>
           <button
@@ -363,12 +363,12 @@ export default function Home() {
       </div>
 
       {/* Main Grid Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* Left / Main: Tasks List */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between pb-1.5">
-            <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
+            <h2 className="text-[11px] uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
               <span className="block h-2 w-2 bg-lumos-yellow" /> Minhas Tarefas Pendentes
             </h2>
             <span className="text-[10px] font-black uppercase bg-lumos-yellow/10 text-lumos-yellow px-2 py-0.5 rounded">
@@ -377,12 +377,12 @@ export default function Home() {
           </div>
 
           {loadingTasks ? (
-            <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-12 text-center flex flex-col items-center justify-center gap-3">
+            <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-10 text-center flex flex-col items-center justify-center gap-3">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow"></div>
               <p className="text-xs text-lumos-text-secondary font-bold uppercase tracking-wider">Carregando tarefas...</p>
             </div>
           ) : sortedTasks.length === 0 ? (
-            <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-12 text-center flex flex-col items-center justify-center gap-4 shadow-sm">
+            <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-10 text-center flex flex-col items-center justify-center gap-4 shadow-sm">
               <div className="p-4 bg-green-500/10 rounded-full border border-green-500/20 text-green-500">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
@@ -411,7 +411,7 @@ export default function Home() {
                       }
                     }}
                     className={clsx(
-                      "bg-lumos-surface border rounded-lumos p-4 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-lumos-yellow/40 group hover:shadow-md",
+                      "bg-lumos-surface border rounded-lumos p-3.5 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-lumos-yellow/40 group hover:shadow-md",
                       isOverdue ? "border-red-500/25 bg-red-500/[0.01]" : "border-lumos-border"
                     )}
                   >
@@ -424,7 +424,7 @@ export default function Home() {
                         )}
                         {getStatusBadge(task.status)}
                       </div>
-                      <h4 className="text-xs md:text-sm font-black text-lumos-text-primary truncate group-hover:text-lumos-yellow transition-colors leading-tight">
+                      <h4 className="text-[13px] font-semibold text-lumos-text-primary truncate group-hover:text-lumos-yellow transition-colors leading-tight">
                         {task.titulo}
                       </h4>
                       <p className="text-[10px] text-lumos-text-secondary font-semibold uppercase tracking-wider">
@@ -464,12 +464,12 @@ export default function Home() {
         </div>
 
         {/* Right Columns: Notifications + Shortcuts */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           
           {/* Recent Notifications */}
-          <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-4 space-y-4 shadow-sm">
+          <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3.5 space-y-3.5 shadow-sm">
             <div className="flex items-center justify-between border-b border-lumos-border/50 pb-2.5">
-              <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
+              <h2 className="text-[11px] uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3">
                 <span className="block h-2 w-2 bg-lumos-yellow" /> Notificações
               </h2>
               {notifications.filter(n => !n.read_at).length > 0 && (
@@ -517,8 +517,8 @@ export default function Home() {
           </div>
 
           {/* Quick Shortcuts */}
-          <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-4 space-y-4 shadow-sm">
-            <h2 className="text-xs uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3 border-b border-lumos-border/50 pb-2.5">
+          <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3.5 space-y-3.5 shadow-sm">
+            <h2 className="text-[11px] uppercase tracking-[3px] text-lumos-text-primary flex items-center gap-3 border-b border-lumos-border/50 pb-2.5">
               <span className="block h-2 w-2 bg-lumos-yellow" /> Atalhos Rápidos
             </h2>
 
