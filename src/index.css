@@ -404,3 +404,22 @@ body {
 @media (max-width: 1023px) {
   .lumos-deck .bg-lumos-surface { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 }
+
+/* Legibilidade no tema CLARO: os tons "400/500" e o amarelo da marca somem sobre o vidro claro.
+   Dentro da Home, no tema claro, o texto usa versões mais escuras (mesmo matiz). O amarelo
+   continua igual em fundos e bordas (quadrados, chips, contornos); só a COR DO TEXTO e dos
+   ícones escurece. No tema escuro nada muda. */
+html:not(.dark) .lumos-deck .text-lumos-yellow,
+html:not(.dark) .lumos-deck .group:hover .group-hover\:text-lumos-yellow,
+html:not(.dark) .lumos-deck .hover\:text-lumos-yellow:hover { color: #7a5c00; }
+html:not(.dark) .lumos-deck .text-amber-400 { color: #92600a; }
+html:not(.dark) .lumos-deck .text-red-400,
+html:not(.dark) .lumos-deck .text-red-500 { color: #b42318; }
+html:not(.dark) .lumos-deck .text-orange-400,
+html:not(.dark) .lumos-deck .text-orange-500 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-blue-500 { color: #1d4ed8; }
+html:not(.dark) .lumos-deck .text-indigo-400 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-sky-400 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-purple-400 { color: #7e22ce; }
+html:not(.dark) .lumos-deck .text-green-400,
+html:not(.dark) .lumos-deck .text-green-500 { color: #15803d; }
