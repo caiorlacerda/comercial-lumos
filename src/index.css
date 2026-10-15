@@ -388,7 +388,9 @@ body {
   font-family: 'DM Sans', Arial, sans-serif;
 }
 .dark .lumos-deck {
-  --color-lumos-surface: rgba(255, 255, 255, 0.08);
+  /* Tema escuro: vidro mais denso (cinza quase preto a 80%) para a leitura de tabelas e textos
+     sobre a luz do fundo. O deck usa branco 8%, mas isso deixava o conteúdo comprometido. */
+  --color-lumos-surface: rgba(30, 30, 28, 0.8);
   --color-lumos-border: rgba(255, 255, 255, 0.22);
   --color-lumos-text-primary: #ffffff;
   --color-lumos-text-secondary: #d5d3d0;
