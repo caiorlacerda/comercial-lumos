@@ -7,8 +7,6 @@ import Confetti from '@/components/common/Confetti';
 import UserAvatar from '@/components/common/UserAvatar';
 import OnboardingGate from '@/components/common/OnboardingGate';
 import WelcomeTour from '@/components/common/WelcomeTour';
-import FundoDeck from '@/components/common/FundoDeck';
-import { carregarFontesDeck } from '@/lib/fontesDeck';
 import { papelDaHome } from '@/components/home/tipos';
 import { useMinhasTarefas } from '@/components/home/useMinhasTarefas';
 import { useHomeLayout } from '@/components/home/useHomeLayout';
@@ -39,9 +37,6 @@ export default function Home() {
   const dados = useMinhasTarefas();
   const layout = useHomeLayout(papel);
   const [personalizando, setPersonalizando] = useState(false);
-
-  // DM Sans e JetBrains Mono do visual do deck (só carregam nas telas que usam esse visual).
-  useEffect(() => { carregarFontesDeck(); }, []);
 
   // Aniversariantes de hoje → confete + banner comemorativo (para todo o time)
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
@@ -88,9 +83,7 @@ export default function Home() {
 
       {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
 
-      <FundoDeck />
-
-    <div className="lumos-deck relative z-10 space-y-5 max-w-7xl mx-auto text-lumos-text-primary pb-10">
+    <div className="space-y-5 max-w-7xl mx-auto text-lumos-text-primary pb-10">
 
       {/* Banner de aniversário 🎂 */}
       {birthdays.length > 0 && !bannerClosed && (

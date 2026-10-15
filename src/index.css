@@ -375,14 +375,16 @@ body {
 }
 
 /* ── Visual do pitch deck da Lumos (skill lumos-pitch-deck) ───────────────────────
-   Escopo `.lumos-deck`: usado pela Home (e, depois, por outras telas). Redefine os
-   tokens para vidro sobre o fundo de vidro canelado, troca as fontes para DM Sans e
-   JetBrains Mono e arredonda os cartões. Fora do escopo nada muda. */
+   Escopo `.lumos-deck`: aplicado ao conteúdo de todas as telas logadas (Sidebar.tsx) e
+   usado pela Home. Redefine os tokens para vidro sobre o fundo de luz difusa, troca as
+   fontes para DM Sans e JetBrains Mono e arredonda os cartões. Fora do escopo (login,
+   telas públicas, barra lateral) nada muda. */
 .lumos-deck {
   --color-lumos-surface: rgba(255, 255, 255, 0.55);
   --color-lumos-border: rgba(255, 255, 255, 0.7);
   --color-lumos-text-primary: #161616;
   --color-lumos-text-secondary: #4a4a45;
+  --deck-solido: #ffffff;
   font-family: 'DM Sans', Arial, sans-serif;
 }
 .dark .lumos-deck {
@@ -390,36 +392,107 @@ body {
   --color-lumos-border: rgba(255, 255, 255, 0.22);
   --color-lumos-text-primary: #ffffff;
   --color-lumos-text-secondary: #d5d3d0;
+  --deck-solido: #2a2a2a;
 }
-.lumos-deck h1, .lumos-deck h2, .lumos-deck h3, .lumos-deck h4 { font-family: 'DM Sans', Arial, sans-serif; }
+.lumos-deck h1, .lumos-deck h2, .lumos-deck h3, .lumos-deck h4,
+.lumos-deck .font-work-sans, .lumos-deck .font-heading { font-family: 'DM Sans', Arial, sans-serif; }
 /* Rótulos em caixa alta viram mono com espaçamento, como no deck */
 .lumos-deck .uppercase { font-family: 'JetBrains Mono', 'Courier New', monospace; font-weight: 500; }
-.lumos-deck .bg-lumos-surface {
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-}
 /* Pesos do deck: 500 a 600, nada de 900 */
 .lumos-deck .font-black { font-weight: 600; }
 .lumos-deck .rounded-lumos { border-radius: 20px; }
+
+/* Vidro: só em cartões que NÃO contêm elementos fixos (modais). O desfoque cria um bloco de
+   contenção para filhos `position: fixed`, e isso desalinharia um modal dentro do cartão. */
+.lumos-deck .bg-lumos-surface:not(:has(.fixed)) {
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
 @media (max-width: 1023px) {
-  .lumos-deck .bg-lumos-surface { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  .lumos-deck .bg-lumos-surface:not(:has(.fixed)) { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+}
+/* Sobreposições precisam de fundo SÓLIDO para ler: modais (tudo dentro de um fixed), menus
+   suspensos (absolute) e cabeçalhos fixados em tabelas (sticky). */
+.lumos-deck .fixed .bg-lumos-surface,
+.lumos-deck .bg-lumos-surface.fixed,
+.lumos-deck .bg-lumos-surface.absolute,
+.lumos-deck .bg-lumos-surface.sticky {
+  background-color: var(--deck-solido);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
-/* Legibilidade no tema CLARO: os tons "400/500" e o amarelo da marca somem sobre o vidro claro.
-   Dentro da Home, no tema claro, o texto usa versões mais escuras (mesmo matiz). O amarelo
-   continua igual em fundos e bordas (quadrados, chips, contornos); só a COR DO TEXTO e dos
-   ícones escurece. No tema escuro nada muda. */
+/* Legibilidade no tema CLARO: os tons 300 a 600 e o amarelo da marca somem sobre o vidro claro.
+   No tema claro o TEXTO e os ícones usam o tom 700 (mesmo matiz); o amarelo da marca vira um
+   dourado escuro. Fundos e bordas não mudam, e o tema escuro também não. */
+html:not(.dark) .lumos-deck .text-red-300 { color: #b91c1c; }
+html:not(.dark) .lumos-deck .text-red-400 { color: #b91c1c; }
+html:not(.dark) .lumos-deck .text-red-500 { color: #b91c1c; }
+html:not(.dark) .lumos-deck .text-red-600 { color: #b91c1c; }
+html:not(.dark) .lumos-deck .text-orange-300 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-orange-400 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-orange-500 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-orange-600 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-amber-300 { color: #b45309; }
+html:not(.dark) .lumos-deck .text-amber-400 { color: #b45309; }
+html:not(.dark) .lumos-deck .text-amber-500 { color: #b45309; }
+html:not(.dark) .lumos-deck .text-amber-600 { color: #b45309; }
+html:not(.dark) .lumos-deck .text-yellow-300 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-yellow-400 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-yellow-500 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-yellow-600 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-lime-300 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-lime-400 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-lime-500 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-lime-600 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-green-300 { color: #15803d; }
+html:not(.dark) .lumos-deck .text-green-400 { color: #15803d; }
+html:not(.dark) .lumos-deck .text-green-500 { color: #15803d; }
+html:not(.dark) .lumos-deck .text-green-600 { color: #15803d; }
+html:not(.dark) .lumos-deck .text-emerald-300 { color: #047857; }
+html:not(.dark) .lumos-deck .text-emerald-400 { color: #047857; }
+html:not(.dark) .lumos-deck .text-emerald-500 { color: #047857; }
+html:not(.dark) .lumos-deck .text-emerald-600 { color: #047857; }
+html:not(.dark) .lumos-deck .text-teal-300 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-teal-400 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-teal-500 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-teal-600 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-cyan-300 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-cyan-400 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-cyan-500 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-cyan-600 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-sky-300 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-sky-400 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-sky-500 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-sky-600 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-blue-300 { color: #1d4ed8; }
+html:not(.dark) .lumos-deck .text-blue-400 { color: #1d4ed8; }
+html:not(.dark) .lumos-deck .text-blue-500 { color: #1d4ed8; }
+html:not(.dark) .lumos-deck .text-blue-600 { color: #1d4ed8; }
+html:not(.dark) .lumos-deck .text-indigo-300 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-indigo-400 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-indigo-500 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-indigo-600 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-violet-300 { color: #6d28d9; }
+html:not(.dark) .lumos-deck .text-violet-400 { color: #6d28d9; }
+html:not(.dark) .lumos-deck .text-violet-500 { color: #6d28d9; }
+html:not(.dark) .lumos-deck .text-violet-600 { color: #6d28d9; }
+html:not(.dark) .lumos-deck .text-purple-300 { color: #7e22ce; }
+html:not(.dark) .lumos-deck .text-purple-400 { color: #7e22ce; }
+html:not(.dark) .lumos-deck .text-purple-500 { color: #7e22ce; }
+html:not(.dark) .lumos-deck .text-purple-600 { color: #7e22ce; }
+html:not(.dark) .lumos-deck .text-fuchsia-300 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-fuchsia-400 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-fuchsia-500 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-fuchsia-600 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-pink-300 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-pink-400 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-pink-500 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-pink-600 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-rose-300 { color: #be123c; }
+html:not(.dark) .lumos-deck .text-rose-400 { color: #be123c; }
+html:not(.dark) .lumos-deck .text-rose-500 { color: #be123c; }
+html:not(.dark) .lumos-deck .text-rose-600 { color: #be123c; }
 html:not(.dark) .lumos-deck .text-lumos-yellow,
 html:not(.dark) .lumos-deck .group:hover .group-hover\:text-lumos-yellow,
 html:not(.dark) .lumos-deck .hover\:text-lumos-yellow:hover { color: #7a5c00; }
-html:not(.dark) .lumos-deck .text-amber-400 { color: #92600a; }
-html:not(.dark) .lumos-deck .text-red-400,
-html:not(.dark) .lumos-deck .text-red-500 { color: #b42318; }
-html:not(.dark) .lumos-deck .text-orange-400,
-html:not(.dark) .lumos-deck .text-orange-500 { color: #c2410c; }
-html:not(.dark) .lumos-deck .text-blue-500 { color: #1d4ed8; }
-html:not(.dark) .lumos-deck .text-indigo-400 { color: #4338ca; }
-html:not(.dark) .lumos-deck .text-sky-400 { color: #0369a1; }
-html:not(.dark) .lumos-deck .text-purple-400 { color: #7e22ce; }
-html:not(.dark) .lumos-deck .text-green-400,
-html:not(.dark) .lumos-deck .text-green-500 { color: #15803d; }
