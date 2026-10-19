@@ -402,7 +402,7 @@ body {
 .lumos-deck .uppercase { font-family: 'JetBrains Mono', 'Courier New', monospace; font-weight: 500; }
 /* Pesos do deck: 500 a 600, nada de 900 */
 .lumos-deck .font-black { font-weight: 600; }
-.lumos-deck .rounded-lumos { border-radius: 20px; }
+.lumos-deck .rounded-lumos { border-radius: 12px; }
 
 /* Vidro: só em cartões que NÃO contêm elementos fixos (modais). O desfoque cria um bloco de
    contenção para filhos `position: fixed`, e isso desalinharia um modal dentro do cartão. */

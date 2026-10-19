@@ -10,12 +10,14 @@ import PageTransition from '@/components/layout/PageTransition';
 import { WikiProvider } from '@/context/WikiContext';
 import FundoDeck from '@/components/common/FundoDeck';
 import { carregarFontesDeck } from '@/lib/fontesDeck';
+import { useVisualNovo } from '@/lib/visualNovo';
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const visualNovo = useVisualNovo();
 
-  // Visual do deck da Lumos (DM Sans + JetBrains Mono) para todas as telas logadas.
-  useEffect(() => { carregarFontesDeck(); }, []);
+  // Visual do deck da Lumos (DM Sans + JetBrains Mono): só carrega com o visual novo ligado.
+  useEffect(() => { if (visualNovo) carregarFontesDeck(); }, [visualNovo]);
 
   // As views de produção compartilham layout — agrupá-las sob a mesma key evita
   // que o cross-fade global re-monte a nav ao trocar de view.
@@ -40,10 +42,10 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         {/* Conteúdo */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0">
           {/* Fundo de luz difusa fixo atrás de todas as telas; o conteúdo (relative z-10) fica acima */}
-          <FundoDeck />
+          {visualNovo && <FundoDeck />}
           <AnimatePresence mode="wait">
             <PageTransition key={transitionKey}>
-              <div className="lumos-deck relative z-10 w-full p-4 lg:p-8">
+              <div className={visualNovo ? 'lumos-deck relative z-10 w-full p-4 lg:p-8' : 'w-full p-4 lg:p-8'}>
                 <React.Suspense
                   fallback={
                     <div className="flex items-center justify-center py-32">

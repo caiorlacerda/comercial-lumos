@@ -6,6 +6,10 @@ import { ToastProvider } from '@/context/ToastContext.tsx'
 import { PrivacyProvider } from '@/context/PrivacyContext.tsx'
 import './index.css'
 import { GoogleOAuthProvider } from '@react-oauth/google'
+import { aplicarVisualDaUrl } from '@/lib/visualNovo'
+
+// `?visual=novo` / `?visual=antigo` liga ou desliga o visual novo neste aparelho.
+aplicarVisualDaUrl();
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
