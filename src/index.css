@@ -693,6 +693,23 @@ html.visual-novo .lumos-deck .titulo-pagina {
 /* Abas que estavam centralizadas (Fornecedores) alinham à esquerda, como nas outras telas. */
 html.visual-novo .lumos-abas { justify-content: flex-start; }
 
+/* ── Onda E: Configurações e equipe ───────────────────────────────────────────────── */
+
+/* A tela de Auditoria usa a classe `input` (que não existe) nos filtros e ficava sem caixa. Com o
+   visual novo ela ganha o mesmo visual dos demais campos. */
+html.visual-novo .input {
+  background-color: var(--color-lumos-bg);
+  border: 1px solid var(--color-lumos-border);
+  border-radius: 12px;
+  padding-top: 0.5rem; padding-bottom: 0.5rem; padding-right: 0.75rem;
+  min-height: 40px;
+}
+
+/* Títulos de seção em caixa alta grandes (Configurações, painéis): descem para 14px, no mesmo peso
+   visual dos demais rótulos de seção (antes eram mono de 18 a 20px, mais fortes que o título da página). */
+.lumos-deck h2.uppercase.text-lg, .lumos-deck h3.uppercase.text-lg,
+.lumos-deck h2.uppercase.text-xl, .lumos-deck h3.uppercase.text-xl { font-size: 14px; letter-spacing: 0.06em; }
+
 /* >>> TONS-GERADOS (não edite: rode scripts/gerar-tons-visual-novo.py) */
 /* Gerado a partir das classes de cor cruas usadas no código. */
 html.visual-novo .bg-amber-400 { background-color: var(--color-warn); }
