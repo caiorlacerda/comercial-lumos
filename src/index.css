@@ -641,6 +641,16 @@ html.visual-novo :where(button, a, summary, [role='button'], [role='tab'], [role
 html.visual-novo .btn-primary:hover:not(:disabled) { background-color: var(--color-lumos-yellow); filter: brightness(0.95); }
 html.visual-novo .btn-primary, html.visual-novo .btn-secondary { font-weight: 600; }
 
+/* Gráficos (Recharts): textos dos eixos e da legenda também respeitam o mínimo de 12px. */
+html.visual-novo .recharts-text,
+html.visual-novo .recharts-cartesian-axis-tick-value,
+html.visual-novo .recharts-legend-item-text { font-size: 12px; }
+
+/* Subtítulo logo abaixo do título de página: um respiro (o título tem entrelinha curta). */
+.lumos-deck h1.text-2xl + p,
+.lumos-deck h1.text-3xl + p,
+.lumos-deck h1.sm\:text-3xl + p { margin-top: 6px; }
+
 /* >>> TONS-GERADOS (não edite: rode scripts/gerar-tons-visual-novo.py) */
 /* Gerado a partir das classes de cor cruas usadas no código. */
 html.visual-novo .bg-amber-400 { background-color: var(--color-warn); }
@@ -693,41 +703,41 @@ html.visual-novo .bg-red-500\/\[0\.04\] { background-color: color-mix(in oklab, 
 html.visual-novo .bg-red-500\/\[0\.06\] { background-color: color-mix(in oklab, var(--color-danger) 6%, transparent); }
 html.visual-novo .bg-red-500\/\[0\.07\] { background-color: color-mix(in oklab, var(--color-danger) 7%, transparent); }
 html.visual-novo .bg-red-600 { background-color: #dc2626; }
-html.visual-novo .border-amber-500 { border-color: var(--color-warn); }
+html.visual-novo .border-amber-500 { border-color: color-mix(in oklab, var(--color-warn) 45%, transparent); }
 html.visual-novo .border-amber-500\/20 { border-color: color-mix(in oklab, var(--color-warn) 20%, transparent); }
 html.visual-novo .border-amber-500\/25 { border-color: color-mix(in oklab, var(--color-warn) 25%, transparent); }
 html.visual-novo .border-amber-500\/30 { border-color: color-mix(in oklab, var(--color-warn) 30%, transparent); }
 html.visual-novo .border-amber-500\/40 { border-color: color-mix(in oklab, var(--color-warn) 40%, transparent); }
 html.visual-novo .border-amber-500\/50 { border-color: color-mix(in oklab, var(--color-warn) 50%, transparent); }
-html.visual-novo .border-amber-600 { border-color: var(--color-warn); }
-html.visual-novo .border-blue-500 { border-color: var(--color-info); }
+html.visual-novo .border-amber-600 { border-color: color-mix(in oklab, var(--color-warn) 45%, transparent); }
+html.visual-novo .border-blue-500 { border-color: color-mix(in oklab, var(--color-info) 45%, transparent); }
 html.visual-novo .border-blue-500\/20 { border-color: color-mix(in oklab, var(--color-info) 20%, transparent); }
 html.visual-novo .border-blue-500\/25 { border-color: color-mix(in oklab, var(--color-info) 25%, transparent); }
 html.visual-novo .border-blue-500\/30 { border-color: color-mix(in oklab, var(--color-info) 30%, transparent); }
 html.visual-novo .border-blue-500\/40 { border-color: color-mix(in oklab, var(--color-info) 40%, transparent); }
 html.visual-novo .border-blue-500\/50 { border-color: color-mix(in oklab, var(--color-info) 50%, transparent); }
-html.visual-novo .border-emerald-500 { border-color: var(--color-ok); }
+html.visual-novo .border-emerald-500 { border-color: color-mix(in oklab, var(--color-ok) 45%, transparent); }
 html.visual-novo .border-emerald-500\/10 { border-color: color-mix(in oklab, var(--color-ok) 10%, transparent); }
 html.visual-novo .border-emerald-500\/20 { border-color: color-mix(in oklab, var(--color-ok) 20%, transparent); }
 html.visual-novo .border-emerald-500\/30 { border-color: color-mix(in oklab, var(--color-ok) 30%, transparent); }
 html.visual-novo .border-emerald-600\/30 { border-color: color-mix(in oklab, var(--color-ok) 30%, transparent); }
 html.visual-novo .border-green-400\/40 { border-color: color-mix(in oklab, var(--color-ok) 40%, transparent); }
-html.visual-novo .border-green-500 { border-color: var(--color-ok); }
+html.visual-novo .border-green-500 { border-color: color-mix(in oklab, var(--color-ok) 45%, transparent); }
 html.visual-novo .border-green-500\/20 { border-color: color-mix(in oklab, var(--color-ok) 20%, transparent); }
 html.visual-novo .border-green-500\/25 { border-color: color-mix(in oklab, var(--color-ok) 25%, transparent); }
 html.visual-novo .border-green-500\/30 { border-color: color-mix(in oklab, var(--color-ok) 30%, transparent); }
 html.visual-novo .border-green-500\/40 { border-color: color-mix(in oklab, var(--color-ok) 40%, transparent); }
 html.visual-novo .border-green-500\/50 { border-color: color-mix(in oklab, var(--color-ok) 50%, transparent); }
 html.visual-novo .border-green-500\/80 { border-color: color-mix(in oklab, var(--color-ok) 80%, transparent); }
-html.visual-novo .border-green-600 { border-color: var(--color-ok); }
+html.visual-novo .border-green-600 { border-color: color-mix(in oklab, var(--color-ok) 45%, transparent); }
 html.visual-novo .border-green-600\/40 { border-color: color-mix(in oklab, var(--color-ok) 40%, transparent); }
 html.visual-novo .border-green-600\/50 { border-color: color-mix(in oklab, var(--color-ok) 50%, transparent); }
-html.visual-novo .border-purple-500 { border-color: var(--color-review); }
+html.visual-novo .border-purple-500 { border-color: color-mix(in oklab, var(--color-review) 45%, transparent); }
 html.visual-novo .border-purple-500\/20 { border-color: color-mix(in oklab, var(--color-review) 20%, transparent); }
 html.visual-novo .border-purple-500\/25 { border-color: color-mix(in oklab, var(--color-review) 25%, transparent); }
 html.visual-novo .border-purple-500\/40 { border-color: color-mix(in oklab, var(--color-review) 40%, transparent); }
 html.visual-novo .border-red-400\/40 { border-color: color-mix(in oklab, var(--color-danger) 40%, transparent); }
-html.visual-novo .border-red-500 { border-color: var(--color-danger); }
+html.visual-novo .border-red-500 { border-color: color-mix(in oklab, var(--color-danger) 45%, transparent); }
 html.visual-novo .border-red-500\/15 { border-color: color-mix(in oklab, var(--color-danger) 15%, transparent); }
 html.visual-novo .border-red-500\/20 { border-color: color-mix(in oklab, var(--color-danger) 20%, transparent); }
 html.visual-novo .border-red-500\/25 { border-color: color-mix(in oklab, var(--color-danger) 25%, transparent); }
@@ -765,6 +775,8 @@ html.visual-novo .text-red-400 { color: var(--color-danger-fg); }
 html.visual-novo .text-red-500 { color: var(--color-danger-fg); }
 html.visual-novo .text-red-500\/80 { color: color-mix(in oklab, var(--color-danger-fg) 80%, transparent); }
 html.visual-novo .text-red-600 { color: var(--color-danger-fg); }
+html.visual-novo .border-cyan-500 { border-color: color-mix(in oklab, var(--color-cyan-500) 45%, transparent); }
+html.visual-novo .border-sky-400 { border-color: color-mix(in oklab, var(--color-sky-400) 45%, transparent); }
 @media (hover: hover) {
   html.visual-novo .group:hover .group-hover\:bg-red-500\/10 { background-color: color-mix(in oklab, var(--color-danger) 10%, transparent); }
   html.visual-novo .group:hover .group-hover\:border-amber-500\/50 { border-color: color-mix(in oklab, var(--color-warn) 50%, transparent); }

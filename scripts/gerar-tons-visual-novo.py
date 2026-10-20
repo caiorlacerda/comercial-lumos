@@ -48,7 +48,7 @@ def pct(a):
     return int(a)
 
 
-def cor(tom, tipo, alfa, shade):
+def cor(tom, tipo, alfa, shade, estatica=True):
     if tipo in ('text', 'fill', 'stroke', 'decoration'):
         base = f'var(--color-{tom}-fg)'
     elif alfa is None and tipo == 'bg' and shade >= 500:
@@ -57,6 +57,8 @@ def cor(tom, tipo, alfa, shade):
         base = f'var(--color-{tom})'
     if alfa is None and tipo == 'bg' and shade <= 300:
         alfa = 15  # fundos claros (100-300) viram um véu suave da cor
+    if alfa is None and tipo == 'border' and estatica:
+        alfa = 45  # borda sólida estática vira um contorno suave (estados de hover/foco ficam sólidos)
     if alfa is None:
         return base
     return f'color-mix(in oklab, {base} {alfa}%, transparent)'
@@ -78,6 +80,19 @@ def declaracao(tipo, valor):
     return f'{tipo}: {valor}'  # fill, stroke
 
 
+OUTROS = re.compile(r'(?<![\w-])border-(orange|cyan|sky|teal|indigo|pink|fuchsia|lime)-(\d{2,3})(?![\w/-])')
+
+
+def varre_outros():
+    achados = set()
+    for pasta, _, arquivos in os.walk(SRC):
+        for nome in arquivos:
+            if nome.endswith(('.tsx', '.ts')):
+                for m in OUTROS.finditer(open(os.path.join(pasta, nome), encoding='utf-8').read()):
+                    achados.add((m.group(1), m.group(2)))
+    return achados
+
+
 def varre():
     achados = {}
     for pasta, _, arquivos in os.walk(SRC):
@@ -95,7 +110,7 @@ def gera(achados):
     for classe in sorted(achados):
         pref, tipo, matiz, shade, a = achados[classe]
         tom = TOM[matiz]
-        regra_cor = declaracao(tipo, cor(tom, tipo, pct(a), int(shade)))
+        regra_cor = declaracao(tipo, cor(tom, tipo, pct(a), int(shade), estatica=(pref == '')))
         sel = escapa(classe)
         if pref == '':
             base.append(f'html.visual-novo .{sel} {{ {regra_cor}; }}')
@@ -105,6 +120,8 @@ def gera(achados):
             estado = {'hover:': 'hover', 'focus:': 'focus', 'active:': 'active'}[pref]
             alvo = f'html.visual-novo .{sel}:{estado}'
             (hover if estado == 'hover' else base).append(f'{alvo} {{ {regra_cor}; }}')
+    for matiz, shade in sorted(varre_outros()):
+        base.append(f'html.visual-novo .border-{matiz}-{shade} {{ border-color: color-mix(in oklab, var(--color-{matiz}-{shade}) 45%, transparent); }}')
     saida = [INI, '/* Gerado a partir das classes de cor cruas usadas no código. */']
     saida += base
     if hover:
