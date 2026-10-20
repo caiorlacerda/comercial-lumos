@@ -10,6 +10,7 @@ import WelcomeTour from '@/components/common/WelcomeTour';
 import { papelDaHome } from '@/components/home/tipos';
 import { useMinhasTarefas } from '@/components/home/useMinhasTarefas';
 import { useGestaoHome } from '@/components/home/useGestaoHome';
+import { useAdminHome } from '@/components/home/useAdminHome';
 import { useHomeLayout } from '@/components/home/useHomeLayout';
 import type { BlocoHome } from '@/components/home/catalogo';
 import PersonalizarHome from '@/components/home/PersonalizarHome';
@@ -37,7 +38,8 @@ export default function Home() {
   const papel = papelDaHome(profile?.role);
   const minhas = useMinhasTarefas();
   const gestao = useGestaoHome(papel !== 'time');
-  const dados = useMemo(() => ({ ...minhas, gestao }), [minhas, gestao]);
+  const admin = useAdminHome(papel === 'admin');
+  const dados = useMemo(() => ({ ...minhas, gestao, admin }), [minhas, gestao, admin]);
   const layout = useHomeLayout(papel);
   const [personalizando, setPersonalizando] = useState(false);
 

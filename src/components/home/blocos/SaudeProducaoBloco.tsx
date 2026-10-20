@@ -16,15 +16,15 @@ function Cartao({ rotulo, valor, apoio, icone, tom, onClick }: {
         tom === 'alerta' ? 'border-danger/40' : tom === 'atencao' ? 'border-warn/40' : 'border-lumos-border hover:border-lumos-yellow/30',
       )}
     >
-      <span className={clsx('p-2.5 rounded-lg border flex-shrink-0',
+      <span className={clsx('hidden sm:block p-2.5 rounded-lg border flex-shrink-0',
         tom === 'alerta' ? 'bg-danger/10 border-danger/30 text-danger-fg'
           : tom === 'atencao' ? 'bg-warn/10 border-warn/30 text-warn-fg'
             : 'bg-lumos-yellow/5 border-lumos-yellow/15 text-lumos-yellow')}>
         {icone}
       </span>
-      <span className="min-w-0">
-        <span className="block text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest truncate">{rotulo}</span>
-        <span className={clsx('block text-xl font-semibold tabular-nums', tom === 'alerta' ? 'text-danger-fg' : 'text-lumos-text-primary')}>{valor}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10px] font-bold text-lumos-text-secondary uppercase tracking-wider sm:tracking-widest leading-tight sm:truncate">{rotulo}</span>
+        <span className={clsx('block text-lg sm:text-xl font-semibold tabular-nums', tom === 'alerta' ? 'text-danger-fg' : 'text-lumos-text-primary')}>{valor}</span>
         <span className="block text-[11px] text-lumos-text-secondary truncate">{apoio}</span>
       </span>
     </button>

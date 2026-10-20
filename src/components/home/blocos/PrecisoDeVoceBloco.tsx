@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, CheckCircle2, Film, CalendarPlus, Wrench, Truck, UserX } from 'lucide-react';
+import { ChevronRight, CheckCircle2, Film, CalendarPlus, Wrench, Truck, UserX, Receipt, FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import BlocoCartao from '../BlocoCartao';
 import type { DadosHome, ItemFila } from '../tipos';
@@ -17,6 +17,7 @@ export default function PrecisoDeVoceBloco({ dados }: { dados: DadosHome }) {
   const g = dados.gestao;
   if (!g) return null;
   const f = g.filas;
+  const extras = dados.admin?.filas;
 
   const linhas: Linha[] = [
     { chave: 'aval', icone: <Film className="w-4 h-4" />, singular: 'vídeo aguardando aval interno', plural: 'vídeos aguardando aval interno', itens: f.aval, rota: f.aval[0]?.rota ?? '/producao' },
@@ -24,6 +25,8 @@ export default function PrecisoDeVoceBloco({ dados }: { dados: DadosHome }) {
     { chave: 'reservas', icone: <Wrench className="w-4 h-4" />, singular: 'reserva de equipamento para decidir', plural: 'reservas de equipamento para decidir', itens: f.reservas, rota: '/producao/equipamentos' },
     { chave: 'fornecedores', icone: <Truck className="w-4 h-4" />, singular: 'fornecedor para aprovar', plural: 'fornecedores para aprovar', itens: f.fornecedores, rota: '/producao/fornecedores' },
     { chave: 'sem', icone: <UserX className="w-4 h-4" />, singular: 'tarefa sem responsável', plural: 'tarefas sem responsável', itens: f.semResponsavel, rota: '/producao/board' },
+    { chave: 'reembolsos', icone: <Receipt className="w-4 h-4" />, singular: 'reembolso aguardando aprovação', plural: 'reembolsos aguardando aprovação', itens: extras?.reembolsos ?? [], rota: '/financeiro/reembolso' },
+    { chave: 'notas', icone: <FileText className="w-4 h-4" />, singular: 'nota de fornecedor para pagar', plural: 'notas de fornecedores para pagar', itens: extras?.notas ?? [], rota: '/financeiro/notas' },
   ].filter(l => l.itens.length > 0);
 
   const total = linhas.reduce((n, l) => n + l.itens.length, 0);

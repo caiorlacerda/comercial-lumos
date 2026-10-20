@@ -50,6 +50,28 @@ export interface DadosGestao {
   filas: FilasGestao;
   carga: { pessoas: CargaPessoa[]; semResponsavel: number; max: number };
   parados: VideoParado[];
+  /** Pessoas ativas da equipe (fora admin e ocultos) sem nenhuma tarefa aberta. */
+  ociosos: PessoaOciosa[];
+}
+
+export interface PessoaOciosa { id: string; nome: string; avatar_url: string | null }
+
+/** Visão financeira, comercial e de pessoas para o admin. */
+export interface DadosAdmin {
+  carregando: boolean;
+  financeiro: {
+    receberAtrasado: { valor: number; qtd: number };
+    recebidoNoMes: number;
+    pagar7d: { valor: number; qtd: number; vencidas: number };
+    notasParaPagar: { valor: number; qtd: number };
+  };
+  comercial: {
+    emNegociacao: number;
+    semResposta7d: { id: string; titulo: string; dias: number }[];
+    aprovadosNoMes: number;
+  };
+  /** Filas extras que só o admin decide (somam à fila "Preciso de você"). */
+  filas: { reembolsos: ItemFila[]; notas: ItemFila[] };
 }
 
 /** O que a Home carrega uma vez e entrega aos blocos. */
@@ -61,6 +83,8 @@ export interface DadosHome {
   resumo: ResumoTarefas;
   /** Só existe para gestão e admin. */
   gestao?: DadosGestao;
+  /** Só existe para admin. */
+  admin?: DadosAdmin;
 }
 
 /** 'cheia' ocupa a linha toda; 'principal' fica na coluna larga; 'lateral' na coluna estreita. */
