@@ -231,7 +231,7 @@ Quatro peças, cada uma com um único visual (CSS no `src/index.css`, seção "P
 
 | Peça | Para que serve | Como aparece | Como marcar no código |
 |---|---|---|---|
-| **Abas** | Trocar de seção dentro da página (A Receber / A Pagar; Em andamento / Encerrados) | Formato de pasta: a ativa é um cartão sólido ligado à linha da seção, DM Sans 14px | Qualquer `<button>` com `border-b-2` (o ativo é o que não tem `border-transparent`), ou a classe `aba-lumos` com `aria-selected` |
+| **Abas** | Trocar de seção dentro da página (A Receber / A Pagar; Em andamento / Encerrados) | Cápsulas de 40px: a ativa é um cartão sólido com sombra e ponto dourado, DM Sans 14px | Qualquer `<button>` com `border-b-2` (o ativo é o que não tem `border-transparent`), ou a classe `aba-lumos` com `aria-selected` |
 | **Alternador** | Mudar a forma de ver os mesmos dados (Lista/Cards, Semana/Mês/Trimestre, Calendário/Lista/Kanban) | Cápsula única, itens de 32px, ativo em amarelo | Caixa `.segmentado-lumos`, itens `.segmento-lumos` com `aria-pressed` |
 | **Chips de filtro** | Filtrar a mesma lista (Todas / Entradas / Saídas; Todos / Emitir NF / Recebido) | Pílula de 32px, ativa com véu dourado (vermelho para "atrasado") | `.chip-lumos` com `aria-pressed` (e `data-tom="danger"` quando for alerta) |
 | **Campos de seleção** | Filtros em lista suspensa | Texto normal em DM Sans, sem caixa alta | Automático (`button.input-lumos`) |
