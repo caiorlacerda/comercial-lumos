@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -30,6 +30,9 @@ const TAMANHOS = {
   full: 'max-w-none h-full flex flex-col',
 } as const;
 
+/** Janelas abertas, da mais antiga para a mais nova: o Esc fecha só a de cima. */
+const pilhaAbertas: symbol[] = [];
+
 export default function Modal({
   isOpen,
   onClose,
@@ -56,6 +59,26 @@ export default function Modal({
     };
   }, [isOpen]);
 
+  // Esc fecha a janela (só a de cima, se houver uma sobre a outra)
+  const aoFechar = useRef(onClose);
+  aoFechar.current = onClose;
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = Symbol('modal');
+    pilhaAbertas.push(id);
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (pilhaAbertas[pilhaAbertas.length - 1] !== id) return;
+      aoFechar.current();
+    };
+    document.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('keydown', aoTeclar);
+      const i = pilhaAbertas.indexOf(id);
+      if (i >= 0) pilhaAbertas.splice(i, 1);
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const conteudo = (
@@ -65,11 +88,11 @@ export default function Modal({
         onClick={onClose}
       />
       <div className={clsx(
-        "bg-lumos-surface w-full rounded-lumos shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300",
+        "bg-lumos-surface w-full max-h-full flex flex-col rounded-lumos shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300",
         maxWidth || (size ? TAMANHOS[size] : 'max-w-md'),
         className
       )}>
-        <div className={clsx("flex items-center justify-between border-b border-lumos-border", padding)}>
+        <div className={clsx("flex items-center justify-between border-b border-lumos-border shrink-0", padding)}>
           <h3 id="modal-title" className="text-xl font-black text-lumos-text-primary tracking-tight">
             {title}
           </h3>
@@ -81,12 +104,12 @@ export default function Modal({
           </button>
         </div>
         
-        <div className={clsx(padding, bodyClassName)}>
+        <div className={clsx('min-h-0 overflow-y-auto', padding, bodyClassName)}>
           {children}
         </div>
 
         {footer && (
-          <div className={clsx("bg-lumos-bg/50 border-t border-lumos-border flex justify-end gap-3", padding, "py-4")}>
+          <div className={clsx("bg-lumos-bg/50 border-t border-lumos-border flex justify-end gap-3 shrink-0", padding, "py-4")}>
             {footer}
           </div>
         )}
