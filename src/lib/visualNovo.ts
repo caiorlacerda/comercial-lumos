@@ -13,9 +13,6 @@ import { useSyncExternalStore } from 'react';
  * Estado atual: `PADRAO_LIGADO = true`, ou seja, o visual novo vale para todo mundo que nunca mexeu no
  * interruptor. Quem desligou de propósito (`?visual=antigo`) continua no antigo. Para voltar tudo ao
  * antigo de uma vez, troque para `false` e faça deploy.
- *
- * A TELA DE LOGIN é a exceção: ela só muda para o visual novo quando a pessoa liga explicitamente
- * (`?visual=novo`), porque a decisão de liberar o login ficou para depois, junto com as páginas públicas.
  */
 const CHAVE = 'lumos-visual-novo';
 const EVENTO = 'lumos-visual-novo-mudou';
@@ -28,11 +25,6 @@ function ler(): boolean {
     if (v === '0') return false;
   } catch { /* localStorage indisponível: cai no padrão */ }
   return PADRAO_LIGADO;
-}
-
-/** Só é verdadeiro se a pessoa ligou de propósito (ignora o padrão). Usado pelo login. */
-function lerExplicito(): boolean {
-  try { return localStorage.getItem(CHAVE) === '1'; } catch { return false; }
 }
 
 export function definirVisualNovo(ligado: boolean) {
@@ -77,7 +69,3 @@ export function useVisualNovo(): boolean {
   return useSyncExternalStore(assinar, ler, () => PADRAO_LIGADO);
 }
 
-/** Igual a useVisualNovo, mas só liga se a pessoa pediu explicitamente (padrão não conta). */
-export function useVisualNovoExplicito(): boolean {
-  return useSyncExternalStore(assinar, lerExplicito, () => false);
-}
