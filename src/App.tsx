@@ -16,6 +16,7 @@ import NewProjectCelebration from '@/components/common/NewProjectCelebration';
 // bundle inicial — a Home carrega leve e o resto vem quando é aberto.
 const Home = lazy(() => import('@/pages/Home'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const DesignSystem = lazy(() => import('@/pages/DesignSystem'));
 const Clients = lazy(() => import('@/pages/Clients'));
 const ClientProfile = lazy(() => import('@/pages/ClientProfile'));
 const Catalog = lazy(() => import('@/pages/Catalog'));
@@ -445,6 +446,17 @@ function AppContent() {
             } 
           />
           
+          <Route
+            path="/design"
+            element={
+              <AuthWrapper>
+                <PermissionGuard permission="admin">
+                  <DesignSystem />
+                </PermissionGuard>
+              </AuthWrapper>
+            }
+          />
+
           <Route 
             path="/orcamentos" 
             element={

@@ -2287,7 +2287,7 @@ export default function Projetos() {
 
                   {/* Nome + chips + ações */}
                   <div className="flex items-center gap-3 flex-wrap">
-                    <h2 className="text-2xl md:text-[26px] font-black text-lumos-text-primary uppercase tracking-tight leading-tight">
+                    <h2 className="titulo-pagina text-2xl md:text-[26px] font-black text-lumos-text-primary uppercase tracking-tight leading-tight">
                       {selectedProject.name}
                     </h2>
                     <span className={clsx(

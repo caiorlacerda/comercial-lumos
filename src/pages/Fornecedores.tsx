@@ -149,7 +149,7 @@ export default function Fornecedores() {
       </div>
 
       {/* Abas */}
-      <div className="flex items-center justify-center gap-6 border-b border-lumos-border">
+      <div className="lumos-abas flex items-center justify-center gap-6 border-b border-lumos-border">
         {([
           { id: 'profissionais' as Aba, label: 'Profissionais', n: totalProfissionais },
           { id: 'empresas' as Aba, label: 'Empresas', n: totalEmpresas },

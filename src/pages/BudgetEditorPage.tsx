@@ -1295,7 +1295,7 @@ export default function BudgetEditorPage() {
               </span>
               <input 
                 disabled={isReadOnly}
-                className="bg-transparent border-none text-2xl font-bold focus:ring-0 p-0 text-lumos-text-primary w-full max-w-md disabled:opacity-70"
+                className="titulo-ferramenta bg-transparent border-none text-2xl font-bold focus:ring-0 p-0 text-lumos-text-primary w-full max-w-md disabled:opacity-70"
                 value={budget?.project_name || ''}
                 onChange={(e) => updateBudget({ project_name: e.target.value })}
               />

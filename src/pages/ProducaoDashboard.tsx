@@ -761,12 +761,13 @@ export default function ProducaoDashboard() {
             </div>
 
             {/* Filtros de Status de Tarefas */}
-            <div className="flex items-center gap-1 bg-lumos-surface border border-lumos-border/50 p-1 rounded-lumos shadow-sm select-none">
+            <div className="segmentado-lumos flex items-center gap-1 bg-lumos-surface border border-lumos-border/50 p-1 rounded-lumos shadow-sm select-none">
               <span className="text-[10px] font-black uppercase tracking-wider text-lumos-text-secondary px-2">Status:</span>
               <button
                 onClick={() => setTaskFilter('pending')}
+                aria-pressed={taskFilter === 'pending'}
                 className={clsx(
-                  "px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
+                  "segmento-lumos px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
                   taskFilter === 'pending'
                     ? "bg-emerald-500 text-black font-black"
                     : "text-lumos-text-secondary hover:text-lumos-text-primary"
@@ -776,8 +777,9 @@ export default function ProducaoDashboard() {
               </button>
               <button
                 onClick={() => setTaskFilter('completed')}
+                aria-pressed={taskFilter === 'completed'}
                 className={clsx(
-                  "px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
+                  "segmento-lumos px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
                   taskFilter === 'completed'
                     ? "bg-emerald-500 text-black font-black"
                     : "text-lumos-text-secondary hover:text-lumos-text-primary"
@@ -787,8 +789,9 @@ export default function ProducaoDashboard() {
               </button>
               <button
                 onClick={() => setTaskFilter('all')}
+                aria-pressed={taskFilter === 'all'}
                 className={clsx(
-                  "px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
+                  "segmento-lumos px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer",
                   taskFilter === 'all'
                     ? "bg-emerald-500 text-black font-black"
                     : "text-lumos-text-secondary hover:text-lumos-text-primary"

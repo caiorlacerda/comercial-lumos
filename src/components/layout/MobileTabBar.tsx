@@ -38,7 +38,7 @@ export default function MobileTabBar() {
 
   return (
     <>
-      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-lumos-surface border-t border-lumos-border pb-[env(safe-area-inset-bottom)] transition-colors duration-300">
+      <div className="lumos-shell lg:hidden fixed bottom-0 inset-x-0 z-40 bg-lumos-surface border-t border-lumos-border pb-[env(safe-area-inset-bottom)] transition-colors duration-300">
         <div className="h-14 flex items-center justify-around">
           {/* Home Tab */}
           <button
@@ -52,7 +52,7 @@ export default function MobileTabBar() {
               <span className="absolute top-0 inset-x-4 h-[2px] bg-lumos-yellow rounded-full" />
             )}
             <HomeIcon className="w-5 h-5 mb-0.5" />
-            <span className="text-[9px] font-bold uppercase tracking-wider">Início</span>
+            <span className="rotulo-tab">Início</span>
           </button>
 
           {/* Comercial Tab */}
@@ -68,7 +68,7 @@ export default function MobileTabBar() {
                 <span className="absolute top-0 inset-x-4 h-[2px] bg-lumos-yellow rounded-full" />
               )}
               <Briefcase className="w-5 h-5 mb-0.5" />
-              <span className="text-[9px] font-bold uppercase tracking-wider">Comercial</span>
+              <span className="rotulo-tab">Comercial</span>
             </button>
           )}
 
@@ -85,7 +85,7 @@ export default function MobileTabBar() {
                 <span className="absolute top-0 inset-x-4 h-[2px] bg-lumos-yellow rounded-full" />
               )}
               <Video className="w-5 h-5 mb-0.5" />
-              <span className="text-[9px] font-bold uppercase tracking-wider">Produção</span>
+              <span className="rotulo-tab">Produção</span>
             </button>
           )}
 
@@ -101,7 +101,7 @@ export default function MobileTabBar() {
               <span className="absolute top-0 inset-x-4 h-[2px] bg-lumos-yellow rounded-full" />
             )}
             <DollarSign className="w-5 h-5 mb-0.5" />
-            <span className="text-[9px] font-bold uppercase tracking-wider">Financeiro</span>
+            <span className="rotulo-tab">Financeiro</span>
           </button>
 
           {/* Mais Tab */}
@@ -116,7 +116,7 @@ export default function MobileTabBar() {
               <span className="absolute top-0 inset-x-4 h-[2px] bg-lumos-yellow rounded-full" />
             )}
             <Menu className="w-5 h-5 mb-0.5" />
-            <span className="text-[9px] font-bold uppercase tracking-wider">Mais</span>
+            <span className="rotulo-tab">Mais</span>
           </button>
         </div>
       </div>

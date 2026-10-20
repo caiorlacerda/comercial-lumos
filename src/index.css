@@ -12,6 +12,30 @@
   --font-body: "Work Sans", sans-serif;
 
   --radius-lumos: 8px;
+
+  /* Cores de SIGNIFICADO. Use estas em vez de green-500, red-500 etc.:
+       ok = sucesso/pago/aprovado · danger = erro/atraso/perigo · warn = atenção/pendente
+       info = informação/neutro azul · review = revisão (roxo)
+     `bg-ok/10 border-ok/30 text-ok-fg`: o fundo e a borda usam a cor base (com transparência) e o
+     texto/ícone usa `-fg`, que muda de tom por tema para sempre ler bem. Com o visual novo
+     desligado, `-fg` é igual à cor base, então nada muda para o time. */
+  --color-ok: #22c55e;       --color-ok-fg: #22c55e;
+  --color-danger: #ef4444;   --color-danger-fg: #ef4444;
+  --color-warn: #f59e0b;     --color-warn-fg: #f59e0b;
+  --color-info: #3b82f6;     --color-info-fg: #3b82f6;
+  --color-review: #a855f7;   --color-review-fg: #a855f7;
+  /* Texto na cor da marca: amarelo da marca no escuro, dourado escuro no claro (ver visual novo) */
+  --color-lumos-gold: #EFC700;
+
+  /* Fonte dos títulos de página do visual novo (utilitário `font-titulo`) */
+  --font-titulo: "Instrument Serif", Georgia, serif;
+
+  /* Escala de tempo e de camadas do visual novo (para os componentes novos usarem) */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --z-menu: 300;
+  --z-modal: 400;
+  --z-toast: 500;
 }
 
 /* Base values override for Dark Theme */
@@ -104,6 +128,14 @@
 
   .btn-secondary {
     @apply bg-lumos-surface text-lumos-text-primary border border-lumos-border font-semibold py-2 px-4 rounded-lumos hover:bg-lumos-bg transition-all disabled:opacity-50 active:scale-95;
+  }
+
+  /* Rótulo da barra inferior do celular. Desligado: igual ao que era (9px, caixa alta). */
+  .rotulo-tab {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .input-lumos {
@@ -373,3 +405,616 @@ body {
 @media (prefers-reduced-motion: reduce) {
   [data-valores-ocultos='1'] .lumos-valor-oculto { transition: none; }
 }
+
+/* ── Visual do pitch deck da Lumos (skill lumos-pitch-deck) ───────────────────────
+   Escopo `.lumos-deck`: aplicado ao conteúdo de todas as telas logadas (Sidebar.tsx) e
+   usado pela Home. Redefine os tokens para vidro sobre o fundo de luz difusa, troca as
+   fontes para DM Sans e JetBrains Mono e arredonda os cartões. Fora do escopo (login,
+   telas públicas, barra lateral) nada muda. */
+.lumos-deck {
+  --color-lumos-surface: rgba(255, 255, 255, 0.55);
+  --color-lumos-border: rgba(255, 255, 255, 0.7);
+  --color-lumos-text-primary: #161616;
+  --color-lumos-text-secondary: #4a4a45;
+  --deck-solido: #ffffff;
+  font-family: 'DM Sans', Arial, sans-serif;
+}
+.dark .lumos-deck {
+  /* Tema escuro: vidro mais denso (cinza quase preto a 80%) para a leitura de tabelas e textos
+     sobre a luz do fundo. O deck usa branco 8%, mas isso deixava o conteúdo comprometido. */
+  --color-lumos-surface: rgba(30, 30, 28, 0.8);
+  --color-lumos-border: rgba(255, 255, 255, 0.22);
+  --color-lumos-text-primary: #ffffff;
+  --color-lumos-text-secondary: #d5d3d0;
+  --deck-solido: #2a2a2a;
+}
+.lumos-deck h1, .lumos-deck h2, .lumos-deck h3, .lumos-deck h4,
+.lumos-deck .font-work-sans, .lumos-deck .font-heading { font-family: 'DM Sans', Arial, sans-serif; }
+/* Rótulos em caixa alta viram mono com espaçamento, como no deck */
+.lumos-deck .uppercase { font-family: 'JetBrains Mono', 'Courier New', monospace; font-weight: 500; }
+/* Pesos do deck: 500 a 600, nada de 900 */
+.lumos-deck .font-black { font-weight: 600; }
+.lumos-deck .rounded-lumos { border-radius: 12px; }
+
+/* Vidro: só em cartões que NÃO contêm elementos fixos (modais). O desfoque cria um bloco de
+   contenção para filhos `position: fixed`, e isso desalinharia um modal dentro do cartão. */
+.lumos-deck .bg-lumos-surface:not(:has(.fixed)) {
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+@media (max-width: 1023px) {
+  .lumos-deck .bg-lumos-surface:not(:has(.fixed)) { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+}
+/* Sobreposições precisam de fundo SÓLIDO para ler: modais (tudo dentro de um fixed), menus
+   suspensos (absolute) e cabeçalhos fixados em tabelas (sticky). */
+.lumos-deck .fixed .bg-lumos-surface,
+.lumos-deck .bg-lumos-surface.fixed,
+.lumos-deck .bg-lumos-surface.absolute,
+.lumos-deck .bg-lumos-surface.sticky {
+  background-color: var(--deck-solido);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Legibilidade no tema CLARO: os tons 300 a 600 e o amarelo da marca somem sobre o vidro claro.
+   No tema claro o TEXTO e os ícones usam o tom 700 (mesmo matiz); o amarelo da marca vira um
+   dourado escuro. Fundos e bordas não mudam, e o tema escuro também não. */
+html:not(.dark) .lumos-deck .text-orange-300 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-orange-400 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-orange-500 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-orange-600 { color: #c2410c; }
+html:not(.dark) .lumos-deck .text-yellow-300 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-yellow-400 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-yellow-500 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-yellow-600 { color: #a16207; }
+html:not(.dark) .lumos-deck .text-lime-300 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-lime-400 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-lime-500 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-lime-600 { color: #4d7c0f; }
+html:not(.dark) .lumos-deck .text-teal-300 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-teal-400 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-teal-500 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-teal-600 { color: #0f766e; }
+html:not(.dark) .lumos-deck .text-cyan-300 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-cyan-400 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-cyan-500 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-cyan-600 { color: #0e7490; }
+html:not(.dark) .lumos-deck .text-sky-300 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-sky-400 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-sky-500 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-sky-600 { color: #0369a1; }
+html:not(.dark) .lumos-deck .text-indigo-300 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-indigo-400 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-indigo-500 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-indigo-600 { color: #4338ca; }
+html:not(.dark) .lumos-deck .text-fuchsia-300 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-fuchsia-400 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-fuchsia-500 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-fuchsia-600 { color: #a21caf; }
+html:not(.dark) .lumos-deck .text-pink-300 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-pink-400 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-pink-500 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-pink-600 { color: #be185d; }
+html:not(.dark) .lumos-deck .text-lumos-yellow,
+html:not(.dark) .lumos-deck .group:hover .group-hover\:text-lumos-yellow,
+html:not(.dark) .lumos-deck .hover\:text-lumos-yellow:hover { color: #7a5c00; }
+
+/* ── Base do VISUAL NOVO (Fase 1 do plano de unidade visual) ──────────────────────
+   `html.visual-novo` é ligado pelo interruptor (src/lib/visualNovo.ts). Tudo daqui para baixo só vale
+   com ele ligado; desligado, o app é exatamente o de antes. */
+
+/* Fonte única: DM Sans em tudo (menu, janelas, menus suspensos), JetBrains Mono nos rótulos. */
+html.visual-novo {
+  --font-heading: 'DM Sans', Arial, sans-serif;
+  --font-body: 'DM Sans', Arial, sans-serif;
+}
+html.visual-novo body {
+  font-family: 'DM Sans', Arial, sans-serif;
+  background-color: var(--color-lumos-bg);
+}
+html.visual-novo .uppercase { font-family: 'JetBrains Mono', 'Courier New', monospace; font-weight: 500; }
+
+/* Cores de significado no TEMA CLARO e ESCURO: o texto/ícone ganha o tom que lê bem sobre o vidro. */
+html.visual-novo {
+  --color-ok-fg: #4ade80;
+  --color-danger-fg: #f87171;
+  --color-warn-fg: #fbbf24;
+  --color-info-fg: #60a5fa;
+  --color-review-fg: #c084fc;
+}
+html.visual-novo:not(.dark) {
+  --color-ok-fg: #15803d;
+  --color-danger-fg: #b91c1c;
+  --color-warn-fg: #b45309;
+  --color-info-fg: #1d4ed8;
+  --color-review-fg: #7e22ce;
+  --color-lumos-gold: #7a5c00;
+}
+
+/* Texto mínimo de 12px: tudo o que era 7px a 11.5px vira 12px (só no visual novo). */
+html.visual-novo .text-\[7px\],
+html.visual-novo .text-\[8px\],
+html.visual-novo .text-\[8\.5px\],
+html.visual-novo .text-\[9px\],
+html.visual-novo .text-\[9\.5px\],
+html.visual-novo .text-\[10px\],
+html.visual-novo .text-\[10\.5px\],
+html.visual-novo .text-\[11px\],
+html.visual-novo .text-\[11\.5px\] { font-size: 12px; }
+
+/* Título de página único: Instrument Serif 36px, sem caixa alta (padrão do login e da Home). A serifa
+   é menor que a DM Sans no mesmo tamanho, por isso 36px. Vale para os h1 de página (as classes
+   text-2xl / text-3xl); h1 menores de cabeçalho de painel ficam. */
+.lumos-deck h1.text-2xl,
+.lumos-deck h1.text-3xl,
+.lumos-deck h1.lg\:text-4xl,
+.lumos-deck h1.sm\:text-3xl {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 36px;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+/* No celular o título de página é um pouco menor (a tela é estreita). */
+@media (max-width: 1023px) {
+  .lumos-deck h1.text-2xl,
+  .lumos-deck h1.text-3xl,
+  .lumos-deck h1.lg\:text-4xl,
+  .lumos-deck h1.sm\:text-3xl { font-size: 30px; }
+}
+
+/* Cantos: 12px nos controles e cartões; elementos pequenos (etiquetas, caixas de ícone) em 8px;
+   pílulas (rounded-full) continuam totalmente redondas. */
+html.visual-novo .rounded-lumos,
+html.visual-novo .rounded-lg,
+html.visual-novo .rounded-xl,
+html.visual-novo .rounded-2xl,
+html.visual-novo .rounded-3xl { border-radius: 12px; }
+html.visual-novo .rounded,
+html.visual-novo .rounded-md { border-radius: 8px; }
+
+/* Sombras em 3 níveis: cartão, menu, janela. */
+html.visual-novo .shadow,
+html.visual-novo .shadow-sm,
+html.visual-novo .shadow-md { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06); }
+html.visual-novo .shadow-lg,
+html.visual-novo .shadow-xl { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
+html.visual-novo .shadow-2xl { box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); }
+
+/* ── Onda A: casca (menu lateral, cabeçalho, sub-menu e barra inferior) ────────────── */
+
+/* Pesos: de 500 a 600, em todo o app (o 700 e o 900 viram 600). */
+html.visual-novo .font-black,
+html.visual-novo .font-bold { font-weight: 600; }
+
+/* Marca no tema claro: o amarelo vira dourado escuro na casca (senão some no fundo claro). */
+html.visual-novo:not(.dark) .lumos-shell .text-lumos-yellow,
+html.visual-novo:not(.dark) .lumos-shell .hover\:text-lumos-yellow:hover,
+html.visual-novo:not(.dark) .lumos-shell .group:hover .group-hover\:text-lumos-yellow { color: var(--color-lumos-gold); }
+
+/* Rótulo da barra inferior: 12px, minúsculas, DM Sans (cabe "Financeiro" sem estourar). */
+html.visual-novo .rotulo-tab {
+  font-family: 'DM Sans', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Título no cabeçalho do celular: serifa, sem caixa alta. */
+html.visual-novo .titulo-topo {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+/* Foco de teclado visível em botões, links e itens clicáveis (antes quase não existia). Campos de
+   texto ficam de fora: eles já têm o próprio anel de foco. */
+html.visual-novo :where(button, a, summary, [role='button'], [role='tab'], [role='menuitem']):focus-visible {
+  outline: 2px solid var(--color-lumos-yellow);
+  outline-offset: 2px;
+}
+
+/* ── Onda B: Financeiro e telas de tabela ──────────────────────────────────────────── */
+
+/* Cabeçalho de tabela único: 12px, caixa alta mono, cor secundária (antes havia 44 estilos). */
+.lumos-deck thead th:not(.wiki-content th) {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-lumos-text-secondary);
+}
+
+/* Linha de tabela: o mesmo realce ao passar o mouse em todas as telas. */
+@media (hover: hover) {
+  .lumos-deck tbody tr:hover { background-color: color-mix(in oklab, var(--color-lumos-text-secondary) 6%, transparent); }
+}
+
+/* Botão principal (classe btn-primary): sem o amarelo cru do hover; escurece um pouco. */
+html.visual-novo .btn-primary:hover:not(:disabled) { background-color: var(--color-lumos-yellow); filter: brightness(0.95); }
+html.visual-novo .btn-primary, html.visual-novo .btn-secondary { font-weight: 600; }
+
+/* Gráficos (Recharts): textos dos eixos e da legenda também respeitam o mínimo de 12px. */
+html.visual-novo .recharts-text,
+html.visual-novo .recharts-cartesian-axis-tick-value,
+html.visual-novo .recharts-legend-item-text { font-size: 12px; }
+
+/* Subtítulo logo abaixo do título de página: um respiro (o título tem entrelinha curta). */
+.lumos-deck h1.text-2xl + p,
+.lumos-deck h1.text-3xl + p,
+.lumos-deck h1.sm\:text-3xl + p { margin-top: 6px; }
+
+/* ── Onda C: Comercial ─────────────────────────────────────────────────────────────── */
+
+/* Amarelos "soltos" escritos em hexadecimal (ex.: etiqueta "Em negociação"): no tema claro viram o
+   dourado escuro da marca, senão somem sobre o vidro claro. */
+html.visual-novo:not(.dark) .lumos-deck .text-\[\#F5D87A\],
+html.visual-novo:not(.dark) .lumos-deck .text-\[\#EFC700\],
+html.visual-novo:not(.dark) .lumos-deck .text-\[\#efc700\] { color: var(--color-lumos-gold); }
+
+/* Celular: os filtros viram uma fileira que rola para o lado (antes cada filtro ocupava uma linha
+   inteira), com o texto em minúsculas para caber o valor escolhido. */
+@media (max-width: 639px) {
+  .lumos-deck .flex-wrap:has(> .relative > button.input-lumos) {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
+  }
+  .lumos-deck .flex-wrap:has(> .relative > button.input-lumos)::-webkit-scrollbar { display: none; }
+  .lumos-deck .flex-wrap > .relative:has(> button.input-lumos) { flex: 0 0 auto; }
+  .lumos-deck button.input-lumos {
+    min-width: 150px; text-transform: none; letter-spacing: 0; font-family: 'DM Sans', Arial, sans-serif; font-weight: 500;
+  }
+  /* Linha de indicadores: 2 por linha no celular, em vez de 1 por linha. */
+  .lumos-deck .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+
+/* Página que já traz o próprio recuo (Catálogo): com o visual novo usa só o recuo do layout. */
+html.visual-novo .pagina-sem-recuo { padding: 0; }
+
+/* ── Onda D: Produção ─────────────────────────────────────────────────────────────── */
+
+/* Título do projeto (cabeçalho da página do projeto): serifa, sem caixa alta, como os demais. */
+html.visual-novo .lumos-deck .titulo-pagina {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+@media (max-width: 1023px) { html.visual-novo .lumos-deck .titulo-pagina { font-size: 26px; } }
+
+/* Abas que estavam centralizadas (Fornecedores) alinham à esquerda, como nas outras telas. */
+html.visual-novo .lumos-abas { justify-content: flex-start; }
+
+/* ── Onda E: Configurações e equipe ───────────────────────────────────────────────── */
+
+/* A tela de Auditoria usa a classe `input` (que não existe) nos filtros e ficava sem caixa. Com o
+   visual novo ela ganha o mesmo visual dos demais campos. */
+html.visual-novo .input {
+  background-color: var(--color-lumos-bg);
+  border: 1px solid var(--color-lumos-border);
+  border-radius: 12px;
+  padding-top: 0.5rem; padding-bottom: 0.5rem; padding-right: 0.75rem;
+  min-height: 40px;
+}
+
+/* Títulos de seção em caixa alta grandes (Configurações, painéis): descem para 14px, no mesmo peso
+   visual dos demais rótulos de seção (antes eram mono de 18 a 20px, mais fortes que o título da página). */
+.lumos-deck h2.uppercase.text-lg, .lumos-deck h3.uppercase.text-lg,
+.lumos-deck h2.uppercase.text-xl, .lumos-deck h3.uppercase.text-xl { font-size: 14px; letter-spacing: 0.06em; }
+
+/* ── Onda F: acabamento ───────────────────────────────────────────────────────────── */
+
+/* Título de "cabeçalho de ferramenta" (nome do projeto no editor, título da Ordem do Dia): serifa. */
+html.visual-novo .titulo-ferramenta {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+html.visual-novo input.titulo-ferramenta { font-size: 30px; }
+html.visual-novo h1.titulo-ferramenta { font-size: 26px; }
+
+/* Largura do conteúdo por tipo de tela (o mapa por rota fica em Sidebar.tsx). */
+.lumos-deck[data-largura='formulario'] { max-width: 768px; margin-inline: auto; }
+.lumos-deck[data-largura='painel'] { max-width: 1280px; margin-inline: auto; }
+.lumos-deck[data-largura='lista'] { max-width: 1600px; margin-inline: auto; }
+
+/* Celular: a barra de filtros do Board (campos soltos, sem .relative em volta) também vira fileira que rola. */
+@media (max-width: 639px) {
+  .lumos-deck .flex-wrap:has(> button.input-lumos) {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
+  }
+  .lumos-deck .flex-wrap:has(> button.input-lumos)::-webkit-scrollbar { display: none; }
+  .lumos-deck .flex-wrap:has(> button.input-lumos) > * { flex: 0 0 auto; }
+  .lumos-deck .flex-wrap:has(> button.input-lumos) > button.input-lumos { width: auto; }
+  .lumos-deck .flex-wrap:has(> button.input-lumos) > .relative { min-width: 220px; }
+}
+
+/* ── Padrão único de abas, alternadores, chips e filtros (visual novo) ─────────────────
+   1) ABAS (trocam de seção na página): sublinhado dourado, DM Sans 14px. Detecta qualquer botão
+      com `border-b-2` (o ativo é o que não tem `border-transparent`) e as abas dos Templates.
+   2) ALTERNADOR (muda a forma de ver: Lista/Cards, Semana/Mês, Calendário/Lista/Kanban): cápsula única,
+      itens de 32px, o ativo em amarelo. Marcação: .segmentado-lumos (caixa) e .segmento-lumos (item).
+   3) CHIPS de filtro (Todas/Entradas/Saídas...): pílulas de 32px, a ativa com véu dourado. Marcação: .chip-lumos.
+   4) CAMPOS de seleção: texto normal em DM Sans (sem caixa alta mono). */
+
+/* Abas em CÁPSULAS: cada aba é um botão de 40px; a ativa vira um cartão sólido com sombra suave e um
+   ponto dourado, e as demais ficam discretas. Sem linha de base. (Alternadores continuam amarelos.) */
+html.visual-novo { --aba-linha: rgba(0, 0, 0, 0.1); }
+html.visual-novo.dark { --aba-linha: rgba(255, 255, 255, 0.16); }
+
+html.visual-novo .lumos-deck :has(> button.border-b-2):not(:has(> :not(button))),
+html.visual-novo .lumos-deck :has(> button.aba-lumos):not(:has(> :not(button))),
+html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) {
+  border-bottom: 0; padding-top: 2px; padding-bottom: 10px; align-items: center; gap: 4px; row-gap: 6px;
+  flex-wrap: wrap; overflow: visible;   /* no computador a barra não corta a cápsula: sombra e contorno ficam por cima */
+}
+@media (max-width: 1023px) {
+  /* Telas menores: a fileira rola para o lado e ganha um respiro vertical para a cápsula e a sombra não serem cortadas. */
+  html.visual-novo .lumos-deck :has(> button.border-b-2):not(:has(> :not(button))),
+  html.visual-novo .lumos-deck :has(> button.aba-lumos):not(:has(> :not(button))),
+  html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-top: 4px; padding-bottom: 8px;
+  }
+}
+html.visual-novo .lumos-deck :has(> button.border-b-2):not(:has(> :not(button)))::-webkit-scrollbar,
+html.visual-novo .lumos-deck :has(> button.aba-lumos):not(:has(> :not(button)))::-webkit-scrollbar { display: none; }
+/* Abas que eram coladas na barra de controles por margem negativa (Custos de Projeto): volta um respiro. */
+html.visual-novo .lumos-deck .border-b.\-mb-2:has(> button.border-b-2) { margin-bottom: 12px; }
+
+html.visual-novo .lumos-deck button.border-b-2,
+html.visual-novo .lumos-deck button.aba-lumos {
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap;
+  height: 40px; margin: 0; padding: 0 16px; background: transparent; line-height: 1.25;
+  font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; font-weight: 500; text-transform: none; letter-spacing: 0;
+  color: var(--color-lumos-text-secondary);
+  border: 1px solid transparent; border-radius: 12px;
+}
+html.visual-novo .lumos-deck button.border-b-2:not(.border-transparent),
+html.visual-novo .lumos-deck button.aba-lumos[aria-selected='true'] {
+  background: var(--deck-solido, var(--color-lumos-surface)); color: var(--color-lumos-text-primary); font-weight: 600;
+  border-color: var(--aba-linha); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07), 0 3px 8px rgba(0, 0, 0, 0.07);
+}
+html.visual-novo .lumos-deck button.border-b-2:not(.border-transparent)::before,
+html.visual-novo .lumos-deck button.aba-lumos[aria-selected='true']::before {
+  content: ''; width: 6px; height: 6px; border-radius: 9999px; background: var(--color-lumos-yellow); flex-shrink: 0;
+}
+@media (hover: hover) {
+  html.visual-novo .lumos-deck button.border-b-2.border-transparent:hover,
+  html.visual-novo .lumos-deck button.aba-lumos[aria-selected='false']:hover {
+    color: var(--color-lumos-text-primary); background: color-mix(in oklab, var(--color-lumos-text-secondary) 12%, transparent);
+  }
+}
+html.visual-novo .lumos-deck .aba-lumos > .absolute { display: none; }
+/* Abas com botão de ação ao lado (Equipamentos): a fileira de abas encolhe e rola em vez de ficar por baixo do botão. */
+html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) > div:first-child { min-width: 0; flex: 1 1 auto; overflow: visible; flex-wrap: wrap; row-gap: 6px; }
+@media (max-width: 1023px) {
+  html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) > div:first-child { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; padding-top: 4px; padding-bottom: 8px; scrollbar-width: none; }
+}
+@media (max-width: 639px) {
+  /* No celular o botão de ação desce para a linha de baixo, e todas as abas ficam visíveis. */
+  html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) { flex-wrap: wrap; row-gap: 8px; }
+  html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) > div:first-child { flex: 1 1 100%; }
+}
+
+html.visual-novo .segmentado-lumos {
+  display: inline-flex; align-items: center; gap: 2px; width: fit-content; padding: 3px; overflow: visible;
+  background: var(--color-lumos-bg); border: 1px solid var(--color-lumos-border); border-radius: 12px;
+}
+html.visual-novo .segmento-lumos {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; min-width: 32px;
+  padding: 0 12px; border: 0; border-radius: 9px; box-shadow: none; transform: none;
+  font-family: 'DM Sans', Arial, sans-serif; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0;
+  color: var(--color-lumos-text-secondary); background: transparent;
+}
+html.visual-novo .segmento-lumos[aria-pressed='true'] { background: var(--color-lumos-yellow); color: #161616; }
+@media (hover: hover) {
+  html.visual-novo .segmento-lumos[aria-pressed='false']:hover { color: var(--color-lumos-text-primary); }
+}
+
+html.visual-novo .chip-lumos {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 9999px;
+  font-family: 'DM Sans', Arial, sans-serif; font-size: 12px; font-weight: 500; line-height: 1; text-transform: none; letter-spacing: 0;
+  color: var(--color-lumos-text-secondary); background: transparent; border: 1px solid var(--color-lumos-border);
+}
+html.visual-novo .chip-lumos[aria-pressed='true'] {
+  color: var(--color-lumos-gold); border-color: color-mix(in oklab, var(--color-lumos-yellow) 45%, transparent);
+  background: color-mix(in oklab, var(--color-lumos-yellow) 15%, transparent);
+}
+html.visual-novo .chip-lumos[aria-pressed='true'][data-tom='danger'] {
+  color: var(--color-danger-fg); border-color: color-mix(in oklab, var(--color-danger) 45%, transparent);
+  background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+@media (hover: hover) {
+  html.visual-novo .chip-lumos[aria-pressed='false']:hover { color: var(--color-lumos-text-primary); }
+}
+
+/* Cabeçalho de dias do calendário (Agenda) no celular: sem caixa alta mono, para "Domingo" caber na coluna. */
+@media (max-width: 639px) {
+  .lumos-deck .grid-cols-7 > .uppercase {
+    font-family: 'DM Sans', Arial, sans-serif; text-transform: none; letter-spacing: 0;
+    padding-left: 0; padding-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+}
+
+html.visual-novo .lumos-deck button.input-lumos {
+  font-family: 'DM Sans', Arial, sans-serif; font-weight: 500; text-transform: none; letter-spacing: 0;
+}
+
+/* >>> TONS-GERADOS (não edite: rode scripts/gerar-tons-visual-novo.py) */
+/* Gerado a partir das classes de cor cruas usadas no código. */
+html.visual-novo .bg-amber-400 { background-color: var(--color-warn); }
+html.visual-novo .bg-amber-500 { background-color: #d97706; }
+html.visual-novo .bg-amber-500\/10 { background-color: color-mix(in oklab, var(--color-warn) 10%, transparent); }
+html.visual-novo .bg-amber-500\/15 { background-color: color-mix(in oklab, var(--color-warn) 15%, transparent); }
+html.visual-novo .bg-amber-500\/5 { background-color: color-mix(in oklab, var(--color-warn) 5%, transparent); }
+html.visual-novo .bg-amber-500\/\[0\.02\] { background-color: color-mix(in oklab, var(--color-warn) 2%, transparent); }
+html.visual-novo .bg-amber-500\/\[0\.03\] { background-color: color-mix(in oklab, var(--color-warn) 3%, transparent); }
+html.visual-novo .bg-amber-500\/\[0\.04\] { background-color: color-mix(in oklab, var(--color-warn) 4%, transparent); }
+html.visual-novo .bg-amber-500\/\[0\.07\] { background-color: color-mix(in oklab, var(--color-warn) 7%, transparent); }
+html.visual-novo .bg-amber-600 { background-color: #d97706; }
+html.visual-novo .bg-blue-400 { background-color: var(--color-info); }
+html.visual-novo .bg-blue-500 { background-color: #2563eb; }
+html.visual-novo .bg-blue-500\/10 { background-color: color-mix(in oklab, var(--color-info) 10%, transparent); }
+html.visual-novo .bg-blue-500\/15 { background-color: color-mix(in oklab, var(--color-info) 15%, transparent); }
+html.visual-novo .bg-blue-500\/20 { background-color: color-mix(in oklab, var(--color-info) 20%, transparent); }
+html.visual-novo .bg-blue-500\/5 { background-color: color-mix(in oklab, var(--color-info) 5%, transparent); }
+html.visual-novo .bg-emerald-500 { background-color: #16a34a; }
+html.visual-novo .bg-emerald-500\/10 { background-color: color-mix(in oklab, var(--color-ok) 10%, transparent); }
+html.visual-novo .bg-emerald-500\/5 { background-color: color-mix(in oklab, var(--color-ok) 5%, transparent); }
+html.visual-novo .bg-emerald-600\/15 { background-color: color-mix(in oklab, var(--color-ok) 15%, transparent); }
+html.visual-novo .bg-green-400 { background-color: var(--color-ok); }
+html.visual-novo .bg-green-500 { background-color: #16a34a; }
+html.visual-novo .bg-green-500\/10 { background-color: color-mix(in oklab, var(--color-ok) 10%, transparent); }
+html.visual-novo .bg-green-500\/15 { background-color: color-mix(in oklab, var(--color-ok) 15%, transparent); }
+html.visual-novo .bg-green-500\/20 { background-color: color-mix(in oklab, var(--color-ok) 20%, transparent); }
+html.visual-novo .bg-green-500\/5 { background-color: color-mix(in oklab, var(--color-ok) 5%, transparent); }
+html.visual-novo .bg-green-500\/60 { background-color: color-mix(in oklab, var(--color-ok) 60%, transparent); }
+html.visual-novo .bg-green-500\/70 { background-color: color-mix(in oklab, var(--color-ok) 70%, transparent); }
+html.visual-novo .bg-green-500\/\[0\.01\] { background-color: color-mix(in oklab, var(--color-ok) 1%, transparent); }
+html.visual-novo .bg-green-600 { background-color: #16a34a; }
+html.visual-novo .bg-green-600\/15 { background-color: color-mix(in oklab, var(--color-ok) 15%, transparent); }
+html.visual-novo .bg-purple-400 { background-color: var(--color-review); }
+html.visual-novo .bg-purple-500\/10 { background-color: color-mix(in oklab, var(--color-review) 10%, transparent); }
+html.visual-novo .bg-purple-500\/15 { background-color: color-mix(in oklab, var(--color-review) 15%, transparent); }
+html.visual-novo .bg-red-400 { background-color: var(--color-danger); }
+html.visual-novo .bg-red-500 { background-color: #dc2626; }
+html.visual-novo .bg-red-500\/10 { background-color: color-mix(in oklab, var(--color-danger) 10%, transparent); }
+html.visual-novo .bg-red-500\/15 { background-color: color-mix(in oklab, var(--color-danger) 15%, transparent); }
+html.visual-novo .bg-red-500\/20 { background-color: color-mix(in oklab, var(--color-danger) 20%, transparent); }
+html.visual-novo .bg-red-500\/5 { background-color: color-mix(in oklab, var(--color-danger) 5%, transparent); }
+html.visual-novo .bg-red-500\/50 { background-color: color-mix(in oklab, var(--color-danger) 50%, transparent); }
+html.visual-novo .bg-red-500\/70 { background-color: color-mix(in oklab, var(--color-danger) 70%, transparent); }
+html.visual-novo .bg-red-500\/80 { background-color: color-mix(in oklab, var(--color-danger) 80%, transparent); }
+html.visual-novo .bg-red-500\/\[0\.01\] { background-color: color-mix(in oklab, var(--color-danger) 1%, transparent); }
+html.visual-novo .bg-red-500\/\[0\.02\] { background-color: color-mix(in oklab, var(--color-danger) 2%, transparent); }
+html.visual-novo .bg-red-500\/\[0\.03\] { background-color: color-mix(in oklab, var(--color-danger) 3%, transparent); }
+html.visual-novo .bg-red-500\/\[0\.04\] { background-color: color-mix(in oklab, var(--color-danger) 4%, transparent); }
+html.visual-novo .bg-red-500\/\[0\.06\] { background-color: color-mix(in oklab, var(--color-danger) 6%, transparent); }
+html.visual-novo .bg-red-500\/\[0\.07\] { background-color: color-mix(in oklab, var(--color-danger) 7%, transparent); }
+html.visual-novo .bg-red-600 { background-color: #dc2626; }
+html.visual-novo .border-amber-500 { border-color: color-mix(in oklab, var(--color-warn) 45%, transparent); }
+html.visual-novo .border-amber-500\/20 { border-color: color-mix(in oklab, var(--color-warn) 20%, transparent); }
+html.visual-novo .border-amber-500\/25 { border-color: color-mix(in oklab, var(--color-warn) 25%, transparent); }
+html.visual-novo .border-amber-500\/30 { border-color: color-mix(in oklab, var(--color-warn) 30%, transparent); }
+html.visual-novo .border-amber-500\/40 { border-color: color-mix(in oklab, var(--color-warn) 40%, transparent); }
+html.visual-novo .border-amber-500\/50 { border-color: color-mix(in oklab, var(--color-warn) 50%, transparent); }
+html.visual-novo .border-amber-600 { border-color: color-mix(in oklab, var(--color-warn) 45%, transparent); }
+html.visual-novo .border-blue-500 { border-color: color-mix(in oklab, var(--color-info) 45%, transparent); }
+html.visual-novo .border-blue-500\/20 { border-color: color-mix(in oklab, var(--color-info) 20%, transparent); }
+html.visual-novo .border-blue-500\/25 { border-color: color-mix(in oklab, var(--color-info) 25%, transparent); }
+html.visual-novo .border-blue-500\/30 { border-color: color-mix(in oklab, var(--color-info) 30%, transparent); }
+html.visual-novo .border-blue-500\/40 { border-color: color-mix(in oklab, var(--color-info) 40%, transparent); }
+html.visual-novo .border-blue-500\/50 { border-color: color-mix(in oklab, var(--color-info) 50%, transparent); }
+html.visual-novo .border-emerald-500 { border-color: color-mix(in oklab, var(--color-ok) 45%, transparent); }
+html.visual-novo .border-emerald-500\/10 { border-color: color-mix(in oklab, var(--color-ok) 10%, transparent); }
+html.visual-novo .border-emerald-500\/20 { border-color: color-mix(in oklab, var(--color-ok) 20%, transparent); }
+html.visual-novo .border-emerald-500\/30 { border-color: color-mix(in oklab, var(--color-ok) 30%, transparent); }
+html.visual-novo .border-emerald-600\/30 { border-color: color-mix(in oklab, var(--color-ok) 30%, transparent); }
+html.visual-novo .border-green-400\/40 { border-color: color-mix(in oklab, var(--color-ok) 40%, transparent); }
+html.visual-novo .border-green-500 { border-color: color-mix(in oklab, var(--color-ok) 45%, transparent); }
+html.visual-novo .border-green-500\/20 { border-color: color-mix(in oklab, var(--color-ok) 20%, transparent); }
+html.visual-novo .border-green-500\/25 { border-color: color-mix(in oklab, var(--color-ok) 25%, transparent); }
+html.visual-novo .border-green-500\/30 { border-color: color-mix(in oklab, var(--color-ok) 30%, transparent); }
+html.visual-novo .border-green-500\/40 { border-color: color-mix(in oklab, var(--color-ok) 40%, transparent); }
+html.visual-novo .border-green-500\/50 { border-color: color-mix(in oklab, var(--color-ok) 50%, transparent); }
+html.visual-novo .border-green-500\/80 { border-color: color-mix(in oklab, var(--color-ok) 80%, transparent); }
+html.visual-novo .border-green-600 { border-color: color-mix(in oklab, var(--color-ok) 45%, transparent); }
+html.visual-novo .border-green-600\/40 { border-color: color-mix(in oklab, var(--color-ok) 40%, transparent); }
+html.visual-novo .border-green-600\/50 { border-color: color-mix(in oklab, var(--color-ok) 50%, transparent); }
+html.visual-novo .border-purple-500 { border-color: color-mix(in oklab, var(--color-review) 45%, transparent); }
+html.visual-novo .border-purple-500\/20 { border-color: color-mix(in oklab, var(--color-review) 20%, transparent); }
+html.visual-novo .border-purple-500\/25 { border-color: color-mix(in oklab, var(--color-review) 25%, transparent); }
+html.visual-novo .border-purple-500\/40 { border-color: color-mix(in oklab, var(--color-review) 40%, transparent); }
+html.visual-novo .border-red-400\/40 { border-color: color-mix(in oklab, var(--color-danger) 40%, transparent); }
+html.visual-novo .border-red-500 { border-color: color-mix(in oklab, var(--color-danger) 45%, transparent); }
+html.visual-novo .border-red-500\/15 { border-color: color-mix(in oklab, var(--color-danger) 15%, transparent); }
+html.visual-novo .border-red-500\/20 { border-color: color-mix(in oklab, var(--color-danger) 20%, transparent); }
+html.visual-novo .border-red-500\/25 { border-color: color-mix(in oklab, var(--color-danger) 25%, transparent); }
+html.visual-novo .border-red-500\/30 { border-color: color-mix(in oklab, var(--color-danger) 30%, transparent); }
+html.visual-novo .border-red-500\/35 { border-color: color-mix(in oklab, var(--color-danger) 35%, transparent); }
+html.visual-novo .border-red-500\/40 { border-color: color-mix(in oklab, var(--color-danger) 40%, transparent); }
+html.visual-novo .border-red-500\/50 { border-color: color-mix(in oklab, var(--color-danger) 50%, transparent); }
+html.visual-novo .border-red-500\/80 { border-color: color-mix(in oklab, var(--color-danger) 80%, transparent); }
+html.visual-novo .fill-amber-500\/20 { fill: color-mix(in oklab, var(--color-warn-fg) 20%, transparent); }
+html.visual-novo .fill-red-500\/30 { fill: color-mix(in oklab, var(--color-danger-fg) 30%, transparent); }
+html.visual-novo .ring-blue-500\/20 { --tw-ring-color: color-mix(in oklab, var(--color-info) 20%, transparent); }
+html.visual-novo .ring-purple-500\/20 { --tw-ring-color: color-mix(in oklab, var(--color-review) 20%, transparent); }
+html.visual-novo .text-amber-200 { color: var(--color-warn-fg); }
+html.visual-novo .text-amber-400 { color: var(--color-warn-fg); }
+html.visual-novo .text-amber-500 { color: var(--color-warn-fg); }
+html.visual-novo .text-amber-500\/90 { color: color-mix(in oklab, var(--color-warn-fg) 90%, transparent); }
+html.visual-novo .text-amber-600 { color: var(--color-warn-fg); }
+html.visual-novo .text-amber-800 { color: var(--color-warn-fg); }
+html.visual-novo .text-blue-400 { color: var(--color-info-fg); }
+html.visual-novo .text-blue-500 { color: var(--color-info-fg); }
+html.visual-novo .text-blue-600 { color: var(--color-info-fg); }
+html.visual-novo .text-emerald-400 { color: var(--color-ok-fg); }
+html.visual-novo .text-emerald-500 { color: var(--color-ok-fg); }
+html.visual-novo .text-emerald-500\/60 { color: color-mix(in oklab, var(--color-ok-fg) 60%, transparent); }
+html.visual-novo .text-emerald-600 { color: var(--color-ok-fg); }
+html.visual-novo .text-emerald-700 { color: var(--color-ok-fg); }
+html.visual-novo .text-green-200 { color: var(--color-ok-fg); }
+html.visual-novo .text-green-400 { color: var(--color-ok-fg); }
+html.visual-novo .text-green-500 { color: var(--color-ok-fg); }
+html.visual-novo .text-green-600 { color: var(--color-ok-fg); }
+html.visual-novo .text-purple-400 { color: var(--color-review-fg); }
+html.visual-novo .text-purple-500 { color: var(--color-review-fg); }
+html.visual-novo .text-red-200 { color: var(--color-danger-fg); }
+html.visual-novo .text-red-400 { color: var(--color-danger-fg); }
+html.visual-novo .text-red-500 { color: var(--color-danger-fg); }
+html.visual-novo .text-red-500\/80 { color: color-mix(in oklab, var(--color-danger-fg) 80%, transparent); }
+html.visual-novo .text-red-600 { color: var(--color-danger-fg); }
+html.visual-novo .border-cyan-500 { border-color: color-mix(in oklab, var(--color-cyan-500) 45%, transparent); }
+html.visual-novo .border-sky-400 { border-color: color-mix(in oklab, var(--color-sky-400) 45%, transparent); }
+@media (hover: hover) {
+  html.visual-novo .group:hover .group-hover\:bg-red-500\/10 { background-color: color-mix(in oklab, var(--color-danger) 10%, transparent); }
+  html.visual-novo .group:hover .group-hover\:border-amber-500\/50 { border-color: color-mix(in oklab, var(--color-warn) 50%, transparent); }
+  html.visual-novo .group:hover .group-hover\:text-amber-600 { color: var(--color-warn-fg); }
+  html.visual-novo .group:hover .group-hover\:text-emerald-500 { color: var(--color-ok-fg); }
+  html.visual-novo .hover\:bg-amber-500\/10:hover { background-color: color-mix(in oklab, var(--color-warn) 10%, transparent); }
+  html.visual-novo .hover\:bg-amber-500\/20:hover { background-color: color-mix(in oklab, var(--color-warn) 20%, transparent); }
+  html.visual-novo .hover\:bg-amber-500\/\[0\.14\]:hover { background-color: color-mix(in oklab, var(--color-warn) 14%, transparent); }
+  html.visual-novo .hover\:bg-blue-500\/10:hover { background-color: color-mix(in oklab, var(--color-info) 10%, transparent); }
+  html.visual-novo .hover\:bg-blue-500\/20:hover { background-color: color-mix(in oklab, var(--color-info) 20%, transparent); }
+  html.visual-novo .hover\:bg-emerald-500\/20:hover { background-color: color-mix(in oklab, var(--color-ok) 20%, transparent); }
+  html.visual-novo .hover\:bg-green-500:hover { background-color: #16a34a; }
+  html.visual-novo .hover\:bg-green-500\/10:hover { background-color: color-mix(in oklab, var(--color-ok) 10%, transparent); }
+  html.visual-novo .hover\:bg-green-500\/15:hover { background-color: color-mix(in oklab, var(--color-ok) 15%, transparent); }
+  html.visual-novo .hover\:bg-green-500\/25:hover { background-color: color-mix(in oklab, var(--color-ok) 25%, transparent); }
+  html.visual-novo .hover\:bg-red-500:hover { background-color: #dc2626; }
+  html.visual-novo .hover\:bg-red-500\/10:hover { background-color: color-mix(in oklab, var(--color-danger) 10%, transparent); }
+  html.visual-novo .hover\:bg-red-500\/20:hover { background-color: color-mix(in oklab, var(--color-danger) 20%, transparent); }
+  html.visual-novo .hover\:bg-red-500\/5:hover { background-color: color-mix(in oklab, var(--color-danger) 5%, transparent); }
+  html.visual-novo .hover\:bg-red-500\/\[0\.04\]:hover { background-color: color-mix(in oklab, var(--color-danger) 4%, transparent); }
+  html.visual-novo .hover\:bg-red-500\/\[0\.12\]:hover { background-color: color-mix(in oklab, var(--color-danger) 12%, transparent); }
+  html.visual-novo .hover\:bg-red-600:hover { background-color: #dc2626; }
+  html.visual-novo .hover\:border-amber-500\/30:hover { border-color: color-mix(in oklab, var(--color-warn) 30%, transparent); }
+  html.visual-novo .hover\:border-amber-500\/40:hover { border-color: color-mix(in oklab, var(--color-warn) 40%, transparent); }
+  html.visual-novo .hover\:border-amber-500\/60:hover { border-color: color-mix(in oklab, var(--color-warn) 60%, transparent); }
+  html.visual-novo .hover\:border-emerald-500\/40:hover { border-color: color-mix(in oklab, var(--color-ok) 40%, transparent); }
+  html.visual-novo .hover\:border-green-500:hover { border-color: var(--color-ok); }
+  html.visual-novo .hover\:border-green-500\/60:hover { border-color: color-mix(in oklab, var(--color-ok) 60%, transparent); }
+  html.visual-novo .hover\:border-red-400\/40:hover { border-color: color-mix(in oklab, var(--color-danger) 40%, transparent); }
+  html.visual-novo .hover\:border-red-500\/30:hover { border-color: color-mix(in oklab, var(--color-danger) 30%, transparent); }
+  html.visual-novo .hover\:border-red-500\/40:hover { border-color: color-mix(in oklab, var(--color-danger) 40%, transparent); }
+  html.visual-novo .hover\:border-red-500\/50:hover { border-color: color-mix(in oklab, var(--color-danger) 50%, transparent); }
+  html.visual-novo .hover\:text-amber-600:hover { color: var(--color-warn-fg); }
+  html.visual-novo .hover\:text-blue-400:hover { color: var(--color-info-fg); }
+  html.visual-novo .hover\:text-blue-500:hover { color: var(--color-info-fg); }
+  html.visual-novo .hover\:text-green-500:hover { color: var(--color-ok-fg); }
+  html.visual-novo .hover\:text-green-500\/60:hover { color: color-mix(in oklab, var(--color-ok-fg) 60%, transparent); }
+  html.visual-novo .hover\:text-red-400:hover { color: var(--color-danger-fg); }
+  html.visual-novo .hover\:text-red-500:hover { color: var(--color-danger-fg); }
+  html.visual-novo .hover\:text-red-600:hover { color: var(--color-danger-fg); }
+}
+/* <<< TONS-GERADOS */

@@ -291,8 +291,9 @@ export default function Templates() {
       <div className="flex items-center gap-1 border-b border-lumos-border pb-px">
         <button 
           onClick={() => setActiveTab('budgets')}
+          role="tab" aria-selected={activeTab === 'budgets'}
           className={clsx(
-            "px-6 py-3 text-xs font-black uppercase tracking-widest transition-all relative",
+            "aba-lumos px-6 py-3 text-xs font-black uppercase tracking-widest transition-all relative",
             activeTab === 'budgets' ? "text-lumos-yellow" : "text-lumos-text-secondary hover:text-lumos-text-primary"
           )}
         >
@@ -301,8 +302,9 @@ export default function Templates() {
         </button>
         <button 
           onClick={() => { setActiveTab('briefing'); setSearchTerm(''); }}
+          role="tab" aria-selected={activeTab === 'briefing'}
           className={clsx(
-            "px-6 py-3 text-xs font-black uppercase tracking-widest transition-all relative",
+            "aba-lumos px-6 py-3 text-xs font-black uppercase tracking-widest transition-all relative",
             activeTab === 'briefing' ? "text-lumos-yellow" : "text-lumos-text-secondary hover:text-lumos-text-primary"
           )}
         >

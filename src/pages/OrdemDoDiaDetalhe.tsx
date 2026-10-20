@@ -1073,7 +1073,7 @@ export default function OrdemDoDiaDetalhe() {
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-black text-lumos-yellow bg-lumos-yellow/10 px-2 py-0.5 rounded uppercase">{od.codigo}</span>
-            <h1 className="text-lg font-black text-lumos-text-primary font-heading truncate">{od.titulo}</h1>
+            <h1 className="titulo-ferramenta text-lg font-black text-lumos-text-primary font-heading truncate">{od.titulo}</h1>
             {canManage && (
               <button type="button" title="Renomear"
                 onClick={() => setQf({ title: 'Renomear ordem do dia', fields: [{ key: 'titulo', label: 'Título', value: od.titulo, required: true }], onSubmit: v => void patch({ titulo: v.titulo.trim() }) })}

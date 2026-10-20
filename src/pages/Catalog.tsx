@@ -235,7 +235,7 @@ export default function Catalog() {
   const groups = ['equipe', 'equipamentos', 'producao', 'edicao'] as const;
 
   return (
-    <div className="space-y-8 p-8">
+    <div className="pagina-sem-recuo space-y-8 p-8">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

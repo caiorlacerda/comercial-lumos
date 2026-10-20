@@ -228,10 +228,10 @@ export default function Agenda() {
         </div>
 
         {/* Visualização: calendário / lista / kanban */}
-        <div className="ml-auto flex items-center border border-lumos-border rounded-lumos overflow-hidden">
+        <div className="segmentado-lumos ml-auto flex items-center border border-lumos-border rounded-lumos overflow-hidden">
           {([['calendario', 'Calendário', CalendarDays], ['lista', 'Lista', List], ['kanban', 'Kanban', LayoutGrid]] as const).map(([key, label, Icon]) => (
-            <button key={key} type="button" onClick={() => mudarVisao(key)}
-              className={clsx('h-9 px-3.5 text-[11px] font-black uppercase tracking-wide flex items-center gap-1.5 transition-colors',
+            <button key={key} type="button" onClick={() => mudarVisao(key)} aria-pressed={visao === key}
+              className={clsx('segmento-lumos h-9 px-3.5 text-[11px] font-black uppercase tracking-wide flex items-center gap-1.5 transition-colors',
                 visao === key ? 'bg-lumos-yellow text-black' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
               <Icon className="w-3.5 h-3.5" /> {label}
             </button>
@@ -245,9 +245,9 @@ export default function Agenda() {
           const ativo = tiposAtivos.has(t);
           const T = TIPOS[t];
           return (
-            <button key={t} type="button"
+            <button key={t} type="button" aria-pressed={ativo}
               onClick={() => setTiposAtivos(prev => { const n = new Set(prev); if (n.has(t)) n.delete(t); else n.add(t); return n; })}
-              className={clsx('h-8 px-3 rounded-full border text-[10.5px] font-black flex items-center gap-1.5 transition-colors',
+              className={clsx('chip-lumos h-8 px-3 rounded-full border text-[10.5px] font-black flex items-center gap-1.5 transition-colors',
                 ativo ? T.chip : 'border-lumos-border text-lumos-text-secondary/60 hover:text-lumos-text-secondary')}>
               <span className="w-2 h-2 rounded-full" style={{ background: ativo ? T.cor : 'currentColor', opacity: ativo ? 1 : 0.4 }} />
               {T.label}
@@ -274,10 +274,10 @@ export default function Agenda() {
           <div className="ml-auto flex items-center gap-1.5">
             <button type="button" onClick={() => setCursor(new Date())}
               className="h-8 px-3 rounded-lumos border border-lumos-border text-[11px] font-black text-lumos-text-secondary hover:text-lumos-text-primary">Hoje</button>
-            <div className="flex items-center border border-lumos-border rounded-lumos overflow-hidden">
+            <div className="segmentado-lumos flex items-center border border-lumos-border rounded-lumos overflow-hidden">
               {([['mes', 'Mês'], ['semana', 'Semana'], ['dia', 'Dia']] as const).map(([key, label]) => (
-                <button key={key} type="button" onClick={() => mudarGran(key)}
-                  className={clsx('h-8 px-3 text-[10.5px] font-black uppercase transition-colors',
+                <button key={key} type="button" onClick={() => mudarGran(key)} aria-pressed={gran === key}
+                  className={clsx('segmento-lumos h-8 px-3 text-[10.5px] font-black uppercase transition-colors',
                     gran === key ? 'bg-lumos-text-primary/10 text-lumos-text-primary' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
                   {label}
                 </button>

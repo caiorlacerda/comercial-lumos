@@ -160,11 +160,12 @@ export default function Clients() {
           <p className="text-lumos-text-secondary mt-1 font-medium">Empresas e agências cadastradas na plataforma.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex bg-lumos-surface border border-lumos-border p-1 rounded-lumos">
+          <div className="segmentado-lumos flex bg-lumos-surface border border-lumos-border p-1 rounded-lumos">
             <button
               onClick={() => setViewMode('grid')}
+              aria-pressed={viewMode === 'grid'}
               className={clsx(
-                "p-2 rounded-sm transition-all",
+                "segmento-lumos p-2 rounded-sm transition-all",
                 viewMode === 'grid' ? "bg-lumos-yellow text-black shadow-sm" : "text-lumos-text-secondary hover:text-lumos-text-primary"
               )}
             >
@@ -172,8 +173,9 @@ export default function Clients() {
             </button>
             <button
               onClick={() => setViewMode('list')}
+              aria-pressed={viewMode === 'list'}
               className={clsx(
-                "p-2 rounded-sm transition-all",
+                "segmento-lumos p-2 rounded-sm transition-all",
                 viewMode === 'list' ? "bg-lumos-yellow text-black shadow-sm" : "text-lumos-text-secondary hover:text-lumos-text-primary"
               )}
             >

@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useVisualNovo } from '@/lib/visualNovo';
+import EscopoVisual from '@/components/ui/EscopoVisual';
 
 interface ModalProps {
   isOpen: boolean;
@@ -13,22 +15,36 @@ interface ModalProps {
   className?: string;
   padding?: string;
   bodyClassName?: string;
-  /** Renderiza direto no <body>: cobre a tela inteira, inclusive a barra lateral. */
+  /** Renderiza direto no <body>: cobre a tela inteira, inclusive a barra lateral.
+   *  Com o visual novo ligado, é o padrão (corrige a janela aparecendo por baixo do menu). */
   portal?: boolean;
+  /** Tamanho padrão da janela. `maxWidth` (se informado) tem prioridade. */
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
-export default function Modal({ 
-  isOpen, 
-  onClose, 
-  title, 
-  children, 
+const TAMANHOS = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+  full: 'max-w-none h-full flex flex-col',
+} as const;
+
+export default function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
   footer,
   maxWidth = '',
   className,
   padding = 'p-6',
   bodyClassName,
-  portal = false
+  portal,
+  size
 }: ModalProps) {
+  const visualNovo = useVisualNovo();
+  const usarPortal = portal ?? visualNovo;
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -50,7 +66,7 @@ export default function Modal({
       />
       <div className={clsx(
         "bg-lumos-surface w-full rounded-lumos shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300",
-        maxWidth || 'max-w-md',
+        maxWidth || (size ? TAMANHOS[size] : 'max-w-md'),
         className
       )}>
         <div className={clsx("flex items-center justify-between border-b border-lumos-border", padding)}>
@@ -78,5 +94,5 @@ export default function Modal({
     </div>
   );
 
-  return portal ? createPortal(conteudo, document.body) : conteudo;
+  return usarPortal ? createPortal(<EscopoVisual>{conteudo}</EscopoVisual>, document.body) : conteudo;
 }

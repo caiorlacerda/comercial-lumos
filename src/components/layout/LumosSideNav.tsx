@@ -98,7 +98,7 @@ export default function LumosSideNav({
   };
 
   return (
-    <div className="relative flex h-full">
+    <div className="lumos-shell relative flex h-full">
       {/* ---------------- Rail de ícones (sempre visível) ---------------- */}
       <aside className="lumos-nav-surface flex w-16 flex-col items-center gap-1.5 border-r border-lumos-border py-3 flex-shrink-0">
         {/* Logo */}

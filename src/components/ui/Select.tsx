@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search } from 'lucide-react';
 import { clsx } from 'clsx';
+import EscopoVisual from '@/components/ui/EscopoVisual';
 
 export interface SelectOption { value: string; label: string; dotClass?: string; groupLabel?: string; }
 
@@ -92,6 +93,7 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
       </button>
 
       {open && pos && createPortal(
+        <EscopoVisual>
         <div
           ref={menuRef}
           style={{
@@ -99,7 +101,7 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
             left: align === 'right' ? undefined : pos.left,
             right: align === 'right' ? Math.max(8, window.innerWidth - (pos.left + pos.width)) : undefined,
           }}
-          className={clsx('z-[300] max-w-[300px] flex flex-col max-h-72 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl', menuClassName)}
+          className={clsx('fixed z-[300] max-w-[300px] flex flex-col max-h-72 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl', menuClassName)}
         >
           {searchable && (
             <div className="p-1.5 border-b border-lumos-border flex items-center gap-1.5">
@@ -139,7 +141,8 @@ export default function Select({ value, onChange, options, placeholder = 'Seleci
               );
             })}
           </div>
-        </div>,
+        </div>
+        </EscopoVisual>,
         document.body,
       )}
     </>

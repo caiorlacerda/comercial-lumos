@@ -19,9 +19,11 @@ import { useTheme } from '@/context/ThemeContext';
 import { clsx } from 'clsx';
 import ThemeToggle from '@/components/common/ThemeToggle';
 import { supabase } from '@/lib/supabase';
+import { useVisualNovo, definirVisualNovo } from '@/lib/visualNovo';
 
 export default function Settings() {
-  const { user, profile, updateProfile, updateAvatar } = useAuth();
+  const { user, profile, updateProfile, updateAvatar, isAdmin } = useAuth();
+  const visualNovo = useVisualNovo();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
@@ -318,6 +320,29 @@ export default function Settings() {
         </div>
 
         <ThemeToggle showDescription={true} />
+
+        {/* Interruptor do visual novo: só para admin e só neste aparelho (ver lib/visualNovo.ts) */}
+        {isAdmin && (
+          <div className="flex items-center justify-between gap-4 pt-6 border-t border-lumos-border">
+            <div>
+              <p className="text-sm font-bold text-lumos-text-primary">Visual novo</p>
+              <p className="text-xs text-lumos-text-secondary">Ligado por padrão para todo o time. Desligar volta ao visual antigo só neste aparelho.</p>
+              <button type="button" onClick={() => navigate('/design')} className="mt-1 text-xs font-semibold text-lumos-yellow hover:underline">Abrir o guia de design</button>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={visualNovo}
+              onClick={() => definirVisualNovo(!visualNovo)}
+              className={clsx(
+                'relative w-11 h-6 rounded-full transition-colors flex-shrink-0',
+                visualNovo ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30',
+              )}
+            >
+              <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform', visualNovo && 'translate-x-5')} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Notifications Section */}

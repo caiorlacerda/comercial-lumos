@@ -286,8 +286,8 @@ export default function FinanceiroMovimentacoes() {
         )}
         <div className="flex items-center gap-1">
           {CHIPS.map(c => (
-            <button key={c.id} onClick={() => setFluxo(c.id)}
-              className={clsx('px-3 h-8 rounded-full text-[11px] font-black uppercase tracking-wider border transition-colors',
+            <button key={c.id} onClick={() => setFluxo(c.id)} aria-pressed={fluxo === c.id}
+              className={clsx('chip-lumos px-3 h-8 rounded-full text-[11px] font-black uppercase tracking-wider border transition-colors',
                 fluxo === c.id
                   ? 'bg-lumos-yellow/15 text-lumos-yellow border-lumos-yellow/40'
                   : 'text-lumos-text-secondary border-lumos-border hover:text-lumos-text-primary')}>
