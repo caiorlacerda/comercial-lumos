@@ -327,6 +327,7 @@ export default function Settings() {
             <div>
               <p className="text-sm font-bold text-lumos-text-primary">Visual novo (em teste)</p>
               <p className="text-xs text-lumos-text-secondary">Vale só neste aparelho. O time continua vendo o visual de sempre.</p>
+              <button type="button" onClick={() => navigate('/design')} className="mt-1 text-xs font-semibold text-lumos-yellow hover:underline">Abrir o guia de design</button>
             </div>
             <button
               type="button"

@@ -215,3 +215,12 @@ Cerca de **3 a 4 semanas de calendário** no total, mas já dá para ver ganho g
 - **Telas grandes** (Projetos, Editor de orçamento) concentram o risco; vamos mexer nelas por último, depois de a caixa de peças estar madura.
 - **Nada de SQL** nesta frente: é só visual. A migration `2026101300_home_layout.sql` da Home continua pendente de você rodar.
 - Nada será mesclado sem sua aprovação.
+
+---
+
+## 7. Andamento
+
+- **Fase 1 (base):** concluída em 20/10/2026. Cores de significado, fonte única, texto mínimo de 12px, cantos, sombras.
+- **Fonte dos títulos:** Instrument Serif (escolha B).
+- **Fase 2 (caixa de peças):** concluída em 20/10/2026, atrás do interruptor. Peças em `src/components/ui/`: `Button` e `IconButton`, `StatusChip`, `Field`/`Input`/`Textarea`, `Tabs` e `SegmentedControl`, `PageHeader`, `Panel` e `StatCard`, `DataTable`, `ActionMenu`, `EmptyState` e `Skeleton`. A janela (`Modal`, com `size` e portal automático), o `Select` e o aviso (toast) ganharam o visual novo. Todas aparecem na página `/design` (só admin).
+- **Fase 3 (ondas nas telas):** próxima. Ordem: casca (menu e celular), Financeiro, Comercial, Produção, Configurações e equipe.

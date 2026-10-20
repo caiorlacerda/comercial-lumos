@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { useVisualNovo } from '@/lib/visualNovo';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -32,8 +33,23 @@ const STYLES: Record<ToastType, string> = {
   info: 'bg-lumos-surface text-lumos-text-primary border border-lumos-border',
 };
 
+// Visual novo: aviso no mesmo vidro do app (fundo do cartão, borda e ícone na cor do significado).
+const STYLES_NOVO: Record<ToastType, string> = {
+  success: 'bg-lumos-surface text-lumos-text-primary border border-ok/50',
+  error: 'bg-lumos-surface text-lumos-text-primary border border-danger/50',
+  warning: 'bg-lumos-surface text-lumos-text-primary border border-warn/50',
+  info: 'bg-lumos-surface text-lumos-text-primary border border-lumos-border',
+};
+const ICON_COR_NOVO: Record<ToastType, string> = {
+  success: 'text-ok-fg',
+  error: 'text-danger-fg',
+  warning: 'text-warn-fg',
+  info: 'text-info-fg',
+};
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const visualNovo = useVisualNovo();
 
   const add = useCallback((message: string, type: ToastType) => {
     const id = crypto.randomUUID();
@@ -61,9 +77,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lumos shadow-2xl text-sm font-semibold w-full pointer-events-auto animate-in fade-in slide-in-from-bottom-4 lg:slide-in-from-top-4 duration-300 ${STYLES[toast.type]}`}
+            className={`flex items-center gap-3 px-4 py-3 rounded-lumos shadow-2xl text-sm font-semibold w-full pointer-events-auto animate-in fade-in slide-in-from-bottom-4 lg:slide-in-from-top-4 duration-300 ${visualNovo ? STYLES_NOVO[toast.type] : STYLES[toast.type]}`}
           >
-            {ICONS[toast.type]}
+            {visualNovo ? <span className={`flex-shrink-0 ${ICON_COR_NOVO[toast.type]}`}>{ICONS[toast.type]}</span> : ICONS[toast.type]}
             <span className="flex-1">{toast.message}</span>
             <button
               onClick={() => remove(toast.id)}
