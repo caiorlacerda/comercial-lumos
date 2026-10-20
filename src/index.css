@@ -651,6 +651,32 @@ html.visual-novo .recharts-legend-item-text { font-size: 12px; }
 .lumos-deck h1.text-3xl + p,
 .lumos-deck h1.sm\:text-3xl + p { margin-top: 6px; }
 
+/* ── Onda C: Comercial ─────────────────────────────────────────────────────────────── */
+
+/* Amarelos "soltos" escritos em hexadecimal (ex.: etiqueta "Em negociação"): no tema claro viram o
+   dourado escuro da marca, senão somem sobre o vidro claro. */
+html.visual-novo:not(.dark) .lumos-deck .text-\[\#F5D87A\],
+html.visual-novo:not(.dark) .lumos-deck .text-\[\#EFC700\],
+html.visual-novo:not(.dark) .lumos-deck .text-\[\#efc700\] { color: var(--color-lumos-gold); }
+
+/* Celular: os filtros viram uma fileira que rola para o lado (antes cada filtro ocupava uma linha
+   inteira), com o texto em minúsculas para caber o valor escolhido. */
+@media (max-width: 639px) {
+  .lumos-deck .flex-wrap:has(> .relative > button.input-lumos) {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
+  }
+  .lumos-deck .flex-wrap:has(> .relative > button.input-lumos)::-webkit-scrollbar { display: none; }
+  .lumos-deck .flex-wrap > .relative:has(> button.input-lumos) { flex: 0 0 auto; }
+  .lumos-deck button.input-lumos {
+    min-width: 150px; text-transform: none; letter-spacing: 0; font-family: 'DM Sans', Arial, sans-serif; font-weight: 500;
+  }
+  /* Linha de indicadores: 2 por linha no celular, em vez de 1 por linha. */
+  .lumos-deck .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+
+/* Página que já traz o próprio recuo (Catálogo): com o visual novo usa só o recuo do layout. */
+html.visual-novo .pagina-sem-recuo { padding: 0; }
+
 /* >>> TONS-GERADOS (não edite: rode scripts/gerar-tons-visual-novo.py) */
 /* Gerado a partir das classes de cor cruas usadas no código. */
 html.visual-novo .bg-amber-400 { background-color: var(--color-warn); }
