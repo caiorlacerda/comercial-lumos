@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abas da Lumos: opções</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --txt:#161616; --sub:#4a4a45; --card:rgba(255,255,255,.62); --bd:rgba(255,255,255,.85); --linha:rgba(0,0,0,.08); --ouro:#7a5c00; --amarelo:#efc700; --sol:#fff; --chip:rgba(0,0,0,.07); }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 16px 56px; font-family:'DM Sans',Arial,sans-serif; color:var(--txt); min-height:100vh;
+    background: radial-gradient(900px 420px at 12% 0%, rgba(239,199,0,.42), transparent 60%), linear-gradient(135deg,#ebe8e2,#d9d5ce); }
+  .wrap { max-width:1000px; margin:0 auto; }
+  h1 { font-family:'Instrument Serif',serif; font-weight:400; font-size:34px; margin:0 0 4px; }
+  p.sub { margin:0 0 22px; color:var(--sub); font-size:14px; }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(440px,1fr)); }
+  .opt { background:var(--card); border:1px solid var(--bd); border-radius:12px; padding:20px; backdrop-filter:blur(14px); }
+  .opt.dark { background:#1d1d1b; color:#fff; --txt:#fff; --sub:#d5d3d0; --linha:rgba(255,255,255,.14); --ouro:#efc700; --sol:#2f2f2c; --chip:rgba(255,255,255,.14); border-color:rgba(255,255,255,.18); }
+  .tag { font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--sub); margin-bottom:6px; display:block; }
+  .nota { font-size:13px; color:var(--sub); margin:0 0 16px; }
+  .conteudo { margin-top:14px; height:56px; border-radius:12px; border:1px solid var(--linha); background:rgba(255,255,255,.35); display:flex; align-items:center; padding:0 14px; font-size:13px; color:var(--sub); }
+  .dark .conteudo { background:rgba(255,255,255,.05); }
+  .cnt { font-size:12px; font-weight:600; padding:1px 7px; border-radius:999px; background:var(--chip); color:var(--sub); }
+  button { font-family:inherit; cursor:pointer; border:0; background:none; color:inherit; }
+
+  /* A: atual, sublinhado */
+  .a { display:flex; gap:2px; border-bottom:1px solid var(--linha); }
+  .a button { padding:10px 14px; font-size:14px; font-weight:500; color:var(--sub); border-bottom:2px solid transparent; margin-bottom:-1px; display:inline-flex; gap:8px; align-items:center; }
+  .a button.on { color:var(--txt); border-bottom-color:var(--amarelo); }
+
+  /* B: cápsulas */
+  .b { display:flex; gap:4px; }
+  .b button { height:40px; padding:0 16px; font-size:14px; font-weight:500; color:var(--sub); border-radius:12px; display:inline-flex; gap:8px; align-items:center; border:1px solid transparent; }
+  .b button:hover { background:var(--chip); }
+  .b button.on { background:var(--sol); color:var(--txt); font-weight:600; border-color:var(--linha); box-shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.07); }
+  .b button.on::before { content:""; width:6px; height:6px; border-radius:99px; background:var(--amarelo); }
+
+  /* C: indicador grosso arredondado + área maior */
+  .c { display:flex; gap:6px; border-bottom:1px solid var(--linha); }
+  .c button { position:relative; height:46px; padding:0 14px; font-size:15px; font-weight:500; color:var(--sub); display:inline-flex; gap:8px; align-items:center; }
+  .c button.on { color:var(--txt); font-weight:600; }
+  .c button.on::after { content:""; position:absolute; left:10px; right:10px; bottom:-1px; height:4px; border-radius:4px 4px 0 0; background:var(--amarelo); }
+  .c button:hover:not(.on) { color:var(--txt); }
+
+  /* D: pasta (aba ligada ao cartão) */
+  .d { display:flex; gap:4px; align-items:flex-end; margin-bottom:-1px; position:relative; z-index:1; }
+  .d button { height:40px; padding:0 18px; font-size:14px; font-weight:500; color:var(--sub); border-radius:12px 12px 0 0; border:1px solid transparent; border-bottom:0; display:inline-flex; gap:8px; align-items:center; }
+  .d button:hover { background:var(--chip); }
+  .d button.on { height:44px; background:var(--sol); color:var(--txt); font-weight:600; border-color:var(--linha); }
+  .d-corpo { border:1px solid var(--linha); background:var(--sol); border-radius:0 12px 12px 12px; padding:14px; font-size:13px; color:var(--sub); height:64px; display:flex; align-items:center; }
+
+  .rolagem { overflow-x:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Abas: quatro jeitos</h1>
+  <p class="sub">Abas trocam de seção na página (Em andamento / Encerrados; A Receber / A Pagar / Bancos). Cada cartão mostra no claro e no escuro, com ícone e contador.</p>
+
+  <div class="grid">
+
+    <div class="opt">
+      <span class="tag">A · Atual (sublinhado fino)</span>
+      <p class="nota">Discreta. A área de clique é pequena e o contraste do ativo depende só da linha.</p>
+      <div class="rolagem"><div class="a"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="conteudo">Conteúdo da aba</div>
+    </div>
+
+    <div class="opt">
+      <span class="tag">B · Cápsulas (recomendada)</span>
+      <p class="nota">Aba ativa vira um cartão branco com sombra e ponto dourado. Área de toque de 40px, ótima no celular e no tablet, e se distingue do alternador (que é amarelo).</p>
+      <div class="rolagem"><div class="b"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="conteudo">Conteúdo da aba</div>
+    </div>
+
+    <div class="opt">
+      <span class="tag">C · Linha grossa dourada</span>
+      <p class="nota">Mais marcante que a atual: indicador de 4px arredondado, texto maior (15px) e altura de 46px.</p>
+      <div class="rolagem"><div class="c"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="conteudo">Conteúdo da aba</div>
+    </div>
+
+    <div class="opt">
+      <span class="tag">D · Pasta (aba ligada ao conteúdo)</span>
+      <p class="nota">A aba ativa "continua" no cartão abaixo, como uma pasta de arquivo. Deixa claro a que conteúdo a aba pertence.</p>
+      <div class="rolagem"><div class="d"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="d-corpo">Conteúdo da aba</div>
+    </div>
+
+    <div class="opt dark">
+      <span class="tag">A · Atual, escuro</span>
+      <div class="rolagem"><div class="a"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="conteudo">Conteúdo da aba</div>
+    </div>
+
+    <div class="opt dark">
+      <span class="tag">B · Cápsulas, escuro</span>
+      <div class="rolagem"><div class="b"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="conteudo">Conteúdo da aba</div>
+    </div>
+
+    <div class="opt dark">
+      <span class="tag">C · Linha grossa, escuro</span>
+      <div class="rolagem"><div class="c"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="conteudo">Conteúdo da aba</div>
+    </div>
+
+    <div class="opt dark">
+      <span class="tag">D · Pasta, escuro</span>
+      <div class="rolagem"><div class="d"><button class="on">Em andamento <span class="cnt">25</span></button><button>Encerrados <span class="cnt">13</span></button><button>Arquivados</button></div></div>
+      <div class="d-corpo">Conteúdo da aba</div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

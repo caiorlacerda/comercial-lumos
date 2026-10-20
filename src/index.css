@@ -747,25 +747,38 @@ html.visual-novo h1.titulo-ferramenta { font-size: 26px; }
    3) CHIPS de filtro (Todas/Entradas/Saídas...): pílulas de 32px, a ativa com véu dourado. Marcação: .chip-lumos.
    4) CAMPOS de seleção: texto normal em DM Sans (sem caixa alta mono). */
 
+/* Abas em formato de PASTA: a aba ativa é um cartão sólido que "continua" na linha da seção; as demais
+   ficam discretas. A linha-base vem de uma sombra interna do contêiner, que a aba ativa cobre. */
+html.visual-novo { --aba-linha: rgba(0, 0, 0, 0.1); }
+html.visual-novo.dark { --aba-linha: rgba(255, 255, 255, 0.16); }
+
+html.visual-novo .lumos-deck .border-b:has(> button.border-b-2),
+html.visual-novo .lumos-deck .border-b:has(> button.aba-lumos),
+html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) {
+  border-bottom: 0; box-shadow: inset 0 -1px 0 var(--aba-linha); padding-bottom: 0;
+  align-items: flex-end; gap: 4px; overflow-x: auto; scrollbar-width: none;
+}
 html.visual-novo .lumos-deck button.border-b-2,
 html.visual-novo .lumos-deck button.aba-lumos {
-  font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 1.25;
-  text-transform: none; letter-spacing: 0; padding: 10px 14px; border-radius: 0; background: transparent;
-  color: var(--color-lumos-text-secondary); border-bottom: 2px solid transparent;
+  position: relative; margin: 0; padding: 10px 18px; background: transparent; line-height: 1.25; white-space: nowrap; flex-shrink: 0;
+  font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; font-weight: 500; text-transform: none; letter-spacing: 0;
+  color: var(--color-lumos-text-secondary);
+  border: 1px solid transparent; border-bottom: 0; border-radius: 12px 12px 0 0;
 }
 html.visual-novo .lumos-deck button.border-b-2:not(.border-transparent),
 html.visual-novo .lumos-deck button.aba-lumos[aria-selected='true'] {
-  color: var(--color-lumos-text-primary); border-bottom-color: var(--color-lumos-yellow);
+  padding-top: 13px; background: var(--deck-solido, var(--color-lumos-surface)); color: var(--color-lumos-text-primary); font-weight: 600;
+  border-color: var(--aba-linha); z-index: 1;
 }
 @media (hover: hover) {
-  html.visual-novo .lumos-deck button.border-b-2:hover,
-  html.visual-novo .lumos-deck button.aba-lumos:hover { color: var(--color-lumos-text-primary); }
+  html.visual-novo .lumos-deck button.border-b-2.border-transparent:hover,
+  html.visual-novo .lumos-deck button.aba-lumos[aria-selected='false']:hover {
+    color: var(--color-lumos-text-primary); background: color-mix(in oklab, var(--color-lumos-text-secondary) 12%, transparent);
+  }
 }
 html.visual-novo .lumos-deck .aba-lumos > .absolute { display: none; }
-/* Abas coladas na barra de controles por margem negativa (Custos de Projeto): a linha dourada ficava escondida. */
-html.visual-novo .lumos-deck .border-b.\-mb-2:has(> button.border-b-2) { margin-bottom: 0; }
-html.visual-novo .lumos-deck .border-b:has(> button.border-b-2),
-html.visual-novo .lumos-deck .border-b:has(> button.aba-lumos) { gap: 2px; }
+/* Abas com botão de ação ao lado (Equipamentos): a fileira de abas encolhe e rola em vez de ficar por baixo do botão. */
+html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) > div:first-child { min-width: 0; flex: 1 1 auto; }
 
 html.visual-novo .segmentado-lumos {
   display: inline-flex; align-items: center; gap: 2px; width: fit-content; padding: 3px; overflow: visible;
