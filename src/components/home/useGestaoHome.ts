@@ -20,6 +20,7 @@ const VAZIO: DadosGestao = {
   filas: { aval: [], diarias: [], reservas: [], fornecedores: [], semResponsavel: [] },
   carga: { pessoas: [], semResponsavel: 0, max: 0 },
   parados: [],
+  ociosos: [],
 };
 
 /**
@@ -37,7 +38,7 @@ export function useGestaoHome(ativo: boolean): DadosGestao | undefined {
       supabase.from('project_tasks')
         .select('id, project_id, titulo, status, data_fim, responsavel_id, project:projects!inner(id, name, status)')
         .eq('project.status', 'ativo').is('deleted_at', null),
-      supabase.from('app_users').select('id, full_name, avatar_url').eq('status', 'ativo'),
+      supabase.from('app_users').select('id, full_name, avatar_url, role, hidden').eq('status', 'ativo'),
       supabase.from('video_versions')
         .select('id, group_id, versao, status, updated_at, file_name, project_id, task_id, project:projects!inner(id, name, status)')
         .eq('project.status', 'ativo'),
@@ -65,7 +66,7 @@ export function useGestaoHome(ativo: boolean): DadosGestao | undefined {
     };
 
     // ── Carga por pessoa ──────────────────────────────────────────────────
-    const usuarios = lista<{ id: string; full_name: string; avatar_url: string | null }>(usu);
+    const usuarios = lista<{ id: string; full_name: string; avatar_url: string | null; role?: string; hidden?: boolean }>(usu);
     const porPessoa = new Map<string, { abertas: number; atrasadas: number }>();
     let semResp = 0;
     abertas.forEach(t => {
@@ -82,6 +83,11 @@ export function useGestaoHome(ativo: boolean): DadosGestao | undefined {
       })
       .sort((a, b) => b.abertas - a.abertas)
       .slice(0, 6);
+
+    const ociosos = usuarios
+      .filter(u => !u.hidden && u.role !== 'admin' && !porPessoa.has(u.id))
+      .map(u => ({ id: u.id, nome: u.full_name, avatar_url: u.avatar_url }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
 
     // ── Vídeos: só vale a versão mais recente de cada vídeo ───────────────
     const maisRecente = new Map<string, VideoVersao>();
@@ -122,7 +128,7 @@ export function useGestaoHome(ativo: boolean): DadosGestao | undefined {
       })),
     };
 
-    setDados({ carregando: false, saude, filas, carga: { pessoas, semResponsavel: semResp, max: pessoas[0]?.abertas ?? 0 }, parados });
+    setDados({ carregando: false, saude, filas, carga: { pessoas, semResponsavel: semResp, max: pessoas[0]?.abertas ?? 0 }, parados, ociosos });
   }, []);
 
   useEffect(() => { if (ativo) void carregar(); }, [ativo, carregar]);

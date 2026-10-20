@@ -11,6 +11,9 @@ import SaudeProducaoBloco from './blocos/SaudeProducaoBloco';
 import PrecisoDeVoceBloco from './blocos/PrecisoDeVoceBloco';
 import CargaEquipeBloco from './blocos/CargaEquipeBloco';
 import VideosParadosBloco from './blocos/VideosParadosBloco';
+import FinanceiroResumoBloco from './blocos/FinanceiroResumoBloco';
+import ComercialResumoBloco from './blocos/ComercialResumoBloco';
+import EquipeOciosaBloco from './blocos/EquipeOciosaBloco';
 
 export interface BlocoHome {
   id: string;
@@ -23,9 +26,13 @@ export interface BlocoHome {
 
 const TODOS: PapelHome[] = ['admin', 'gestao', 'time'];
 const GESTAO: PapelHome[] = ['admin', 'gestao'];
+const SO_ADMIN: PapelHome[] = ['admin'];
 
 /** Todos os blocos da Home. Para criar um novo: componente em ./blocos e uma linha aqui. */
 export const BLOCOS: BlocoHome[] = [
+  { id: 'financeiro_resumo', titulo: 'Financeiro', largura: 'cheia', papeis: SO_ADMIN, render: d => <FinanceiroResumoBloco dados={d} /> },
+  { id: 'comercial_resumo', titulo: 'Comercial', largura: 'lateral', papeis: SO_ADMIN, render: d => <ComercialResumoBloco dados={d} /> },
+  { id: 'equipe_ociosa', titulo: 'Disponíveis', largura: 'lateral', papeis: GESTAO, render: d => <EquipeOciosaBloco dados={d} /> },
   { id: 'saude_producao', titulo: 'Saúde da produção', largura: 'cheia', papeis: GESTAO, render: d => <SaudeProducaoBloco dados={d} /> },
   { id: 'preciso_de_voce', titulo: 'Preciso de você', largura: 'principal', papeis: GESTAO, render: d => <PrecisoDeVoceBloco dados={d} /> },
   { id: 'carga_equipe', titulo: 'Carga da equipe', largura: 'lateral', papeis: GESTAO, render: d => <CargaEquipeBloco dados={d} /> },
@@ -43,7 +50,7 @@ export const BLOCOS: BlocoHome[] = [
 export const ORDEM_PADRAO: Record<PapelHome, string[]> = {
   time: ['resumo', 'hoje', 'videos_ajustes', 'mural', 'tarefas', 'notificacoes', 'atalhos'],
   // 'resumo' (os quatro números das MINHAS tarefas) fica de fora por padrão: repetia os rótulos da Saúde da produção e confundia. Dá para ligar em Personalizar.
-  gestao: ['saude_producao', 'preciso_de_voce', 'carga_equipe', 'videos_parados', 'tarefas', 'notificacoes', 'atalhos', 'mural'],
-  // Admin: por enquanto a mesma visão da gestão; financeiro, comercial e equipe entram na fase 3.
-  admin: ['saude_producao', 'preciso_de_voce', 'carga_equipe', 'videos_parados', 'tarefas', 'notificacoes', 'atalhos', 'mural'],
+  gestao: ['saude_producao', 'preciso_de_voce', 'carga_equipe', 'equipe_ociosa', 'videos_parados', 'tarefas', 'notificacoes', 'atalhos', 'mural'],
+  // Admin: caixa e produção em duas faixas de números, depois a fila de decisões ao lado de comercial, carga e disponíveis.
+  admin: ['financeiro_resumo', 'saude_producao', 'preciso_de_voce', 'comercial_resumo', 'carga_equipe', 'equipe_ociosa', 'videos_parados', 'tarefas', 'notificacoes', 'atalhos', 'mural'],
 };
