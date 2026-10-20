@@ -130,6 +130,14 @@
     @apply bg-lumos-surface text-lumos-text-primary border border-lumos-border font-semibold py-2 px-4 rounded-lumos hover:bg-lumos-bg transition-all disabled:opacity-50 active:scale-95;
   }
 
+  /* Rótulo da barra inferior do celular. Desligado: igual ao que era (9px, caixa alta). */
+  .rotulo-tab {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
   .input-lumos {
     @apply bg-lumos-bg border border-lumos-border rounded-lumos px-3 py-2 text-lumos-text-primary focus:border-lumos-yellow focus:ring-1 focus:ring-lumos-yellow outline-none transition-all placeholder:text-lumos-text-secondary;
   }
@@ -556,15 +564,15 @@ html.visual-novo:not(.dark) {
 }
 
 /* Texto mínimo de 12px: tudo o que era 7px a 11.5px vira 12px (só no visual novo). */
-.lumos-deck .text-\[7px\],
-.lumos-deck .text-\[8px\],
-.lumos-deck .text-\[8\.5px\],
-.lumos-deck .text-\[9px\],
-.lumos-deck .text-\[9\.5px\],
-.lumos-deck .text-\[10px\],
-.lumos-deck .text-\[10\.5px\],
-.lumos-deck .text-\[11px\],
-.lumos-deck .text-\[11\.5px\] { font-size: 12px; }
+html.visual-novo .text-\[7px\],
+html.visual-novo .text-\[8px\],
+html.visual-novo .text-\[8\.5px\],
+html.visual-novo .text-\[9px\],
+html.visual-novo .text-\[9\.5px\],
+html.visual-novo .text-\[10px\],
+html.visual-novo .text-\[10\.5px\],
+html.visual-novo .text-\[11px\],
+html.visual-novo .text-\[11\.5px\] { font-size: 12px; }
 
 /* Título de página único: Instrument Serif 36px, sem caixa alta (padrão do login e da Home). A serifa
    é menor que a DM Sans no mesmo tamanho, por isso 36px. Vale para os h1 de página (as classes
@@ -579,6 +587,14 @@ html.visual-novo:not(.dark) {
   font-weight: 400;
   letter-spacing: -0.01em;
   text-transform: none;
+}
+
+/* No celular o título de página é um pouco menor (a tela é estreita). */
+@media (max-width: 1023px) {
+  .lumos-deck h1.text-2xl,
+  .lumos-deck h1.text-3xl,
+  .lumos-deck h1.lg\:text-4xl,
+  .lumos-deck h1.sm\:text-3xl { font-size: 30px; }
 }
 
 /* Cantos: 12px nos controles e cartões; elementos pequenos (etiquetas, caixas de ícone) em 8px;
@@ -598,3 +614,40 @@ html.visual-novo .shadow-md { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 1
 html.visual-novo .shadow-lg,
 html.visual-novo .shadow-xl { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
 html.visual-novo .shadow-2xl { box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); }
+
+/* ── Onda A: casca (menu lateral, cabeçalho, sub-menu e barra inferior) ────────────── */
+
+/* Pesos: de 500 a 600, em todo o app (o 700 e o 900 viram 600). */
+html.visual-novo .font-black,
+html.visual-novo .font-bold { font-weight: 600; }
+
+/* Marca no tema claro: o amarelo vira dourado escuro na casca (senão some no fundo claro). */
+html.visual-novo:not(.dark) .lumos-shell .text-lumos-yellow,
+html.visual-novo:not(.dark) .lumos-shell .hover\:text-lumos-yellow:hover,
+html.visual-novo:not(.dark) .lumos-shell .group:hover .group-hover\:text-lumos-yellow { color: var(--color-lumos-gold); }
+
+/* Rótulo da barra inferior: 12px, minúsculas, DM Sans (cabe "Financeiro" sem estourar). */
+html.visual-novo .rotulo-tab {
+  font-family: 'DM Sans', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Título no cabeçalho do celular: serifa, sem caixa alta. */
+html.visual-novo .titulo-topo {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+/* Foco de teclado visível em botões, links e itens clicáveis (antes quase não existia). Campos de
+   texto ficam de fora: eles já têm o próprio anel de foco. */
+html.visual-novo :where(button, a, summary, [role='button'], [role='tab'], [role='menuitem']):focus-visible {
+  outline: 2px solid var(--color-lumos-yellow);
+  outline-offset: 2px;
+}
