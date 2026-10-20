@@ -15,7 +15,6 @@ import {
   ChevronUp,
   ChevronDown,
   CalendarClock, Pencil,
-  X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
@@ -963,23 +962,21 @@ export default function ContasReceber() {
         </form>
       </Modal>
 
-      {/* Editar recebível — estilo dos modais de Produção (overlay custom, lumos) */}
+      {/* Editar recebível */}
       {editing && (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditing(null)}>
-          <form
-            onClick={e => e.stopPropagation()}
-            onSubmit={handleSaveEdit}
-            className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-200"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-black uppercase tracking-tight text-lumos-text-primary flex items-center gap-2">
-                <Pencil className="w-4 h-4 text-lumos-yellow" /> Editar recebível
-              </h3>
-              <button type="button" onClick={() => setEditing(null)} className="p-1.5 rounded-full text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
+        <Modal
+          isOpen
+          onClose={() => setEditing(null)}
+          title="Editar recebível"
+          size="sm"
+          footer={(
+            <>
+              <button type="button" onClick={() => setEditing(null)} className="btn-secondary h-10 px-4 text-sm">Cancelar</button>
+              <button type="submit" form="form-editar-recebivel" className="btn-primary h-10 px-5 text-sm font-bold">Salvar</button>
+            </>
+          )}
+        >
+          <form id="form-editar-recebivel" onSubmit={handleSaveEdit} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Descrição</label>
               <input required type="text" className="input-lumos w-full h-10 text-sm" value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} />
@@ -1008,13 +1005,8 @@ export default function ContasReceber() {
                 ? 'Quando o valor foi recebido.'
                 : 'Quando o valor deve ser recebido (é o vencimento, o mesmo de Custos de Projeto). Para marcar como recebido, use o status.'}
             </p>
-
-            <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setEditing(null)} className="btn-secondary flex-1 h-10 text-sm">Cancelar</button>
-              <button type="submit" className="btn-primary flex-1 h-10 text-sm font-bold">Salvar</button>
-            </div>
           </form>
-        </div>
+        </Modal>
       )}
 
       {parcelando && (

@@ -9,6 +9,8 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  /** Cabeçalho próprio (ex.: foto + nome). Quando informado, no lugar do título em texto. */
+  header?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
   maxWidth?: string;
@@ -37,6 +39,7 @@ export default function Modal({
   isOpen,
   onClose,
   title,
+  header,
   children,
   footer,
   maxWidth = '',
@@ -93,9 +96,13 @@ export default function Modal({
         className
       )}>
         <div className={clsx("flex items-center justify-between border-b border-lumos-border shrink-0", padding)}>
-          <h3 id="modal-title" className="text-xl font-black text-lumos-text-primary tracking-tight">
-            {title}
-          </h3>
+          {header ? (
+            <div id="modal-title" className="min-w-0 flex-1">{header}</div>
+          ) : (
+            <h3 id="modal-title" className="text-xl font-black text-lumos-text-primary tracking-tight">
+              {title}
+            </h3>
+          )}
           <button 
             onClick={onClose}
             className="p-2 -mr-2 text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded-full transition-all"
