@@ -710,6 +710,35 @@ html.visual-novo .input {
 .lumos-deck h2.uppercase.text-lg, .lumos-deck h3.uppercase.text-lg,
 .lumos-deck h2.uppercase.text-xl, .lumos-deck h3.uppercase.text-xl { font-size: 14px; letter-spacing: 0.06em; }
 
+/* ── Onda F: acabamento ───────────────────────────────────────────────────────────── */
+
+/* Título de "cabeçalho de ferramenta" (nome do projeto no editor, título da Ordem do Dia): serifa. */
+html.visual-novo .titulo-ferramenta {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+html.visual-novo input.titulo-ferramenta { font-size: 30px; }
+html.visual-novo h1.titulo-ferramenta { font-size: 26px; }
+
+/* Largura do conteúdo por tipo de tela (o mapa por rota fica em Sidebar.tsx). */
+.lumos-deck[data-largura='formulario'] { max-width: 768px; margin-inline: auto; }
+.lumos-deck[data-largura='painel'] { max-width: 1280px; margin-inline: auto; }
+.lumos-deck[data-largura='lista'] { max-width: 1600px; margin-inline: auto; }
+
+/* Celular: a barra de filtros do Board (campos soltos, sem .relative em volta) também vira fileira que rola. */
+@media (max-width: 639px) {
+  .lumos-deck .flex-wrap:has(> button.input-lumos) {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
+  }
+  .lumos-deck .flex-wrap:has(> button.input-lumos)::-webkit-scrollbar { display: none; }
+  .lumos-deck .flex-wrap:has(> button.input-lumos) > * { flex: 0 0 auto; }
+  .lumos-deck .flex-wrap:has(> button.input-lumos) > button.input-lumos { width: auto; }
+  .lumos-deck .flex-wrap:has(> button.input-lumos) > .relative { min-width: 220px; }
+}
+
 /* >>> TONS-GERADOS (não edite: rode scripts/gerar-tons-visual-novo.py) */
 /* Gerado a partir das classes de cor cruas usadas no código. */
 html.visual-novo .bg-amber-400 { background-color: var(--color-warn); }

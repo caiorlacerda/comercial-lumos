@@ -12,6 +12,19 @@ import FundoDeck from '@/components/common/FundoDeck';
 import { carregarFontesDeck } from '@/lib/fontesDeck';
 import { useVisualNovo } from '@/lib/visualNovo';
 
+// Largura do conteúdo por tipo de tela (só com o visual novo): formulário até 768px, painel até 1280px,
+// lista/tabela até 1600px. As demais rotas (editor, board, timeline, wiki) ficam livres.
+const LARGURA_POR_ROTA: Record<string, 'formulario' | 'painel' | 'lista'> = {
+  '/configuracoes': 'formulario', '/configuracoes/notificacoes': 'formulario', '/configuracoes/automacoes': 'formulario',
+  '/comunicados': 'formulario', '/mural': 'formulario', '/notificacoes': 'formulario',
+  '/': 'painel', '/comercial': 'painel', '/financeiro': 'painel', '/financeiro/relatorios': 'painel',
+  '/financeiro/fluxo-de-caixa': 'painel', '/financeiro/configuracao': 'painel', '/producao': 'painel', '/monitoramento': 'painel',
+  '/orcamentos': 'lista', '/clientes': 'lista', '/catalogo': 'lista', '/templates': 'lista', '/equipe': 'lista', '/auditoria': 'lista',
+  '/financeiro/contas': 'lista', '/financeiro/custos-projeto': 'lista', '/financeiro/movimentacoes': 'lista', '/financeiro/notas': 'lista',
+  '/financeiro/reembolso': 'lista', '/financeiro/custos-fixos': 'lista', '/producao/fornecedores': 'lista', '/producao/equipamentos': 'lista',
+  '/producao/acessos': 'lista', '/producao/templates-tarefas': 'lista', '/ordem-do-dia': 'lista',
+};
+
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const visualNovo = useVisualNovo();
@@ -45,7 +58,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           {visualNovo && <FundoDeck />}
           <AnimatePresence mode="wait">
             <PageTransition key={transitionKey}>
-              <div className={visualNovo ? 'lumos-deck relative z-10 w-full p-4 lg:p-8' : 'w-full p-4 lg:p-8'}>
+              <div data-largura={visualNovo ? LARGURA_POR_ROTA[location.pathname] : undefined} className={visualNovo ? 'lumos-deck relative z-10 w-full p-4 lg:p-8' : 'w-full p-4 lg:p-8'}>
                 <React.Suspense
                   fallback={
                     <div className="flex items-center justify-center py-32">
