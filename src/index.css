@@ -27,6 +27,9 @@
   /* Texto na cor da marca: amarelo da marca no escuro, dourado escuro no claro (ver visual novo) */
   --color-lumos-gold: #EFC700;
 
+  /* Fonte dos títulos de página do visual novo (utilitário `font-titulo`) */
+  --font-titulo: "Instrument Serif", Georgia, serif;
+
   /* Escala de tempo e de camadas do visual novo (para os componentes novos usarem) */
   --duration-fast: 150ms;
   --duration-base: 200ms;
@@ -563,17 +566,18 @@ html.visual-novo:not(.dark) {
 .lumos-deck .text-\[11px\],
 .lumos-deck .text-\[11\.5px\] { font-size: 12px; }
 
-/* Título de página único: 28px, peso médio, sem caixa alta (padrão do login e da Home).
-   Vale para os h1 de página (as classes text-2xl / text-3xl); h1 menores de cabeçalho de painel ficam. */
+/* Título de página único: Instrument Serif 36px, sem caixa alta (padrão do login e da Home). A serifa
+   é menor que a DM Sans no mesmo tamanho, por isso 36px. Vale para os h1 de página (as classes
+   text-2xl / text-3xl); h1 menores de cabeçalho de painel ficam. */
 .lumos-deck h1.text-2xl,
 .lumos-deck h1.text-3xl,
 .lumos-deck h1.lg\:text-4xl,
 .lumos-deck h1.sm\:text-3xl {
-  font-family: 'DM Sans', Arial, sans-serif;
-  font-size: 28px;
-  line-height: 1.15;
-  font-weight: 500;
-  letter-spacing: -0.03em;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 36px;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   text-transform: none;
 }
 

@@ -7,6 +7,7 @@ import { carregarFontesDeck } from '@/lib/fontesDeck';
 // dourada, cartão de vidro, DM Sans para texto e JetBrains Mono para rótulos. A tela é
 // sempre escura, independente do tema do app. As fontes carregam só aqui.
 const DM = "'DM Sans', Arial, sans-serif";
+const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', 'Courier New', monospace";
 
 const rotulo = 'block text-[11px] uppercase tracking-[3px] text-[#d5d3d0] mb-2';
@@ -108,8 +109,8 @@ export default function Login() {
             </div>
             {/* Duas linhas. O tamanho acompanha a largura livre ao lado do cartão para a primeira linha caber. */}
             <h1
-              className="whitespace-nowrap font-medium leading-[1.02] tracking-[-0.03em] text-[clamp(24px,calc((100vw_-_48px)/12.8),64px)] xl:text-[clamp(40px,calc((78vw_-_488px)/12.6),84px)]"
-              style={{ fontFamily: DM }}
+              className="whitespace-nowrap font-normal leading-[1.04] tracking-[-0.01em] text-[clamp(28px,calc((100vw_-_48px)/11.1),74px)] xl:text-[clamp(46px,calc((78vw_-_488px)/10.95),96px)]"
+              style={{ fontFamily: SERIF }}
             >
               Seja bem-vindo(a) à Lulu,<br />o App da Lumos.
             </h1>

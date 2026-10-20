@@ -121,10 +121,10 @@ export default function Home() {
             Olá, {profile?.full_name || 'Membro Lumos'}! 👋
           </h1>
         </div>
-        <div className="flex items-center gap-2 self-start md:self-center">
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
           <div className="flex items-center gap-2 bg-[#161616]/85 border border-white/20 px-3.5 py-1.5 rounded-full">
             <Flame className="w-4 h-4 text-lumos-yellow animate-pulse" />
-            <span className="text-[10px] uppercase tracking-[2px] text-white">
+            <span className="whitespace-nowrap text-[10px] uppercase tracking-[2px] text-white">
               Tudo Pronto Para Produzir
             </span>
           </div>

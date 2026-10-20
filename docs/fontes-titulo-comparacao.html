@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fontes para os títulos da Lumos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Instrument+Serif:ital@0;1&family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: light; --txt:#161616; --sub:#4a4a45; --card:rgba(255,255,255,.62); --bd:rgba(255,255,255,.8); }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 16px 48px; font-family:'DM Sans',Arial,sans-serif; color:var(--txt);
+    background: radial-gradient(900px 420px at 15% 0%, rgba(239,199,0,.42), transparent 60%), linear-gradient(135deg,#ebe8e2,#d9d5ce); min-height:100vh; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1.cab { font-size:15px; font-weight:500; margin:0 0 4px; }
+  p.cab { margin:0 0 20px; color:var(--sub); font-size:13px; }
+  .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .opt { background:var(--card); border:1px solid var(--bd); border-radius:12px; padding:20px; backdrop-filter: blur(14px); }
+  .tag { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--sub); margin-bottom:14px; }
+  .t { margin:0; font-size:34px; line-height:1.1; letter-spacing:-.02em; }
+  .sub { margin:6px 0 16px; color:var(--sub); font-size:14px; }
+  .kpi { display:flex; gap:10px; margin-bottom:14px; }
+  .kpi div { flex:1; background:rgba(255,255,255,.7); border:1px solid var(--bd); border-radius:12px; padding:10px 12px; }
+  .kpi small { display:block; font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--sub); }
+  .kpi b { font-size:20px; font-weight:500; }
+  .btn { display:inline-block; background:#efc700; color:#161616; border-radius:12px; padding:9px 16px; font-size:14px; font-weight:600; }
+  .dark { margin-top:16px; background:#1b1b19; color:#fff; border-radius:12px; padding:20px; }
+  .dark .sub { color:#d5d3d0; }
+  .dark .t { font-size:30px; }
+  .a .t { font-family:'DM Sans',sans-serif; font-weight:500; }
+  .b .t { font-family:'Instrument Serif',serif; font-weight:400; font-size:38px; letter-spacing:-.01em; }
+  .c .t { font-family:'Fraunces',serif; font-weight:500; font-size:34px; }
+  .d .t { font-family:'Bricolage Grotesque',sans-serif; font-weight:500; }
+  .e .t { font-family:'Sora',sans-serif; font-weight:500; font-size:31px; letter-spacing:-.03em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="cab">Fonte dos títulos de página (o resto continua em DM Sans, rótulos em JetBrains Mono)</h1>
+  <p class="cab">Cada cartão mostra o mesmo título, um subtítulo, indicadores e um botão, no claro e no escuro.</p>
+  <div class="grid">
+
+    <div class="opt a">
+      <span class="tag">A · Hoje (DM Sans)</span>
+      <h2 class="t">Contas a Receber</h2>
+      <p class="sub">Controle de faturamento e entradas de projetos.</p>
+      <div class="kpi"><div><small>Total a receber</small><b>R$ 550.535,19</b></div><div><small>No mês</small><b>R$ 59.513,33</b></div></div>
+      <span class="btn">+ Novo recebível</span>
+      <div class="dark"><h2 class="t">Olá, Caio!</h2><p class="sub">Sexta-feira, 23 de outubro</p></div>
+    </div>
+
+    <div class="opt b">
+      <span class="tag">B · Instrument Serif (recomendada)</span>
+      <h2 class="t">Contas a Receber</h2>
+      <p class="sub">Controle de faturamento e entradas de projetos.</p>
+      <div class="kpi"><div><small>Total a receber</small><b>R$ 550.535,19</b></div><div><small>No mês</small><b>R$ 59.513,33</b></div></div>
+      <span class="btn">+ Novo recebível</span>
+      <div class="dark"><h2 class="t">Olá, Caio!</h2><p class="sub">Sexta-feira, 23 de outubro</p></div>
+    </div>
+
+    <div class="opt c">
+      <span class="tag">C · Fraunces (serifa mais calorosa)</span>
+      <h2 class="t">Contas a Receber</h2>
+      <p class="sub">Controle de faturamento e entradas de projetos.</p>
+      <div class="kpi"><div><small>Total a receber</small><b>R$ 550.535,19</b></div><div><small>No mês</small><b>R$ 59.513,33</b></div></div>
+      <span class="btn">+ Novo recebível</span>
+      <div class="dark"><h2 class="t">Olá, Caio!</h2><p class="sub">Sexta-feira, 23 de outubro</p></div>
+    </div>
+
+    <div class="opt d">
+      <span class="tag">D · Bricolage Grotesque (sem serifa, com personalidade)</span>
+      <h2 class="t">Contas a Receber</h2>
+      <p class="sub">Controle de faturamento e entradas de projetos.</p>
+      <div class="kpi"><div><small>Total a receber</small><b>R$ 550.535,19</b></div><div><small>No mês</small><b>R$ 59.513,33</b></div></div>
+      <span class="btn">+ Novo recebível</span>
+      <div class="dark"><h2 class="t">Olá, Caio!</h2><p class="sub">Sexta-feira, 23 de outubro</p></div>
+    </div>
+
+    <div class="opt e">
+      <span class="tag">E · Sora (geométrica, tecnológica)</span>
+      <h2 class="t">Contas a Receber</h2>
+      <p class="sub">Controle de faturamento e entradas de projetos.</p>
+      <div class="kpi"><div><small>Total a receber</small><b>R$ 550.535,19</b></div><div><small>No mês</small><b>R$ 59.513,33</b></div></div>
+      <span class="btn">+ Novo recebível</span>
+      <div class="dark"><h2 class="t">Olá, Caio!</h2><p class="sub">Sexta-feira, 23 de outubro</p></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
