@@ -677,6 +677,22 @@ html.visual-novo:not(.dark) .lumos-deck .text-\[\#efc700\] { color: var(--color-
 /* Página que já traz o próprio recuo (Catálogo): com o visual novo usa só o recuo do layout. */
 html.visual-novo .pagina-sem-recuo { padding: 0; }
 
+/* ── Onda D: Produção ─────────────────────────────────────────────────────────────── */
+
+/* Título do projeto (cabeçalho da página do projeto): serifa, sem caixa alta, como os demais. */
+html.visual-novo .lumos-deck .titulo-pagina {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+@media (max-width: 1023px) { html.visual-novo .lumos-deck .titulo-pagina { font-size: 26px; } }
+
+/* Abas que estavam centralizadas (Fornecedores) alinham à esquerda, como nas outras telas. */
+html.visual-novo .lumos-abas { justify-content: flex-start; }
+
 /* >>> TONS-GERADOS (não edite: rode scripts/gerar-tons-visual-novo.py) */
 /* Gerado a partir das classes de cor cruas usadas no código. */
 html.visual-novo .bg-amber-400 { background-color: var(--color-warn); }
