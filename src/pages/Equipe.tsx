@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '@/components/common/Modal';
 import {
-  Users2, UserPlus, Search, Shield, Mail, Phone, MessageSquare, Loader2, X, Trash2, Camera,
+  Users2, UserPlus, Search, Shield, Mail, Phone, MessageSquare, Loader2, Trash2, Camera,
   Cake, CalendarDays, Briefcase, MapPin, CreditCard, Shirt, Footprints, HeartPulse, IdCard, ShieldAlert,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -392,10 +392,14 @@ export default function Equipe() {
       )}
 
       {/* Detalhe da pessoa */}
-      {detail && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setDetail(null)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl">
-            <div className="sticky top-0 bg-lumos-surface border-b border-lumos-border px-5 py-3 flex items-center justify-between z-10">
+      {detail && (
+        <Modal
+          isOpen
+          onClose={() => setDetail(null)}
+          title={nameOf(detail)}
+          size="lg"
+          padding="p-5"
+          header={(
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative">
                   <UserAvatar user={avatarOf(detail) as any} size={40} showStatus lastSeen={detail.user?.last_seen} />
@@ -409,10 +413,9 @@ export default function Equipe() {
                   <p className="text-[11px] text-lumos-text-secondary truncate">{cargoOf(detail)}</p>
                 </div>
               </div>
-              <button onClick={() => setDetail(null)} className="p-1.5 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary"><X className="w-4 h-4" /></button>
-            </div>
-
-            <div className="p-5 space-y-6">
+          )}
+        >
+            <div className="space-y-6">
               {/* Contato */}
               <Section title="Contato & presença" icon={Mail}>
                 {detail.user?.email && <Info label="E-mail" value={detail.user.email} />}
@@ -563,16 +566,26 @@ export default function Equipe() {
                 );
               })()}
             </div>
-          </div>
-        </div>,
-        document.body,
+        </Modal>
       )}
 
       {/* Convite de novo usuário */}
-      {invite && createPortal(
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setInvite(null)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4">
-            <h2 className="text-base font-black uppercase tracking-tight text-lumos-text-primary flex items-center gap-2"><UserPlus className="w-5 h-5 text-lumos-yellow" /> Novo usuário</h2>
+      {invite && (
+        <Modal
+          isOpen
+          onClose={() => setInvite(null)}
+          title="Novo usuário"
+          size="md"
+          footer={(
+            <>
+              <button onClick={() => setInvite(null)} className="btn-secondary h-10 px-4 text-sm">Cancelar</button>
+              <button onClick={sendInvite} disabled={inviting} className="btn-primary h-10 px-5 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Enviar convite
+              </button>
+            </>
+          )}
+        >
+          <div className="space-y-4">
             <Field label="Nome completo *" value={invite.full_name} onChange={v => setInvite(i => i && { ...i, full_name: v })} full />
             <Field label="E-mail *" value={invite.email} onChange={v => setInvite(i => i && { ...i, email: v })} icon={Mail} full />
             <div className="grid grid-cols-2 gap-3">
@@ -583,15 +596,8 @@ export default function Equipe() {
               </div>
             </div>
             <p className="text-[11px] text-lumos-text-secondary">A pessoa recebe um e-mail para definir a própria senha.</p>
-            <div className="flex gap-3 pt-1">
-              <button onClick={() => setInvite(null)} className="btn-secondary flex-1 h-10 text-sm">Cancelar</button>
-              <button onClick={sendInvite} disabled={inviting} className="btn-primary flex-1 h-10 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Enviar convite
-              </button>
-            </div>
           </div>
-        </div>,
-        document.body,
+        </Modal>
       )}
 
       {dialog}

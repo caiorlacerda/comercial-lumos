@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '@/components/common/Modal';
 import {
-  Users2, Plus, Loader2, ShieldAlert, Search, Trash2, X, Cake, Phone,
+  Users2, Plus, Loader2, ShieldAlert, Search, Trash2, Cake, Phone,
   CalendarDays, Briefcase, MapPin, Mail, CreditCard, Shirt, Footprints, HeartPulse, IdCard,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -250,17 +250,29 @@ export default function DadosEquipe() {
       )}
 
       {/* Modal de edição/criação */}
-      {editing && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onClick={closeModal}>
-          <div onClick={e => e.stopPropagation()}
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl">
-            <div className="sticky top-0 bg-lumos-surface border-b border-lumos-border px-5 py-3 flex items-center justify-between z-10">
-              <h2 className="text-base font-black text-lumos-text-primary uppercase tracking-tight">
-                {editing === 'new' ? 'Novo membro' : form.full_name || 'Editar membro'}
-              </h2>
-              <button onClick={closeModal} className="p-1.5 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary"><X className="w-4 h-4" /></button>
+      {editing && (
+        <Modal
+          isOpen
+          onClose={closeModal}
+          title={editing === 'new' ? 'Novo membro' : form.full_name || 'Editar membro'}
+          size="lg"
+          padding="p-5"
+          footer={(
+            <div className="flex items-center justify-between gap-2 w-full">
+              {editing !== 'new' ? (
+                <button onClick={() => remove(editing)} className="text-xs font-bold text-red-400 hover:text-red-500 flex items-center gap-1.5">
+                  <Trash2 className="w-4 h-4" /> Excluir
+                </button>
+              ) : <span />}
+              <div className="flex items-center gap-2">
+                <button onClick={closeModal} className="btn-secondary h-9 px-4 text-xs font-bold">Cancelar</button>
+                <button onClick={save} disabled={saving} className="btn-primary h-9 px-5 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Salvar
+                </button>
+              </div>
             </div>
-
+          )}
+        >
             <div className="p-5 space-y-5">
               <Section title="Pessoal" icon={IdCard}>
                 <Field label="Nome completo *" value={form.full_name} onChange={v => setField('full_name', v)} full />
@@ -293,23 +305,7 @@ export default function DadosEquipe() {
                 </div>
               </Section>
             </div>
-
-            <div className="sticky bottom-0 bg-lumos-surface border-t border-lumos-border px-5 py-3 flex items-center justify-between gap-2">
-              {editing !== 'new' ? (
-                <button onClick={() => remove(editing)} className="text-xs font-bold text-red-400 hover:text-red-500 flex items-center gap-1.5">
-                  <Trash2 className="w-4 h-4" /> Excluir
-                </button>
-              ) : <span />}
-              <div className="flex items-center gap-2">
-                <button onClick={closeModal} className="btn-secondary h-9 px-4 text-xs font-bold">Cancelar</button>
-                <button onClick={save} disabled={saving} className="btn-primary h-9 px-5 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Salvar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body,
+        </Modal>
       )}
 
       {dialog}
