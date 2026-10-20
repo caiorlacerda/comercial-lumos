@@ -224,3 +224,16 @@ Cerca de **3 a 4 semanas de calendário** no total, mas já dá para ver ganho g
 - **Fonte dos títulos:** Instrument Serif (escolha B).
 - **Fase 2 (caixa de peças):** concluída em 20/10/2026, atrás do interruptor. Peças em `src/components/ui/`: `Button` e `IconButton`, `StatusChip`, `Field`/`Input`/`Textarea`, `Tabs` e `SegmentedControl`, `PageHeader`, `Panel` e `StatCard`, `DataTable`, `ActionMenu`, `EmptyState` e `Skeleton`. A janela (`Modal`, com `size` e portal automático), o `Select` e o aviso (toast) ganharam o visual novo. Todas aparecem na página `/design` (só admin).
 - **Fase 3 (ondas nas telas):** próxima. Ordem: casca (menu e celular), Financeiro, Comercial, Produção, Configurações e equipe.
+
+## 8. Padrão de abas, alternadores, chips e filtros (21/10/2026)
+
+Quatro peças, cada uma com um único visual (CSS no `src/index.css`, seção "Padrão único de abas, alternadores, chips e filtros"):
+
+| Peça | Para que serve | Como aparece | Como marcar no código |
+|---|---|---|---|
+| **Abas** | Trocar de seção dentro da página (A Receber / A Pagar; Em andamento / Encerrados) | Sublinhado dourado, DM Sans 14px | Qualquer `<button>` com `border-b-2` (o ativo é o que não tem `border-transparent`), ou a classe `aba-lumos` com `aria-selected` |
+| **Alternador** | Mudar a forma de ver os mesmos dados (Lista/Cards, Semana/Mês/Trimestre, Calendário/Lista/Kanban) | Cápsula única, itens de 32px, ativo em amarelo | Caixa `.segmentado-lumos`, itens `.segmento-lumos` com `aria-pressed` |
+| **Chips de filtro** | Filtrar a mesma lista (Todas / Entradas / Saídas; Todos / Emitir NF / Recebido) | Pílula de 32px, ativa com véu dourado (vermelho para "atrasado") | `.chip-lumos` com `aria-pressed` (e `data-tom="danger"` quando for alerta) |
+| **Campos de seleção** | Filtros em lista suspensa | Texto normal em DM Sans, sem caixa alta | Automático (`button.input-lumos`) |
+
+Em telas novas, use os componentes `Tabs` e `SegmentedControl` (em `src/components/ui/Tabs.tsx`), que seguem a mesma aparência.

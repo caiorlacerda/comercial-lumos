@@ -703,8 +703,10 @@ export default function ContasReceber() {
               <button
                 key={key}
                 onClick={() => setStatusFilter(key)}
+                aria-pressed={active}
+                data-tom={danger ? 'danger' : undefined}
                 className={clsx(
-                  'px-3 py-1.5 rounded-full text-[11px] font-bold border transition-colors',
+                  'chip-lumos px-3 py-1.5 rounded-full text-[11px] font-bold border transition-colors',
                   active
                     ? danger
                       ? 'bg-red-500/15 text-red-500 border-red-500/30'

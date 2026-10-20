@@ -333,13 +333,14 @@ export default function ProducaoSchedule() {
 
         {/* Zoom + navegação */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-lumos-surface/40 p-1 border border-lumos-border/50 rounded-full">
+          <div className="segmentado-lumos flex bg-lumos-surface/40 p-1 border border-lumos-border/50 rounded-full">
             {(['semana', 'mes', 'trimestre'] as const).map(z => (
               <button
                 key={z}
                 onClick={() => changeZoom(z)}
+                aria-pressed={zoom === z}
                 className={clsx(
-                  'px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all',
+                  'segmento-lumos px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all',
                   zoom === z ? 'bg-lumos-yellow text-lumos-bg shadow-md' : 'text-lumos-text-secondary hover:text-lumos-text-primary'
                 )}
               >

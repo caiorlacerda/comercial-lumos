@@ -271,8 +271,8 @@ export default function FinanceiroNotas() {
       <div className="card p-3 space-y-2.5">
         <div className="flex items-center gap-1 flex-wrap">
           {CHIPS_STATUS.map(c => (
-            <button key={c.id} onClick={() => setStatusFiltro(c.id)}
-              className={clsx('px-3 h-8 rounded-full text-[11px] font-black uppercase tracking-wider border transition-colors',
+            <button key={c.id} onClick={() => setStatusFiltro(c.id)} aria-pressed={statusFiltro === c.id}
+              className={clsx('chip-lumos px-3 h-8 rounded-full text-[11px] font-black uppercase tracking-wider border transition-colors',
                 statusFiltro === c.id
                   ? 'bg-lumos-yellow/15 text-lumos-yellow border-lumos-yellow/40'
                   : 'text-lumos-text-secondary border-lumos-border hover:text-lumos-text-primary')}>

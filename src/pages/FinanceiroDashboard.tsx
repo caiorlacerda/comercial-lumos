@@ -710,12 +710,13 @@ export default function FinanceiroDashboard() {
           )}
 
           {/* Seletor de Período Global */}
-          <div className="flex bg-lumos-surface/40 p-1 border border-lumos-border/50 rounded-full w-fit">
+          <div className="segmentado-lumos flex bg-lumos-surface/40 p-1 border border-lumos-border/50 rounded-full w-fit">
             {(['semana', 'mes', 'trimestre', 'semestre', 'ano'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                aria-pressed={period === p}
+                className={`segmento-lumos px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                   period === p
                     ? 'bg-lumos-yellow text-lumos-bg shadow-md scale-105'
                     : 'text-lumos-text-secondary hover:text-lumos-text-primary'

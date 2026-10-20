@@ -739,6 +739,78 @@ html.visual-novo h1.titulo-ferramenta { font-size: 26px; }
   .lumos-deck .flex-wrap:has(> button.input-lumos) > .relative { min-width: 220px; }
 }
 
+/* ── Padrão único de abas, alternadores, chips e filtros (visual novo) ─────────────────
+   1) ABAS (trocam de seção na página): sublinhado dourado, DM Sans 14px. Detecta qualquer botão
+      com `border-b-2` (o ativo é o que não tem `border-transparent`) e as abas dos Templates.
+   2) ALTERNADOR (muda a forma de ver: Lista/Cards, Semana/Mês, Calendário/Lista/Kanban): cápsula única,
+      itens de 32px, o ativo em amarelo. Marcação: .segmentado-lumos (caixa) e .segmento-lumos (item).
+   3) CHIPS de filtro (Todas/Entradas/Saídas...): pílulas de 32px, a ativa com véu dourado. Marcação: .chip-lumos.
+   4) CAMPOS de seleção: texto normal em DM Sans (sem caixa alta mono). */
+
+html.visual-novo .lumos-deck button.border-b-2,
+html.visual-novo .lumos-deck button.aba-lumos {
+  font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; font-weight: 500; line-height: 1.25;
+  text-transform: none; letter-spacing: 0; padding: 10px 14px; border-radius: 0; background: transparent;
+  color: var(--color-lumos-text-secondary); border-bottom: 2px solid transparent;
+}
+html.visual-novo .lumos-deck button.border-b-2:not(.border-transparent),
+html.visual-novo .lumos-deck button.aba-lumos[aria-selected='true'] {
+  color: var(--color-lumos-text-primary); border-bottom-color: var(--color-lumos-yellow);
+}
+@media (hover: hover) {
+  html.visual-novo .lumos-deck button.border-b-2:hover,
+  html.visual-novo .lumos-deck button.aba-lumos:hover { color: var(--color-lumos-text-primary); }
+}
+html.visual-novo .lumos-deck .aba-lumos > .absolute { display: none; }
+/* Abas coladas na barra de controles por margem negativa (Custos de Projeto): a linha dourada ficava escondida. */
+html.visual-novo .lumos-deck .border-b.\-mb-2:has(> button.border-b-2) { margin-bottom: 0; }
+html.visual-novo .lumos-deck .border-b:has(> button.border-b-2),
+html.visual-novo .lumos-deck .border-b:has(> button.aba-lumos) { gap: 2px; }
+
+html.visual-novo .segmentado-lumos {
+  display: inline-flex; align-items: center; gap: 2px; width: fit-content; padding: 3px; overflow: visible;
+  background: var(--color-lumos-bg); border: 1px solid var(--color-lumos-border); border-radius: 12px;
+}
+html.visual-novo .segmento-lumos {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; min-width: 32px;
+  padding: 0 12px; border: 0; border-radius: 9px; box-shadow: none; transform: none;
+  font-family: 'DM Sans', Arial, sans-serif; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0;
+  color: var(--color-lumos-text-secondary); background: transparent;
+}
+html.visual-novo .segmento-lumos[aria-pressed='true'] { background: var(--color-lumos-yellow); color: #161616; }
+@media (hover: hover) {
+  html.visual-novo .segmento-lumos[aria-pressed='false']:hover { color: var(--color-lumos-text-primary); }
+}
+
+html.visual-novo .chip-lumos {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 9999px;
+  font-family: 'DM Sans', Arial, sans-serif; font-size: 12px; font-weight: 500; line-height: 1; text-transform: none; letter-spacing: 0;
+  color: var(--color-lumos-text-secondary); background: transparent; border: 1px solid var(--color-lumos-border);
+}
+html.visual-novo .chip-lumos[aria-pressed='true'] {
+  color: var(--color-lumos-gold); border-color: color-mix(in oklab, var(--color-lumos-yellow) 45%, transparent);
+  background: color-mix(in oklab, var(--color-lumos-yellow) 15%, transparent);
+}
+html.visual-novo .chip-lumos[aria-pressed='true'][data-tom='danger'] {
+  color: var(--color-danger-fg); border-color: color-mix(in oklab, var(--color-danger) 45%, transparent);
+  background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+@media (hover: hover) {
+  html.visual-novo .chip-lumos[aria-pressed='false']:hover { color: var(--color-lumos-text-primary); }
+}
+
+/* Cabeçalho de dias do calendário (Agenda) no celular: sem caixa alta mono, para "Domingo" caber na coluna. */
+@media (max-width: 639px) {
+  .lumos-deck .grid-cols-7 > .uppercase {
+    font-family: 'DM Sans', Arial, sans-serif; text-transform: none; letter-spacing: 0;
+    padding-left: 0; padding-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+}
+
+html.visual-novo .lumos-deck button.input-lumos {
+  font-family: 'DM Sans', Arial, sans-serif; font-weight: 500; text-transform: none; letter-spacing: 0;
+}
+
 /* >>> TONS-GERADOS (não edite: rode scripts/gerar-tons-visual-novo.py) */
 /* Gerado a partir das classes de cor cruas usadas no código. */
 html.visual-novo .bg-amber-400 { background-color: var(--color-warn); }
