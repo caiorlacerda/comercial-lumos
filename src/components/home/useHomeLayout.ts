@@ -83,8 +83,11 @@ export function useHomeLayout(papel: PapelHome) {
   const mover = useCallback((id: string, direcao: -1 | 1) => {
     const lista = [...itens];
     const i = lista.findIndex(x => x.bloco.id === id);
-    const j = i + direcao;
-    if (i < 0 || j < 0 || j >= lista.length) return;
+    if (i < 0) return;
+    // Pula os blocos escondidos: quem está na tela troca de lugar com o próximo bloco visível
+    let j = i + direcao;
+    while (!lista[i].oculto && j >= 0 && j < lista.length && lista[j].oculto) j += direcao;
+    if (j < 0 || j >= lista.length) return;
     [lista[i], lista[j]] = [lista[j], lista[i]];
     void salvar(emSalvo(lista));
   }, [itens, salvar, emSalvo]);
