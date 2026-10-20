@@ -1,9 +1,9 @@
-import { useVisualNovoExplicito } from '@/lib/visualNovo';
+import { useVisualNovo } from '@/lib/visualNovo';
 import LoginNovo from '@/pages/LoginNovo';
 import LoginClassico from '@/pages/LoginClassico';
 
-/** Login: o visual novo só aparece para quem ligou de propósito; o padrão segue o login clássico (ver `lib/visualNovo.ts`). */
+/** Escolhe o login conforme o interruptor do visual novo (ver `lib/visualNovo.ts`): novo por padrão, clássico para quem desligou. */
 export default function Login() {
-  const novo = useVisualNovoExplicito();
+  const novo = useVisualNovo();
   return novo ? <LoginNovo /> : <LoginClassico />;
 }

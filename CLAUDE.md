@@ -94,7 +94,7 @@ Use sempre os tokens `lumos-*` (definidos em `@theme` no `src/index.css`; o Tail
 
 Cores de significado (novas): `ok` (sucesso/pago), `danger` (erro/atraso), `warn` (atenção), `info`, `review` (revisão). Padrão de uso: `bg-ok/10 border-ok/30 text-ok-fg`. Em telas novas, use estas em vez de `green-500`, `red-500` etc.
 
-**Visual novo:** é o padrão de todo o time desde 21/10/2026 (`PADRAO_LIGADO = true` em `src/lib/visualNovo.ts`). Ainda existe um interruptor por aparelho (`?visual=antigo` ou Configurações > Aparência, só admin) para voltar ao visual antigo, e o login continua clássico até a decisão de liberar o login junto com as páginas públicas. Plano e padrões em `docs/plano-unidade-visual.md`; guia ao vivo em `/design` (admin). Código novo de visual deve usar o escopo `.lumos-deck` / `html.visual-novo`, os componentes de `src/components/ui/` e os padrões de abas, alternadores, chips e campos.
+**Visual novo:** é o padrão de todo o time desde 21/10/2026 (`PADRAO_LIGADO = true` em `src/lib/visualNovo.ts`). Ainda existe um interruptor por aparelho (`?visual=antigo` ou Configurações > Aparência, só admin) para voltar ao visual antigo; o login novo vale para todos também. As páginas públicas (aprovação, portal, revisão, nota, cadastro) e os PDFs ainda não foram redesenhados. Plano e padrões em `docs/plano-unidade-visual.md`; guia ao vivo em `/design` (admin). Código novo de visual deve usar o escopo `.lumos-deck` / `html.visual-novo`, os componentes de `src/components/ui/` e os padrões de abas, alternadores, chips e campos.
 
 ## Convenções de UI mobile
 - Respeite safe areas do iPhone: `env(safe-area-inset-top/bottom)`.
