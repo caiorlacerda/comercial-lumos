@@ -77,7 +77,7 @@ interface TeamMember {
 interface Person { key: string; user: AppUserProfile | null; hr: TeamMember | null; }
 
 const fmtBirthday = (d?: string | null) => { if (!d) return '—'; const [, m, day] = d.split('-'); return m && day ? `${day}/${m}` : d; };
-const fmtDate = (d?: string | null) => { if (!d) return '—'; const [y, m, day] = d.split('-'); return y && m && day ? `${day}/${m}/${y}` : d; };
+const fmtDate = (d?: string | null) => { if (!d) return '—'; const [y, m, day] = d.slice(0, 10).split('-'); return y && m && day ? `${day}/${m}/${y}` : d; };
 
 export default function Equipe() {
   const { profile, isAdmin, can } = useAuth();
