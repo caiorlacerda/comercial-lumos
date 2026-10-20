@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home, Briefcase, Video, DollarSign, Settings, Sun, Moon, LogOut, BookOpen, Eye, EyeOff,
@@ -15,6 +16,7 @@ import SidebarProjectTree from '@/components/layout/SidebarProjectTree';
 import StatusDot from '@/components/common/StatusDot';
 import LumosSideNav, { type NavSectionMeta, type NavItemMeta } from '@/components/layout/LumosSideNav';
 import WikiTree from '@/components/layout/WikiTree';
+import EscopoVisual from '@/components/ui/EscopoVisual';
 import { clsx } from 'clsx';
 
 // Ícone + rótulo de cada seção no rail. As sub-páginas continuam vindo de
@@ -175,12 +177,27 @@ function AvatarMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+
+  // O menu é desenhado direto no <body> (portal): dentro do menu lateral ele ficava por baixo do painel aberto.
+  useLayoutEffect(() => {
+    if (!open || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setPos({ left: r.right + 8, bottom: Math.max(8, window.innerHeight - r.bottom) });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onDoc = (e: MouseEvent) => {
+      const alvo = e.target as Node;
+      if (ref.current?.contains(alvo) || menuRef.current?.contains(alvo)) return;
+      setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc); };
   }, [open]);
 
   const initials = profile?.full_name
@@ -216,8 +233,12 @@ function AvatarMenu({
         </span>
       </button>
 
-      {open && (
-        <div className="absolute left-full bottom-0 ml-2 w-56 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[60] py-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+      {open && pos && createPortal(
+        <EscopoVisual>
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', left: pos.left, bottom: pos.bottom }}
+          className="fixed w-56 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[300] py-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
           <div className="px-4 py-2 border-b border-lumos-border">
             <p className="text-xs font-bold text-lumos-text-primary truncate">{profile?.full_name || user?.user_metadata?.full_name || 'Usuário'}</p>
             <p className="text-[10px] text-lumos-text-secondary truncate mt-0.5">{profile?.email || user?.email}</p>
@@ -239,6 +260,8 @@ function AvatarMenu({
             </button>
           </div>
         </div>
+        </EscopoVisual>,
+        document.body,
       )}
     </div>
   );
