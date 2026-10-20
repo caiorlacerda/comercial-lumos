@@ -89,8 +89,12 @@ Notificações in-app são criadas por **dois caminhos**. Antes de adicionar uma
 Supabase Realtime Presence via canal `online-users` em `LayoutContext`. O status ao vivo vem de `getLiveStatus(profileId)` (não da coluna estática `presence_status`). `Equipe.tsx` exibe a equipe com esse status.
 
 ## Design tokens (Tailwind)
-Use sempre os tokens `lumos-*` (definidos em `tailwind.config.js` / `src/index.css`), nunca cores cruas:
+Use sempre os tokens `lumos-*` (definidos em `@theme` no `src/index.css`; o Tailwind 4 não lê `tailwind.config.js`, que foi removido), nunca cores cruas:
 `lumos-bg`, `lumos-surface`, `lumos-border`, `lumos-yellow`, `lumos-text-primary`, `lumos-text-secondary`. Cantos: `rounded-lumos`. Tema claro/escuro via `ThemeContext`.
+
+Cores de significado (novas): `ok` (sucesso/pago), `danger` (erro/atraso), `warn` (atenção), `info`, `review` (revisão). Padrão de uso: `bg-ok/10 border-ok/30 text-ok-fg`. Em telas novas, use estas em vez de `green-500`, `red-500` etc.
+
+**Visual novo (em teste):** fica atrás de um interruptor (`src/lib/visualNovo.ts`, `?visual=novo` ou Configurações > Aparência para admin). Plano completo em `docs/plano-unidade-visual.md`. Código novo de visual deve valer só com o interruptor ligado (escopo `.lumos-deck` / `html.visual-novo`).
 
 ## Convenções de UI mobile
 - Respeite safe areas do iPhone: `env(safe-area-inset-top/bottom)`.

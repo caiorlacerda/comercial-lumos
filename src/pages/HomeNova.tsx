@@ -117,7 +117,7 @@ export default function Home() {
             <span className="block h-2 w-2 bg-lumos-yellow" />
             <span className="text-[10px] uppercase tracking-[3px] text-lumos-text-secondary">{formattedDate}</span>
           </div>
-          <h1 className="text-2xl md:text-[34px] font-medium text-lumos-text-primary tracking-[-0.03em] leading-[1.05]">
+          <h1 className="text-2xl md:text-[28px] font-medium text-lumos-text-primary tracking-[-0.03em] leading-[1.05]">
             Olá, {profile?.full_name || 'Membro Lumos'}! 👋
           </h1>
         </div>

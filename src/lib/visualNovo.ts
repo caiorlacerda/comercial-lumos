@@ -43,6 +43,18 @@ export function aplicarVisualDaUrl() {
   } catch { /* URL inválida: ignora */ }
 }
 
+/** Liga/desliga a classe `visual-novo` no <html> (base de fontes e cores do visual novo no CSS). */
+function sincronizarClasse() {
+  document.documentElement.classList.toggle('visual-novo', ler());
+}
+
+/** Chamar uma vez na abertura: aplica a classe e acompanha mudanças do interruptor. */
+export function iniciarVisualNovo() {
+  sincronizarClasse();
+  window.addEventListener(EVENTO, sincronizarClasse);
+  window.addEventListener('storage', sincronizarClasse);
+}
+
 function assinar(cb: () => void) {
   window.addEventListener(EVENTO, cb);
   window.addEventListener('storage', cb);

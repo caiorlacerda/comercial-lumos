@@ -12,6 +12,27 @@
   --font-body: "Work Sans", sans-serif;
 
   --radius-lumos: 8px;
+
+  /* Cores de SIGNIFICADO. Use estas em vez de green-500, red-500 etc.:
+       ok = sucesso/pago/aprovado · danger = erro/atraso/perigo · warn = atenção/pendente
+       info = informação/neutro azul · review = revisão (roxo)
+     `bg-ok/10 border-ok/30 text-ok-fg`: o fundo e a borda usam a cor base (com transparência) e o
+     texto/ícone usa `-fg`, que muda de tom por tema para sempre ler bem. Com o visual novo
+     desligado, `-fg` é igual à cor base, então nada muda para o time. */
+  --color-ok: #22c55e;       --color-ok-fg: #22c55e;
+  --color-danger: #ef4444;   --color-danger-fg: #ef4444;
+  --color-warn: #f59e0b;     --color-warn-fg: #f59e0b;
+  --color-info: #3b82f6;     --color-info-fg: #3b82f6;
+  --color-review: #a855f7;   --color-review-fg: #a855f7;
+  /* Texto na cor da marca: amarelo da marca no escuro, dourado escuro no claro (ver visual novo) */
+  --color-lumos-gold: #EFC700;
+
+  /* Escala de tempo e de camadas do visual novo (para os componentes novos usarem) */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --z-menu: 300;
+  --z-modal: 400;
+  --z-toast: 500;
 }
 
 /* Base values override for Dark Theme */
@@ -498,3 +519,77 @@ html:not(.dark) .lumos-deck .text-rose-600 { color: #be123c; }
 html:not(.dark) .lumos-deck .text-lumos-yellow,
 html:not(.dark) .lumos-deck .group:hover .group-hover\:text-lumos-yellow,
 html:not(.dark) .lumos-deck .hover\:text-lumos-yellow:hover { color: #7a5c00; }
+
+/* ── Base do VISUAL NOVO (Fase 1 do plano de unidade visual) ──────────────────────
+   `html.visual-novo` é ligado pelo interruptor (src/lib/visualNovo.ts). Tudo daqui para baixo só vale
+   com ele ligado; desligado, o app é exatamente o de antes. */
+
+/* Fonte única: DM Sans em tudo (menu, janelas, menus suspensos), JetBrains Mono nos rótulos. */
+html.visual-novo {
+  --font-heading: 'DM Sans', Arial, sans-serif;
+  --font-body: 'DM Sans', Arial, sans-serif;
+}
+html.visual-novo body {
+  font-family: 'DM Sans', Arial, sans-serif;
+  background-color: var(--color-lumos-bg);
+}
+html.visual-novo .uppercase { font-family: 'JetBrains Mono', 'Courier New', monospace; font-weight: 500; }
+
+/* Cores de significado no TEMA CLARO e ESCURO: o texto/ícone ganha o tom que lê bem sobre o vidro. */
+html.visual-novo {
+  --color-ok-fg: #4ade80;
+  --color-danger-fg: #f87171;
+  --color-warn-fg: #fbbf24;
+  --color-info-fg: #60a5fa;
+  --color-review-fg: #c084fc;
+}
+html.visual-novo:not(.dark) {
+  --color-ok-fg: #15803d;
+  --color-danger-fg: #b91c1c;
+  --color-warn-fg: #b45309;
+  --color-info-fg: #1d4ed8;
+  --color-review-fg: #7e22ce;
+  --color-lumos-gold: #7a5c00;
+}
+
+/* Texto mínimo de 12px: tudo o que era 7px a 11.5px vira 12px (só no visual novo). */
+.lumos-deck .text-\[7px\],
+.lumos-deck .text-\[8px\],
+.lumos-deck .text-\[8\.5px\],
+.lumos-deck .text-\[9px\],
+.lumos-deck .text-\[9\.5px\],
+.lumos-deck .text-\[10px\],
+.lumos-deck .text-\[10\.5px\],
+.lumos-deck .text-\[11px\],
+.lumos-deck .text-\[11\.5px\] { font-size: 12px; }
+
+/* Título de página único: 28px, peso médio, sem caixa alta (padrão do login e da Home).
+   Vale para os h1 de página (as classes text-2xl / text-3xl); h1 menores de cabeçalho de painel ficam. */
+.lumos-deck h1.text-2xl,
+.lumos-deck h1.text-3xl,
+.lumos-deck h1.lg\:text-4xl,
+.lumos-deck h1.sm\:text-3xl {
+  font-family: 'DM Sans', Arial, sans-serif;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  text-transform: none;
+}
+
+/* Cantos: 12px nos controles e cartões; elementos pequenos (etiquetas, caixas de ícone) em 8px;
+   pílulas (rounded-full) continuam totalmente redondas. */
+.lumos-deck .rounded-lg,
+.lumos-deck .rounded-xl,
+.lumos-deck .rounded-2xl,
+.lumos-deck .rounded-3xl { border-radius: 12px; }
+.lumos-deck .rounded,
+.lumos-deck .rounded-md { border-radius: 8px; }
+
+/* Sombras em 3 níveis: cartão, menu, janela. */
+.lumos-deck .shadow,
+.lumos-deck .shadow-sm,
+.lumos-deck .shadow-md { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06); }
+.lumos-deck .shadow-lg,
+.lumos-deck .shadow-xl { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
+.lumos-deck .shadow-2xl { box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); }
