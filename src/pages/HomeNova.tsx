@@ -9,6 +9,7 @@ import OnboardingGate from '@/components/common/OnboardingGate';
 import WelcomeTour from '@/components/common/WelcomeTour';
 import { papelDaHome } from '@/components/home/tipos';
 import { useMinhasTarefas } from '@/components/home/useMinhasTarefas';
+import { useGestaoHome } from '@/components/home/useGestaoHome';
 import { useHomeLayout } from '@/components/home/useHomeLayout';
 import type { BlocoHome } from '@/components/home/catalogo';
 import PersonalizarHome from '@/components/home/PersonalizarHome';
@@ -34,7 +35,9 @@ function emFaixas(blocos: BlocoHome[]): Faixa[] {
 export default function Home() {
   const { profile } = useAuth();
   const papel = papelDaHome(profile?.role);
-  const dados = useMinhasTarefas();
+  const minhas = useMinhasTarefas();
+  const gestao = useGestaoHome(papel !== 'time');
+  const dados = useMemo(() => ({ ...minhas, gestao }), [minhas, gestao]);
   const layout = useHomeLayout(papel);
   const [personalizando, setPersonalizando] = useState(false);
 
