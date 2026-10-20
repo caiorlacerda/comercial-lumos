@@ -325,8 +325,8 @@ export default function Settings() {
         {isAdmin && (
           <div className="flex items-center justify-between gap-4 pt-6 border-t border-lumos-border">
             <div>
-              <p className="text-sm font-bold text-lumos-text-primary">Visual novo (em teste)</p>
-              <p className="text-xs text-lumos-text-secondary">Vale só neste aparelho. O time continua vendo o visual de sempre.</p>
+              <p className="text-sm font-bold text-lumos-text-primary">Visual novo</p>
+              <p className="text-xs text-lumos-text-secondary">Ligado por padrão para todo o time. Desligar volta ao visual antigo só neste aparelho.</p>
               <button type="button" onClick={() => navigate('/design')} className="mt-1 text-xs font-semibold text-lumos-yellow hover:underline">Abrir o guia de design</button>
             </div>
             <button
