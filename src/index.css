@@ -752,13 +752,22 @@ html.visual-novo h1.titulo-ferramenta { font-size: 26px; }
 html.visual-novo { --aba-linha: rgba(0, 0, 0, 0.1); }
 html.visual-novo.dark { --aba-linha: rgba(255, 255, 255, 0.16); }
 
-html.visual-novo .lumos-deck .border-b:has(> button.border-b-2),
-html.visual-novo .lumos-deck .border-b:has(> button.aba-lumos),
-html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) {
-  border-bottom: 0; padding-bottom: 0; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none;
+html.visual-novo .lumos-deck :has(> button.border-b-2),
+html.visual-novo .lumos-deck :has(> button.aba-lumos),
+html.visual-novo .lumos-deck :has(> div > button.border-b-2) {
+  border-bottom: 0; padding-top: 2px; padding-bottom: 10px; align-items: center; gap: 4px; row-gap: 6px;
+  flex-wrap: wrap; overflow: visible;   /* no computador a barra não corta a cápsula: sombra e contorno ficam por cima */
 }
-html.visual-novo .lumos-deck .border-b:has(> button.border-b-2)::-webkit-scrollbar,
-html.visual-novo .lumos-deck .border-b:has(> button.aba-lumos)::-webkit-scrollbar { display: none; }
+@media (max-width: 1023px) {
+  /* Telas menores: a fileira rola para o lado e ganha um respiro vertical para a cápsula e a sombra não serem cortadas. */
+  html.visual-novo .lumos-deck :has(> button.border-b-2),
+  html.visual-novo .lumos-deck :has(> button.aba-lumos),
+  html.visual-novo .lumos-deck :has(> div > button.border-b-2) {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-top: 4px; padding-bottom: 8px;
+  }
+}
+html.visual-novo .lumos-deck :has(> button.border-b-2)::-webkit-scrollbar,
+html.visual-novo .lumos-deck :has(> button.aba-lumos)::-webkit-scrollbar { display: none; }
 /* Abas que eram coladas na barra de controles por margem negativa (Custos de Projeto): volta um respiro. */
 html.visual-novo .lumos-deck .border-b.\-mb-2:has(> button.border-b-2) { margin-bottom: 12px; }
 
@@ -773,7 +782,7 @@ html.visual-novo .lumos-deck button.aba-lumos {
 html.visual-novo .lumos-deck button.border-b-2:not(.border-transparent),
 html.visual-novo .lumos-deck button.aba-lumos[aria-selected='true'] {
   background: var(--deck-solido, var(--color-lumos-surface)); color: var(--color-lumos-text-primary); font-weight: 600;
-  border-color: var(--aba-linha); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 14px rgba(0, 0, 0, 0.07);
+  border-color: var(--aba-linha); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07), 0 3px 8px rgba(0, 0, 0, 0.07);
 }
 html.visual-novo .lumos-deck button.border-b-2:not(.border-transparent)::before,
 html.visual-novo .lumos-deck button.aba-lumos[aria-selected='true']::before {
@@ -787,11 +796,14 @@ html.visual-novo .lumos-deck button.aba-lumos[aria-selected='true']::before {
 }
 html.visual-novo .lumos-deck .aba-lumos > .absolute { display: none; }
 /* Abas com botão de ação ao lado (Equipamentos): a fileira de abas encolhe e rola em vez de ficar por baixo do botão. */
-html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) > div:first-child { min-width: 0; flex: 1 1 auto; }
+html.visual-novo .lumos-deck :has(> div > button.border-b-2) > div:first-child { min-width: 0; flex: 1 1 auto; overflow: visible; flex-wrap: wrap; row-gap: 6px; }
+@media (max-width: 1023px) {
+  html.visual-novo .lumos-deck :has(> div > button.border-b-2) > div:first-child { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; padding-top: 4px; padding-bottom: 8px; scrollbar-width: none; }
+}
 @media (max-width: 639px) {
   /* No celular o botão de ação desce para a linha de baixo, e todas as abas ficam visíveis. */
-  html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) { flex-wrap: wrap; row-gap: 8px; }
-  html.visual-novo .lumos-deck .border-b:has(> div > button.border-b-2) > div:first-child { flex: 1 1 100%; }
+  html.visual-novo .lumos-deck :has(> div > button.border-b-2) { flex-wrap: wrap; row-gap: 8px; }
+  html.visual-novo .lumos-deck :has(> div > button.border-b-2) > div:first-child { flex: 1 1 100%; }
 }
 
 html.visual-novo .segmentado-lumos {
