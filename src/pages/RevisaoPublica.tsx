@@ -12,6 +12,8 @@ import { useVideoFonte } from '@/hooks/useVideoFonte';
 import { useConfirm } from '@/components/ui/useConfirm';
 import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
 import ColarComentarios from '@/components/producao/ColarComentarios';
+import FundoDeck from '@/components/common/FundoDeck';
+import PaginaPublica, { MONO, SERIF, ROTULO_PUBLICO, CAMPO_PUBLICO, BOTAO_AMARELO, CARTAO_VIDRO } from '@/components/publico/PaginaPublica';
 
 const LOGO = { dark: '/logo/Logotipo-Branco-Alpha.svg', light: '/logo/Logotipo-Preto-Alpha.svg' };
 
@@ -555,31 +557,42 @@ export default function RevisaoPublica() {
 
   // --- Render ---
   if (loading) return <Centered className={themeClass}><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" /></Centered>;
-  if (error) return <Centered className={themeClass}><p className="text-red-500 font-bold text-sm">{error}</p></Centered>;
+  if (error) return (
+    <Centered className={themeClass}>
+      <div className={`${CARTAO_VIDRO} w-full max-w-md p-8`}>
+        <h1 className="mb-2 text-[34px] font-normal leading-tight" style={{ fontFamily: SERIF }}>Link indisponível</h1>
+        <p className="text-sm leading-relaxed text-[#d5d3d0]">{error}</p>
+      </div>
+    </Centered>
+  );
   if (!data) return null;
 
   // Identificação
   if (!viewerId) {
     return (
-      <Centered className={themeClass}>
-        <div className="w-full max-w-sm bg-lumos-surface border border-lumos-border rounded-lumos p-8 shadow-2xl">
-          <div className="flex flex-col items-center text-center mb-6">
-            <img src="/logo-lumos.png" alt="Lumos" className="h-8 mb-4" onError={e => (e.currentTarget.style.display = 'none')} />
-            <h1 className="text-lg font-black text-lumos-text-primary">Revisão de vídeo</h1>
-            <p className="text-xs text-lumos-text-secondary mt-1">{data.video.project_name} · v{String(data.video.versao).padStart(2, '0')}</p>
-          </div>
-          <label className="block text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary mb-2">Seu nome</label>
+      <PaginaPublica rodape="Revisão de vídeo">
+        <div className="mb-6 flex items-center gap-3">
+          <span className="block h-[9px] w-[9px] bg-[#efc700]" />
+          <span className="text-[10px] uppercase tracking-[3px]" style={{ fontFamily: MONO }}>
+            {data.video.project_name} · v{String(data.video.versao).padStart(2, '0')}
+          </span>
+        </div>
+        <h1 className="mb-6 text-[44px] font-normal leading-[1.05] tracking-[-0.01em] sm:text-[56px]" style={{ fontFamily: SERIF }}>
+          Revisão de vídeo
+        </h1>
+        <div className={`${CARTAO_VIDRO} p-7 sm:p-9`}>
+          <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>Seu nome</label>
           <input
             autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && identify()}
-            placeholder="Como você se chama?" className="input-lumos w-full h-11 text-sm mb-4"
+            placeholder="Como você se chama?" className={`${CAMPO_PUBLICO} h-12 mb-5`}
           />
-          <button onClick={() => identify()} disabled={!nameInput.trim()} className="btn-primary w-full h-11 text-sm font-black uppercase tracking-widest">
+          <button onClick={() => identify()} disabled={!nameInput.trim()} className={`${BOTAO_AMARELO} h-12 w-full text-[15px] uppercase tracking-[2px]`}>
             Entrar
           </button>
-          <p className="text-[10px] text-lumos-text-secondary/60 text-center mt-4">Ao entrar, seu nome fica registrado nesta revisão.</p>
+          <p className="mt-5 text-center text-xs text-white/60">Ao entrar, seu nome fica registrado nesta revisão.</p>
         </div>
-      </Centered>
+      </PaginaPublica>
     );
   }
 
@@ -605,7 +618,8 @@ export default function RevisaoPublica() {
   // altura travada e o vídeo ocupa só a altura que sobra. No mobile segue o fluxo
   // normal, empilhado e rolável.
   return (
-    <div className={clsx('min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-lumos-bg text-lumos-text-primary font-work-sans', themeClass)}>
+    <div className={clsx('relative isolate min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col text-lumos-text-primary font-work-sans', themeClass)}>
+      <div className="fixed inset-0 -z-10" aria-hidden><FundoDeck tema={rtheme === 'dark' ? 'dark' : 'light'} /></div>
       {dialogoConfirmar}
       {colando && (
         <ColarComentarios fps={fps} duracaoMs={durationMs}
@@ -636,7 +650,7 @@ export default function RevisaoPublica() {
       )}
 
       {/* Header (sem logo) */}
-      <header className="h-14 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 relative z-30">
+      <header className="h-14 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl relative z-30">
         <div className="flex items-center gap-3 min-w-0">
           {volta && (
             <a href={volta.url} title={volta.rotulo}
@@ -650,7 +664,7 @@ export default function RevisaoPublica() {
               overflow:hidden cortaria a lista de versões, que abre pra fora da
               caixa: o botão clicaria e nada apareceria. */}
           <span className="text-sm font-black flex items-center gap-2 min-w-0 border-l border-lumos-border pl-3">
-            <span className="truncate min-w-0">{data.video.project_name}</span>
+            <span className="truncate min-w-0 text-xl font-normal leading-none" style={{ fontFamily: SERIF }}>{data.video.project_name}</span>
             {versoes.length > 1 ? (
               <span className="relative inline-flex items-center gap-0.5 flex-shrink-0">
                 {/* Setas: ir e voltar sem abrir lista, que é como se compara de
@@ -961,7 +975,7 @@ export default function RevisaoPublica() {
         </div>
 
         {/* Comentários */}
-        <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col lg:h-full lg:min-h-0', isFs && 'hidden')}>
+        <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex flex-col lg:my-4 lg:mr-4 lg:rounded-[14px] lg:overflow-hidden lg:min-h-0', isFs && 'hidden')}>
 
           {/* Versão antiga é só leitura. Comentar num corte que já foi
               substituído (ou aprovar ele) é pedido que nasce perdido: a equipe
@@ -1320,7 +1334,10 @@ export default function RevisaoPublica() {
 }
 
 // ---------------------------------------------------------------------------
-function Centered({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={clsx('min-h-screen bg-lumos-bg flex items-center justify-center p-4 font-work-sans', className)}>{children}</div>;
+function Centered({ children }: { children: React.ReactNode; className?: string }) {
+  return (
+    <PaginaPublica rodape="Revisão de vídeo">
+      <div className="flex justify-center text-center">{children}</div>
+    </PaginaPublica>
+  );
 }
-
