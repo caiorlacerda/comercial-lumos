@@ -13,6 +13,10 @@ import { captureVideoThumb, capaDoStream, valeCapturarCapa, capaJaFalhou, marcar
 import { useVideoFonte } from '@/hooks/useVideoFonte';
 import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
 import ColarComentarios from '@/components/producao/ColarComentarios';
+import FundoDeck from '@/components/common/FundoDeck';
+import { carregarFontesDeck } from '@/lib/fontesDeck';
+
+const SERIF = "'Instrument Serif', Georgia, serif";
 
 interface TeamComment {
   id: string; author_name: string; is_team: boolean; timecode_ms: number; body: string; created_at: string;
@@ -39,6 +43,7 @@ interface Props {
 export default function InternalReviewModal({ versionId, token, fileName, versao, projectName, status, podeDecidir, onDecidir, onClose }: Props) {
   const { profile } = useAuth();
   const toast = useToast();
+  useEffect(() => { carregarFontesDeck(); }, []);
   const authorName = profile?.full_name || 'Equipe';
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -551,7 +556,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
    * bug no dia em que o seletor de versões foi parar nesse canto.
    */
   return createPortal(
-    <div className={clsx('fixed inset-0 z-[200] bg-lumos-bg text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
+    <div className={clsx('fixed inset-0 z-[200] isolate text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
+      <div className="absolute inset-0 -z-10" aria-hidden><FundoDeck tema={rtheme === 'dark' ? 'dark' : 'light'} /></div>
       {/* Sem isto o confirm() nunca aparecia e a promessa ficava pendurada:
           excluir comentário simplesmente não acontecia, em silêncio. */}
       {dialogoConfirmar}
@@ -559,7 +565,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         <ColarComentarios fps={fps} duracaoMs={durationMs}
           onConfirmar={criarColados} onClose={() => setColando(false)} />
       )}
-      <header className="h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/80 flex-shrink-0">
+      <header className="h-16 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex-shrink-0">
         {/* O truncate vale só pro NOME DO ARQUIVO. Quando ele estava aqui no
             contêiner, o overflow:hidden cortava o menu de versões, que abre pra
             fora da caixa: o botão clicava e nada aparecia. */}
@@ -576,7 +582,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           ) : (
             <span className="text-[9px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-400 px-2 py-0.5 rounded-full">Revisão interna</span>
           )}
-          {projectName ? `${projectName} · ` : ''}
+          {projectName && <span className="text-xl font-normal leading-none" style={{ fontFamily: SERIF }}>{projectName}</span>}
 
           {versoes.length > 1 ? (
             <span className="relative inline-flex items-center gap-0.5">
@@ -590,7 +596,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               </button>
               <button type="button" onClick={() => setMenuVersao(o => !o)}
                 title="Trocar de versão"
-                className={clsx('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lumos border text-sm font-black transition-colors',
+                className={clsx('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-sm font-black transition-colors',
                   vendoAntiga ? 'border-amber-500 text-amber-500' : 'border-lumos-border hover:border-lumos-yellow/60')}>
                 v{String(atual?.versao ?? versao).padStart(2, '0')}
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -629,17 +635,17 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         </span>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setRtheme(t => t === 'dark' ? 'light' : 'dark')} title="Tema claro/escuro"
-            className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
+            className="p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
             {rtheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
-          <button onClick={onClose} className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"><X className="w-4 h-4" /></button>
         </div>
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         {/* Player */}
-        <div className="flex-1 p-4 flex flex-col gap-2 min-w-0">
-          <div ref={wrapRef} className="relative w-full aspect-video bg-black rounded-lumos overflow-hidden select-none"
+        <div className="flex-1 flex flex-col min-w-0 m-4 lg:mr-2 p-3 gap-2 rounded-[18px] border border-lumos-border bg-lumos-surface/40 backdrop-blur-xl">
+          <div ref={wrapRef} className="relative w-full aspect-video bg-black rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10 overflow-hidden select-none"
             onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
             onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
             onPointerUp={() => { arrastando.current = null; }}
@@ -807,13 +813,13 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         {/* Comentários do time — painel redimensionável (largura lembrada) */}
         <aside
           style={{ ['--rpw' as any]: `${panelWidth}px` }}
-          className="relative w-full lg:w-[var(--rpw)] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-lumos-border bg-lumos-surface/30 flex flex-col min-h-0"
+          className="relative w-full lg:w-[var(--rpw)] flex-shrink-0 border-t lg:border border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex flex-col min-h-0 lg:my-4 lg:mr-4 lg:rounded-[14px] lg:overflow-hidden"
         >
           {/* Handle de redimensionamento (só desktop) */}
           <div
             onPointerDown={startResize}
             title="Arraste para redimensionar"
-            className="hidden lg:block absolute left-0 top-0 h-full w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-lumos-yellow/40 active:bg-lumos-yellow/60 transition-colors z-20"
+            className="hidden lg:block absolute left-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-lumos-yellow/40 active:bg-lumos-yellow/60 transition-colors z-20"
           />
           <div className="px-4 py-3 border-b border-lumos-border flex-shrink-0 space-y-2">
             <div className="flex items-center justify-between">
@@ -933,12 +939,12 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 <div className="flex gap-2">
                   <button disabled={decidindo}
                     onClick={async () => { setDecidindo(true); await onDecidir('EM_REVISAO_CLIENTE'); }}
-                    className="flex-1 h-10 rounded-lumos bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
-                    <Check className="w-4 h-4" /> {decidindo ? 'Enviando…' : 'Aprovar e liberar pro cliente'}
+                    className="flex-1 min-h-10 py-1.5 px-3 rounded-full bg-green-500 text-white text-[12.5px] font-black leading-tight text-center flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
+                    <Check className="w-4 h-4 flex-shrink-0" /> <span>{decidindo ? 'Enviando…' : 'Aprovar e liberar pro cliente'}</span>
                   </button>
                   <button onClick={() => setPedindoAlteracao(true)} disabled={decidindo}
-                    className="flex-1 h-10 rounded-lumos border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
-                    <RotateCcw className="w-4 h-4" /> Pedir alteração
+                    className="flex-1 min-h-10 py-1.5 px-3 rounded-full border border-lumos-border text-lumos-text-primary text-[12.5px] font-black leading-tight text-center flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
+                    <RotateCcw className="w-4 h-4 flex-shrink-0" /> <span>Pedir alteração</span>
                   </button>
                 </div>
               )}
@@ -958,10 +964,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 key={c.id}
                 onClick={() => editingId !== c.id && viewComment(c)}
                 className={clsx(
-                  'relative w-full text-left p-2.5 rounded-lumos border transition-all',
+                  'relative w-full text-left p-3 rounded-xl border transition-all bg-lumos-surface/50',
                   editingId === c.id
                     ? 'border-lumos-yellow/60 bg-lumos-text-secondary/[0.03]'
-                    : 'border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer',
+                    : 'border-lumos-border hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer',
                   // Resolvido some do primeiro plano sem sumir da lista: o olho
                   // vai pro que ainda falta.
                   c.resolved && editingId !== c.id && 'opacity-55',
@@ -1127,7 +1133,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             </div>
 
             {/* Ferramentas de anotação — sempre visíveis */}
-            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-lumos">
+            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-xl">
               {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
                 <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
                   title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}

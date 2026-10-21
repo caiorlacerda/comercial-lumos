@@ -650,11 +650,11 @@ export default function RevisaoPublica() {
       )}
 
       {/* Header (sem logo) */}
-      <header className="h-14 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl relative z-30">
+      <header className="h-16 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl relative z-30">
         <div className="flex items-center gap-3 min-w-0">
           {volta && (
             <a href={volta.url} title={volta.rotulo}
-              className="flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-lumos border border-lumos-border text-[11.5px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 transition-colors flex-shrink-0">
+              className="flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-full border border-lumos-border text-[11.5px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 transition-colors flex-shrink-0">
               <ArrowLeft className="w-4 h-4" />
               <span className="hidden sm:inline">{volta.rotulo}</span>
             </a>
@@ -675,7 +675,7 @@ export default function RevisaoPublica() {
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button type="button" onClick={() => setMenuVersao(o => !o)} title="Trocar de versão"
-                  className={clsx('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lumos border text-sm font-black transition-colors',
+                  className={clsx('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-sm font-black transition-colors',
                     vendoAntiga ? 'border-amber-500 text-amber-500' : 'border-lumos-border hover:border-lumos-yellow/60')}>
                   v{String(atual?.versao ?? data.video.versao).padStart(2, '0')}
                   <ChevronDown className="w-3.5 h-3.5" />
@@ -726,7 +726,7 @@ export default function RevisaoPublica() {
                 setViewerId(null); setViewerName(''); setNameInput('');
               }}
               title="Trocar de nome"
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary transition-colors max-w-[180px]">
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary transition-colors max-w-[180px]">
               <span className="truncate">{viewerName}</span>
               <span className="text-lumos-text-secondary/60 flex-shrink-0">trocar</span>
             </button>
@@ -751,7 +751,7 @@ export default function RevisaoPublica() {
           </div>
           {/* Tema claro/escuro */}
           <button onClick={toggleTheme} title="Tema claro/escuro"
-            className="p-2 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors">
+            className="p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors">
             {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
           </button>
           <span className="text-[10px] text-lumos-text-secondary ml-1 hidden sm:inline">Você: <b className="text-lumos-text-primary">{viewerName}</b></span>
@@ -760,12 +760,12 @@ export default function RevisaoPublica() {
 
       <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0" onClick={() => showInfo && setShowInfo(false)}>
         {/* Player */}
-        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0 lg:min-h-0', isFs ? 'bg-black' : 'p-4 gap-2')}>
+        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0 lg:min-h-0', isFs ? 'bg-black' : 'm-4 lg:mr-2 p-3 gap-2 rounded-[18px] border border-lumos-border bg-lumos-surface/40 backdrop-blur-xl')}>
           {/* Área do vídeo: no desktop ocupa a altura que sobra (depois do header e dos
               controles) e o box 16:9 é limitado por max-h-full, então nunca empurra os
               controles para fora da tela. No mobile segue o fluxo normal (sem esticar). */}
           <div className="lg:flex-1 lg:min-h-0 flex items-center justify-center">
-          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 w-full flex items-center justify-center' : 'w-full aspect-video max-h-full rounded-lumos')}
+          <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 w-full flex items-center justify-center' : 'w-full aspect-video max-h-full rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10')}
             onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
             onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
             onPointerUp={() => { arrastando.current = null; }}
@@ -1033,11 +1033,11 @@ export default function RevisaoPublica() {
               ) : (
                 <div className="flex gap-2">
                   <button onClick={() => decide('aprovado')} disabled={deciding}
-                    className="flex-1 h-10 rounded-lumos bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
+                    className="flex-1 h-10 rounded-full bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
                     <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : 'Aprovar vídeo'}
                   </button>
                   <button onClick={() => setAskChanges(true)} disabled={deciding}
-                    className="flex-1 h-10 rounded-lumos border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
+                    className="flex-1 h-10 rounded-full border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
                     <RotateCcw className="w-4 h-4" /> Pedir ajustes
                   </button>
                 </div>
@@ -1127,10 +1127,10 @@ export default function RevisaoPublica() {
                   key={c.id}
                   onClick={() => editingId !== c.id && viewComment(c)}
                   className={clsx(
-                    'relative w-full text-left p-2.5 rounded-lumos border transition-all',
+                    'relative w-full text-left p-3 rounded-xl border transition-all bg-lumos-surface/50',
                     editingId === c.id
                       ? 'border-lumos-yellow/60 bg-lumos-text-secondary/[0.03]'
-                      : 'border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer'
+                      : 'border-lumos-border hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] cursor-pointer'
                   )}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -1295,7 +1295,7 @@ export default function RevisaoPublica() {
             </div>
 
             {/* Ferramentas de anotação — sempre visíveis */}
-            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-lumos">
+            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-xl">
               {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
                 <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
                   title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}
