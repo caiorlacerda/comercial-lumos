@@ -45,3 +45,11 @@ BEGIN
     END IF;
   END IF;
 END $$;
+
+-- A conferência em produção mostrou OUTRO resquício da mesma trava: o índice `uq_receivables_budget`
+-- (UNIQUE em budget_id) ainda existia e o índice por parcela `uq_receivables_budget_parcela` não.
+-- Ou seja, esse trecho da migration 2026093311 nunca chegou a rodar lá. Faz agora: derruba o
+-- índice antigo e cria o por parcela (idempotente).
+DROP INDEX IF EXISTS public.uq_receivables_budget;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_receivables_budget_parcela
+  ON public.receivables (budget_id, parcela_numero) WHERE budget_id IS NOT NULL;
