@@ -6,6 +6,7 @@ import { formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 import { syncBudgetApprovalFlow } from '@/utils/financeiro';
 import type { BudgetVersion, BudgetItem } from '@/utils/financials';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import PaginaPublica, { DM, MONO, SERIF, CARTAO_VIDRO } from '@/components/publico/PaginaPublica';
 
 
 const COMPANY = {
@@ -35,7 +36,9 @@ const RESPONSIVE_CSS = `
   .ap-total-bar { display: flex; justify-content: space-between; align-items: center; border-top: 3px solid #222; border-bottom: 3px solid #222; padding: 14px 12px; margin: 0 0 40px; }
   .ap-payment-row { display: flex; gap: 16px; margin-bottom: 40px; }
   .ap-btn-row { display: flex; gap: 12px; margin-top: 24px; }
-  .ap-terms-box { border: 1px solid #e0e0e0; border-radius: 8px; padding: 32px; background: #fafafa; margin-bottom: 40px; }
+  /* Emissão e categoria repetidas dentro da célula: só no celular (no desktop já têm coluna própria) */
+  .ap-info-categoria-cell { display: none; }
+  .ap-terms-box { border: 1px solid #e0e0e0; border-radius: 14px; padding: 32px; background: #fafafa; margin-bottom: 40px; }
 
   @media (max-width: 600px) {
     .ap-wrap { padding: 20px 16px; }
@@ -67,38 +70,41 @@ const RESPONSIVE_CSS = `
 type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'already_responded' | 'not_found';
 
 const s: Record<string, React.CSSProperties> = {
-  page: { fontFamily: 'Inter, Helvetica, Arial, sans-serif', backgroundColor: '#fff', color: '#222', minHeight: '100vh' },
+  page: { fontFamily: DM, backgroundColor: '#fff', color: '#222', borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,0.45)', overflow: 'hidden' },
   yellowLine: { borderBottom: '2px solid #EFC700', marginBottom: 20 },
-  codeText: { fontSize: 11, color: '#888', marginBottom: 18 },
+  codeText: { fontFamily: MONO, fontSize: 11, color: '#888', marginBottom: 22, letterSpacing: '0.04em' },
   infoTable: { width: '100%', borderCollapse: 'collapse' as const, marginBottom: 36, border: '1px solid #e0e0e0' },
-  infoLabel: { padding: '9px 12px', color: '#888', fontWeight: 700, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: 1, width: 90, borderRight: '1px solid #e0e0e0', backgroundColor: '#fafafa', verticalAlign: 'top' as const },
+  infoLabel: { fontFamily: MONO, padding: '9px 12px', color: '#888', fontWeight: 500, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: 1, width: 90, borderRight: '1px solid #e0e0e0', backgroundColor: '#fafafa', verticalAlign: 'top' as const },
   infoValue: { padding: '9px 14px', color: '#222' },
-  sectionTitle: { fontWeight: 900, fontSize: 13, textTransform: 'uppercase' as const, letterSpacing: '0.08em', borderBottom: '2px solid #222', paddingBottom: 8, marginBottom: 16, marginTop: 0 },
+  sectionTitle: { fontFamily: MONO, fontWeight: 500, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.18em', borderBottom: '2px solid #222', paddingBottom: 8, marginBottom: 16, marginTop: 0 },
   finTable: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 12, marginBottom: 0 },
-  finTh: { padding: '8px 12px', textAlign: 'left' as const, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: 1, borderBottom: '2px solid #222', color: '#555', whiteSpace: 'nowrap' as const },
+  finTh: { fontFamily: MONO, padding: '8px 12px', textAlign: 'left' as const, fontWeight: 500, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: 1, borderBottom: '2px solid #222', color: '#555', whiteSpace: 'nowrap' as const },
   groupRow: { backgroundColor: '#FEF3AA' },
-  groupCell: { padding: '8px 12px', fontWeight: 800, fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#222' },
+  groupCell: { fontFamily: MONO, padding: '8px 12px', fontWeight: 600, fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#222' },
   itemName: { padding: '8px 12px', fontWeight: 600, color: '#222', verticalAlign: 'top' as const },
   itemDesc: { padding: '8px 12px', color: '#777', fontSize: 11, verticalAlign: 'top' as const },
   itemQty: { padding: '8px 12px', textAlign: 'center' as const, color: '#444', verticalAlign: 'top' as const, whiteSpace: 'nowrap' as const },
   itemUnit: { padding: '8px 12px', textAlign: 'center' as const, color: '#666', verticalAlign: 'top' as const, whiteSpace: 'nowrap' as const },
   subtotalRow: { borderTop: '1px solid #ddd', borderBottom: '2px solid #ddd' },
-  totalLabel: { fontWeight: 900, fontSize: 13, textTransform: 'uppercase' as const, letterSpacing: '0.06em' },
-  termsTitle: { fontWeight: 900, fontSize: 13, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 24, marginTop: 0 },
-  inputLabel: { display: 'block', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 1, color: '#888', marginBottom: 6 },
-  input: { width: '100%', padding: '10px 14px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, outline: 'none', boxSizing: 'border-box' as const, backgroundColor: '#fff', fontFamily: 'inherit' },
-  footer: { borderTop: '1px solid #e0e0e0', paddingTop: 16, textAlign: 'center' as const, fontSize: 10, color: '#bbb', letterSpacing: '0.15em', textTransform: 'uppercase' as const, marginTop: 40 },
+  totalLabel: { fontFamily: MONO, fontWeight: 500, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.16em' },
+  termsTitle: { fontFamily: SERIF, fontWeight: 400, fontSize: 30, lineHeight: 1.1, marginBottom: 22, marginTop: 0 },
+  inputLabel: { display: 'block', fontFamily: MONO, fontSize: 10, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: 1, color: '#888', marginBottom: 6 },
+  input: { width: '100%', padding: '11px 14px', border: '1px solid #ddd', borderRadius: 10, fontSize: 13, outline: 'none', boxSizing: 'border-box' as const, backgroundColor: '#fff', fontFamily: 'inherit' },
+  footer: { fontFamily: MONO, borderTop: '1px solid #e0e0e0', paddingTop: 16, textAlign: 'center' as const, fontSize: 10, color: '#bbb', letterSpacing: '0.15em', textTransform: 'uppercase' as const, marginTop: 40 },
 };
 
 function CenterScreen({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ maxWidth: 440, width: '100%', textAlign: 'center', fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}>
+    <PaginaPublica>
+      <div className={`${CARTAO_VIDRO} p-8 text-center`} style={{ fontFamily: DM }}>
         {children}
       </div>
-    </div>
+    </PaginaPublica>
   );
 }
+
+const tituloStatus: React.CSSProperties = { fontFamily: SERIF, fontWeight: 400, fontSize: 34, lineHeight: 1.1, color: '#fff', margin: '0 0 8px' };
+const textoStatus: React.CSSProperties = { color: '#d5d3d0', fontSize: 14, lineHeight: 1.6 };
 
 export default function AprovacaoPublica() {
   const { token } = useParams<{ token: string }>();
@@ -187,33 +193,33 @@ export default function AprovacaoPublica() {
       <div style={{ width: 64, height: 64, borderRadius: '50%', border: '4px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
         <span style={{ color: '#ef4444', fontSize: 28, fontWeight: 900 }}>!</span>
       </div>
-      <h1 style={{ fontSize: 22, fontWeight: 900, color: '#111', marginBottom: 8 }}>Link inválido</h1>
-      <p style={{ color: '#888', fontSize: 14 }}>Este link de aprovação não existe ou expirou.</p>
-      {debugError && <p style={{ marginTop: 16, fontSize: 11, color: '#ef4444', fontFamily: 'monospace', background: '#fef2f2', padding: 12, borderRadius: 6, textAlign: 'left', wordBreak: 'break-all' }}>{debugError}</p>}
+      <h1 style={tituloStatus}>Link inválido</h1>
+      <p style={textoStatus}>Este link de aprovação não existe ou expirou.</p>
+      {debugError && <p style={{ marginTop: 16, fontSize: 11, color: '#fca5a5', fontFamily: MONO, background: 'rgba(239,68,68,0.12)', padding: 12, borderRadius: 10, textAlign: 'left', wordBreak: 'break-all' }}>{debugError}</p>}
     </CenterScreen>
   );
 
   if (status === 'already_responded') return (
     <CenterScreen>
       <CheckCircle2 style={{ width: 64, height: 64, color: '#EFC700', margin: '0 auto 20px' }} />
-      <h1 style={{ fontSize: 22, fontWeight: 900, color: '#111', marginBottom: 8 }}>Resposta já registrada</h1>
-      <p style={{ color: '#888', fontSize: 14 }}>Este orçamento já recebeu uma resposta anteriormente.</p>
+      <h1 style={tituloStatus}>Resposta já registrada</h1>
+      <p style={textoStatus}>Este orçamento já recebeu uma resposta anteriormente.</p>
     </CenterScreen>
   );
 
   if (status === 'approved') return (
     <CenterScreen>
       <CheckCircle2 style={{ width: 64, height: 64, color: '#22c55e', margin: '0 auto 20px' }} />
-      <h1 style={{ fontSize: 22, fontWeight: 900, color: '#111', marginBottom: 8 }}>Orçamento aprovado!</h1>
-      <p style={{ color: '#888', fontSize: 14 }}>Obrigado. Nossa equipe entrará em contato em breve.</p>
+      <h1 style={tituloStatus}>Orçamento aprovado!</h1>
+      <p style={textoStatus}>Obrigado. Nossa equipe entrará em contato em breve.</p>
     </CenterScreen>
   );
 
   if (status === 'rejected') return (
     <CenterScreen>
       <XCircle style={{ width: 64, height: 64, color: '#ef4444', margin: '0 auto 20px' }} />
-      <h1 style={{ fontSize: 22, fontWeight: 900, color: '#111', marginBottom: 8 }}>Orçamento recusado</h1>
-      <p style={{ color: '#888', fontSize: 14 }}>Sua resposta foi registrada. Obrigado pelo retorno.</p>
+      <h1 style={tituloStatus}>Orçamento recusado</h1>
+      <p style={textoStatus}>Sua resposta foi registrada. Obrigado pelo retorno.</p>
     </CenterScreen>
   );
 
@@ -228,6 +234,7 @@ export default function AprovacaoPublica() {
   const codeTitle = `#${budget.code} | Lumos + ${budget.clients?.name || ''} | ${budget.project_name}`;
 
   return (
+    <PaginaPublica largura="max-w-4xl" rodape="Proposta comercial">
     <div style={s.page}>
       <style>{RESPONSIVE_CSS}</style>
       <div className="ap-wrap">
@@ -255,7 +262,10 @@ export default function AprovacaoPublica() {
         {/* Yellow divider */}
         <div style={s.yellowLine} />
 
-        {/* Code */}
+        {/* Título e código */}
+        <h1 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 'clamp(30px, 6vw, 46px)', lineHeight: 1.05, letterSpacing: '-0.01em', color: '#111', margin: '0 0 10px' }}>
+          {budget.project_name}
+        </h1>
         <div style={s.codeText}>{codeTitle}</div>
 
         {/* Project info table */}
@@ -303,20 +313,20 @@ export default function AprovacaoPublica() {
             {(version.logistics_date || version.logistics_time || version.logistics_location) && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                 {version.logistics_date && (
-                  <div style={{ flex: '1 1 120px', padding: '10px 14px', border: '1px solid #e0e0e0', borderRadius: 6, backgroundColor: '#fafafa' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 3 }}>Data(s)</div>
+                  <div style={{ flex: '1 1 120px', padding: '10px 14px', border: '1px solid #e0e0e0', borderRadius: 10, backgroundColor: '#fafafa' }}>
+                    <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 3 }}>Data(s)</div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{version.logistics_date}</div>
                   </div>
                 )}
                 {version.logistics_time && (
-                  <div style={{ flex: '1 1 100px', padding: '10px 14px', border: '1px solid #e0e0e0', borderRadius: 6, backgroundColor: '#fafafa' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 3 }}>Horário</div>
+                  <div style={{ flex: '1 1 100px', padding: '10px 14px', border: '1px solid #e0e0e0', borderRadius: 10, backgroundColor: '#fafafa' }}>
+                    <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 3 }}>Horário</div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{version.logistics_time}</div>
                   </div>
                 )}
                 {version.logistics_location && (
-                  <div style={{ flex: '2 1 200px', padding: '10px 14px', border: '1px solid #e0e0e0', borderRadius: 6, backgroundColor: '#fafafa' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 3 }}>Local / Endereço</div>
+                  <div style={{ flex: '2 1 200px', padding: '10px 14px', border: '1px solid #e0e0e0', borderRadius: 10, backgroundColor: '#fafafa' }}>
+                    <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 3 }}>Local / Endereço</div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{version.logistics_location}</div>
                   </div>
                 )}
@@ -385,7 +395,7 @@ export default function AprovacaoPublica() {
         {/* Total */}
         <div className="ap-total-bar">
           <span style={s.totalLabel}>Investimento Total do Projeto</span>
-          <span className="ap-total-value" style={{ fontWeight: 900, fontSize: 30, color: '#111' }}>
+          <span className="ap-total-value" style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 40, color: '#111' }}>
             {fmt(financials.valorFinal)}
           </span>
         </div>
@@ -394,14 +404,14 @@ export default function AprovacaoPublica() {
         {(version.payment_terms || version.validity_days) && (
           <div className="ap-payment-row">
             {version.payment_terms && (
-              <div style={{ flex: 1, padding: 16, border: '1px solid #e0e0e0', borderRadius: 6 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 4 }}>Condições de Pagamento</div>
+              <div style={{ flex: 1, padding: 16, border: '1px solid #e0e0e0', borderRadius: 10 }}>
+                <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 4 }}>Condições de Pagamento</div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{version.payment_terms}</div>
               </div>
             )}
             {version.validity_days && (
-              <div style={{ flex: 1, padding: 16, border: '1px solid #e0e0e0', borderRadius: 6 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 4 }}>Validade da Proposta</div>
+              <div style={{ flex: 1, padding: 16, border: '1px solid #e0e0e0', borderRadius: 10 }}>
+                <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 4 }}>Validade da Proposta</div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{version.validity_days} dias</div>
               </div>
             )}
@@ -502,7 +512,7 @@ export default function AprovacaoPublica() {
               onClick={() => handleSubmit(true)}
               disabled={submitting}
               className="ap-btn-approve"
-              style={{ flex: 1, padding: '14px', backgroundColor: '#EFC700', border: 'none', borderRadius: 6, fontWeight: 800, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#000', letterSpacing: '0.04em', opacity: submitting ? 0.6 : 1 }}
+              style={{ flex: 1, padding: '14px', backgroundColor: '#EFC700', border: 'none', borderRadius: 999, fontFamily: MONO, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#000', letterSpacing: '0.14em', opacity: submitting ? 0.6 : 1 }}
             >
               {submitting && decision === 'aprovado'
                 ? <Loader2 className="animate-spin" style={{ width: 16, height: 16 }} />
@@ -513,7 +523,7 @@ export default function AprovacaoPublica() {
               onClick={() => handleSubmit(false)}
               disabled={submitting}
               className="ap-btn-reject"
-              style={{ flex: 1, padding: '14px', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#555', letterSpacing: '0.04em', opacity: submitting ? 0.6 : 1 }}
+              style={{ flex: 1, padding: '14px', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: 999, fontFamily: MONO, fontWeight: 500, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#555', letterSpacing: '0.14em', opacity: submitting ? 0.6 : 1 }}
             >
               {submitting && decision === 'reprovado'
                 ? <Loader2 className="animate-spin" style={{ width: 16, height: 16 }} />
@@ -527,5 +537,6 @@ export default function AprovacaoPublica() {
         <div style={s.footer}>{codeTitle} · {COMPANY.website}</div>
       </div>
     </div>
+    </PaginaPublica>
   );
 }
