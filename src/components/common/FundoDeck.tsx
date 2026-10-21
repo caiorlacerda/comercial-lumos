@@ -10,8 +10,9 @@ const GRAO = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/s
  * O conteúdo da página precisa ter `relative z-10` para ficar acima dele; a barra lateral
  * e os cabeçalhos já ficam acima.
  */
-export default function FundoDeck() {
-  const { theme } = useTheme();
+export default function FundoDeck({ tema }: { tema?: 'dark' | 'light' } = {}) {
+  const { theme: temaDoApp } = useTheme();
+  const theme = tema ?? temaDoApp;
 
   if (theme === 'dark') {
     return (

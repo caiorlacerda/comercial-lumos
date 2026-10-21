@@ -784,4 +784,63 @@ export const PORTAL_CSS = String.raw`
   .wd-progresso-luz { height: 100%; background: var(--luz); transition: width .3s ease; }
   .wd-progresso-contagem { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--gesso); white-space: nowrap; }
   .wd-progresso-contagem b { color: var(--luz); }
+
+  /* ── VISUAL DO APP ───────────────────────────────────────────
+     O portal usa a mesma linguagem do resto da plataforma: fundo de luz do
+     deck, superfícies de vidro, cantos de 12px, abas em cápsulas. As cores,
+     as fontes e a estrutura continuam as da sala de projeção. */
+  .portal-lumos { isolation: isolate; background: transparent;
+    --solido: #2c2926; --vidro: blur(16px) saturate(1.1); --raio: 14px; }
+  .portal-lumos.claro { --solido: #ffffff; }
+  .portal-lumos { --mesa: rgba(24,22,20,.58); --mesa-alta: rgba(34,31,29,.62); --fio: rgba(255,247,230,.15); }
+  .portal-lumos.claro { --mesa: rgba(255,255,255,.62); --mesa-alta: rgba(255,255,255,.5); --fio: rgba(28,24,20,.12); }
+  .fundo-portal { position: fixed; inset: 0; z-index: -1; }
+
+  /* Cabeçalho de vidro */
+  .topo { background: color-mix(in srgb, var(--mesa) 100%, transparent); backdrop-filter: var(--vidro); }
+
+  /* Seções e peças em cartões de vidro */
+  .secao { background: var(--mesa); border: 1px solid var(--fio); border-radius: var(--raio);
+    padding: 24px 26px; margin-top: 16px; backdrop-filter: var(--vidro); }
+  .secao:last-child { padding-bottom: 24px; }
+  .duas { gap: 16px; }
+  .duas .secao { padding-bottom: 24px; margin-top: 0; }
+  .fita-proj + .secao { padding-top: 24px; }
+  .peca-bloco { background: var(--mesa); border: 1px solid var(--fio); border-radius: var(--raio);
+    padding: 20px 22px; margin-top: 14px; backdrop-filter: var(--vidro); }
+  .proj:last-of-type, .diario li:last-child, .arquivo:last-child, .pessoa:last-child { border-bottom: 0; }
+  .rodape { border-top-color: var(--fio); }
+
+  /* Abas em cápsulas, como no app: 40px, a ativa vira um cartão sólido com ponto amarelo */
+  .link, .aba { height: 40px; padding: 0 16px; border-radius: 12px; border: 1px solid transparent;
+    font-size: 14px; font-weight: 500; }
+  .aba { max-width: 210px; border-bottom: 1px solid transparent; }
+  .link[aria-current="true"], .aba[aria-selected="true"],
+  .portal-lumos.claro .link[aria-current="true"] {
+    background: var(--solido); color: var(--gesso); font-weight: 600; border-color: var(--fio);
+    box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 3px 8px rgba(0,0,0,.12); }
+  .link[aria-current="true"]::before, .aba[aria-selected="true"]::before {
+    content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--luz); flex: 0 0 auto; }
+  .aba[aria-selected="true"] { border-bottom-color: var(--fio); }
+  .fita, .fita-proj { border-bottom: 0; gap: 6px; }
+  .fita-proj { margin: 22px 0 0; padding: 2px 0 8px; }
+
+  /* Peças menores no mesmo raio do app */
+  .quadro .still, .quadro .legenda { border-radius: 10px; }
+  .quadro .legenda { border-radius: 0 0 10px 10px; }
+  .campo { border-radius: 12px; background: var(--mesa-alta); }
+  .botao { border-radius: 999px; letter-spacing: .1em; font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 12px; }
+  .baixar, .canal, .pessoa a { border-radius: 999px; }
+  .menu-abre .menu, .pedido-modal { border-radius: 14px; backdrop-filter: var(--vidro); }
+  .menu-abre .menu { background: var(--solido); }
+  .pedido-modal { background: color-mix(in srgb, var(--solido) 92%, transparent); }
+  .pedido-modal-fora { background: rgba(10,9,8,.55); }
+  .calend .dia, .grav-card { background: var(--mesa-alta); }
+  .chamada::before { opacity: .55; }
+  @media (max-width: 760px) {
+    .link { padding: 0 11px; font-size: 13px; }
+    .navegacao { overflow-x: auto; scrollbar-width: none; justify-content: flex-start; gap: 2px; }
+    .navegacao::-webkit-scrollbar { display: none; }
+    .secao, .peca-bloco { padding: 18px 16px; }
+  }
 `;

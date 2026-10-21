@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
 import WelcomeDocPage from './welcome-doc/WelcomeDocPage';
+import FundoDeck from '@/components/common/FundoDeck';
 
 /**
  * PORTAL DO CLIENTE — um link por cliente, uma aba por projeto.
@@ -883,6 +884,7 @@ export default function PortalCliente() {
   if (erro) {
     return (
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <p className="rotulo">{erro}</p>
       </div>
@@ -907,6 +909,7 @@ export default function PortalCliente() {
     };
     return (
       <div className={`portal-lumos ${tema === 'claro' ? 'claro' : ''}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <div style={{ width: '100%', maxWidth: 400 }}>
           <img className="logotipo" src={tema === 'claro' ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
@@ -963,6 +966,7 @@ export default function PortalCliente() {
   if (!dados) {
     return (
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <span className="farol" />
       </div>
@@ -974,6 +978,7 @@ export default function PortalCliente() {
   if (!nome) {
     return (
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <div style={{ width: '100%', maxWidth: 380 }}>
           <img className="logotipo" src={tema === "claro" ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
@@ -1004,6 +1009,7 @@ export default function PortalCliente() {
 
   return (
     <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
       <style>{PORTAL_CSS}</style>
 
       {/* Cabeçalho em uma linha só: marca à esquerda, navegação no meio,
