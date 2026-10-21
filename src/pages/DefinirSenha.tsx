@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { KeyRound } from 'lucide-react';
-import { useTheme } from '@/context/ThemeContext';
+import PaginaPublica, { MONO, SERIF, ROTULO_PUBLICO, CAMPO_PUBLICO, BOTAO_AMARELO, CARTAO_VIDRO } from '@/components/publico/PaginaPublica';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 
@@ -44,7 +43,6 @@ export default function DefinirSenha() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [hasSession, setHasSession] = useState(false);
   const navigate = useNavigate();
-  const { theme } = useTheme();
   // Mesmo componente atende dois fluxos: /definir-senha (primeiro acesso via
   // convite) e /redefinir-senha (recuperação via "Esqueci minha senha").
   const isReset = useLocation().pathname === '/redefinir-senha';
@@ -108,88 +106,74 @@ export default function DefinirSenha() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-lumos-bg px-4 transition-colors duration-300">
-      <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-700">
-        <div className="text-center mb-10 flex flex-col items-center">
-          <img
-            src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"}
-            alt="Lumos Logo"
-            className="h-14 transition-all duration-300"
-          />
-        </div>
-
-        <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-10 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-lumos-yellow" />
-
-          <h2 className="text-2xl font-black mb-2 flex items-center gap-3 text-lumos-text-primary tracking-tight">
-            <KeyRound className="w-6 h-6 text-lumos-yellow" />
-            {isReset ? 'Redefinir senha' : 'Definir senha'}
-          </h2>
-          <p className="text-lumos-text-secondary text-sm mb-8">
-            {isReset ? 'Crie uma senha nova pra sua conta. A antiga deixa de valer.' : 'Bem-vindo(a) à Lumos! Crie sua senha de acesso à plataforma.'}
-          </p>
-
-          {checkingSession ? (
-            <div className="flex items-center justify-center py-10">
-              <div className="w-8 h-8 border-2 border-lumos-yellow/30 border-t-lumos-yellow rounded-full animate-spin" />
-            </div>
-          ) : !hasSession ? (
-            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lumos text-red-500 text-sm font-medium">
-              {isReset
-                ? 'Este link é inválido ou expirou. Volte à tela de login e peça um novo em "Esqueci minha senha".'
-                : 'Este link de convite é inválido ou expirou. Peça a um administrador para reenviar o convite.'}
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest mb-2">
-                  Nova senha
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-lumos w-full h-12"
-                  placeholder="••••••••"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest mb-2">
-                  Confirmar senha
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  className="input-lumos w-full h-12"
-                  placeholder="••••••••"
-                />
-              </div>
-
-              {error && (
-                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lumos text-red-500 text-sm font-medium animate-in shake-in duration-300">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full flex items-center justify-center gap-2 h-12 text-sm font-black uppercase tracking-widest shadow-lg shadow-lumos-yellow/20"
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                ) : (
-                  'Criar senha e entrar'
-                )}
-              </button>
-            </form>
-          )}
-        </div>
+    <PaginaPublica rodape={isReset ? 'Redefinição de senha' : 'Primeiro acesso'}>
+      <div className="mb-6 flex items-center gap-3">
+        <span className="block h-[9px] w-[9px] bg-[#efc700]" />
+        <span className="text-[10px] uppercase tracking-[3px]" style={{ fontFamily: MONO }}>
+          {isReset ? 'Nova senha' : 'Bem-vindo(a) à Lumos'}
+        </span>
       </div>
-    </div>
+      <h1 className="mb-6 text-[44px] font-normal leading-[1.05] tracking-[-0.01em] sm:text-[56px]" style={{ fontFamily: SERIF }}>
+        {isReset ? 'Redefinir senha' : 'Definir senha'}
+      </h1>
+
+      <div className={`${CARTAO_VIDRO} p-7 sm:p-9`}>
+        <p className="mb-7 text-sm leading-relaxed text-[#d5d3d0]">
+          {isReset ? 'Crie uma senha nova pra sua conta. A antiga deixa de valer.' : 'Crie sua senha de acesso à plataforma.'}
+        </p>
+
+        {checkingSession ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#efc700]/30 border-t-[#efc700]" />
+          </div>
+        ) : !hasSession ? (
+          <div className="rounded-xl border border-red-400/40 bg-red-500/15 p-4 text-sm font-medium text-red-200">
+            {isReset
+              ? 'Este link é inválido ou expirou. Volte à tela de login e peça um novo em "Esqueci minha senha".'
+              : 'Este link de convite é inválido ou expirou. Peça a um administrador para reenviar o convite.'}
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>Nova senha</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${CAMPO_PUBLICO} h-12`}
+                placeholder="••••••••"
+              />
+            </div>
+
+            <div>
+              <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>Confirmar senha</label>
+              <input
+                type="password"
+                required
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                className={`${CAMPO_PUBLICO} h-12`}
+                placeholder="••••••••"
+              />
+            </div>
+
+            {error && (
+              <div className="animate-in shake-in rounded-xl border border-red-400/40 bg-red-500/15 p-4 text-sm font-medium text-red-200 duration-300">
+                {error}
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className={`${BOTAO_AMARELO} h-12 w-full text-[15px] uppercase tracking-[2px]`}>
+              {loading ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+              ) : (
+                'Criar senha e entrar'
+              )}
+            </button>
+          </form>
+        )}
+      </div>
+    </PaginaPublica>
   );
 }

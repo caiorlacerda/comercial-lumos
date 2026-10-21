@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle2, FileUp, Loader2, Receipt, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import PaginaPublica, { MONO, SERIF, ROTULO_PUBLICO, CAMPO_PUBLICO, BOTAO_AMARELO, CARTAO_VIDRO } from '@/components/publico/PaginaPublica';
 
 /**
  * PÁGINA PÚBLICA DA NOTA FISCAL — o fornecedor recebe este link por e-mail
@@ -90,55 +91,50 @@ export default function NotaFiscalPublica() {
   const valorTxt = brl(info?.valor);
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-white flex flex-col">
-      <header className="px-6 py-5 border-b border-white/10">
-        <img src="/logo/Logotipo-Branco-Alpha.svg" alt="Produtora Lumos" className="h-7" />
-      </header>
-
-      <main className="flex-1 flex items-center justify-center px-4 py-10">
+    <PaginaPublica rodape="Envio de nota fiscal">
         {loading ? (
-          <Loader2 className="w-8 h-8 animate-spin text-[#EFC700]" />
+          <Loader2 className="mx-auto block h-8 w-8 animate-spin text-[#efc700]" />
         ) : !info?.ok ? (
-          <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-3">
+          <div className={`${CARTAO_VIDRO} p-8 text-center space-y-3`}>
             <AlertTriangle className="w-10 h-10 text-red-400 mx-auto" />
-            <h1 className="text-lg font-bold">Link inválido</h1>
+            <h1 className="text-[34px] font-normal leading-tight" style={{ fontFamily: SERIF }}>Link inválido</h1>
             <p className="text-sm text-white/60">
               Este link de envio de nota não existe ou foi cancelado. Se você recebeu por e-mail, fale com a produção da Lumos.
             </p>
           </div>
         ) : (
-          <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-2xl p-8 space-y-6">
+          <div className={`${CARTAO_VIDRO} p-7 sm:p-9 space-y-6`}>
             <div className="space-y-1.5">
-              <div className="w-11 h-11 rounded-full bg-[#EFC700]/15 flex items-center justify-center">
-                <Receipt className="w-5 h-5 text-[#EFC700]" />
+              <div className="w-11 h-11 rounded-full bg-[#efc700]/15 flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-[#efc700]" />
               </div>
-              <h1 className="text-xl font-bold pt-1">Olá, {info.fornecedor}!</h1>
-              <p className="text-sm text-white/60 leading-relaxed">
+              <h1 className="pt-1 text-[34px] font-normal leading-tight" style={{ fontFamily: SERIF }}>Olá, {info.fornecedor}!</h1>
+              <p className="text-sm text-white/75 leading-relaxed">
                 {info.status === 'paga'
                   ? 'O pagamento deste job já foi realizado. Obrigado!'
                   : <>Pra gente pagar o seu job em dia, precisamos da sua nota fiscal. Envie o arquivo aqui embaixo.</>}
               </p>
             </div>
 
-            <div className="bg-black/30 border border-white/10 rounded-xl p-4 space-y-2 text-sm">
+            <div className="bg-[#161616]/55 border border-white/[0.22] rounded-xl p-4 space-y-2 text-sm">
               <div className="flex justify-between gap-3">
-                <span className="text-white/50">Job</span>
+                <span className="text-white/65">Job</span>
                 <span className="font-semibold text-right">{info.descricao}</span>
               </div>
               {info.projeto && (
                 <div className="flex justify-between gap-3">
-                  <span className="text-white/50">Projeto</span>
+                  <span className="text-white/65">Projeto</span>
                   <span className="font-semibold text-right">{info.projeto}</span>
                 </div>
               )}
               {valorTxt && (
                 <div className="flex justify-between gap-3">
-                  <span className="text-white/50">Valor</span>
-                  <span className="font-bold text-[#EFC700]">{valorTxt}</span>
+                  <span className="text-white/65">Valor</span>
+                  <span className="font-bold text-[#efc700]">{valorTxt}</span>
                 </div>
               )}
               <div className="flex justify-between gap-3">
-                <span className="text-white/50">Pagamento previsto</span>
+                <span className="text-white/65">Pagamento previsto</span>
                 <span className="font-semibold">{brData(info.pagar_em)}</span>
               </div>
             </div>
@@ -153,7 +149,7 @@ export default function NotaFiscalPublica() {
                   <CheckCircle2 className="w-5 h-5" />
                   {enviado ? 'Nota recebida, obrigado!' : `Nota já recebida${info.arquivo ? ` (${info.arquivo})` : ''}`}
                 </div>
-                <p className="text-xs text-white/50">
+                <p className="text-xs text-white/65">
                   O pagamento segue previsto pra {brData(info.pagar_em)}. Se precisar corrigir o arquivo, é só enviar de novo.
                 </p>
                 <button
@@ -167,7 +163,7 @@ export default function NotaFiscalPublica() {
             ) : (
               <>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-white/50 block">
+                  <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>
                     Seus dados bancários e chave PIX *
                   </label>
                   <textarea
@@ -175,14 +171,14 @@ export default function NotaFiscalPublica() {
                     onChange={e => setDadosPagamento(e.target.value)}
                     rows={3}
                     placeholder="Ex: PIX (CPF): 000.000.000-00 · Banco Nubank, ag 0001, conta 1234567-8"
-                    className="w-full bg-black/30 border border-white/15 focus:border-[#EFC700] rounded-xl p-3 text-sm outline-none resize-none placeholder:text-white/25"
+                    className={`${CAMPO_PUBLICO} py-3 text-sm resize-none`}
                   />
-                  <p className="text-[11px] text-white/40">Confira se está tudo certo, o pagamento vai cair aí.</p>
+                  <p className="text-[11px] text-white/60">Confira se está tudo certo, o pagamento vai cair aí.</p>
                 </div>
                 <button
                   onClick={pedirArquivo}
                   disabled={enviando}
-                  className="w-full bg-[#EFC700] hover:bg-[#ffd91e] text-black font-black rounded-xl py-3.5 flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
+                  className={`${BOTAO_AMARELO} h-12 w-full text-[15px] uppercase tracking-[2px]`}
                 >
                   {enviando ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileUp className="w-5 h-5" />}
                   {enviando ? 'Enviando…' : 'Enviar nota fiscal'}
@@ -200,13 +196,12 @@ export default function NotaFiscalPublica() {
 
             {erro && <p className="text-xs text-red-400 text-center">{erro}</p>}
             {info.status !== 'paga' && (
-              <p className="text-[11px] text-white/40 text-center">
+              <p className="text-[11px] text-white/60 text-center">
                 Aceitamos PDF, XML ou foto da nota (até 15MB). Qualquer dúvida, fale com a produção da Lumos.
               </p>
             )}
           </div>
         )}
-      </main>
-    </div>
+    </PaginaPublica>
   );
 }

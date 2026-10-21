@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Truck, Plus, Trash2, CheckCircle2, Sun, Moon, Send } from 'lucide-react';
+import { Trash2, CheckCircle2, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useTheme } from '@/context/ThemeContext';
+import PaginaPublica, { MONO, SERIF, ROTULO_PUBLICO, CAMPO_PUBLICO, BOTAO_AMARELO, BOTAO_CONTORNO, CARTAO_VIDRO_FORTE } from '@/components/publico/PaginaPublica';
 import { useToast } from '@/context/ToastContext';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
@@ -25,7 +25,6 @@ interface ServiceItem {
 }
 
 export default function CadastroFornecedorPublico() {
-  const { theme, toggleTheme } = useTheme();
   const toast = useToast();
 
   const [saving, setSaving] = useState(false);
@@ -149,127 +148,116 @@ export default function CadastroFornecedorPublico() {
   };
 
   return (
-    <div className="min-h-screen bg-lumos-bg text-lumos-text-primary transition-colors duration-300 font-work-sans py-12 px-4 sm:px-6 lg:px-8 relative flex flex-col items-center justify-start">
-      {/* Theme Toggle Button */}
-      <div className="absolute top-6 right-6">
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-full text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5 transition-all flex items-center justify-center"
-          title="Alternar Tema"
-        >
-          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
-      </div>
-
-      {/* Main Container */}
-      <div className="w-full max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-750">
-        {/* Header/Logo */}
-        <div className="text-center space-y-4">
-          <img
-            src={theme === 'dark' ? "/logo/Logotipo-Branco-Alpha.svg" : "/logo/Logotipo-Preto-Alpha.svg"}
-            alt="Lumos Logo"
-            className="h-10 mx-auto transition-all duration-300"
-          />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Cadastro de Fornecedores</h1>
-            <p className="text-lumos-text-secondary text-xs mt-1">Preencha seus dados cadastrais e os serviços prestados para fazer parte da nossa rede de parceiros.</p>
+    <PaginaPublica largura="max-w-4xl" rodape="Cadastro de fornecedores">
+      <div className="space-y-8">
+        {/* Título */}
+        <div>
+          <div className="mb-4 flex items-center gap-3">
+            <span className="block h-[9px] w-[9px] bg-[#efc700]" />
+            <span className="text-[10px] uppercase tracking-[3px]" style={{ fontFamily: MONO }}>Rede de parceiros</span>
           </div>
+          <h1 className="text-[44px] font-normal leading-[1.05] tracking-[-0.01em] sm:text-[56px]" style={{ fontFamily: SERIF }}>
+            Cadastro de fornecedores
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#d5d3d0]">
+            Preencha seus dados cadastrais e os serviços prestados para fazer parte da nossa rede de parceiros.
+          </p>
         </div>
 
         {success ? (
-          <div className="card border-t-4 border-t-green-500 p-8 text-center space-y-6 max-w-lg mx-auto animate-in zoom-in duration-300">
+          <div className={`${CARTAO_VIDRO_FORTE} p-8 text-center space-y-6 max-w-lg mx-auto animate-in zoom-in duration-300`}>
             <div className="w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-10 h-10" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-lumos-text-primary">Cadastro enviado!</h2>
-              <p className="text-sm text-lumos-text-secondary">
+              <h2 className="text-[34px] font-normal leading-tight" style={{ fontFamily: SERIF }}>Cadastro enviado!</h2>
+              <p className="text-sm text-[#d5d3d0]">
                 A equipe Lumos vai revisar os seus dados. Em breve entraremos em contato se necessário.
               </p>
             </div>
             <div className="pt-4">
               <button
                 onClick={handleResetForm}
-                className="btn-secondary py-2 px-6 text-xs font-bold"
+                className={`${BOTAO_CONTORNO} h-10 px-6 text-xs uppercase tracking-[2px]`} style={{ fontFamily: MONO }}
               >
                 Enviar Novo Cadastro
               </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="card border-t-4 border-t-lumos-yellow p-6 sm:p-8 space-y-8 shadow-xl">
+          <form onSubmit={handleSubmit} className={`${CARTAO_VIDRO_FORTE} p-6 sm:p-9 space-y-8`}>
             {/* Dados Cadastrais */}
             <div className="space-y-6">
-              <h2 className="text-sm font-bold text-lumos-text-primary uppercase tracking-widest border-b border-lumos-border/50 pb-2">
+              <h2 className="border-b border-white/[0.22] pb-2 text-[11px] uppercase tracking-[3px] text-[#efc700]" style={{ fontFamily: MONO }}>
                 Dados Cadastrais
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest block">
+                  <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>
                     Nome do Fornecedor / Razão Social *
                   </label>
                   <input
                     required
                     type="text"
-                    className="input-lumos w-full h-10 px-4"
+                    className={`${CAMPO_PUBLICO} h-10`}
                     placeholder="Ex: Carlos Filmmaker Ltda"
                     value={formData.nome}
                     onChange={e => setFormData({ ...formData, nome: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest block">
+                  <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>
                     CNPJ / CPF
                   </label>
                   <input
                     type="text"
-                    className="input-lumos w-full h-10 px-4"
+                    className={`${CAMPO_PUBLICO} h-10`}
                     placeholder="Ex: 00.000.000/0001-00"
                     value={formData.cnpj}
                     onChange={e => setFormData({ ...formData, cnpj: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest block">
+                  <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>
                     Telefone de Contato
                   </label>
                   <input
                     type="text"
-                    className="input-lumos w-full h-10 px-4"
+                    className={`${CAMPO_PUBLICO} h-10`}
                     placeholder="Ex: (11) 99999-9999"
                     value={formData.telefone}
                     onChange={e => setFormData({ ...formData, telefone: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest block">
+                  <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>
                     E-mail
                   </label>
                   <input
                     type="email"
-                    className="input-lumos w-full h-10 px-4"
+                    className={`${CAMPO_PUBLICO} h-10`}
                     placeholder="Ex: contato@parceiro.com"
                     value={formData.email}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest block">
+                  <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>
                     Dados de Pagamento (PIX, Banco, Agência, Conta)
                   </label>
                   <textarea
-                    className="input-lumos w-full p-4 h-24 resize-none"
+                    className={`${CAMPO_PUBLICO} h-24 resize-none py-3`}
                     placeholder="Ex: Chave PIX Celular: (11) 99999-9999 (Banco Nubank)"
                     value={formData.payment_info}
                     onChange={e => setFormData({ ...formData, payment_info: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest block">
+                  <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>
                     Observações Gerais
                   </label>
                   <textarea
-                    className="input-lumos w-full p-4 h-24 resize-none"
+                    className={`${CAMPO_PUBLICO} h-24 resize-none py-3`}
                     placeholder="Alguma observação, restrição ou observação contratual..."
                     value={formData.notes}
                     onChange={e => setFormData({ ...formData, notes: e.target.value })}
@@ -279,15 +267,15 @@ export default function CadastroFornecedorPublico() {
             </div>
 
             {/* Serviços e Valores */}
-            <div className="space-y-6 pt-6 border-t border-lumos-border/30">
+            <div className="space-y-6 pt-6 border-t border-white/[0.15]">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-lumos-text-primary uppercase tracking-widest">
+                <h2 className="text-[11px] uppercase tracking-[3px] text-[#efc700]" style={{ fontFamily: MONO }}>
                   Serviços Oferecidos
                 </h2>
                 <button
                   type="button"
                   onClick={handleAddService}
-                  className="text-xs font-black uppercase text-lumos-yellow bg-lumos-yellow/10 px-4 py-2 rounded transition-all hover:bg-lumos-yellow/20"
+                  className="rounded-full border border-[#efc700]/50 px-4 py-2 text-[11px] uppercase tracking-[2px] text-[#efc700] transition-colors hover:bg-[#efc700]/10" style={{ fontFamily: MONO }}
                 >
                   + Adicionar Serviço
                 </button>
@@ -296,38 +284,38 @@ export default function CadastroFornecedorPublico() {
               <div className="space-y-4">
                 <ServicosDatalist />
                 {services.map((item, idx) => (
-                  <div key={idx} className="bg-lumos-bg/30 p-4 rounded border border-lumos-border grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative">
-                    <div className="md:col-span-6 space-y-1">
-                      <label className="block text-[9px] font-bold text-lumos-text-secondary uppercase tracking-wide">
+                  <div key={idx} className="bg-[#161616]/40 p-4 rounded-xl border border-white/[0.22] grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative">
+                    <div className="md:col-span-5 space-y-1">
+                      <label className={`${ROTULO_PUBLICO} !tracking-[2px] !text-[10px]`} style={{ fontFamily: MONO }}>
                         Tipo de Serviço *
                       </label>
                       <input
                         required
                         type="text"
                         list="servicos-catalogo"
-                        className="input-lumos w-full h-10 px-3 text-sm"
+                        className={`${CAMPO_PUBLICO} h-10`}
                         placeholder="Busque o serviço (ex.: Filmmaker, Som direto…)"
                         value={item.tipo_servico}
                         onChange={e => handleUpdateService(idx, 'tipo_servico', e.target.value)}
                       />
                     </div>
                     <div className="md:col-span-3 space-y-1">
-                      <label className="block text-[9px] font-bold text-lumos-text-secondary uppercase tracking-wide">
+                      <label className={`${ROTULO_PUBLICO} !tracking-[2px] !text-[10px]`} style={{ fontFamily: MONO }}>
                         Valor da Diária (R$)
                       </label>
                       <CurrencyInput
-                        className="input-lumos w-full h-10 px-3 text-sm font-bold"
+                        className={`${CAMPO_PUBLICO} h-10 font-bold`}
                         value={item.valor}
                         onChange={(val: number) => handleUpdateService(idx, 'valor', val)}
                       />
                     </div>
-                    <div className="md:col-span-2 space-y-1">
-                      <label className="block text-[9px] font-bold text-lumos-text-secondary uppercase tracking-wide">
+                    <div className="md:col-span-3 space-y-1">
+                      <label className={`${ROTULO_PUBLICO} !tracking-[2px] !text-[10px]`} style={{ fontFamily: MONO }}>
                         Detalhes do Serviço
                       </label>
                       <input
                         type="text"
-                        className="input-lumos w-full h-10 px-3 text-xs"
+                        className={`${CAMPO_PUBLICO} h-10`}
                         placeholder="Ex: Incluso kit de lentes"
                         value={item.notes || ''}
                         onChange={e => handleUpdateService(idx, 'notes', e.target.value)}
@@ -338,7 +326,7 @@ export default function CadastroFornecedorPublico() {
                         <button
                           type="button"
                           onClick={() => handleRemoveService(idx)}
-                          className="p-2 text-lumos-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded transition-all"
+                          className="p-2 text-white/60 hover:text-red-300 hover:bg-red-500/15 rounded-lg transition-all"
                           title="Remover Serviço"
                         >
                           <Trash2 className="w-5 h-5" />
@@ -351,25 +339,18 @@ export default function CadastroFornecedorPublico() {
             </div>
 
             {/* Enviar Form */}
-            <div className="pt-6 border-t border-lumos-border/30 flex justify-end">
+            <div className="pt-6 border-t border-white/[0.15] flex justify-end">
               <button
                 type="submit"
                 disabled={saving}
-                className="btn-primary h-11 px-8 min-w-[200px] flex items-center justify-center gap-2"
+                className={`${BOTAO_AMARELO} h-12 px-8 min-w-[200px] text-sm uppercase tracking-[2px]`}
               >
                 <Send className="w-4 h-4" /> {saving ? 'Enviando...' : 'Enviar Cadastro'}
               </button>
             </div>
           </form>
         )}
-
-        {/* Footer */}
-        <div className="text-center pt-8 border-t border-lumos-border/20">
-          <p className="text-[10px] text-lumos-text-secondary font-bold uppercase tracking-wider opacity-40">
-            Lumos Studio © {new Date().getFullYear()}
-          </p>
-        </div>
       </div>
-    </div>
+    </PaginaPublica>
   );
 }
