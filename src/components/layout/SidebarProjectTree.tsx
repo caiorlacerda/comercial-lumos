@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { formatBudgetCode } from '@/utils/formatters';
 import Select from '@/components/ui/Select';
+import Modal from '@/components/common/Modal';
 import PortalModal from '@/components/producao/PortalModal';
 
 // Cores disponíveis para clientes. A chave é o que fica salvo no banco
@@ -513,15 +514,33 @@ export default function SidebarProjectTree() {
 
       {/* Confirmação de exclusão definitiva */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-lumos-surface border border-red-500/30 rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary text-center">
+        <Modal
+          isOpen
+          onClose={() => setConfirmDelete(null)}
+          title={`Excluir "${confirmDelete.name}"?`}
+          size="md"
+          footer={(
+            <>
+              <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="btn-secondary h-10 px-4 text-xs font-bold">
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                disabled={deleting}
+                className="h-10 px-4 text-xs font-bold rounded-lumos bg-red-500 hover:bg-red-600 text-white transition-all flex items-center justify-center gap-2"
+              >
+                {deleting
+                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : 'Sim, excluir definitivamente'}
+              </button>
+            </>
+          )}
+        >
+          <div className="space-y-4 text-lumos-text-primary text-center">
             <div className="mx-auto w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center">
               <Trash2 className="w-6 h-6" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-base font-bold uppercase tracking-tight text-lumos-text-primary">
-                Excluir "{confirmDelete.name}"?
-              </h3>
               <p className="text-xs text-lumos-text-secondary leading-relaxed">
                 Esta ação é <span className="font-bold text-red-400">definitiva</span> e apaga junto:
               </p>
@@ -533,35 +552,28 @@ export default function SidebarProjectTree() {
                 A pasta no <b>Google Drive não</b> é apagada. Custos já lançados permanecem no financeiro (vinculados ao orçamento).
               </p>
             </div>
-            <div className="flex items-center justify-center gap-2.5 pt-3">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                disabled={deleting}
-                className="btn-secondary text-xs w-full py-2.5 font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDeleteProject}
-                disabled={deleting}
-                className="w-full py-2.5 text-xs font-bold rounded-lumos bg-red-500 hover:bg-red-600 text-white transition-all flex items-center justify-center gap-2"
-              >
-                {deleting
-                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  : 'Sim, excluir definitivamente'}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal de edição de projeto (nome / código / categoria) */}
       {editProj && (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditProj(null)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4">
-            <h3 className="text-base font-black uppercase tracking-tight text-lumos-text-primary flex items-center gap-2">
-              <Pencil className="w-4 h-4 text-lumos-yellow" /> Editar projeto
-            </h3>
+        <Modal
+          isOpen
+          onClose={() => setEditProj(null)}
+          title="Editar projeto"
+          size="md"
+          footer={(
+            <>
+              <button onClick={() => setEditProj(null)} className="btn-secondary h-10 px-4 text-sm">Cancelar</button>
+              <button onClick={handleSaveEdit} disabled={!editForm.name.trim() || savingEdit}
+                className="btn-primary h-10 px-5 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                {savingEdit ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : 'Salvar'}
+              </button>
+            </>
+          )}
+        >
+          <div className="space-y-4">
             <div>
               <label className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary block mb-1">Nome do projeto</label>
               <input autoFocus value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
@@ -580,15 +592,8 @@ export default function SidebarProjectTree() {
                   options={[{ value: 'digital', label: 'Digital' }, { value: 'filme', label: 'Filme' }, { value: 'live', label: 'Live' }]} />
               </div>
             </div>
-            <div className="flex gap-3 pt-1">
-              <button onClick={() => setEditProj(null)} className="btn-secondary flex-1 h-10 text-sm">Cancelar</button>
-              <button onClick={handleSaveEdit} disabled={!editForm.name.trim() || savingEdit}
-                className="btn-primary flex-1 h-10 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                {savingEdit ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : 'Salvar'}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Portal do cliente: um link por cliente, aberto pelo nome dele */}

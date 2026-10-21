@@ -22,7 +22,6 @@ import {
   MessageSquare,
   FileText,
   Library,
-  X,
   FileStack,
   ClipboardList,
   StickyNote,
@@ -2206,25 +2205,32 @@ export default function BudgetEditorPage() {
 
       {/* Add Item Modal */}
       {isCatalogOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-lumos-surface border border-lumos-border w-full max-w-2xl rounded-lumos shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-lumos-border flex items-center justify-between bg-lumos-bg/30">
-              <div>
-                <h2 className="text-xl font-black text-lumos-text-primary flex items-center gap-2">
-                  <Library className="w-6 h-6 text-lumos-yellow" />
-                  Biblioteca: {activeGroup}
-                </h2>
-                <p className="text-xs text-lumos-text-secondary mt-1 font-semibold uppercase tracking-tight">Utilize itens pré-cadastrados para agilizar sua proposta.</p>
-              </div>
-              <button 
-                onClick={() => setIsCatalogOpen(false)} 
-                className="text-lumos-text-secondary hover:bg-lumos-bg p-2 rounded-full transition-all"
-              >
-                <X className="w-6 h-6" />
+        <Modal
+          isOpen
+          onClose={() => setIsCatalogOpen(false)}
+          title={`Biblioteca: ${activeGroup}`}
+          size="lg"
+          header={(
+            <div>
+              <h2 className="text-xl font-black text-lumos-text-primary flex items-center gap-2">
+                <Library className="w-6 h-6 text-lumos-yellow" />
+                Biblioteca: {activeGroup}
+              </h2>
+              <p className="text-xs text-lumos-text-secondary mt-1 font-semibold uppercase tracking-tight">Utilize itens pré-cadastrados para agilizar sua proposta.</p>
+            </div>
+          )}
+          footer={selectedCatalogIds.size > 0 ? (
+            <div className="flex w-full items-center justify-between gap-3">
+              <span className="text-xs font-bold text-lumos-text-secondary">
+                {selectedCatalogIds.size} {selectedCatalogIds.size === 1 ? 'item selecionado' : 'itens selecionados'}
+              </span>
+              <button onClick={addSelectedCatalogItems} className="btn-primary h-10 px-6">
+                Adicionar {selectedCatalogIds.size} {selectedCatalogIds.size === 1 ? 'item' : 'itens'}
               </button>
             </div>
-            
-            <div className="p-6 border-b border-lumos-border">
+          ) : undefined}
+        >
+          <div className="sticky -top-6 z-10 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-lumos-surface border-b border-lumos-border mb-4">
               <div className="relative group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-lumos-text-secondary group-focus-within:text-lumos-yellow transition-colors" />
                 <input 
@@ -2236,9 +2242,8 @@ export default function BudgetEditorPage() {
                   onChange={(e) => setCatalogSearch(e.target.value)}
                 />
               </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4 space-y-2">
+          </div>
+          <div className="space-y-2">
               <button 
                 onClick={() => addManualItem()}
                 className="w-full text-left p-6 rounded-lumos hover:bg-lumos-bg border-2 border-dashed border-gray-200 hover:border-lumos-yellow transition-all flex items-center justify-between group"
@@ -2294,20 +2299,9 @@ export default function BudgetEditorPage() {
                     </button>
                   ))}
               </div>
-            </div>
-
-            {selectedCatalogIds.size > 0 && (
-              <div className="p-4 border-t border-lumos-border bg-lumos-bg/30 flex items-center justify-between gap-3">
-                <span className="text-xs font-bold text-lumos-text-secondary">
-                  {selectedCatalogIds.size} {selectedCatalogIds.size === 1 ? 'item selecionado' : 'itens selecionados'}
-                </span>
-                <button onClick={addSelectedCatalogItems} className="btn-primary h-10 px-6">
-                  Adicionar {selectedCatalogIds.size} {selectedCatalogIds.size === 1 ? 'item' : 'itens'}
-                </button>
-              </div>
-            )}
+            
           </div>
-        </div>
+        </Modal>
       )}
       <GoogleDriveAuthModal
         isOpen={isDriveModalOpen}

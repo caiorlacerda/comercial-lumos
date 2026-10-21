@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '@/components/common/Modal';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, Users, UserX,
@@ -476,10 +476,14 @@ export default function MonitoramentoEquipe() {
       </div>
 
       {/* Drill-down de uma pessoa */}
-      {detailPerson && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setDetailId(null)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl">
-            <div className="sticky top-0 bg-lumos-surface border-b border-lumos-border px-5 py-3 flex items-center justify-between z-10">
+      {detailPerson && (
+        <Modal
+          isOpen
+          onClose={() => setDetailId(null)}
+          title={detailPerson.user.full_name}
+          size="lg"
+          padding="p-5"
+          header={(
               <div className="flex items-center gap-3 min-w-0">
                 <UserAvatar user={detailPerson.user as any} size={40} showStatus lastSeen={detailPerson.user.last_seen} />
                 <div className="min-w-0">
@@ -489,9 +493,9 @@ export default function MonitoramentoEquipe() {
                   </p>
                 </div>
               </div>
-              <button onClick={() => setDetailId(null)} className="p-1.5 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="p-5 space-y-4">
+          )}
+        >
+            <div className="space-y-4">
               <div className="grid grid-cols-4 gap-2 text-center">
                 <MiniStat label="Abertas" value={detailPerson.open} />
                 <MiniStat label="Atrasadas" value={detailPerson.overdue} tone={detailPerson.overdue ? 'danger' : undefined} />
@@ -537,9 +541,7 @@ export default function MonitoramentoEquipe() {
                 </p>
               )}
             </div>
-          </div>
-        </div>,
-        document.body,
+        </Modal>
       )}
     </div>
   );
