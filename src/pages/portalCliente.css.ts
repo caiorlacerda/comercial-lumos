@@ -33,7 +33,7 @@ export const PORTAL_CSS = String.raw`
     min-height: 100dvh;
     background: var(--sala);
     color: var(--gesso);
-    font-family: "Work Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 15px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
@@ -46,9 +46,9 @@ export const PORTAL_CSS = String.raw`
   button { font: inherit; color: inherit; }
   :focus-visible { outline: 2px solid var(--luz); outline-offset: 3px; border-radius: 3px; }
 
-  .mono { font-family: "DM Mono", ui-monospace, SFMono-Regular, monospace; font-feature-settings: "tnum"; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace; font-feature-settings: "tnum"; }
   .rotulo {
-    font-family: "DM Mono", monospace; font-size: 10.5px; letter-spacing: .18em;
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: .18em;
     text-transform: uppercase; color: var(--meia-luz);
   }
 
@@ -91,7 +91,7 @@ export const PORTAL_CSS = String.raw`
   .aba:hover { color: var(--gesso); }
   .aba[aria-selected="true"] { color: var(--luz); border-bottom-color: var(--luz); }
   .aba .n {
-    font-family: "DM Mono", monospace; font-size: 10.5px; font-weight: 500;
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px; font-weight: 500;
     background: var(--luz); color: #171310; border-radius: 999px; padding: 1px 7px;
   }
   .aba[aria-selected="true"] .n { background: var(--luz); }
@@ -113,8 +113,8 @@ export const PORTAL_CSS = String.raw`
     pointer-events: none; filter: blur(6px);
   }
   .chamada > * { position: relative; }
-  .conta { font-family: "Anton", Impact, sans-serif; font-size: clamp(78px, 13vw, 148px); line-height: .82; letter-spacing: -.02em; color: var(--luz); }
-  .chamada h1 { font-family: "Anton", Impact, sans-serif; font-weight: 400; font-size: clamp(26px, 3.6vw, 38px); line-height: 1.02; letter-spacing: .005em; margin: 10px 0 12px; text-transform: uppercase; }
+  .conta { font-family: "Instrument Serif", Georgia, serif; font-size: clamp(78px, 13vw, 148px); line-height: .82; letter-spacing: -.02em; color: var(--luz); }
+  .chamada h1 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: clamp(32px, 4.4vw, 50px); line-height: 1.04; letter-spacing: -.005em; margin: 10px 0 12px;  }
   .chamada p { color: var(--meia-luz); font-size: 14px; margin: 0; max-width: 34ch; }
   .desde { margin-top: 14px; }
 
@@ -150,7 +150,7 @@ export const PORTAL_CSS = String.raw`
   .f11  .still { height: var(--h); width: var(--h); }
   .quadro .fmt {
     position: absolute; top: 7px; left: 7px; z-index: 2;
-    font-family: "DM Mono", monospace; font-size: 9.5px; letter-spacing: .06em;
+    font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: .06em;
     background: rgba(10,9,8,.7); color: var(--gesso); padding: 2px 6px; border-radius: 3px;
   }
   /* Nome dentro do quadro, sobre um véu: texto embaixo em larguras
@@ -166,11 +166,11 @@ export const PORTAL_CSS = String.raw`
   }
   .quadro:hover .legenda, .quadro:focus-visible .legenda { opacity: 1; transform: none; }
   .quadro .peca { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.2; }
-  .quadro .meta { display: block; font-family: "DM Mono", monospace; font-size: 9.5px; color: #cfc7bb; margin-top: 1px; }
+  .quadro .meta { display: block; font-family: "JetBrains Mono", monospace; font-size: 9.5px; color: #cfc7bb; margin-top: 1px; }
   @media (prefers-reduced-motion: reduce) { .quadro .legenda { transition: none; } }
   .mais {
     align-self: stretch; min-height: var(--h, 150px); display: grid; place-items: center;
-    font-family: "DM Mono", monospace; font-size: 12px; color: var(--meia-luz);
+    font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--meia-luz);
     background: none; border: 1px dashed var(--fio); border-radius: 4px; padding: 0 16px; cursor: pointer;
   }
   .mais:hover { color: var(--luz); border-color: rgba(239,199,0,.4); }
@@ -199,13 +199,13 @@ export const PORTAL_CSS = String.raw`
   @media (min-width: 620px) { .proj { grid-template-columns: 1fr 210px 96px; align-items: center; gap: 18px; } }
   .proj:hover .nome { color: var(--luz); }
   .proj .nome { display: block; font-size: 15px; font-weight: 600; transition: color .16s; }
-  .proj .sub { display: block; font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); margin-top: 1px; }
+  .proj .sub { display: block; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--meia-luz); margin-top: 1px; }
   .barra { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: rgba(255,247,230,.07); }
   .barra i { display: block; }
   .barra .b-ok { background: var(--aprovado); }
   .barra .b-voce { background: var(--luz); }
   .barra .b-prod { background: var(--producao); }
-  .proj .contagem { font-family: "DM Mono", monospace; font-size: 11.5px; color: var(--meia-luz); text-align: left; }
+  .proj .contagem { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--meia-luz); text-align: left; }
   @media (min-width: 620px) { .proj .contagem { text-align: right; } }
   .chaves { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
   .chave { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--meia-luz); }
@@ -214,25 +214,25 @@ export const PORTAL_CSS = String.raw`
   /* Diário: o que aconteceu, em ordem. */
   .diario { list-style: none; margin: 0; padding: 0; }
   .diario li { display: grid; grid-template-columns: 62px 1fr; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--fio); align-items: baseline; }
-  .diario .dia { font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); }
+  .diario .dia { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--meia-luz); }
   .diario .fato { font-size: 13.5px; line-height: 1.45; }
   .diario .fato b { font-weight: 600; }
-  .diario .onde { display: block; font-family: "DM Mono", monospace; font-size: 10.5px; color: var(--meia-luz); margin-top: 1px; }
+  .diario .onde { display: block; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); margin-top: 1px; }
 
   /* ── Aba de projeto ───────────────────────────────────────── */
   .cabeca-proj { padding: 44px 0 26px; }
-  .cabeca-proj h2 { font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: clamp(30px, 5vw, 52px); line-height: 1; letter-spacing: .01em; margin: 8px 0 14px; }
+  .cabeca-proj h2 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400;  font-size: clamp(38px, 6vw, 68px); line-height: 1.02; letter-spacing: -.01em; margin: 8px 0 14px; }
   .resumo-linha { display: flex; gap: 26px; flex-wrap: wrap; }
   .resumo-linha div { display: flex; align-items: baseline; gap: 7px; }
-  .resumo-linha .v { font-family: "DM Mono", monospace; font-size: 19px; color: var(--gesso); }
+  .resumo-linha .v { font-family: "JetBrains Mono", monospace; font-size: 19px; color: var(--gesso); }
   .resumo-linha .v.destaque { color: var(--luz); }
   .resumo-linha .k { font-size: 12px; color: var(--meia-luz); }
 
   .peca-bloco { padding: 20px 0; border-top: 1px solid var(--fio); display: grid; gap: 16px; grid-template-columns: 1fr; }
   @media (min-width: 780px) { .peca-bloco { grid-template-columns: 210px 1fr; gap: 26px; align-items: start; } }
   .peca-bloco h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
-  .peca-bloco .estado { display: block; font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); }
-  .selo { display: inline-block; font-family: "DM Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; margin-top: 8px; }
+  .peca-bloco .estado { display: block; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--meia-luz); }
+  .selo { display: inline-block; font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; margin-top: 8px; }
   .s-voce { background: var(--luz); color: #171310; }
   .s-ok { background: rgba(116,201,138,.16); color: var(--aprovado); }
   .s-aj { background: rgba(232,112,95,.16); color: var(--ajuste); }
@@ -245,12 +245,12 @@ export const PORTAL_CSS = String.raw`
   .etapa.agora { border-top-color: var(--luz); }
   .etapa .q { display: block; font-size: 13px; font-weight: 600; }
   .etapa.pendente .q { color: var(--meia-luz); font-weight: 500; }
-  .etapa .d { display: block; font-family: "DM Mono", monospace; font-size: 10.5px; color: var(--meia-luz); margin-top: 2px; }
+  .etapa .d { display: block; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); margin-top: 2px; }
   .etapa.agora .d { color: var(--luz); }
 
   .arquivo { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--fio); }
   .arquivo .nm { flex: 1; font-size: 13.5px; }
-  .arquivo .nm span { display: block; font-family: "DM Mono", monospace; font-size: 10.5px; color: var(--meia-luz); }
+  .arquivo .nm span { display: block; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); }
   .baixar { background: none; border: 1px solid var(--fio); border-radius: 6px; padding: 6px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer; }
   .baixar:hover { border-color: var(--luz); color: var(--luz); }
 
@@ -258,7 +258,7 @@ export const PORTAL_CSS = String.raw`
   .pessoa { display: flex; align-items: center; gap: 13px; padding: 14px 0; border-bottom: 1px solid var(--fio); }
   .pessoa .rosto { width: 40px; height: 40px; font-size: 14px; }
   .pessoa .nm { display: block; font-size: 14.5px; font-weight: 600; }
-  .pessoa .fn { display: block; font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); }
+  .pessoa .fn { display: block; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--meia-luz); }
   .pessoa a { margin-left: auto; color: var(--luz); text-decoration: none; font-size: 12.5px; border: 1px solid rgba(239,199,0,.35); border-radius: 6px; padding: 6px 12px; }
   .pessoa a:hover { background: rgba(239,199,0,.1); }
   .nota { font-size: 12.5px; color: var(--meia-luz); max-width: 60ch; }
@@ -310,14 +310,14 @@ export const PORTAL_CSS = String.raw`
      número e o nome da gravação, como num calendário de verdade. */
   .calend .dia { aspect-ratio: 1.15; display: flex; flex-direction: column;
     align-items: flex-start; gap: 2px; padding: 5px 6px; border-radius: 9px;
-    font-family: "DM Mono", monospace; font-size: 12.5px; position: relative;
+    font-family: "JetBrains Mono", monospace; font-size: 12.5px; position: relative;
     background: var(--mesa-alta); border: 1px solid var(--fio); color: var(--meia-luz);
     overflow: hidden; text-align: left;
     transition: border-color .12s, background .12s, color .12s; }
   .calend .dia .num { line-height: 1; }
   /* Nome da gravação dentro do dia. Some em tela estreita, onde a casa não
      comporta texto legível e o ponto amarelo já diz que o dia é dele. */
-  .calend .dia .rot-dia { font-family: "Work Sans", system-ui, sans-serif;
+  .calend .dia .rot-dia { font-family: "DM Sans", system-ui, sans-serif;
     font-size: 8.5px; line-height: 1.2; letter-spacing: .01em; opacity: .95;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden; width: 100%; }
@@ -374,10 +374,10 @@ export const PORTAL_CSS = String.raw`
     transition: border-color .16s, background .16s; }
   .grav-card:hover { border-color: rgba(239,199,0,.45); background: rgba(239,199,0,.07); }
   .grav-card:focus-visible { outline: 2px solid var(--luz); outline-offset: 2px; }
-  .grav-card .qd { font-family: "DM Mono", monospace; font-size: 10.5px;
+  .grav-card .qd { font-family: "JetBrains Mono", monospace; font-size: 10.5px;
     letter-spacing: .08em; color: var(--luz); }
   .grav-card .nm { font-size: 14px; font-weight: 600; line-height: 1.25; margin-bottom: 2px; }
-  .grav-card .det { font-family: "DM Mono", monospace; font-size: 10.5px;
+  .grav-card .det { font-family: "JetBrains Mono", monospace; font-size: 10.5px;
     color: var(--meia-luz); overflow-wrap: anywhere; }
 
   /* A gravação por dentro, na mesma janela do pedido (mesma moldura, mesmo
@@ -393,7 +393,7 @@ export const PORTAL_CSS = String.raw`
   .grav-pessoa { display: flex; align-items: baseline; justify-content: space-between;
     gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--fio); }
   .grav-pessoa .nm { font-size: 13.5px; font-weight: 600; }
-  .grav-pessoa .fn { font-family: "DM Mono", monospace; font-size: 10.5px;
+  .grav-pessoa .fn { font-family: "JetBrains Mono", monospace; font-size: 10.5px;
     color: var(--meia-luz); text-align: right; }
 
   /* No dia: a ordem do dia aprovada, na janela da própria gravação. Só o que
@@ -409,7 +409,7 @@ export const PORTAL_CSS = String.raw`
     gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
   .grav-dia-cabeca > .rotulo { margin: 0; }
   .grav-dia-erro { margin-top: 8px; }
-  .grav-dia .rt { display: block; font-family: "DM Mono", monospace; font-size: 10px;
+  .grav-dia .rt { display: block; font-family: "JetBrains Mono", monospace; font-size: 10px;
     letter-spacing: .14em; text-transform: uppercase; color: var(--meia-luz);
     margin: 16px 0 6px; }
   .grav-ponto .nm { display: block; font-size: 13.5px; font-weight: 600;
@@ -419,7 +419,7 @@ export const PORTAL_CSS = String.raw`
   .grav-crono { list-style: none; margin: 0; padding: 0; }
   .grav-crono li { display: flex; align-items: baseline; gap: 14px;
     padding: 9px 0; border-bottom: 1px solid var(--fio); }
-  .grav-crono .hr { font-family: "DM Mono", monospace; font-size: 11.5px;
+  .grav-crono .hr { font-family: "JetBrains Mono", monospace; font-size: 11.5px;
     color: var(--luz); flex: 0 0 44px; }
   .grav-crono .oq { font-size: 13px; line-height: 1.45; min-width: 0;
     overflow-wrap: anywhere; }
@@ -451,8 +451,8 @@ export const PORTAL_CSS = String.raw`
   .pedido-modal .fechar:hover { color: var(--gesso); background: rgba(255,247,230,.08); }
   .pedido-modal .fechar svg { width: 17px; height: 17px; display: block; }
   .pedido-titulo {
-    font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
-    font-size: clamp(21px, 4vw, 27px); line-height: 1.05; margin: 6px 26px 0 0;
+    font-family: "Instrument Serif", Georgia, serif; font-weight: 400; 
+    font-size: clamp(26px, 4.6vw, 34px); line-height: 1.08; margin: 6px 26px 0 0;
   }
   .pedido-modal .pedido-form { margin-top: 20px; max-width: none; }
 
@@ -494,7 +494,7 @@ export const PORTAL_CSS = String.raw`
   .link:hover { color: var(--gesso); background: rgba(255,247,230,.05); }
   .link[aria-current="true"] { color: var(--luz); background: rgba(239,199,0,.10); }
   .link .n {
-    font-family: "DM Mono", monospace; font-size: 10.5px; font-weight: 500;
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px; font-weight: 500;
     background: var(--luz); color: #171310; border-radius: 999px; padding: 1px 7px;
   }
   .seta { width: 14px; height: 14px; transition: transform .18s; }
@@ -520,10 +520,10 @@ export const PORTAL_CSS = String.raw`
   .menu-abre .item.atual { color: var(--luz); }
   .menu-abre .item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .menu-abre .item .n {
-    font-family: "DM Mono", monospace; font-size: 10.5px;
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px;
     background: var(--luz); color: #171310; border-radius: 999px; padding: 1px 7px; flex: 0 0 auto;
   }
-  .menu-abre .calmo { font-family: "DM Mono", monospace; font-size: 10.5px; color: var(--meia-luz); flex: 0 0 auto; }
+  .menu-abre .calmo { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); flex: 0 0 auto; }
 
   @media (max-width: 760px) {
     .topo { gap: 10px; }
@@ -660,8 +660,8 @@ export const PORTAL_CSS = String.raw`
   }
   .hero-bv h1 {
     position: relative; margin: 0;
-    font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
-    font-size: clamp(38px, 7.5vw, 84px); line-height: .94; letter-spacing: -.01em;
+    font-family: "Instrument Serif", Georgia, serif; font-weight: 400; 
+    font-size: clamp(46px, 8.5vw, 104px); line-height: .98; letter-spacing: -.015em;
     animation: bv-sobe .7s cubic-bezier(.2,.7,.3,1) .12s both;
   }
   .hero-bv .risca { color: var(--luz); }
@@ -677,7 +677,7 @@ export const PORTAL_CSS = String.raw`
      caixa alta, meia-luz), mas menor e com respiro em cima: lê como subtítulo
      de um bloco de itens, não como kicker de seção da página. */
   .wd-grupo-label {
-    display: block; font-family: "DM Mono", monospace; text-transform: uppercase;
+    display: block; font-family: "JetBrains Mono", monospace; text-transform: uppercase;
     letter-spacing: .14em; font-size: 10.5px; color: var(--meia-luz);
     margin: 12px 0 -2px;
   }
@@ -689,7 +689,7 @@ export const PORTAL_CSS = String.raw`
   .item-bv .nome { font-weight: 600; }
   .item-bv .desc { color: var(--meia-luz); font-size: 13px; margin-top: 4px; }
   .item-bv .status { display: flex; align-items: center; gap: 10px; }
-  .item-bv .feito { color: var(--aprovado); font-family: "DM Mono", monospace; font-size: 13px; }
+  .item-bv .feito { color: var(--aprovado); font-family: "JetBrains Mono", monospace; font-size: 13px; }
   .item-bv .reenviar { color: var(--meia-luz); font-size: 12px; text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0; }
   .item-bv .botao {
     background: var(--luz); color: var(--sala); border: none; border-radius: 8px;
@@ -703,12 +703,12 @@ export const PORTAL_CSS = String.raw`
   .wd-secao { padding: 38px 0; border-top: 1px solid var(--fio); }
   .wd-secao:first-child { border-top: none; padding-top: 0; }
   .wd-kicker {
-    display: block; font-family: "DM Mono", monospace; text-transform: uppercase;
+    display: block; font-family: "JetBrains Mono", monospace; text-transform: uppercase;
     letter-spacing: .16em; font-size: 11px; color: var(--meia-luz); margin-bottom: 10px;
   }
   .wd-titulo {
-    font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase;
-    font-size: clamp(22px, 3vw, 32px); line-height: 1; margin: 0 0 20px;
+    font-family: "Instrument Serif", Georgia, serif; font-weight: 400; 
+    font-size: clamp(28px, 3.8vw, 42px); line-height: 1.05; margin: 0 0 20px;
   }
   .wd-destaque { color: var(--luz); }
   .wd-footnote { color: var(--meia-luz); font-size: 13px; margin-top: 14px; max-width: 60ch; }
@@ -720,7 +720,7 @@ export const PORTAL_CSS = String.raw`
   }
   .wd-row-nome { font-weight: 600; }
   .wd-row-papel, .wd-row-quando { color: var(--meia-luz); font-size: 13px; }
-  .wd-pill { font-family: "DM Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--fio); white-space: nowrap; }
+  .wd-pill { font-family: "JetBrains Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--fio); white-space: nowrap; }
   .wd-pill-accent { background: rgba(239,199,0,.10); color: var(--luz); border-color: rgba(239,199,0,.3); }
   .wd-pill-ghost { background: transparent; color: var(--meia-luz); border-color: var(--fio); }
   .wd-pill-green { background: rgba(116,201,138,.10); color: var(--aprovado); border-color: rgba(116,201,138,.3); }
@@ -728,8 +728,8 @@ export const PORTAL_CSS = String.raw`
   .wd-two-panels { display: grid; gap: 20px; grid-template-columns: 1fr; }
   @media (min-width: 720px) { .wd-two-panels { grid-template-columns: 1fr 1fr; } }
   .wd-panel { padding: 18px 20px; border: 1px solid var(--fio); border-radius: 10px; background: var(--mesa); }
-  .wd-panel h3 { margin: 0 0 4px; font-family: "Anton", Impact, sans-serif; font-weight: 400; text-transform: uppercase; font-size: 17px; }
-  .wd-panel-sub { margin: 0 0 14px; font-family: "DM Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); }
+  .wd-panel h3 { margin: 0 0 4px; font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: 22px; }
+  .wd-panel-sub { margin: 0 0 14px; font-family: "JetBrains Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); }
   .wd-panel ul { margin: 0; padding-left: 18px; color: var(--gesso); font-size: 14px; }
   .wd-panel li { margin-bottom: 6px; }
   .wd-panel-fora ul { color: var(--meia-luz); }
@@ -739,49 +739,49 @@ export const PORTAL_CSS = String.raw`
 
   .wd-steps { display: grid; gap: 2px; border-top: 1px solid var(--fio); }
   .wd-step { display: flex; align-items: center; gap: 18px; padding: 13px 4px; border-bottom: 1px solid var(--fio); }
-  .wd-step-numero { font-family: "DM Mono", monospace; font-size: 12px; color: var(--meia-luz); width: 22px; }
+  .wd-step-numero { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--meia-luz); width: 22px; }
   .wd-step-texto { flex: 1; font-size: 14px; }
-  .wd-step-quem { font-family: "DM Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); width: 150px; }
-  .wd-step-quando { font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); width: 110px; text-align: right; }
+  .wd-step-quem { font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); width: 150px; }
+  .wd-step-quando { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--meia-luz); width: 110px; text-align: right; }
   .wd-step-sua-vez { background: rgba(239,199,0,.035); }
   .wd-step-sua-vez .wd-step-texto { font-weight: 600; }
   .wd-step-sua-vez .wd-step-numero { color: var(--luz); }
   @media (max-width: 720px) { .wd-step-quem, .wd-step-quando { display: none; } }
 
   .wd-note { background: var(--mesa); border: 1px solid var(--fio); border-left: 2px solid var(--luz); border-radius: 10px; padding: 20px 22px; }
-  .wd-note-label { display: block; font-family: "DM Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); margin-bottom: 10px; }
+  .wd-note-label { display: block; font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); margin-bottom: 10px; }
   .wd-note p { margin: 0 0 12px; color: var(--gesso); font-size: 14px; max-width: 62ch; }
   .wd-note p:last-child { margin-bottom: 0; }
 
   .wd-tips { display: grid; gap: 16px; grid-template-columns: 1fr; }
   @media (min-width: 720px) { .wd-tips { grid-template-columns: repeat(3, 1fr); } }
   .wd-tip { background: var(--mesa); border: 1px solid var(--fio); border-radius: 10px; padding: 20px 22px; }
-  .wd-tip-numero { font-family: "Anton", Impact, sans-serif; font-size: 26px; color: var(--luz); line-height: 1; }
+  .wd-tip-numero { font-family: "Instrument Serif", Georgia, serif; font-size: 26px; color: var(--luz); line-height: 1; }
   .wd-tip h4 { margin: 10px 0 6px; font-size: 14px; }
   .wd-tip p { margin: 0; color: var(--meia-luz); font-size: 13px; }
 
   .wd-date-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .wd-date-card { padding: 16px 18px; border: 1px solid var(--fio); border-radius: 8px; background: var(--mesa); }
   .wd-date-card-destaque { border-color: rgba(239,199,0,.4); background: rgba(239,199,0,.05); }
-  .wd-date-data { font-family: "DM Mono", monospace; font-size: 11px; color: var(--luz); letter-spacing: .08em; }
+  .wd-date-data { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--luz); letter-spacing: .08em; }
   .wd-date-titulo { font-weight: 600; font-size: 14px; margin-top: 5px; }
-  .wd-date-nota { font-family: "DM Mono", monospace; font-size: 10px; color: var(--meia-luz); margin-top: 4px; }
+  .wd-date-nota { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--meia-luz); margin-top: 4px; }
 
   .wd-next-steps { display: grid; gap: 2px; border-top: 1px solid var(--fio); }
   .wd-next-step { display: flex; gap: 18px; align-items: baseline; padding: 15px 4px; border-bottom: 1px solid var(--fio); }
-  .wd-next-numero { font-family: "Anton", Impact, sans-serif; font-size: 20px; color: var(--luz); width: 30px; flex-shrink: 0; }
+  .wd-next-numero { font-family: "Instrument Serif", Georgia, serif; font-size: 20px; color: var(--luz); width: 30px; flex-shrink: 0; }
   .wd-next-corpo { flex: 1; font-size: 14px; }
   .wd-next-corpo small { display: block; color: var(--meia-luz); font-size: 12px; margin-top: 2px; }
-  .wd-next-quando { font-family: "DM Mono", monospace; font-size: 11px; color: var(--meia-luz); white-space: nowrap; }
+  .wd-next-quando { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--meia-luz); white-space: nowrap; }
   @media (max-width: 720px) { .wd-next-quando { display: none; } }
 
   .wd-progresso {
     display: flex; align-items: center; gap: 16px; padding: 16px 20px; margin-bottom: 34px;
     background: var(--mesa); border: 1px solid var(--fio); border-radius: 10px;
   }
-  .wd-progresso-legenda { font-family: "DM Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); white-space: nowrap; }
+  .wd-progresso-legenda { font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--meia-luz); white-space: nowrap; }
   .wd-progresso-trilha { flex: 1; height: 4px; border-radius: 999px; background: var(--fio); overflow: hidden; min-width: 60px; }
   .wd-progresso-luz { height: 100%; background: var(--luz); transition: width .3s ease; }
-  .wd-progresso-contagem { font-family: "DM Mono", monospace; font-size: 12px; color: var(--gesso); white-space: nowrap; }
+  .wd-progresso-contagem { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--gesso); white-space: nowrap; }
   .wd-progresso-contagem b { color: var(--luz); }
 `;
