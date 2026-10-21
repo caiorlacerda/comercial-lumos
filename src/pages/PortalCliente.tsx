@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
 import WelcomeDocPage from './welcome-doc/WelcomeDocPage';
+import FundoDeck from '@/components/common/FundoDeck';
 
 /**
  * PORTAL DO CLIENTE — um link por cliente, uma aba por projeto.
@@ -517,11 +518,11 @@ export default function PortalCliente() {
   });
   useEffect(() => { try { localStorage.setItem('portal_tema', tema); } catch { /* ignore */ } }, [tema]);
 
-  // As fontes do portal não são as do app: entram só aqui.
+  // As fontes do portal (as do deck da Lumos) não são as do app: entram só aqui.
   useEffect(() => {
     const l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = 'https://fonts.googleapis.com/css2?family=Anton&family=DM+Mono:wght@400;500&family=Work+Sans:wght@400;500;600;700&display=swap';
+    l.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300..700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400..600&display=swap';
     document.head.appendChild(l);
     return () => { document.head.removeChild(l); };
   }, []);
@@ -883,6 +884,7 @@ export default function PortalCliente() {
   if (erro) {
     return (
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <p className="rotulo">{erro}</p>
       </div>
@@ -907,13 +909,14 @@ export default function PortalCliente() {
     };
     return (
       <div className={`portal-lumos ${tema === 'claro' ? 'claro' : ''}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <div style={{ width: '100%', maxWidth: 400 }}>
           <img className="logotipo" src={tema === 'claro' ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
           <p className="rotulo">Portal de {porta.cliente}</p>
           {porta.tipo === 'sem_acesso' ? (
             <>
-              <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 32, lineHeight: 1.02, margin: '8px 0 14px' }}>
+              <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 42, lineHeight: 1.05, margin: '8px 0 14px' }}>
                 Esta conta<br />não tem acesso
               </h1>
               <p className="nota">
@@ -927,7 +930,7 @@ export default function PortalCliente() {
             </>
           ) : linkEnviado ? (
             <>
-              <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 32, lineHeight: 1.02, margin: '8px 0 14px' }}>
+              <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 42, lineHeight: 1.05, margin: '8px 0 14px' }}>
                 Olha<br />seu e-mail
               </h1>
               <p className="nota">
@@ -940,7 +943,7 @@ export default function PortalCliente() {
             </>
           ) : (
             <>
-              <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 32, lineHeight: 1.02, margin: '8px 0 14px' }}>
+              <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 42, lineHeight: 1.05, margin: '8px 0 14px' }}>
                 Entre com<br />seu e-mail
               </h1>
               <input autoFocus type="email" className="campo" placeholder="voce@empresa.com.br"
@@ -963,6 +966,7 @@ export default function PortalCliente() {
   if (!dados) {
     return (
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <span className="farol" />
       </div>
@@ -974,11 +978,12 @@ export default function PortalCliente() {
   if (!nome) {
     return (
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
         <div style={{ width: '100%', maxWidth: 380 }}>
           <img className="logotipo" src={tema === "claro" ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
           <p className="rotulo">Portal de {dados.cliente.nome}</p>
-          <h1 style={{ fontFamily: 'Anton, Impact, sans-serif', fontWeight: 400, textTransform: 'uppercase', fontSize: 34, lineHeight: 1.02, margin: '8px 0 18px' }}>
+          <h1 style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, fontSize: 44, lineHeight: 1.05, margin: '8px 0 18px' }}>
             Como<br />te chamamos?
           </h1>
           <input
@@ -1004,6 +1009,7 @@ export default function PortalCliente() {
 
   return (
     <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`}>
+        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
       <style>{PORTAL_CSS}</style>
 
       {/* Cabeçalho em uma linha só: marca à esquerda, navegação no meio,
