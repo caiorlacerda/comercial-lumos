@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Modal from '@/components/common/Modal';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
 import { formatBudgetCode } from '@/utils/formatters';
-import { Film, X, Loader2 } from 'lucide-react';
+import { Film, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import VideoThumb from '@/components/producao/VideoThumb';
 import StreamMigracao from '@/components/producao/StreamMigracao';
@@ -156,25 +156,26 @@ export default function VideoReviewHub() {
       )}
 
       {/* Modal de revisão (abre o player + comentários ali mesmo) */}
-      {openProject && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setOpenProject(null)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-6xl max-h-[94vh] overflow-y-auto custom-scrollbar bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl">
-            <div className="sticky top-0 z-10 bg-lumos-surface border-b border-lumos-border px-5 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <Film className="w-4 h-4 text-lumos-yellow" />
-                <h3 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary truncate">
-                  {openProject.code && <span className="text-amber-600 dark:text-lumos-yellow">{formatBudgetCode(openProject.code)} </span>}
-                  {openProject.name}
-                </h3>
-              </div>
-              <button onClick={() => setOpenProject(null)} className="p-1.5 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary"><X className="w-4 h-4" /></button>
+      {openProject && (
+        <Modal
+          isOpen
+          onClose={() => setOpenProject(null)}
+          title={openProject.name}
+          maxWidth="max-w-6xl"
+          padding="p-4"
+          camada="z-[200]"
+          header={(
+            <div className="flex items-center gap-2 min-w-0">
+              <Film className="w-4 h-4 text-lumos-yellow" />
+              <h3 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary truncate">
+                {openProject.code && <span className="text-amber-600 dark:text-lumos-yellow">{formatBudgetCode(openProject.code)} </span>}
+                {openProject.name}
+              </h3>
             </div>
-            <div className="p-4">
-              <VideoReviewPanel projectId={openProject.id} tasks={openTasks} />
-            </div>
-          </div>
-        </div>,
-        document.body,
+          )}
+        >
+          <VideoReviewPanel projectId={openProject.id} tasks={openTasks} />
+        </Modal>
       )}
     </div>
   );

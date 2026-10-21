@@ -24,6 +24,7 @@ import { clsx } from 'clsx';
 import { useToast } from '@/context/ToastContext';
 import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 import Select from '@/components/ui/Select';
+import Modal from '@/components/common/Modal';
 
 interface CatalogItem {
   id: string;
@@ -343,15 +344,23 @@ export default function Catalog() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-lumos-surface border border-lumos-border rounded-lumos w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-lumos-border flex items-center justify-between">
-              <h2 className="text-xl font-bold">{editingItem ? 'Editar Item do Catálogo' : 'Novo Item'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-lumos-text-secondary hover:text-lumos-text-primary">
-                <X className="w-6 h-6" />
+        <Modal
+          isOpen
+          onClose={() => setIsModalOpen(false)}
+          title={editingItem ? 'Editar Item do Catálogo' : 'Novo Item'}
+          fecharAoClicarFora={false}
+          maxWidth="max-w-lg"
+          footer={(
+            <>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary h-10 px-4 text-sm">Cancelar</button>
+              <button type="submit" form="form-item-catalogo" className="btn-primary h-10 px-5 text-sm flex items-center justify-center gap-2">
+                <Save className="w-4 h-4" />
+                Salvar Item
               </button>
-            </div>
-            <form onSubmit={handleSave} className="p-6 space-y-4">
+            </>
+          )}
+        >
+          <form id="form-item-catalogo" onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-xs font-bold text-lumos-text-secondary uppercase mb-1">Nome do Item</label>
@@ -416,39 +425,42 @@ export default function Catalog() {
                   Item Ativo
                 </label>
               </div>
-
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-                <button type="submit" className="btn-primary flex-1 flex items-center justify-center gap-2">
-                  <Save className="w-4 h-4" />
-                  Salvar Item
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
       {/* Modal Deleção */}
-      <AnimatePresence>
-        {isDeleteModalOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-lumos-surface border border-lumos-border rounded-lumos w-full max-w-md shadow-2xl overflow-hidden"
-            >
-              <div className="p-6 border-b border-lumos-border bg-red-500/5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-lumos-text-primary">Confirmar Deleção</h2>
-                  <p className="text-sm text-red-500/80 font-medium">Esta ação é irreversível.</p>
-                </div>
-              </div>
-              
-              <div className="p-6 space-y-4">
+      {isDeleteModalOpen && (
+        <Modal
+          isOpen
+          onClose={() => { setIsDeleteModalOpen(false); setItemToDelete(null); }}
+          title="Confirmar deleção"
+          fecharAoClicarFora={false}
+          size="md"
+          camada="z-[60]"
+          footer={(
+            <>
+              <button
+                onClick={() => { setIsDeleteModalOpen(false); setItemToDelete(null); }}
+                className="btn-secondary h-10 px-4 text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteItems}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold h-10 px-4 text-sm rounded-lumos transition-colors flex items-center justify-center gap-2"
+              >
+                <Trash className="w-4 h-4" />
+                Deletar
+              </button>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 shrink-0 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-red-500/90 font-medium">Esta ação é irreversível.</p>
                 <div className="text-lumos-text-secondary text-sm">
                   {deletingType === 'single' ? (
                     <p>Tem certeza que deseja excluir permanentemente o item <span className="text-lumos-text-primary font-bold">"{itemToDelete?.name}"</span> do catálogo?</p>
@@ -456,30 +468,10 @@ export default function Catalog() {
                     <p>Tem certeza que deseja excluir permanentemente os <span className="text-lumos-text-primary font-bold">{selectedItems.size} itens selecionados</span> do catálogo?</p>
                   )}
                 </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button 
-                    onClick={() => {
-                      setIsDeleteModalOpen(false);
-                      setItemToDelete(null);
-                    }} 
-                    className="btn-secondary flex-1"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    onClick={handleDeleteItems} 
-                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lumos flex-1 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Trash className="w-4 h-4" />
-                    Deletar
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </Modal>
+      )}
 
       {/* Barra de Ações Flutuante */}
       <AnimatePresence>

@@ -22,6 +22,10 @@ interface ModalProps {
   portal?: boolean;
   /** Tamanho padrão da janela. `maxWidth` (se informado) tem prioridade. */
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  /** Camada (z-index) da janela. Padrão `z-50`; confirmações abertas sobre outras janelas usam uma mais alta. */
+  camada?: string;
+  /** Clicar no fundo escuro fecha a janela (padrão). Desligue em formulários longos, para não perder o que foi digitado. */
+  fecharAoClicarFora?: boolean;
 }
 
 const TAMANHOS = {
@@ -47,7 +51,9 @@ export default function Modal({
   padding = 'p-6',
   bodyClassName,
   portal,
-  size
+  size,
+  camada = 'z-50',
+  fecharAoClicarFora = true,
 }: ModalProps) {
   const visualNovo = useVisualNovo();
   const usarPortal = portal ?? visualNovo;
@@ -85,10 +91,10 @@ export default function Modal({
   if (!isOpen) return null;
 
   const conteudo = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className={clsx("fixed inset-0 flex items-center justify-center p-4 sm:p-6", camada)}>
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
-        onClick={onClose}
+        onClick={fecharAoClicarFora ? onClose : undefined}
       />
       <div className={clsx(
         "bg-lumos-surface w-full max-h-full flex flex-col rounded-lumos shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300",

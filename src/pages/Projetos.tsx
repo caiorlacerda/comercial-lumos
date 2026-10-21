@@ -14,6 +14,7 @@ import ProjectOrdens from '@/components/producao/ProjectOrdens';
 import ProjectEquipe from '@/components/producao/ProjectEquipe';
 import ProjectRoteiros from '@/components/producao/ProjectRoteiros';
 import Select from '@/components/ui/Select';
+import Modal from '@/components/common/Modal';
 import { useConfirm, usePrompt } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
@@ -131,7 +132,6 @@ import {
   MoreVertical,
   User,
   PlusCircle,
-  HelpCircle,
   CornerDownRight,
   MessageSquare,
   History,
@@ -3906,18 +3906,11 @@ export default function Projetos() {
 
       {/* ================= LIXEIRA (tarefas excluídas) ================= */}
       {showTrash && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowTrash(false)}>
-          <div className="w-full max-w-lg bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between pb-3 border-b border-lumos-border">
-              <h3 className="text-lg font-black uppercase tracking-tight text-lumos-yellow flex items-center gap-2">
-                <Trash2 className="w-4 h-4" /> Lixeira
-              </h3>
-              <button onClick={() => setShowTrash(false)} className="text-lumos-text-secondary hover:text-lumos-text-primary"><X className="w-5 h-5" /></button>
-            </div>
+        <Modal isOpen onClose={() => setShowTrash(false)} title="Lixeira" size="lg" camada="z-[150]">
             <p className="text-[11px] text-lumos-text-secondary">
               Tarefas excluídas ficam aqui por <span className="font-bold text-lumos-text-primary">30 dias</span> e depois são apagadas de vez. Clique em restaurar para trazer de volta.
             </p>
-            <div className="flex-1 overflow-y-auto custom-scrollbar -mx-1 px-1">
+            <div className="mt-4">
               {trashLoading ? (
                 <div className="flex items-center justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
               ) : trashedTasks.length === 0 ? (
@@ -3943,30 +3936,32 @@ export default function Projetos() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ================= MANUAL CREATE MODAL ================= */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="w-full max-w-lg bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-6 text-lumos-text-primary">
-            
-            <div className="flex items-center justify-between pb-3 border-b border-lumos-border">
-              <h3 className="text-lg font-black uppercase tracking-tight text-lumos-yellow flex items-center gap-2">
-                <Briefcase className="w-5 h-5" />
-                Cadastrar Projeto Manual
-              </h3>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-              >
-                <X className="w-5 h-5" />
+        <Modal
+          isOpen
+          onClose={() => setIsModalOpen(false)}
+          title="Cadastrar projeto manual"
+          maxWidth="max-w-lg"
+          camada="z-[150]"
+          fecharAoClicarFora={false}
+          footer={(
+            <>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary h-10 px-4 text-xs font-bold" disabled={modalLoading}>
+                Cancelar
               </button>
-            </div>
+              <button type="submit" form="form-projeto-manual" className="btn-primary h-10 px-5 text-xs font-bold flex items-center gap-2" disabled={modalLoading}>
+                {modalLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Salvar Projeto
+              </button>
+            </>
+          )}
+        >
+          <form id="form-projeto-manual" onSubmit={handleCreateProject} className="space-y-4">
 
-            <form onSubmit={handleCreateProject} className="space-y-4">
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
@@ -4070,49 +4065,18 @@ export default function Projetos() {
                   Gerar as tarefas-padrão do segmento automaticamente
                 </label>
               </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-lumos-border">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="btn-secondary py-2.5 px-4 text-xs font-bold"
-                  disabled={modalLoading}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center gap-2"
-                  disabled={modalLoading}
-                >
-                  {modalLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Salvar Projeto
-                </button>
-              </div>
-
-            </form>
-          </div>
-        </div>
+          </form>
+        </Modal>
       )}
 
       {/* ================= CONFIRM APPLY TEMPLATE MODAL ================= */}
       {isConfirmTemplateOpen && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-6 space-y-4 text-lumos-text-primary text-center">
-            <div className="mx-auto w-12 h-12 bg-lumos-yellow/10 border border-lumos-yellow/20 text-lumos-yellow rounded-full flex items-center justify-center">
-              <HelpCircle className="w-6 h-6" />
-            </div>
-            
-            <div className="space-y-1.5">
-              <h3 className="text-base font-bold uppercase tracking-tight text-lumos-text-primary">
-                Este projeto já possui tarefas
-              </h3>
-              <p className="text-xs text-lumos-text-secondary leading-relaxed">
+        <Modal isOpen onClose={() => setIsConfirmTemplateOpen(false)} title="Este projeto já possui tarefas" size="md" camada="z-[160]">
+          <div className="space-y-4 text-lumos-text-primary">
+            <p className="text-xs text-lumos-text-secondary leading-relaxed">
                 Você deseja carregar o template padrão deste segmento? Escolha se quer acumular as novas tarefas ou substituir todo o workflow atual.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-3">
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
               <button
                 onClick={() => executeApplyTemplate(true)}
                 className="btn-primary text-xs w-full py-2.5 font-bold"
@@ -4133,7 +4097,7 @@ export default function Projetos() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirmDialog}

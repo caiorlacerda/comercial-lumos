@@ -526,9 +526,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
 
       {/* Picker de tipo de momento */}
       {pickerAberto && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={() => setPickerAberto(false)}>
-          <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-black text-lumos-text-primary mb-3">Novo momento</p>
+        <Modal isOpen onClose={() => setPickerAberto(false)} title="Novo momento" size="md" padding="p-5">
             <div className="grid grid-cols-3 gap-2">
               {(Object.keys(TIPOS) as TipoMomento[]).map(k => (
                 <button key={k} type="button" onClick={() => abrirCfg(k)}
@@ -538,15 +536,12 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                 </button>
               ))}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Trocar a ação (tipo) de um momento já criado — sem apagar nada */}
       {tipoEditIdx != null && rows[tipoEditIdx] && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={() => setTipoEditIdx(null)}>
-          <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-black text-lumos-text-primary mb-3">Trocar ação de "{rows[tipoEditIdx].descricao || 'este momento'}"</p>
+        <Modal isOpen onClose={() => setTipoEditIdx(null)} title={`Trocar ação de "${rows[tipoEditIdx].descricao || 'este momento'}"`} size="md" padding="p-5">
             <div className="grid grid-cols-3 gap-2">
               {(Object.keys(TIPOS) as TipoMomento[]).map(k => {
                 const atual = (rows[tipoEditIdx].tipo || 'personalizado') === k;
@@ -560,16 +555,27 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                 );
               })}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Config do momento escolhido */}
       {cfg && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={() => setCfg(null)}>
-          <div className="bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-black text-lumos-text-primary">Configurar {TIPOS[cfg.tipo].label}</p>
-
+        <Modal
+          isOpen
+          onClose={() => setCfg(null)}
+          title={`Configurar ${TIPOS[cfg.tipo].label}`}
+          size="md"
+          padding="p-5"
+          footer={(
+            <>
+              <button type="button" onClick={() => { setCfg(null); setPickerAberto(true); }} className="mr-auto text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary px-2">← Voltar</button>
+              <button type="button" onClick={criar} className="btn-primary h-10 px-5 text-xs font-black flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" /> Criar momento
+              </button>
+            </>
+          )}
+        >
+          <div className="space-y-3">
             <div>
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Horário de início</label>
               <input type="time" value={cfg.inicio} onChange={e => setCfg({ ...cfg, inicio: e.target.value })}
@@ -635,15 +641,8 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
               <textarea rows={2} value={cfg.descricao} onChange={e => setCfg({ ...cfg, descricao: e.target.value })}
                 placeholder="Adicione uma descrição…" className="input-lumos w-full mt-1 text-sm resize-y" />
             </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <button type="button" onClick={() => { setCfg(null); setPickerAberto(true); }} className="text-[11px] font-bold text-lumos-text-secondary px-2">← Voltar</button>
-              <button type="button" onClick={criar} className="ml-auto btn-primary h-9 px-5 text-xs font-black flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> Criar momento
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
