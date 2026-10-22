@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E8C64A',
     marginBottom: 12,
   },
-  // Bloco de identificação (Diária / Data / Horário / Emissão)
+  // Bloco de identificação (Diária / Data / Horário)
   idBlock: {
     borderWidth: 0.75,
     borderColor: '#8A8A8A',
@@ -355,7 +355,6 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
   /** Sem flag no banco, a seção aparece: quem manda é ter conteúdo. */
   const ligada = (chave: keyof SecoesAtivas) => secoes[chave] !== false;
 
-  const dataEmissao = formatDataLonga(ordem.data_emissao || new Date().toLocaleDateString('en-CA'));
   const dataProducao = formatDataLonga(ordem.data_producao, true);
   const dataCurta = formatDataLonga(ordem.data_producao);
   const nomenclatura = `LUMOS · ${ordem.titulo} · ORDEM DO DIA`;
@@ -452,9 +451,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
           </View>
           <View style={[styles.idRow, { borderBottomWidth: 0 }]}>
             <View style={styles.idLabelCol}><Text>Horário</Text></View>
-            <View style={styles.idValueCol}><Text>{horarioTexto}</Text></View>
-            <View style={styles.idLabelCol}><Text>Emissão</Text></View>
-            <View style={[styles.idValueCol, { borderRightWidth: 0 }]}><Text>{dataEmissao}</Text></View>
+            <View style={[styles.idValueCol, { width: '84%', borderRightWidth: 0 }]}><Text>{horarioTexto}</Text></View>
           </View>
         </View>
 
