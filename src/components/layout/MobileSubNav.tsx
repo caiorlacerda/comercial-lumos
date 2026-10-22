@@ -14,7 +14,7 @@ export default function MobileSubNav() {
   if (items.length <= 1) return null;
 
   return (
-    <div className="lumos-shell lg:hidden sticky top-[calc(env(safe-area-inset-top)+48px)] z-30 bg-lumos-bg/95 backdrop-blur-sm border-b border-lumos-border">
+    <div className="lumos-shell md:hidden sticky top-[calc(env(safe-area-inset-top)+48px)] z-30 bg-lumos-bg/95 backdrop-blur-sm border-b border-lumos-border">
       <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 py-2">
         {items.map(item => {
           // Strict end path matching or prefix matching

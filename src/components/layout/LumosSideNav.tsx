@@ -98,7 +98,7 @@ export default function LumosSideNav({
   };
 
   return (
-    <div className="lumos-shell relative flex h-full">
+    <div className="lumos-shell relative z-10 flex h-full">
       {/* ---------------- Rail de ícones (sempre visível) ---------------- */}
       <aside className="lumos-nav-surface flex w-16 flex-col items-center gap-1.5 border-r border-lumos-border py-3 flex-shrink-0">
         {/* Logo */}
@@ -128,7 +128,7 @@ export default function LumosSideNav({
 
       {/* ---------------- Painel de detalhe (expansível + redimensionável) ---------------- */}
       <div
-        className="lumos-nav-surface relative border-r border-lumos-border overflow-hidden flex flex-col flex-shrink-0"
+        className={clsx('lumos-nav-surface painel-sobreposto relative border-r border-lumos-border overflow-hidden flex flex-col flex-shrink-0 max-lg:left-16 max-lg:top-0 max-lg:h-full max-lg:z-40 max-lg:shadow-2xl', collapsed && 'border-r-0 max-lg:shadow-none')}
         style={{ width: collapsed ? 0 : panelWidth, transition: dragging ? 'none' : `width 380ms ${SPRING}` }}
       >
         <div className="flex flex-col h-full" style={{ width: panelWidth }}>

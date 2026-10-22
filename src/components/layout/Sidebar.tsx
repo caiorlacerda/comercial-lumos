@@ -40,7 +40,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   return (
     <WikiProvider>
     <div className="flex flex-col h-screen overflow-hidden bg-lumos-bg transition-colors duration-300 font-work-sans">
-      {/* Header + sub-nav (só mobile) */}
+      {/* Header + sub-nav (só celular, abaixo de 768px; de 768px pra cima entra o menu lateral) */}
       <MobileHeader />
       <MobileSubNav />
 
@@ -48,17 +48,17 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         {/* Navegação desktop: rail fixo de seções + painel expansível.
             relative z-30 garante que o rail fique sempre acima do conteúdo da
             página (ex.: páginas full-bleed como a Wiki) e receba os cliques. */}
-        <div className="hidden lg:flex flex-shrink-0 relative z-30">
+        <div className="hidden md:flex flex-shrink-0 relative z-30">
           <DesktopNav />
         </div>
 
         {/* Conteúdo */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-lumos-bg transition-colors duration-300 pb-20 lg:pb-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-lumos-bg transition-colors duration-300 pb-20 md:pb-0">
           {/* Fundo de luz difusa fixo atrás de todas as telas; o conteúdo (relative z-10) fica acima */}
           {visualNovo && <FundoDeck />}
           <AnimatePresence mode="wait">
             <PageTransition key={transitionKey}>
-              <div data-largura={visualNovo ? LARGURA_POR_ROTA[location.pathname] : undefined} className={visualNovo ? 'lumos-deck relative z-10 w-full p-4 lg:p-8' : 'w-full p-4 lg:p-8'}>
+              <div data-largura={visualNovo ? LARGURA_POR_ROTA[location.pathname] : undefined} className={visualNovo ? 'lumos-deck relative z-10 w-full p-4 md:p-6 lg:p-8' : 'w-full p-4 md:p-6 lg:p-8'}>
                 <React.Suspense
                   fallback={
                     <div className="flex items-center justify-center py-32">
@@ -74,7 +74,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* Tab bar inferior (só mobile) */}
+      {/* Tab bar inferior (só celular) */}
       <MobileTabBar />
 
       {/* Busca global (Cmd+K) */}
