@@ -11,7 +11,7 @@ import Select from '@/components/ui/Select';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
 import { sincronizarTarefa } from '@/lib/reviewTransition';
 import { captureVideoThumb, capaDoStream, valeCapturarCapa, capaJaFalhou, marcarCapaFalhou } from '@/lib/videoThumb';
-import { moverEtapa, mensagemDaEtapa } from '@/lib/reviewTransition';
+import { moverEtapa, mensagemDaEtapa, atualizacaoDeEtapa, garantirLinkDoCliente } from '@/lib/reviewTransition';
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 
@@ -265,8 +265,11 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     try {
       const versionIds = gs.map(g => g.current.id);
       const { error } = await supabase.from('video_versions')
-        .update({ status: next, updated_at: new Date().toISOString() }).in('id', versionIds);
+        .update(atualizacaoDeEtapa(next)).in('id', versionIds);
       if (error) throw error;
+      // Em lote também: quem vai pro cliente precisa do link, e a decisão da
+      // rodada anterior sai (ver reviewTransition).
+      if (next === 'EM_REVISAO_CLIENTE') await Promise.all(gs.map(g => garantirLinkDoCliente(g.current, profile?.id)));
       // Uma tarefa pode ter vários formatos: cada uma recalcula pelo conjunto,
       // em vez de todas receberem o status do lote.
       const taskIds = [...new Set(gs.map(g => g.current.task_id).filter(Boolean) as string[])];
@@ -716,8 +719,9 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
       const next = sozinho && t?.status ? taskStatusToVideo(t.status, g.current.status) : null;
       if (next && next !== g.current.status) {
         await supabase.from('video_versions')
-          .update({ status: next, updated_at: new Date().toISOString() })
+          .update(atualizacaoDeEtapa(next))
           .eq('id', g.current.id);
+        if (next === 'EM_REVISAO_CLIENTE') await garantirLinkDoCliente(g.current, profile?.id);
         toast.success(`Vinculado. O vídeo assumiu o status da tarefa: ${STATUS_UI[next].label}.`);
       } else {
         toast.success('Tarefa vinculada ✓');

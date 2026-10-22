@@ -9,7 +9,7 @@ import Select from '@/components/ui/Select';
 import InternalReviewModal from './InternalReviewModal';
 import VideoThumb from './VideoThumb';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
-import { moverEtapa, mensagemDaEtapa, sincronizarTarefa } from '@/lib/reviewTransition';
+import { moverEtapa, mensagemDaEtapa, sincronizarTarefa, atualizacaoDeEtapa, garantirLinkDoCliente } from '@/lib/reviewTransition';
 
 interface Version {
   id: string;
@@ -195,8 +195,9 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
       const next = sozinho ? taskStatusToVideo(task.status, g.current.status) : null;
       if (next && next !== g.current.status) {
         await supabase.from('video_versions')
-          .update({ status: next, updated_at: new Date().toISOString() })
+          .update(atualizacaoDeEtapa(next))
           .eq('id', g.current.id);
+        if (next === 'EM_REVISAO_CLIENTE') await garantirLinkDoCliente(g.current, profile?.id);
         toast.success(`Vídeo vinculado e com o status da tarefa: ${STATUS_UI[next].label}.`);
       } else {
         toast.success('Vídeo vinculado ✓');
