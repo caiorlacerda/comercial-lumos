@@ -69,6 +69,12 @@ const EXPENSE_CATEGORY_OPTIONS = [
 ];
 const categoryLabel = (value: string) => EXPENSE_CATEGORY_OPTIONS.find(o => o.value === value)?.label || value;
 
+// `expense_date` é uma data SEM hora (YYYY-MM-DD). `new Date('2026-10-21')` vira meia-noite UTC,
+// que no Brasil é o dia anterior (20/10). Aqui a data é lida ao meio-dia, sem virar o dia.
+const dataBR = (iso: string) => new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR');
+// Hoje no fuso do navegador. `toISOString()` usa UTC e, depois das 21h no Brasil, já devolve o dia seguinte.
+const hojeLocalISO = () => new Date().toLocaleDateString('en-CA');
+
 export default function Reembolso() {
   const { profile, isAdmin } = useAuth();
   const toast = useToast();
@@ -83,7 +89,7 @@ export default function Reembolso() {
   const [formData, setFormData] = useState({
     description: '',
     amount: 0,
-    expense_date: new Date().toISOString().split('T')[0],
+    expense_date: hojeLocalISO(),
     project_id: '',
     payment_method: 'pix',
     notes: '',
@@ -132,7 +138,7 @@ export default function Reembolso() {
 
   const getOrCreatePath = async (employeeName: string) => {
     const rootId = import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID || '1-Q38vOIfw-CoDxYtBa82-tvhKa1-Xiks';
-    const month = new Date().toISOString().split('-').slice(0, 2).join('-');
+    const month = hojeLocalISO().slice(0, 7);
 
     const findFolder = async (name: string, parentId: string) => {
       const res = await listFiles(`name = '${name}' and '${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
@@ -459,7 +465,7 @@ export default function Reembolso() {
   };
 
   const resetForm = () => {
-    setFormData({ description: '', amount: 0, expense_date: new Date().toISOString().split('T')[0], project_id: '', payment_method: 'pix', notes: '', attachment: null, supplier: '', category: '' });
+    setFormData({ description: '', amount: 0, expense_date: hojeLocalISO(), project_id: '', payment_method: 'pix', notes: '', attachment: null, supplier: '', category: '' });
     setProjectSearch('');
   };
 
@@ -537,7 +543,7 @@ export default function Reembolso() {
                       </td>
                     )}
                     {isAdmin && <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{r.requester?.full_name}</td>}
-                    <td className="px-6 py-4 text-sm text-lumos-text-secondary">{new Date(r.expense_date).toLocaleDateString('pt-BR')}</td>
+                    <td className="px-6 py-4 text-sm text-lumos-text-secondary">{dataBR(r.expense_date)}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
@@ -597,7 +603,7 @@ export default function Reembolso() {
               <MobileCard key={r.id}>
                 <div className="flex items-center justify-between gap-3 mb-1.5">
                   <span className="text-[11px] font-bold text-lumos-text-primary truncate">
-                    {isAdmin ? (r.requester?.full_name || '—') : new Date(r.expense_date).toLocaleDateString('pt-BR')}
+                    {isAdmin ? (r.requester?.full_name || '—') : dataBR(r.expense_date)}
                   </span>
                   <StatusBadge status={r.status} />
                 </div>
@@ -621,7 +627,7 @@ export default function Reembolso() {
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}
                     </span>
                     {isAdmin && (
-                      <span className="text-[10px] text-lumos-text-secondary">{new Date(r.expense_date).toLocaleDateString('pt-BR')}</span>
+                      <span className="text-[10px] text-lumos-text-secondary">{dataBR(r.expense_date)}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
