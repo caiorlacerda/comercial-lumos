@@ -59,6 +59,9 @@ async function resolverToken(token: string, wantsDownload: boolean, versaoPedida
 
   const { data: link } = await db.from('review_links').select('video_version_id, group_id, allow_download').eq('token', token).eq('active', true).maybeSingle()
   if (!link) return guardar(null)
+  // Download do arquivo original só se o link permitir. Antes só o cabeçalho
+  // Content-Disposition dependia da flag: com ?download=1 o original saía igual.
+  if (wantsDownload && !link.allow_download) return guardar(null)
 
   // Comparar versões: o player pode pedir uma versão ESPECÍFICA do mesmo grupo.
   // Sem isso, o token resolveria sempre a mais nova e o seletor de versões
