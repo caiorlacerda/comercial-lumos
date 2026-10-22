@@ -288,7 +288,14 @@ export default function RevisaoPublica() {
   // --- Decisão do cliente (aprovar / pedir ajustes) ---
   const [deciding, setDeciding] = useState(false);
   const [askChanges, setAskChanges] = useState(false);
-  const decision = data?.video.client_decision ?? null;
+  // A decisão que a tela mostra vem da ETAPA do vídeo, não do registro de quem decidiu:
+  // a equipe pode reabrir o vídeo ou marcar a decisão na mão (sem esse registro), e a
+  // tela do cliente tem que acompanhar a etapa. O nome de quem decidiu só enfeita.
+  const decision: 'aprovado' | 'ajustes' | null =
+    data?.video.status === 'APROVADO' ? 'aprovado'
+    : data?.video.status === 'ALTERACOES_CLIENTE' ? 'ajustes'
+    : null;
+  const decididoPor = decision ? data?.video.client_decided_by : null;
 
   // Fase interna: o mesmo link serve à revisão do time, com a decisão certa.
   // A revisão interna acontece DENTRO da plataforma, com login e permissão.
@@ -303,7 +310,9 @@ export default function RevisaoPublica() {
     });
     setDeciding(false);
     if (err || !(res as any)?.ok) {
-      setError((res as any)?.error === 'em_revisao_interna'
+      // Aviso na própria tela: trocar a página inteira por um erro fazia o cliente
+      // perder o vídeo e os comentários que estava olhando.
+      setAviso((res as any)?.error === 'em_revisao_interna'
         ? 'Este vídeo ainda está em revisão interna da Lumos.'
         : 'Não foi possível registrar. Tente novamente.');
       return;
@@ -1004,13 +1013,13 @@ export default function RevisaoPublica() {
               ) : decision === 'aprovado' ? (
                 <div className="rounded-lumos border border-green-500/40 bg-green-500/10 px-3 py-2.5 text-[12px] font-bold text-green-500 flex items-start gap-2">
                   <Check className="w-4 h-4 flex-shrink-0 mt-px" />
-                  <span>Vídeo aprovado por {data.video.client_decided_by}. A equipe da Lumos já foi avisada.</span>
+                  <span>Vídeo aprovado{decididoPor ? ` por ${decididoPor}` : ''}. A equipe da Lumos já foi avisada.</span>
                 </div>
               ) : decision === 'ajustes' ? (
                 <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500 flex items-start gap-2">
                   <RotateCcw className="w-4 h-4 flex-shrink-0 mt-px" />
                   <div className="min-w-0">
-                    <p>Ajustes solicitados por {data.video.client_decided_by}.</p>
+                    <p>Ajustes solicitados{decididoPor ? ` por ${decididoPor}` : ''}.</p>
                     <button onClick={() => decide('aprovado')} disabled={deciding}
                       className="mt-1 text-[11px] font-bold underline underline-offset-2 hover:text-green-500 disabled:opacity-60">
                       Mudou de ideia? Aprovar assim mesmo

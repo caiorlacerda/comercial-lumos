@@ -58,6 +58,13 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const [historico, setHistorico] = useState<{ versao: number; comments: TeamComment[] }[]>([]);
   const [verHistorico, setVerHistorico] = useState<number | null>(null);
   const [decidindo, setDecidindo] = useState(false);
+  // Decide pelo painel e SEMPRE destrava o botão: se a mudança de etapa falhar, o
+  // modal continua aberto e o botão ficava preso em "Enviando…" para sempre.
+  const decidir = async (proximo: Parameters<NonNullable<Props['onDecidir']>>[0]) => {
+    if (!onDecidir) return;
+    setDecidindo(true);
+    try { await onDecidir(proximo); } finally { setDecidindo(false); }
+  };
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
 
   // Achar o comentário certo numa lista de 40 é o trabalho de verdade da
@@ -907,8 +914,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                       message: 'O vídeo sai da mão do cliente e volta para a equipe. O link do cliente para de mostrar o vídeo até você liberar de novo.',
                       confirmLabel: 'Voltar',
                     })) return;
-                    setDecidindo(true);
-                    await onDecidir('ALTERACOES_INTERNAS');
+                    await decidir('ALTERACOES_INTERNAS');
                   }}
                   className="mt-2 h-8 px-3 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-primary hover:border-amber-500/60 disabled:opacity-60">
                   Trazer de volta pra revisão interna
@@ -929,7 +935,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                       Cancelar
                     </button>
                     <button disabled={decidindo}
-                      onClick={async () => { setDecidindo(true); await onDecidir('ALTERACOES_INTERNAS'); }}
+                      onClick={() => decidir('ALTERACOES_INTERNAS')}
                       className="flex-1 h-8 rounded-lumos bg-amber-500 text-black text-[11px] font-black hover:brightness-95 disabled:opacity-60">
                       {decidindo ? 'Enviando…' : 'Confirmar alteração'}
                     </button>
@@ -938,7 +944,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               ) : (
                 <div className="flex gap-2">
                   <button disabled={decidindo}
-                    onClick={async () => { setDecidindo(true); await onDecidir('EM_REVISAO_CLIENTE'); }}
+                    onClick={() => decidir('EM_REVISAO_CLIENTE')}
                     className="flex-1 min-h-10 py-1.5 px-3 rounded-full bg-green-500 text-white text-[12.5px] font-black leading-tight text-center flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
                     <Check className="w-4 h-4 flex-shrink-0" /> <span>{decidindo ? 'Enviando…' : 'Aprovar e liberar pro cliente'}</span>
                   </button>
