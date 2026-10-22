@@ -24,6 +24,7 @@ import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
+import { dataBR, hojeLocalISO, jaPassou } from '@/lib/dataSemHora';
 import { MobileCardList, MobileCard, MobileCardSkeleton, MobileCardEmpty } from '@/components/ui/MobileCards';
 
 const CurrencyInput = ({ value, onChange, className }: any) => {
@@ -59,7 +60,7 @@ export default function ContasPagar() {
   const [formData, setFormData] = useState({
     description: '',
     amount: 0,
-    due_date: new Date().toISOString().split('T')[0],
+    due_date: hojeLocalISO(),
     category: 'equipe',
     supplier: '',
     responsible_id: '',
@@ -277,7 +278,7 @@ export default function ContasPagar() {
     setFormData({
       description: '',
       amount: 0,
-      due_date: new Date().toISOString().split('T')[0],
+      due_date: hojeLocalISO(),
       category: 'equipe',
       supplier: '',
       responsible_id: '',
@@ -309,7 +310,7 @@ export default function ContasPagar() {
   const stats = {
     pending: payables.filter(p => !p.paid_at).reduce((acc, p) => acc + p.amount, 0),
     paidMonth: payables.filter(p => p.paid_at && new Date(p.paid_at).getMonth() === new Date().getMonth()).reduce((acc, p) => acc + p.amount, 0),
-    overdueCount: payables.filter(p => !p.paid_at && p.due_date && new Date(p.due_date) < new Date()).length
+    overdueCount: payables.filter(p => !p.paid_at && p.due_date && jaPassou(p.due_date)).length
   };
 
   const handleSort = (key: string) => {
@@ -361,7 +362,7 @@ export default function ContasPagar() {
                 'Fornecedor': p.supplier || '',
                 'Categoria': p.category || '',
                 'Valor (R$)': p.amount,
-                'Vencimento': p.due_date ? new Date(p.due_date).toLocaleDateString('pt-BR') : '',
+                'Vencimento': p.due_date ? dataBR(p.due_date) : '',
                 'Status': p.paid_at ? 'Pago' : 'Pendente',
                 'Pago em': p.paid_at ? new Date(p.paid_at).toLocaleDateString('pt-BR') : '',
                 'Responsável': p.responsible?.full_name || '',
@@ -369,7 +370,7 @@ export default function ContasPagar() {
               const ws = XLSX.utils.json_to_sheet(rows);
               const wb = XLSX.utils.book_new();
               XLSX.utils.book_append_sheet(wb, ws, 'Contas a Pagar');
-              XLSX.writeFile(wb, `contas-pagar-${new Date().toISOString().slice(0,10)}.xlsx`);
+              XLSX.writeFile(wb, `contas-pagar-${hojeLocalISO()}.xlsx`);
             }}
             className="btn-secondary h-10 px-4 flex items-center gap-2 text-sm"
           >
@@ -491,7 +492,7 @@ export default function ContasPagar() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">
-                      {p.due_date ? new Date(p.due_date).toLocaleDateString('pt-BR') : '—'}
+                      {p.due_date ? dataBR(p.due_date) : '—'}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
@@ -593,7 +594,7 @@ export default function ContasPagar() {
                 <div className="flex items-center justify-between gap-3 mb-1.5">
                   <span className="text-[11px] font-bold text-lumos-text-primary flex items-center gap-1 whitespace-nowrap">
                     <Calendar className="w-3 h-3 text-lumos-text-secondary" />
-                    {p.due_date ? new Date(p.due_date).toLocaleDateString('pt-BR') : 'Sem vencimento'}
+                    {p.due_date ? dataBR(p.due_date) : 'Sem vencimento'}
                   </span>
                   {p.paid_at ? (
                     <span className="inline-flex items-center text-[9px] font-black text-green-500 uppercase bg-green-500/10 px-2 py-0.5 rounded-full whitespace-nowrap"><CheckCircle2 className="w-2.5 h-2.5 mr-1" /> Pago</span>
