@@ -308,6 +308,10 @@ export default function Reembolso() {
       toast.error("Selecione um projeto. Se não for de um projeto específico, escolha 'Produtora Lumos'.");
       return;
     }
+    if (!formData.attachment) {
+      toast.error('Anexe a nota fiscal ou o comprovante do gasto. Todo reembolso precisa de uma nota.');
+      return;
+    }
 
     try {
       setUploading(true);
@@ -1072,7 +1076,7 @@ export default function Reembolso() {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Comprovante</label>
+            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Comprovante (nota fiscal) <span className="text-danger-fg">*</span></label>
             <div className="relative group">
               <input
                 type="file"
