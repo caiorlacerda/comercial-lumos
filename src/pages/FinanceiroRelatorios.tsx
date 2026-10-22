@@ -145,7 +145,7 @@ export default function FinanceiroRelatorios() {
     data.forEach(item => {
       const date = item.data_recebimento_negociada || item.created_at;
       if (date) {
-        const year = new Date(date).getFullYear().toString();
+        const year = item.data_recebimento_negociada ? String(date).slice(0, 4) : new Date(date).getFullYear().toString();
         years.add(year);
       }
     });
@@ -174,7 +174,7 @@ export default function FinanceiroRelatorios() {
       if (selectedYear) {
         const date = item.data_recebimento_negociada || item.created_at;
         if (date) {
-          const year = new Date(date).getFullYear().toString();
+          const year = item.data_recebimento_negociada ? String(date).slice(0, 4) : new Date(date).getFullYear().toString();
           if (year !== selectedYear) return false;
         } else {
           return false;

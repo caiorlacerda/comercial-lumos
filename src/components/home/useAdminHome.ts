@@ -29,6 +29,7 @@ export function useAdminHome(ativo: boolean): DadosAdmin | undefined {
     const h = hoje();
     const limite = maisDias(7);
     const mes = inicioDoMes();
+    const mesDia = h.slice(0, 7) + '-01';
     const [rec, pag, nota, reemb, orc] = await Promise.allSettled([
       supabase.from('receivables').select('id, total_amount, received_amount, due_date, received_at, status'),
       supabase.from('payables').select('id, amount, due_date, paid_at').is('paid_at', null),
@@ -46,7 +47,7 @@ export function useAdminHome(ativo: boolean): DadosAdmin | undefined {
       qtd: atrasados.length,
     };
     const recebidoNoMes = recebiveis
-      .filter(r => r.received_at && r.received_at >= mes)
+      .filter(r => r.received_at && String(r.received_at).slice(0, 10) >= mesDia)
       .reduce((n, r) => n + Number(r.received_amount || 0), 0);
 
     const aPagar = lista<any>(pag);

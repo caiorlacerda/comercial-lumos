@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CalendarClock, Loader2, Plus, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
 import DatePicker from '@/components/ui/DatePicker';
@@ -54,7 +55,7 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
   const [plano, setPlano] = useState<'a_vista' | 'entrada_saldo' | 'fee_mensal'>('a_vista');
   const [dias, setDias] = useState(30);
   const [entradaPct, setEntradaPct] = useState(50);
-  const [base, setBase] = useState(() => new Date().toISOString().slice(0, 10));
+  const [base, setBase] = useState(() => hojeLocalISO());
   const [salvando, setSalvando] = useState(false);
   const [resumo, setResumo] = useState<{ total: number; recebido: number; saldo: number } | null>(null);
   const [indisponivel, setIndisponivel] = useState(false);
@@ -298,7 +299,7 @@ export default function ParcelamentoModal({ budgetId, nomeProjeto, onClose, onDo
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">A partir de</label>
-                  <DatePicker mode="date" value={base} onChange={v => setBase(v || new Date().toISOString().slice(0, 10))}
+                  <DatePicker mode="date" value={base} onChange={v => setBase(v || hojeLocalISO())}
                     className="input-lumos w-full h-10 text-sm" />
                 </div>
               </div>

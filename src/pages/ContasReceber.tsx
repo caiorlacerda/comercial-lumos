@@ -19,6 +19,7 @@ import {
 import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO, jaPassou } from '@/lib/dataSemHora';
 import ParcelamentoModal from '@/components/financeiro/ParcelamentoModal';
 import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -66,7 +67,7 @@ export default function ContasReceber() {
     description: '',
     client_id: '',
     total_amount: 0,
-    due_date: new Date().toISOString().split('T')[0],
+    due_date: hojeLocalISO(),
     notes: ''
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -85,7 +86,7 @@ export default function ContasReceber() {
         : <ChevronDown className="w-3 h-3 text-lumos-yellow" />;
   const [paymentData, setPaymentData] = useState({
     amount: 0,
-    received_at: new Date().toISOString().split('T')[0],
+    received_at: hojeLocalISO(),
     payment_method: 'pix'
   });
   // Menu de status por linha (mesmo padrão do dropdown de status dos Orçamentos).
@@ -121,7 +122,7 @@ export default function ContasReceber() {
     }
     try {
       const patch = newStatus === 'recebido'
-        ? { status: 'recebido', received_amount: Number(r.total_amount || 0), received_at: (r.received_at || new Date().toISOString().split('T')[0]) }
+        ? { status: 'recebido', received_amount: Number(r.total_amount || 0), received_at: (r.received_at || hojeLocalISO()) }
         : {
             status: newStatus, received_amount: 0, received_at: null,
             // Reabrir um título em dólar já recebido volta ao total contratado em reais
@@ -286,7 +287,7 @@ export default function ContasReceber() {
       }]);
       if (error) throw error;
       setIsNewModalOpen(false);
-      setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: new Date().toISOString().split('T')[0], notes: '' });
+      setNewReceivableData({ description: '', client_id: '', total_amount: 0, due_date: hojeLocalISO(), notes: '' });
       fetchReceivables();
     } catch (error: any) { toast.error(error.message); }
   };
@@ -317,7 +318,7 @@ export default function ContasReceber() {
         supabase.from('receivables').update({
           status: 'recebido',
           received_amount: r.total_amount,
-          received_at: new Date().toISOString().split('T')[0],
+          received_at: hojeLocalISO(),
           updated_at: new Date().toISOString()
         }).eq('id', r.id)
       );
@@ -377,13 +378,13 @@ export default function ContasReceber() {
   // "Atrasado" é um recebível não recebido cujo vencimento já passou, OU
   // marcado manualmente como tal (status 'inadimplente'). Tratamos os dois
   // casos como o mesmo balde — statusOf é a fonte única pra exibição/filtro.
-  const isOverdue = (r: any) => r.status !== 'recebido' && r.due_date && new Date(r.due_date) < new Date();
+  const isOverdue = (r: any) => r.status !== 'recebido' && r.due_date && jaPassou(r.due_date);
 
   const statusOf = (r: any): string => (r.status === 'inadimplente' || isOverdue(r)) ? 'atrasado' : r.status;
 
   const stats = {
     toReceive: receivables.filter(r => r.status !== 'recebido').reduce((acc, r) => acc + (r.total_amount - r.received_amount), 0),
-    receivedMonth: receivables.filter(r => r.received_at && new Date(r.received_at).getMonth() === new Date().getMonth()).reduce((acc, r) => acc + r.received_amount, 0),
+    receivedMonth: receivables.filter(r => r.received_at && String(r.received_at).slice(0, 7) === hojeLocalISO().slice(0, 7)).reduce((acc, r) => acc + r.received_amount, 0),
     overdue: receivables.filter(r => statusOf(r) === 'atrasado').length
   };
 
@@ -636,7 +637,7 @@ export default function ContasReceber() {
               const ws = XLSX.utils.json_to_sheet(rows);
               const wb = XLSX.utils.book_new();
               XLSX.utils.book_append_sheet(wb, ws, 'Contas a Receber');
-              XLSX.writeFile(wb, `contas-receber-${new Date().toISOString().slice(0,10)}.xlsx`);
+              XLSX.writeFile(wb, `contas-receber-${hojeLocalISO()}.xlsx`);
             }}
             className="btn-secondary h-10 px-4 flex items-center gap-2 text-sm"
           >

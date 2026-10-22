@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, CalendarOff, Clock, CloudRain, Copy, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
@@ -277,7 +278,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           {diarias.map(d => {
             const p = clima[d.id];
             const chuva = (p?.chanceChuva ?? 0) >= 30;
-            const passada = !!d.data && d.data < new Date().toISOString().slice(0, 10);
+            const passada = !!d.data && d.data < hojeLocalISO();
             return (
               <div key={d.id} className={clsx('card p-4 relative group border-l-4',
                 chuva ? 'border-l-amber-500' : passada ? 'border-l-green-600' : 'border-l-lumos-yellow/70')}>

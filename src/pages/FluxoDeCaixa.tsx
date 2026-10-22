@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
@@ -129,7 +130,7 @@ export default function FluxoDeCaixa() {
   const [projectsList, setProjectsList] = useState<any[]>([]);
 
   const defaultForm: EntryFormData = {
-    entry_date: new Date().toISOString().split('T')[0],
+    entry_date: hojeLocalISO(),
     type: 'entrada',
     amount: 0,
     description: '',
@@ -230,7 +231,7 @@ export default function FluxoDeCaixa() {
     const reembolsosComCusto = new Set(projectCosts.map((pc: any) => pc.reimbursement_id).filter(Boolean));
     payables.forEach(p => {
       if ((p as any).cost_id || (p as any).reimbursement_id) return; // espelho: quem conta é a origem
-      const d = p.paid_at?.slice(0, 10);
+      const d = p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-CA') : undefined;
       if (!d || !d.startsWith(yearStr)) return;
       const m = parseInt(d.slice(5, 7)) - 1;
       months[m].saidas += p.amount || 0;
@@ -246,7 +247,7 @@ export default function FluxoDeCaixa() {
 
     // Project costs → saídas
     projectCosts.forEach(pc => {
-      const d = pc.paid_at?.slice(0, 10);
+      const d = pc.paid_at ? new Date(pc.paid_at).toLocaleDateString('en-CA') : undefined;
       if (!d || !d.startsWith(yearStr)) return;
       const m = parseInt(d.slice(5, 7)) - 1;
       months[m].saidas += pc.amount || 0;
@@ -263,7 +264,7 @@ export default function FluxoDeCaixa() {
     // Reimbursements → saídas (só os internos, sem custo espelho no projeto)
     reimbursements.forEach(r => {
       if (reembolsosComCusto.has(r.id)) return; // já contado como custo de projeto
-      const d = r.paid_at?.slice(0, 10);
+      const d = r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-CA') : undefined;
       if (!d || !d.startsWith(yearStr)) return;
       const m = parseInt(d.slice(5, 7)) - 1;
       months[m].saidas += r.amount || 0;

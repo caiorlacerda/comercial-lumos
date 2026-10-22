@@ -355,7 +355,7 @@ export const OrdemDoDiaPDF = ({ ordem }: OrdemDoDiaPDFProps) => {
   /** Sem flag no banco, a seção aparece: quem manda é ter conteúdo. */
   const ligada = (chave: keyof SecoesAtivas) => secoes[chave] !== false;
 
-  const dataEmissao = formatDataLonga(ordem.data_emissao || new Date().toISOString());
+  const dataEmissao = formatDataLonga(ordem.data_emissao || new Date().toLocaleDateString('en-CA'));
   const dataProducao = formatDataLonga(ordem.data_producao, true);
   const dataCurta = formatDataLonga(ordem.data_producao);
   const nomenclatura = `LUMOS · ${ordem.titulo} · ORDEM DO DIA`;

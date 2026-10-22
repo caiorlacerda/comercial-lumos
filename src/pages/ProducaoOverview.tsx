@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import UserAvatar from '@/components/common/UserAvatar';
@@ -47,11 +48,11 @@ const CONCLUDED_STATUSES = new Set([...TASK_STATUS_GROUPS.concluido.map(s => s.v
 // Etapas abertas na ordem do fluxo (mesma régua do hub de projetos).
 const OPEN_STAGES = ['na_fila', 'roteiro', 'captacao', 'em_progresso', 'revisao_interna', 'revisao_cliente', 'alteracoes', 'pausado'];
 
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = hojeLocalISO;
 const plusDaysStr = (n: number) => {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-CA');
 };
 
 const relativeTime = (dateStr: string) => {

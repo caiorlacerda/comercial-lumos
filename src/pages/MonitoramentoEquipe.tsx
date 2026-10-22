@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useLayout } from '@/context/LayoutContext';
 import UserAvatar from '@/components/common/UserAvatar';
@@ -33,7 +34,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const STALE_DAYS = 3;
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = hojeLocalISO;
 const daysLate = (due: string) => Math.floor((Date.now() - new Date(due + 'T23:59:59').getTime()) / 86400000);
 function relTime(iso: string | null) {
   if (!iso) return 'nunca';

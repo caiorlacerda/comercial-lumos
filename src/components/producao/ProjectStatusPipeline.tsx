@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Lock, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 
@@ -91,7 +92,7 @@ export default function ProjectStatusPipeline({ projectId, projectStatus, canMan
       Array.isArray(v) ? v.length > 0 : typeof v === 'string' && v.trim().length > 0);
 
     const ds = diarias.data || [];
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocalISO();
     const todasPassadas = ds.length > 0 && ds.every(d => d.data && d.data < hoje);
 
     // Um "vídeo" = grupo; conta a versão mais recente de cada.

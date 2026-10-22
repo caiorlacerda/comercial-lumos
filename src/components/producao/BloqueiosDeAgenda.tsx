@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { AlertTriangle, CalendarOff, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
@@ -39,7 +40,7 @@ const fmtData = (d: string) => {
   const s = new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
-const hoje = () => new Date().toISOString().slice(0, 10);
+const hoje = hojeLocalISO;
 
 /** 0 = domingo, igual ao `dia_semana` da tabela (EXTRACT(DOW)). */
 const NOME_DIA_SEMANA = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
