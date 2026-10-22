@@ -22,7 +22,8 @@ interface ModalProps {
   portal?: boolean;
   /** Tamanho padrão da janela. `maxWidth` (se informado) tem prioridade. */
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
-  /** Camada (z-index) da janela. Padrão `z-50`; confirmações abertas sobre outras janelas usam uma mais alta. */
+  /** Camada (z-index) da janela. Padrão `z-[200]`: acima do detalhe da tarefa (z-140) e dos painéis de Projetos, onde as janelas
+   *  rápidas (roteiro, etc.) abrem; confirmações abertas sobre outras janelas usam uma mais alta (`z-[300]`). */
   camada?: string;
   /** Clicar no fundo escuro fecha a janela (padrão). Desligue em formulários longos, para não perder o que foi digitado. */
   fecharAoClicarFora?: boolean;
@@ -52,7 +53,7 @@ export default function Modal({
   bodyClassName,
   portal,
   size,
-  camada = 'z-50',
+  camada = 'z-[200]',
   fecharAoClicarFora = true,
 }: ModalProps) {
   const visualNovo = useVisualNovo();
