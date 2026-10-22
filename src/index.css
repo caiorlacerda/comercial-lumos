@@ -1018,3 +1018,10 @@ html.visual-novo .border-sky-400 { border-color: color-mix(in oklab, var(--color
   html.visual-novo .hover\:text-red-600:hover { color: var(--color-danger-fg); }
 }
 /* <<< TONS-GERADOS */
+
+/* Telas de toque (iPad, celular): não existe "passar o mouse". O Tailwind só aplica group-hover onde há mouse,
+   então os botões que nascem com opacity-0 e aparecem no hover (editar diária, apagar, arrastar, copiar...)
+   ficavam invisíveis no iPad. Em telas de toque eles ficam sempre visíveis. */
+@media (hover: none) {
+  .opacity-0[class*="group-hover:opacity-100"] { opacity: 1; }
+}
