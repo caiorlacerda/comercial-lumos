@@ -72,7 +72,7 @@ export default function MoedaPanel({ version, disabled, aprovado, feeMensal, onC
       }
       aplicar(c.compra, 'ptax', c.do_cache ? `${c.data}T12:00:00-03:00` : undefined);
       setManualAberto(false);
-      if (c.do_cache) toast.warning(`Banco Central indisponível agora. Usei a última cotação guardada (${dataBR(c.data)}).`);
+      if (c.do_cache) toast.warning(`Banco Central indisponível agora. Usei a última cotação guardada (${dataBR(`${c.data}T12:00:00`)}).`);
     } catch {
       toast.error('Não consegui buscar a cotação. Digite a cotação à mão.');
       setManualAberto(true);

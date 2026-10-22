@@ -6,6 +6,7 @@ import { Archive, ArrowLeft, ArrowLeftRight, ExternalLink, Plus, AlertTriangle, 
 import { clsx } from 'clsx';
 import { calcFinancials } from '@/utils/financials';
 import { supabase } from '@/lib/supabase';
+import { dataBR, hojeLocalISO } from '@/lib/dataSemHora';
 import Select from '@/components/ui/Select';
 import ParcelamentoModal from '@/components/financeiro/ParcelamentoModal';
 import EncerrarProjetoModal from '@/components/financeiro/EncerrarProjetoModal';
@@ -53,7 +54,7 @@ export default function CustosProjetoDetalhe() {
   const [formData, setFormData] = useState({
     description: '',
     amount: 0,
-    cost_date: new Date().toISOString().split('T')[0],
+    cost_date: hojeLocalISO(),
     payment_due_date: '',
     category: 'equipe',
     supplier: '',
@@ -219,7 +220,7 @@ export default function CustosProjetoDetalhe() {
           <span className="text-sm font-black text-lumos-text-primary whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.amount)}</span>
         </div>
         <div className="flex items-center gap-2 mt-1 text-[11px] text-lumos-text-secondary">
-          <span>{new Date(c.cost_date).toLocaleDateString('pt-BR')}</span>
+          <span>{dataBR(c.cost_date)}</span>
           {c.category && <span className="uppercase font-bold">· {formatCategoryLabel(c.category)}</span>}
           {dueEl && <span>· {dueEl}</span>}
         </div>
@@ -555,14 +556,14 @@ export default function CustosProjetoDetalhe() {
 
   // calcula data adicionando dias (formato YYYY-MM-DD)
   const addDaysToDate = (dateStr: string, days: number): string => {
-    const d = new Date(dateStr);
+    const d = new Date(dateStr.slice(0, 10) + 'T12:00:00');
     d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
+    return d.toLocaleDateString('en-CA');
   };
 
   const resetForm = () => {
     setEditingId(null);
-    const today = new Date().toISOString().split('T')[0];
+    const today = hojeLocalISO();
     setFormData({
       description: '',
       amount: 0,
@@ -711,7 +712,7 @@ export default function CustosProjetoDetalhe() {
         data_recebimento_negociada: financeForm.data_recebimento_negociada || null,
         status_titulo: financeForm.status_titulo,
         data_recebido: financeForm.status_titulo === 'pagamento_recebido' 
-          ? (financeForm.data_recebido || new Date().toISOString().split('T')[0]) 
+          ? (financeForm.data_recebido || hojeLocalISO()) 
           : null,
         valor_vendido: financeForm.valor_vendido,
         nf_percent: financeForm.nf_percent,
@@ -1141,7 +1142,7 @@ export default function CustosProjetoDetalhe() {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-lumos-text-secondary">
-                          {new Date(c.cost_date).toLocaleDateString('pt-BR')}
+                          {dataBR(c.cost_date)}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
@@ -1317,7 +1318,7 @@ export default function CustosProjetoDetalhe() {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-lumos-text-secondary">
-                          {new Date(c.cost_date).toLocaleDateString('pt-BR')}
+                          {dataBR(c.cost_date)}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">

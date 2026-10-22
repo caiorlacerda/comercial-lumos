@@ -14,6 +14,7 @@ import {
 import { Search, Flag, CalendarDays, Columns3, ExternalLink, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import Select from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -64,7 +65,7 @@ const getInitials = (name: string) => {
   return parts[0][0].toUpperCase();
 };
 
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = hojeLocalISO;
 
 // -------------------------------------------------------------
 // Conteúdo visual do card (usado no board e no DragOverlay)

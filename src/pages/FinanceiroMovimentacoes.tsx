@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
@@ -242,7 +243,7 @@ export default function FinanceiroMovimentacoes() {
           <button onClick={() => fileRef.current?.click()} className="btn-primary h-10 px-4 flex items-center gap-2 text-xs">
             <Upload className="w-4 h-4" /> Importar extrato
           </button>
-          <button onClick={() => setEditando({ data: new Date().toISOString().slice(0, 10) })}
+          <button onClick={() => setEditando({ data: hojeLocalISO() })}
             className="btn-secondary h-10 px-4 flex items-center gap-2 text-xs">
             <Plus className="w-4 h-4" /> Novo lançamento
           </button>

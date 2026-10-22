@@ -279,7 +279,7 @@ export default function FinanceiroDashboard() {
         start = new Date(now.getFullYear(), 0, 1);
         break;
     }
-    return start.toISOString().split('T')[0];
+    return start.toLocaleDateString('en-CA');
   };
 
   // Limite SUPERIOR (exclusivo) do período. Para períodos de calendário (mês/ano)
@@ -566,7 +566,7 @@ export default function FinanceiroDashboard() {
     const now = new Date();
     const nextWeek = new Date();
     nextWeek.setDate(now.getDate() + 7);
-    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+    const nextWeekStr = nextWeek.toLocaleDateString('en-CA');
 
     const pagarSemana = payables
       .filter(p => !p.paid_at && p.due_date && p.due_date <= nextWeekStr)

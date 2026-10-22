@@ -1137,7 +1137,7 @@ export default function OrdemDoDiaDetalhe() {
                 const ordem = {
                   codigo: od.codigo, titulo: od.titulo, data_producao: od.data_producao,
                   hora_inicio: od.hora_inicio,
-                  data_emissao: new Date().toISOString(), clima: od.clima,
+                  data_emissao: hojeLocal(), clima: od.clima,
                   ponto_encontro: od.ponto_encontro,
                   call_times: od.call_times,
                   locacoes: locs.length ? locs : (od.locacao?.nome ? [od.locacao] : []),

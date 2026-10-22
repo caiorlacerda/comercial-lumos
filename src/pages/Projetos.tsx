@@ -19,6 +19,7 @@ import { useConfirm, usePrompt } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
 import { supabase } from '@/lib/supabase';
+import { hojeLocalISO } from '@/lib/dataSemHora';
 
 // Pipeline da Lumos, na ordem do fluxo. Cada etapa tem um time dono (exibido
 // no cabeçalho do grupo), pra ficar claro de quem é a bola.
@@ -2551,7 +2552,7 @@ export default function Projetos() {
                     </div>
                     {(() => {
                       const ups = projectTasks.filter(t => !isTaskDone(t) && t.data_fim).sort((a, b) => (a.data_fim!).localeCompare(b.data_fim!)).slice(0, 6);
-                      const today = new Date().toISOString().slice(0, 10);
+                      const today = hojeLocalISO();
                       return ups.length === 0 ? (
                         <p className="px-4 py-6 text-xs text-lumos-text-secondary italic text-center">Nenhuma tarefa aberta com prazo definido.</p>
                       ) : ups.map(t => (
