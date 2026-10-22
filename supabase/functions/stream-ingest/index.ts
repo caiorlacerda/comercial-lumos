@@ -72,15 +72,17 @@ async function urlAssinada(versionId: string, minutos = 120): Promise<string> {
   return `${base}?v=${versionId}&exp=${exp}&sig=${sig}`
 }
 
-// Só admin ativo mexe nisso: é o que gasta a conta do Stream.
+// Só admin ativo mexe nisso: é o que gasta a conta do Stream. A função roda sem a
+// verificação automática de JWT (por causa da ação 'auto'), então o token é
+// conferido AQUI, no servidor de autenticação. Antes o payload era só decodificado,
+// sem checar a assinatura: um token forjado com o sub de um admin passava.
 async function ehAdmin(req: Request): Promise<boolean> {
   try {
     const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    let p = jwt.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/') ?? ''
-    while (p.length % 4) p += '='
-    const sub = JSON.parse(atob(p))?.sub
-    if (!sub) return false
-    const { data } = await db.from('app_users').select('role, status').eq('auth_user_id', sub).maybeSingle()
+    if (!jwt) return false
+    const { data: { user }, error } = await db.auth.getUser(jwt)
+    if (error || !user) return false
+    const { data } = await db.from('app_users').select('role, status').eq('auth_user_id', user.id).maybeSingle()
     return data?.status === 'ativo' && data?.role === 'admin'
   } catch (_) { return false }
 }

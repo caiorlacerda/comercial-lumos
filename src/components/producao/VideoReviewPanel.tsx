@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Film, ExternalLink, Check, AlertTriangle, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
+import { Ban, Lock, Film, ExternalLink, Check, AlertTriangle, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import InternalReviewModal from './InternalReviewModal';
+import { useConfirm } from '@/components/ui/useConfirm';
 import Select from '@/components/ui/Select';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
 import { sincronizarTarefa } from '@/lib/reviewTransition';
@@ -67,6 +68,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   const { isAdmin, profile, can } = useAuth();
   const toast = useToast();
   const canManage = isAdmin || can('ordem_do_dia');
+  const { confirm, dialog: dialogoConfirmar } = useConfirm();
   // Quem dá o aval interno: admin, produção e quem receber 'revisao_interna'
   // (é assim que o atendimento entra, sem precisar de papel novo). O editor
   // sobe o vídeo, mas não aprova o próprio trabalho.
@@ -199,6 +201,25 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     setLinksByGroup(prev => ({ ...prev, [groupId]: { ...link, [field]: next } }));
     const { error } = await supabase.from('review_links').update({ [field]: next }).eq('id', link.id);
     if (error) { toast.error('Não foi possível salvar.'); setLinksByGroup(prev => ({ ...prev, [groupId]: link })); }
+  };
+
+  // Revoga o link do cliente: o endereço antigo para de abrir na hora (o vídeo, os
+  // comentários e as decisões ficam). Gerar outro é só abrir a revisão do vídeo de
+  // novo: ela cria um link com endereço diferente.
+  const revogarLink = async (g: Group) => {
+    setMenuFor(null);
+    const ok = await confirm({
+      title: 'Revogar o link do cliente?',
+      message: 'Quem tiver o endereço atual deixa de conseguir abrir este vídeo. Os comentários e as decisões continuam salvos. Para gerar um link novo, abra a revisão do vídeo de novo.',
+      confirmLabel: 'Revogar', danger: true,
+    });
+    if (!ok) return;
+    const link = linksByGroup[g.id];
+    const q = supabase.from('review_links').update({ active: false }).eq('active', true);
+    const { error } = await (g.id ? q.or(`group_id.eq.${g.id}${link ? `,id.eq.${link.id}` : ''}`) : q.eq('video_version_id', g.current.id));
+    if (error) { toast.error('Não foi possível revogar o link.'); return; }
+    setLinksByGroup(prev => { const n = { ...prev }; delete n[g.id]; return n; });
+    toast.success('Link revogado ✓ O endereço antigo não abre mais.');
   };
 
   // Abre a revisão interna (player + comentários do time). Garante um token de
@@ -834,6 +855,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
                   <MenuItem icon={ExternalLink} label="Abrir link do cliente" onClick={() => { setMenuFor(null); window.open(`/revisao/${link.token}`, '_blank'); }} />
                   <MenuItem icon={Droplet} label={link.watermark ? 'Marca d’água: ligada' : 'Marca d’água: desligada'} active={link.watermark} onClick={() => toggleLinkFlag(g.id, 'watermark')} />
                   <MenuItem icon={DownloadCloud} label={link.allow_download ? 'Download: liberado' : 'Download: bloqueado'} active={link.allow_download} onClick={() => toggleLinkFlag(g.id, 'allow_download')} />
+                  {canManage && <MenuItem icon={Ban} label="Revogar link do cliente" danger onClick={() => revogarLink(g)} />}
                   <div className="h-px bg-lumos-border my-1" />
                 </>)}
 
@@ -1348,6 +1370,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
       )}
     </div>
 
+    {dialogoConfirmar}
     {reviewModal && (
       <InternalReviewModal
         versionId={reviewModal.versionId}
