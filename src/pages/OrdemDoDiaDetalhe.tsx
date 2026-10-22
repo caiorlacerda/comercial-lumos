@@ -284,6 +284,13 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
   const [cfg, setCfg] = useState<null | { tipo: TipoMomento; inicio: string; locacao: string; chegada: string; duracao: number; paralelo: boolean; descricao: string; manual: boolean; calculando: boolean }>(null);
   const [alturaRel, setAlturaRel] = useState(() => { try { return localStorage.getItem('lumos_od_altura') === '1'; } catch { return false; } });
   const [cfgAberto, setCfgAberto] = useState(false);
+  const toast = useToast();
+  // Mudar um horário empurra os seguintes junto (ligado por padrão; some o trabalho de
+  // refazer a lista inteira, um por um, quando um bloco atrasa ou adianta).
+  const [empurrar, setEmpurrar] = useState(() => { try { return localStorage.getItem('lumos_od_empurrar') !== '0'; } catch { return true; } });
+  const toggleEmpurrar = () => setEmpurrar(v => { try { localStorage.setItem('lumos_od_empurrar', v ? '0' : '1'); } catch { /* ignora */ } return !v; });
+  // Índice (real, em `rows`) do momento cuja locação está sendo trocada, ou null.
+  const [locEditIdx, setLocEditIdx] = useState<number | null>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [agulhaTop, setAgulhaTop] = useState<number | null>(null);
@@ -381,6 +388,46 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
   const editar = (i: number, campo: keyof Momento, valor: unknown) =>
     onChange(rows.map((x, j) => j === i ? { ...x, [campo]: valor } : x));
 
+  /**
+   * Muda o horário de início ou de término de um momento e, com "empurrar" ligado,
+   * leva os seguintes junto:
+   *  - início: o momento anda inteiro (mantém a duração) e todos os que começam a partir
+   *    dele andam o mesmo tanto (os que acontecem em paralelo, no mesmo horário, também);
+   *  - término: só a duração dele muda, e quem começava depois do fim antigo anda o mesmo tanto.
+   * Passar da meia-noite funciona (a conta é no relógio de 24h, em minutos).
+   */
+  const editarHorario = (i: number, campo: 'inicio' | 'fim', valor: string) => {
+    const item = rows[i];
+    const antigo = minutos(campo === 'inicio' ? item.inicio : item.fim);
+    const novo = minutos(valor);
+    if (!empurrar || antigo == null || novo == null) { editar(i, campo, valor); return; }
+    let delta = novo - antigo;
+    if (delta > 720) delta -= 1440;
+    if (delta < -720) delta += 1440;
+    if (delta === 0) { editar(i, campo, valor); return; }
+    const antes = efetivoDoItem(item.inicio, item.fim, base);
+    if (antes.ini == null) { editar(i, campo, valor); return; }
+    const corte = campo === 'inicio' ? antes.ini : (antes.fim ?? antes.ini);
+    const anda = (h: string | null | undefined) => {
+      const m = minutos(h);
+      return m == null ? (h ?? null) : fmtMin((((m + delta) % 1440) + 1440) % 1440);
+    };
+    let seguintes = 0;
+    const lista = rows.map((x, j) => {
+      if (j === i) return campo === 'inicio' ? { ...x, inicio: valor, fim: anda(x.fim) } : { ...x, fim: valor };
+      const e = efetivoDoItem(x.inicio, x.fim, base);
+      if (e.ini == null || e.ini < corte) return x;
+      seguintes++;
+      return { ...x, inicio: anda(x.inicio), fim: anda(x.fim) };
+    });
+    onChange(lista as Momento[]);
+    if (seguintes > 0) {
+      const abs = Math.abs(delta);
+      const tempo = abs >= 60 ? `${Math.floor(abs / 60)}h${abs % 60 ? ` ${abs % 60}min` : ''}` : `${abs}min`;
+      toast.info(`${seguintes} momento${seguintes > 1 ? 's' : ''} seguinte${seguintes > 1 ? 's' : ''} ${delta > 0 ? 'atrasado' : 'adiantado'}${seguintes > 1 ? 's' : ''} em ${tempo}.`);
+    }
+  };
+
   return (
     <div className="card overflow-hidden">
       <div className="px-4 py-3 border-b border-lumos-border flex items-center gap-2 flex-wrap">
@@ -402,6 +449,16 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                   <span>
                     <span className="block text-xs font-bold text-lumos-text-primary">Altura relativa ao tempo</span>
                     <span className="block text-[10.5px] text-lumos-text-secondary leading-snug mt-0.5">A altura de cada linha fica proporcional à duração do momento. Desligado, todas as linhas têm a mesma altura.</span>
+                  </span>
+                </div>
+                <div className="flex items-start gap-3 mt-3 pt-3 border-t border-lumos-border">
+                  <button type="button" onClick={toggleEmpurrar}
+                    className={clsx('w-10 h-5 rounded-full relative transition-colors flex-shrink-0 mt-0.5', empurrar ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30')}>
+                    <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', empurrar ? 'left-5' : 'left-0.5')} />
+                  </button>
+                  <span>
+                    <span className="block text-xs font-bold text-lumos-text-primary">Mover os horários seguintes junto</span>
+                    <span className="block text-[10.5px] text-lumos-text-secondary leading-snug mt-0.5">Ao mudar o início de um momento, todos os que vêm depois andam o mesmo tanto. Ao mudar o término, só quem vem depois dele anda. Desligado, cada horário muda sozinho.</span>
                   </span>
                 </div>
               </div>
@@ -442,9 +499,9 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                 <span className="flex items-center gap-1 min-h-8 max-lg:flex-col max-lg:items-stretch tabular-nums text-[11.5px] font-black text-lumos-text-primary">
                   {canManage ? (
                     <>
-                      <CampoAoVivo type="time" aria-label="Hora de início" valor={r.inicio || ''} onSalvar={v => editar(i, 'inicio', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
+                      <CampoAoVivo type="time" aria-label="Hora de início" valor={r.inicio || ''} onSalvar={v => editarHorario(i, 'inicio', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
                       <span className="text-lumos-text-secondary max-lg:hidden">–</span>
-                      <CampoAoVivo type="time" aria-label="Hora de término" valor={r.fim || ''} onSalvar={v => editar(i, 'fim', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
+                      <CampoAoVivo type="time" aria-label="Hora de término" valor={r.fim || ''} onSalvar={v => editarHorario(i, 'fim', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
                     </>
                   ) : <>{r.inicio} – {r.fim}</>}
                 </span>
@@ -471,8 +528,16 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
                         <t.Icon className="w-2.5 h-2.5" /> {t.label}
                       </span>
                     )}
-                    {r.locacao && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{r.locacao}</span>}
-                    {r.tipo === 'deslocamento' && r.chegada && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5">→ {r.chegada}</span>}
+                    {canManage ? (
+                      <button type="button" onClick={() => setLocEditIdx(i)} title="Trocar a locação"
+                        className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 hover:bg-lumos-text-secondary/20 rounded-full px-2 py-0.5 flex items-center gap-1 transition-colors">
+                        <MapPin className="w-2.5 h-2.5" />{r.locacao || 'Sem locação'}
+                        {r.tipo === 'deslocamento' && r.chegada ? <> → {r.chegada}</> : null}
+                      </button>
+                    ) : (<>
+                      {r.locacao && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{r.locacao}</span>}
+                      {r.tipo === 'deslocamento' && r.chegada && <span className="text-[9px] font-bold text-lumos-text-secondary bg-lumos-text-secondary/10 rounded-full px-2 py-0.5">→ {r.chegada}</span>}
+                    </>)}
                     {r.paralelo && <span className="text-[9px] font-black uppercase text-purple-400 bg-purple-500/10 rounded-full px-2 py-0.5">paralelo</span>}
                     {r.responsavel && <span className="text-[9px] font-bold text-lumos-text-secondary">resp.: {r.responsavel}</span>}
                   </span>
@@ -538,6 +603,37 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
             </div>
         </Modal>
       )}
+
+      {/* Trocar a locação de um momento já criado — sem apagar nada */}
+      {locEditIdx != null && rows[locEditIdx] && (() => {
+        const m = rows[locEditIdx];
+        const desloc = m.tipo === 'deslocamento';
+        const opcoes = (atual: string | null | undefined, vazio: string) => {
+          const base = locsAtivas.map(l => ({ value: l.nome, label: l.nome }));
+          if (atual && !base.some(o => o.value === atual)) base.unshift({ value: atual, label: atual });
+          return [...base, { value: '', label: vazio }];
+        };
+        return (
+          <Modal isOpen onClose={() => setLocEditIdx(null)} title={`Locação de "${m.descricao || 'este momento'}"`} size="md" padding="p-5"
+            footer={<button type="button" onClick={() => setLocEditIdx(null)} className="btn-primary h-10 px-5 text-xs font-black">Pronto</button>}>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">{desloc ? 'Partida' : 'Locação'}</label>
+                <Select value={m.locacao || ''} onChange={v => editar(locEditIdx, 'locacao', v)} className="input-lumos w-full h-10 mt-1 text-sm"
+                  options={opcoes(m.locacao, desloc ? 'Outro lugar' : 'Sem locação')} />
+              </div>
+              {desloc && (
+                <div>
+                  <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Chegada</label>
+                  <Select value={m.chegada || ''} onChange={v => editar(locEditIdx, 'chegada', v)} className="input-lumos w-full h-10 mt-1 text-sm"
+                    options={opcoes(m.chegada, 'Outro lugar')} />
+                </div>
+              )}
+              <p className="text-[10.5px] text-lumos-text-secondary">A mudança já fica salva. Nada mais do momento é alterado.</p>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Trocar a ação (tipo) de um momento já criado — sem apagar nada */}
       {tipoEditIdx != null && rows[tipoEditIdx] && (
