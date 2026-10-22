@@ -119,7 +119,7 @@ function MetaLucroModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (mesSel == null) { setLancamentosMes([]); return; }
     const ini = `${ano}-${String(mesSel + 1).padStart(2, '0')}-01`;
-    const fim = `${ano}-${String(mesSel + 1).padStart(2, '0')}-31`;
+    const fim = `${ano}-${String(mesSel + 1).padStart(2, '0')}-${String(new Date(ano, mesSel + 1, 0).getDate()).padStart(2, '0')}`;
     supabase.from('bank_transactions').select('data, identificacao, valor')
       .gte('data', ini).lte('data', fim).order('data', { ascending: false }).limit(200)
       .then(({ data }) => setLancamentosMes((data as any[]) || []));
