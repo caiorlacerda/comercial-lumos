@@ -12,7 +12,10 @@ import {
   Search,
   Check,
   AlertTriangle,
-  FolderPlus
+  FolderPlus,
+  Paperclip,
+  FileX,
+  ExternalLink
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -75,6 +78,72 @@ const dataBR = (iso: string) => new Date(String(iso).slice(0, 10) + 'T12:00:00')
 // Hoje no fuso do navegador. `toISOString()` usa UTC e, depois das 21h no Brasil, já devolve o dia seguinte.
 const hojeLocalISO = () => new Date().toLocaleDateString('en-CA');
 
+const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+// Notas anexadas ao reembolso (jsonb `attachments`: [{ name, url, uploaded_at }]).
+type Anexo = { name?: string; url: string };
+const anexosDe = (r: any): Anexo[] => (Array.isArray(r?.attachments) ? r.attachments : []).filter((a: any) => a && typeof a.url === 'string' && a.url);
+const tipoAnexo = (a: Anexo): 'pdf' | 'imagem' | 'outro' => {
+  for (const texto of [a.name, a.url]) {
+    const ext = String(texto || '').split('?')[0].split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (ext && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp'].includes(ext)) return 'imagem';
+  }
+  return 'outro';
+};
+
+// Chips de filtro por situação. "Em aberto" = ainda falta alguém decidir ou pagar.
+type FiltroStatus = 'todos' | 'abertos' | 'pendente' | 'aprovado' | 'pago' | 'rejeitado';
+const FILTROS_STATUS: { id: FiltroStatus; label: string; casa: (status: string) => boolean }[] = [
+  { id: 'todos', label: 'Todos', casa: () => true },
+  { id: 'abertos', label: 'Em aberto', casa: st => st === 'pendente' || st === 'aprovado' },
+  { id: 'pendente', label: 'Pendentes', casa: st => st === 'pendente' },
+  { id: 'aprovado', label: 'Aprovados (a pagar)', casa: st => st === 'aprovado' },
+  { id: 'pago', label: 'Pagos', casa: st => st === 'pago' },
+  { id: 'rejeitado', label: 'Rejeitados', casa: st => st === 'rejeitado' },
+];
+const CHAVE_FILTRO = 'reembolso-filtro-status';
+const filtroSalvo = (): FiltroStatus => {
+  try {
+    const v = localStorage.getItem(CHAVE_FILTRO) as FiltroStatus | null;
+    return v && FILTROS_STATUS.some(f => f.id === v) ? v : 'todos';
+  } catch { return 'todos'; }
+};
+
+// Clipe verde = tem nota; vermelho = o funcionário não anexou nenhuma.
+const NotaIndicador = ({ r }: { r: any }) => anexosDe(r).length > 0
+  ? <span title="Nota anexada" className="inline-flex text-ok-fg"><Paperclip className="w-3.5 h-3.5" /></span>
+  : <span title="Sem nota anexada" className="inline-flex text-danger-fg"><FileX className="w-3.5 h-3.5" /></span>;
+
+const NotaVisualizador = ({ anexo }: { anexo: Anexo }) => {
+  const [falhou, setFalhou] = useState(false);
+  const tipo = tipoAnexo(anexo);
+  if (tipo === 'imagem' && !falhou) {
+    return (
+      <a href={anexo.url} target="_blank" rel="noreferrer" title="Abrir em tamanho real">
+        <img src={anexo.url} alt={anexo.name || 'Nota'} onError={() => setFalhou(true)} className="w-full max-h-[70vh] object-contain rounded-lumos border border-lumos-border bg-lumos-text-primary/5" />
+      </a>
+    );
+  }
+  if (tipo === 'pdf') {
+    return <iframe src={anexo.url} title={anexo.name || 'Nota'} className="w-full h-[70vh] rounded-lumos border border-lumos-border bg-white" />;
+  }
+  return (
+    <a href={anexo.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-4 rounded-lumos border border-lumos-border hover:border-lumos-yellow/50 transition-colors">
+      <Paperclip className="w-5 h-5 text-lumos-text-secondary shrink-0" />
+      <span className="text-sm font-bold text-lumos-text-primary truncate">{anexo.name || 'Abrir nota'}</span>
+      <ExternalLink className="w-4 h-4 text-lumos-text-secondary ml-auto shrink-0" />
+    </a>
+  );
+};
+
+const CampoDetalhe = ({ rotulo, children }: { rotulo: string; children: React.ReactNode }) => (
+  <div>
+    <div className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">{rotulo}</div>
+    <div className="text-sm text-lumos-text-primary mt-0.5 break-words">{children}</div>
+  </div>
+);
+
 export default function Reembolso() {
   const { profile, isAdmin } = useAuth();
   const toast = useToast();
@@ -103,6 +172,9 @@ export default function Reembolso() {
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>(filtroSalvo);
+  const [filtroFuncionario, setFiltroFuncionario] = useState('todos');
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchReimbursements();
@@ -448,11 +520,24 @@ export default function Reembolso() {
     } catch (error: any) { toast.error(error.message); }
   };
 
+  // Funcionário (só admin vê todos) → depois a situação. As contagens dos chips respeitam o funcionário.
+  const porFuncionario = reimbursements.filter(r => filtroFuncionario === 'todos' || r.requester_id === filtroFuncionario);
+  const visiveis = porFuncionario.filter(r => (FILTROS_STATUS.find(f => f.id === filtroStatus) || FILTROS_STATUS[0]).casa(r.status));
+  const totalVisivel = visiveis.reduce((acc, r) => acc + Number(r.amount || 0), 0);
+  const funcionarios = Array.from(new Map(reimbursements.filter(r => r.requester_id).map(r => [r.requester_id, r.requester?.full_name || '—'])).entries());
+  const detalhe = viewingId ? reimbursements.find(r => r.id === viewingId) || null : null;
+
+  const trocarFiltroStatus = (id: FiltroStatus) => {
+    setFiltroStatus(id);
+    setSelectedIds(new Set());
+    try { localStorage.setItem(CHAVE_FILTRO, id); } catch { /* sem armazenamento: só não lembra */ }
+  };
+
   const toggleSelectAll = () => {
-    if (selectedIds.size === reimbursements.length) {
+    if (selectedIds.size === visiveis.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(reimbursements.map(r => r.id)));
+      setSelectedIds(new Set(visiveis.map(r => r.id)));
     }
   };
 
@@ -481,6 +566,34 @@ export default function Reembolso() {
         </button>
       </div>
 
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {FILTROS_STATUS.map(f => {
+            const ativo = filtroStatus === f.id;
+            const qtd = porFuncionario.filter(r => f.casa(r.status)).length;
+            return (
+              <button key={f.id} onClick={() => trocarFiltroStatus(f.id)} aria-pressed={ativo}
+                className={clsx('chip-lumos px-3 h-8 rounded-full text-xs font-bold border transition-colors',
+                  ativo
+                    ? 'bg-lumos-yellow/15 text-lumos-yellow border-lumos-yellow/40'
+                    : 'text-lumos-text-secondary border-lumos-border hover:text-lumos-text-primary')}>
+                {f.label} <span className="opacity-70">({qtd})</span>
+              </button>
+            );
+          })}
+          {isAdmin && funcionarios.length > 1 && (
+            <Select className="input-lumos h-8 px-3 text-xs min-w-[170px] ml-auto" value={filtroFuncionario}
+              onChange={v => { setFiltroFuncionario(v); setSelectedIds(new Set()); }}
+              options={[{ value: 'todos', label: 'Todos os funcionários' }, ...funcionarios.map(([id, nome]) => ({ value: id as string, label: nome as string }))]} />
+          )}
+        </div>
+        {!loading && (
+          <div className="text-xs text-lumos-text-secondary">
+            <strong className="text-lumos-text-primary">{visiveis.length}</strong> {visiveis.length === 1 ? 'reembolso' : 'reembolsos'} · total <strong className="text-lumos-text-primary">{brl(totalVisivel)}</strong>
+          </div>
+        )}
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto hidden lg:block">
           <table className="w-full text-left">
@@ -492,12 +605,12 @@ export default function Reembolso() {
                       onClick={toggleSelectAll}
                       className={clsx(
                         "w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all",
-                        selectedIds.size === reimbursements.length && reimbursements.length > 0
+                        selectedIds.size === visiveis.length && visiveis.length > 0
                           ? "bg-lumos-yellow border-lumos-yellow text-lumos-bg"
                           : "border-lumos-border hover:border-lumos-yellow/50"
                       )}
                     >
-                      {selectedIds.size === reimbursements.length && reimbursements.length > 0 && <Check className="w-3.5 h-3.5" />}
+                      {selectedIds.size === visiveis.length && visiveis.length > 0 && <Check className="w-3.5 h-3.5" />}
                     </div>
                   </th>
                 )}
@@ -514,17 +627,17 @@ export default function Reembolso() {
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
                 <tr><td colSpan={isAdmin ? 9 : 7} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
-              ) : reimbursements.length === 0 ? (
-                <tr><td colSpan={isAdmin ? 9 : 7} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum reembolso.</td></tr>
+              ) : visiveis.length === 0 ? (
+                <tr><td colSpan={isAdmin ? 9 : 7} className="py-12 text-center text-lumos-text-secondary text-sm italic">{reimbursements.length === 0 ? 'Nenhum reembolso.' : 'Nenhum reembolso neste filtro.'}</td></tr>
               ) : (
-                reimbursements.map((r) => (
+                visiveis.map((r) => (
                   <tr 
                     key={r.id} 
                     className={clsx(
                       "hover:bg-lumos-text-primary/5 transition-colors cursor-pointer group",
                       selectedIds.has(r.id) && "bg-lumos-yellow/[0.03]"
                     )}
-                    onClick={() => !isAdmin && r.status === 'pendente' ? null : null}
+                    onClick={() => { if (isAdmin) setViewingId(r.id); }}
                   >
                     {isAdmin && (
                       <td className="px-6 py-4">
@@ -546,7 +659,7 @@ export default function Reembolso() {
                     <td className="px-6 py-4 text-sm text-lumos-text-secondary">{dataBR(r.expense_date)}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-lumos-text-primary">{r.description}</span>
+                        <span className="text-sm font-bold text-lumos-text-primary inline-flex items-center gap-1.5">{r.description}{isAdmin && <NotaIndicador r={r} />}</span>
                         {r.project && (
                           <span className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest">Projeto: {r.project.name}</span>
                         )}
@@ -562,7 +675,7 @@ export default function Reembolso() {
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-lumos-text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.amount)}</td>
                     <td className="px-6 py-4 text-center"><StatusBadge status={r.status} /></td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
                         {isAdmin ? (
                           <>
@@ -596,18 +709,18 @@ export default function Reembolso() {
         <MobileCardList>
           {loading ? (
             <MobileCardSkeleton rows={5} />
-          ) : reimbursements.length === 0 ? (
-            <MobileCardEmpty>Nenhum reembolso.</MobileCardEmpty>
+          ) : visiveis.length === 0 ? (
+            <MobileCardEmpty>{reimbursements.length === 0 ? 'Nenhum reembolso.' : 'Nenhum reembolso neste filtro.'}</MobileCardEmpty>
           ) : (
-            reimbursements.map((r) => (
-              <MobileCard key={r.id}>
+            visiveis.map((r) => (
+              <MobileCard key={r.id} onClick={isAdmin ? () => setViewingId(r.id) : undefined}>
                 <div className="flex items-center justify-between gap-3 mb-1.5">
                   <span className="text-[11px] font-bold text-lumos-text-primary truncate">
                     {isAdmin ? (r.requester?.full_name || '—') : dataBR(r.expense_date)}
                   </span>
                   <StatusBadge status={r.status} />
                 </div>
-                <div className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate">{r.description}</div>
+                <div className="font-bold text-lumos-text-primary text-[15px] leading-snug truncate flex items-center gap-1.5"><span className="truncate">{r.description}</span>{isAdmin && <NotaIndicador r={r} />}</div>
                 {r.project && (
                   <div className="text-[10px] text-lumos-yellow font-bold uppercase tracking-widest truncate mt-0.5">Projeto: {r.project.name}</div>
                 )}
@@ -630,7 +743,7 @@ export default function Reembolso() {
                       <span className="text-[10px] text-lumos-text-secondary">{dataBR(r.expense_date)}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                     {isAdmin ? (
                       <>
                         {r.status === 'pendente' && (
@@ -711,6 +824,61 @@ export default function Reembolso() {
           </div>
         </div>
       )}
+
+      {/* Detalhe do reembolso + nota (admin): clicar na linha abre aqui */}
+      <Modal
+        isOpen={isAdmin && !!detalhe}
+        onClose={() => setViewingId(null)}
+        title="Reembolso"
+        size="xl"
+        footer={detalhe && (detalhe.status === 'pendente' || detalhe.status === 'aprovado') ? (
+          <div className="flex justify-end gap-2">
+            {detalhe.status === 'pendente' && (
+              <>
+                <button onClick={() => updateStatus(detalhe.id, 'rejeitado')} className="px-4 py-2 rounded-lumos text-sm font-bold text-red-500 hover:bg-red-500/10 transition-colors">Rejeitar</button>
+                <button onClick={() => updateStatus(detalhe.id, 'aprovado')} className="btn-primary">Aprovar</button>
+              </>
+            )}
+            {detalhe.status === 'aprovado' && <button onClick={() => updateStatus(detalhe.id, 'pago')} className="btn-primary">Marcar como pago</button>}
+          </div>
+        ) : undefined}
+      >
+        {detalhe && (
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xl font-black font-mono text-lumos-text-primary">{brl(detalhe.amount)}</span>
+                <StatusBadge status={detalhe.status} />
+              </div>
+              <CampoDetalhe rotulo="Funcionário">{detalhe.requester?.full_name || '—'}</CampoDetalhe>
+              <CampoDetalhe rotulo="Descrição">{detalhe.description}</CampoDetalhe>
+              <CampoDetalhe rotulo="Data do gasto">{detalhe.expense_date ? dataBR(detalhe.expense_date) : '—'}</CampoDetalhe>
+              <CampoDetalhe rotulo="Fornecedor">{detalhe.supplier || '—'}</CampoDetalhe>
+              <CampoDetalhe rotulo="Tipo de despesa">{detalhe.category ? categoryLabel(detalhe.category) : '—'}</CampoDetalhe>
+              <CampoDetalhe rotulo="Projeto">{detalhe.project?.name || 'Produtora Lumos (interno)'}</CampoDetalhe>
+              {detalhe.notes && <CampoDetalhe rotulo="Observações"><span className="whitespace-pre-line">{detalhe.notes}</span></CampoDetalhe>}
+            </div>
+            <div className="space-y-3 min-w-0">
+              <div className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Nota fiscal / comprovante</div>
+              {anexosDe(detalhe).length === 0 ? (
+                <div className="flex items-center gap-3 p-4 rounded-lumos border border-danger/30 bg-danger/10 text-danger-fg">
+                  <FileX className="w-5 h-5 shrink-0" />
+                  <span className="text-sm font-bold">O funcionário não anexou nenhuma nota neste reembolso.</span>
+                </div>
+              ) : (
+                anexosDe(detalhe).map((a, i) => (
+                  <div key={`${detalhe.id}-${i}`} className="space-y-2">
+                    <NotaVisualizador anexo={a} />
+                    <a href={a.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-lumos-yellow hover:underline">
+                      <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
+                    </a>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Batch Delete Confirmation Modal */}
       <Modal
