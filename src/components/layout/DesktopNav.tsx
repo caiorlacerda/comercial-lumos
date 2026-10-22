@@ -18,6 +18,7 @@ import LumosSideNav, { type NavSectionMeta, type NavItemMeta } from '@/component
 import WikiTree from '@/components/layout/WikiTree';
 import EscopoVisual from '@/components/ui/EscopoVisual';
 import { clsx } from 'clsx';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 // Ícone + rótulo de cada seção no rail. As sub-páginas continuam vindo de
 // getSectionItems (fonte única em navigation.ts).
@@ -68,11 +69,23 @@ export default function DesktopNav() {
   // inclusive a Wiki, que agora mostra a árvore de páginas NESTE mesmo painel —
   // respeita a preferência manual (lembrada por usuário).
   const [userCollapsed, setUserCollapsed] = useState<boolean>(() => localStorage.getItem('lumos-nav-collapsed') === '1');
-  const collapsed = activeSection === 'home' ? true : userCollapsed;
+  // Abaixo de 1024px (iPad em pé) só o rail de ícones fica fixo: o painel (lista de clientes/projetos, itens da
+  // seção) abre POR CIMA do conteúdo ao tocar numa seção e fecha ao navegar ou ao tocar fora.
+  const telaMedia = useMediaQuery('(max-width: 1023px)');
+  const [painelAberto, setPainelAberto] = useState(false);
+  const mantemAberto = useRef(false);
+  const collapsed = activeSection === 'home' ? true : (telaMedia ? !painelAberto : userCollapsed);
   const setCollapsed = (v: boolean) => {
+    if (telaMedia) { setPainelAberto(!v); return; }
     setUserCollapsed(v);
     localStorage.setItem('lumos-nav-collapsed', v ? '1' : '0');
   };
+  // Trocou de página: o painel sobreposto fecha (menos quando a própria troca veio de tocar numa seção do rail).
+  useEffect(() => {
+    if (!telaMedia) return;
+    if (mantemAberto.current) { mantemAberto.current = false; return; }
+    setPainelAberto(false);
+  }, [location.key, telaMedia]);   // location.key muda a cada navegação, inclusive para a mesma página
 
   // Largura do painel, ajustável arrastando a borda (lembrada por usuário).
   const [panelWidth, setPanelWidth] = useState<number>(() => {
@@ -85,7 +98,15 @@ export default function DesktopNav() {
   };
 
   const onSelectSection = (id: string) => {
-    if (id !== 'home') setCollapsed(false);   // abrir a seção mostra o painel
+    if (telaMedia && id !== 'home') {
+      // Tocar na seção em que já está só abre/fecha o painel; em outra seção, vai para ela e deixa o painel aberto.
+      if (id === activeSection) { setPainelAberto(a => !a); return; }
+      mantemAberto.current = true;
+      window.setTimeout(() => { mantemAberto.current = false; }, 800);
+      setPainelAberto(true);
+    } else if (id !== 'home') {
+      setCollapsed(false);   // abrir a seção mostra o painel
+    }
     navigateToSection(id as SectionType);
   };
 
@@ -144,6 +165,11 @@ export default function DesktopNav() {
   };
 
   return (
+    <>
+    {/* Fundo que fecha o painel ao tocar fora (só no iPad em pé, com o painel aberto) */}
+    {telaMedia && painelAberto && activeSection !== 'home' && (
+      <div className="fixed inset-0 z-[5] bg-black/25" onClick={() => setPainelAberto(false)} aria-hidden />
+    )}
     <LumosSideNav
       logo={logo}
       sections={railSections}
@@ -154,7 +180,7 @@ export default function DesktopNav() {
       isItemActive={isItemActive}
       onNavigate={(p) => navigate(p)}
       collapsed={collapsed}
-      onToggleCollapse={() => setCollapsed(!userCollapsed)}
+      onToggleCollapse={() => setCollapsed(!collapsed)}
       onSearch={openCommandPalette}
       railFooter={railFooter}
       renderItem={(item) => renderItem(item)}
@@ -162,6 +188,7 @@ export default function DesktopNav() {
       panelWidth={panelWidth}
       onResizePanel={resizePanel}
     />
+    </>
   );
 }
 

@@ -335,6 +335,11 @@ body {
     radial-gradient(120% 55% at 50% -6%, rgba(239, 199, 0, 0.10), transparent 60%),
     linear-gradient(180deg, #FFFFFF 0%, #F3F1EA 58%, #EDEAE1 100%);
 }
+/* Abaixo de 1024px (iPad em pé) o painel do menu lateral abre POR CIMA do conteúdo, em vez de empurrá-lo.
+   (Fica aqui e não em utilitário porque a regra .lumos-nav-surface acima já fixa position: relative.) */
+@media (max-width: 1023px) {
+  .lumos-nav-surface.painel-sobreposto { position: absolute; }
+}
 .dark .lumos-nav-surface {
   /* Tema escuro: Ônix âmbar (near-black quente + brilho amarelo). */
   background:

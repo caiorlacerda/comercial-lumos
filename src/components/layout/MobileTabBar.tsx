@@ -38,7 +38,7 @@ export default function MobileTabBar() {
 
   return (
     <>
-      <div className="lumos-shell lg:hidden fixed bottom-0 inset-x-0 z-40 bg-lumos-surface border-t border-lumos-border pb-[env(safe-area-inset-bottom)] transition-colors duration-300">
+      <div className="lumos-shell md:hidden fixed bottom-0 inset-x-0 z-40 bg-lumos-surface border-t border-lumos-border pb-[env(safe-area-inset-bottom)] transition-colors duration-300">
         <div className="h-14 flex items-center justify-around">
           {/* Home Tab */}
           <button
