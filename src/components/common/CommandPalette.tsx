@@ -1,3 +1,4 @@
+import { lerProjetosRecentes } from '@/lib/projetosRecentes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -24,7 +25,7 @@ interface PaletteItem {
   path: string;
 }
 
-const GROUP_ORDER = ['Ações', 'Páginas', 'Projetos', 'Tarefas', 'Clientes', 'Orçamentos', 'Fornecedores'];
+const GROUP_ORDER = ['Recentes', 'Ações', 'Páginas', 'Projetos', 'Tarefas', 'Clientes', 'Orçamentos', 'Fornecedores'];
 
 export default function CommandPalette() {
   const { can, isAdmin } = useAuth();
@@ -109,11 +110,20 @@ export default function CommandPalette() {
     return staticItems.filter(i => `${i.label} ${i.sublabel || ''}`.toLowerCase().includes(t));
   }, [staticItems, term]);
 
+  // Sem digitar nada: os últimos projetos abertos neste aparelho, antes das ações e páginas.
+  const recentes = useMemo<PaletteItem[]>(() => {
+    if (!open || term.trim()) return [];
+    return lerProjetosRecentes().map(p => ({
+      id: `rec-${p.id}`, group: 'Recentes', label: p.name, sublabel: p.client || undefined,
+      icon: FolderOpen, path: `/producao/projetos?projectId=${p.id}`,
+    }));
+  }, [open, term]);
+
   const allItems = useMemo(() => {
-    const combined = [...filteredStatic, ...asyncItems];
+    const combined = [...recentes, ...filteredStatic, ...asyncItems];
     combined.sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
     return combined;
-  }, [filteredStatic, asyncItems]);
+  }, [recentes, filteredStatic, asyncItems]);
 
   // Busca entidades no Supabase (debounced)
   useEffect(() => {
@@ -135,9 +145,15 @@ export default function CommandPalette() {
       const canForn = isAdmin || can('fornecedores');
 
       try {
+        // Projeto também se acha pelo código e pelo nome do cliente (antes só pelo nome, e só 5).
+        const seguro = t.replace(/[,()]/g, ' ');
+        const cliIds = canProd
+          ? (((await supabase.from('clients').select('id').ilike('name', `%${seguro}%`).limit(15)).data as any[]) || []).map(c => c.id)
+          : [];
+        const filtroProj = [`name.ilike.%${seguro}%`, `code.ilike.%${seguro}%`, ...(cliIds.length ? [`client_id.in.(${cliIds.join(',')})`] : [])].join(',');
         const [projRes, taskRes, cliRes, budRes, fornRes] = await Promise.all([
           canProd
-            ? supabase.from('projects').select('id, name, client:clients(name)').ilike('name', like).eq('status', 'ativo').limit(5)
+            ? supabase.from('projects').select('id, name, code, client:clients(name)').or(filtroProj).eq('status', 'ativo').order('name').limit(12)
             : Promise.resolve({ data: [] as any[] }),
           canProd
             ? supabase.from('project_tasks').select('id, titulo, project_id, project:projects!inner(name, status)').ilike('titulo', like).is('deleted_at', null).eq('project.status', 'ativo').limit(5)
@@ -158,7 +174,7 @@ export default function CommandPalette() {
 
         const items: PaletteItem[] = [];
         ((projRes as any).data || []).forEach((p: any) =>
-          items.push({ id: `proj-${p.id}`, group: 'Projetos', label: p.name, sublabel: p.client?.name, icon: FolderOpen, path: `/producao/projetos?projectId=${p.id}` })
+          items.push({ id: `proj-${p.id}`, group: 'Projetos', label: p.name, sublabel: [p.client?.name, p.code].filter(Boolean).join(' · ') || undefined, icon: FolderOpen, path: `/producao/projetos?projectId=${p.id}` })
         );
         ((taskRes as any).data || []).forEach((tk: any) =>
           items.push({ id: `task-${tk.id}`, group: 'Tarefas', label: tk.titulo, sublabel: tk.project?.name, icon: Check, path: `/producao/projetos?projectId=${tk.project_id}&taskId=${tk.id}` })
