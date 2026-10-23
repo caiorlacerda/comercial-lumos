@@ -108,7 +108,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     const STORAGE_KEY = 'lumos_last_activity';
-    // 3 horas, ou 30 dias quando a pessoa deixou "Manter conectado neste aparelho" (padrão). Ver lib/sessao.ts.
+    // 3 horas, ou 3 dias quando a pessoa marcou "Manter conectado neste aparelho". Ver lib/sessao.ts.
     const CHECK_INTERVAL = 60 * 1000; // check every minute
 
     const stored = localStorage.getItem(STORAGE_KEY);
