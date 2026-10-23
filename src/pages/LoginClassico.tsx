@@ -124,8 +124,15 @@ export default function Login() {
               />
             </div>
 
-            <label className="flex cursor-pointer select-none items-center gap-2.5 text-xs text-lumos-text-secondary">
-              <input type="checkbox" checked={manter} onChange={(e) => setManter(e.target.checked)} className="h-4 w-4 rounded accent-[#efc700]" />
+            <label className="group flex cursor-pointer select-none items-center gap-2.5 text-xs font-semibold text-lumos-text-secondary hover:text-lumos-text-primary">
+              <span className="relative inline-flex h-[18px] w-[18px] flex-shrink-0">
+                <input type="checkbox" checked={manter} onChange={(e) => setManter(e.target.checked)}
+                  className="peer absolute inset-0 z-10 m-0 h-full w-full cursor-pointer appearance-none rounded-[5px] opacity-0" />
+                <span className="pointer-events-none absolute inset-0 rounded-[5px] border border-lumos-border bg-lumos-bg transition-colors peer-checked:border-[#efc700] peer-checked:bg-[#efc700] peer-focus-visible:ring-2 peer-focus-visible:ring-[#efc700]/60" />
+                <svg viewBox="0 0 16 16" className="pointer-events-none absolute inset-0 m-auto h-3 w-3 text-[#161616] opacity-0 transition-opacity peer-checked:opacity-100" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M3 8.5l3.2 3.2L13 4.8" />
+                </svg>
+              </span>
               Manter conectado neste aparelho
             </label>
 
