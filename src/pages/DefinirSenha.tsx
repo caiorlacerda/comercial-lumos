@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import SenhaInput from '@/components/common/SenhaInput';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PaginaPublica, { MONO, SERIF, ROTULO_PUBLICO, CAMPO_PUBLICO, BOTAO_AMARELO, CARTAO_VIDRO } from '@/components/publico/PaginaPublica';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
@@ -136,8 +137,10 @@ export default function DefinirSenha() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>Nova senha</label>
-              <input
-                type="password"
+              <SenhaInput
+                name="password"
+                id="nova-senha"
+                autoComplete="new-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -148,8 +151,10 @@ export default function DefinirSenha() {
 
             <div>
               <label className={ROTULO_PUBLICO} style={{ fontFamily: MONO }}>Confirmar senha</label>
-              <input
-                type="password"
+              <SenhaInput
+                name="confirmar-senha"
+                id="confirmar-senha"
+                autoComplete="new-password"
                 required
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}

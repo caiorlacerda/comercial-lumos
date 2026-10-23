@@ -1,3 +1,4 @@
+import { limiteDeInatividadeMs } from '@/lib/sessao';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import throttle from 'lodash/throttle';
@@ -107,7 +108,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     const STORAGE_KEY = 'lumos_last_activity';
-    const TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
+    // 3 horas, ou 30 dias quando a pessoa deixou "Manter conectado neste aparelho" (padrão). Ver lib/sessao.ts.
     const CHECK_INTERVAL = 60 * 1000; // check every minute
 
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -128,6 +129,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
       const storedActivity = localStorage.getItem(STORAGE_KEY);
       const lastActivity = storedActivity ? parseInt(storedActivity, 10) : lastActivityRef.current;
       const idle = Date.now() - lastActivity;
+      const TIMEOUT_MS = limiteDeInatividadeMs();
 
       if (idle > TIMEOUT_MS) {
         signOut();

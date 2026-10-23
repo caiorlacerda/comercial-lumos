@@ -1,3 +1,5 @@
+import SenhaInput from '@/components/common/SenhaInput';
+import { lerManterConectado, definirManterConectado } from '@/lib/sessao';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -8,6 +10,7 @@ import { clsx } from 'clsx';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [manter, setManter] = useState(lerManterConectado);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeoutMessage, setTimeoutMessage] = useState(false);
@@ -43,6 +46,8 @@ export default function Login() {
       setError(error.message);
       setLoading(false);
     } else {
+      definirManterConectado(manter);
+      try { localStorage.setItem('lumos_last_activity', Date.now().toString()); } catch { /* ignora */ }
       navigate('/');
     }
   };
@@ -92,6 +97,9 @@ export default function Login() {
               </label>
               <input
                 type="email"
+                name="email"
+                id="login-email"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -104,8 +112,10 @@ export default function Login() {
               <label className="block text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest mb-2">
                 Senha
               </label>
-              <input
-                type="password"
+              <SenhaInput
+                name="password"
+                id="login-senha"
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -113,6 +123,11 @@ export default function Login() {
                 placeholder="••••••••"
               />
             </div>
+
+            <label className="flex cursor-pointer select-none items-center gap-2.5 text-xs text-lumos-text-secondary">
+              <input type="checkbox" checked={manter} onChange={(e) => setManter(e.target.checked)} className="h-4 w-4 rounded accent-[#efc700]" />
+              Manter conectado neste aparelho
+            </label>
 
             {error && (
               <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lumos text-red-500 text-sm font-medium animate-in shake-in duration-300">
