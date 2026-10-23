@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { carregarFontesDeck } from '@/lib/fontesDeck';
+import SenhaInput from '@/components/common/SenhaInput';
+import { lerManterConectado, definirManterConectado } from '@/lib/sessao';
 
 // Visual do pitch deck da Lumos (skill lumos-pitch-deck): fundo de vidro canelado com luz
 // dourada, cartão de vidro, DM Sans para texto e JetBrains Mono para rótulos. A tela é
@@ -19,6 +21,7 @@ const botaoAmarelo = 'flex items-center justify-center gap-2 rounded-full bg-[#e
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [manter, setManter] = useState(lerManterConectado);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeoutMessage, setTimeoutMessage] = useState(false);
@@ -56,6 +59,8 @@ export default function Login() {
       setError(error.message);
       setLoading(false);
     } else {
+      definirManterConectado(manter);
+      try { localStorage.setItem('lumos_last_activity', Date.now().toString()); } catch { /* ignora */ }
       navigate('/');
     }
   };
@@ -132,6 +137,9 @@ export default function Login() {
                   <label className={rotulo} style={{ fontFamily: MONO }}>E-mail</label>
                   <input
                     type="email"
+                    name="email"
+                    id="login-email"
+                    autoComplete="username"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -142,8 +150,10 @@ export default function Login() {
 
                 <div>
                   <label className={rotulo} style={{ fontFamily: MONO }}>Senha</label>
-                  <input
-                    type="password"
+                  <SenhaInput
+                    name="password"
+                    id="login-senha"
+                    autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -151,6 +161,16 @@ export default function Login() {
                     placeholder="••••••••"
                   />
                 </div>
+
+                <label className="flex cursor-pointer select-none items-center gap-3 text-[13px] text-[#d5d3d0]">
+                  <input
+                    type="checkbox"
+                    checked={manter}
+                    onChange={(e) => setManter(e.target.checked)}
+                    className="h-4 w-4 rounded accent-[#efc700]"
+                  />
+                  Manter conectado neste aparelho
+                </label>
 
                 {error && (
                   <div className="rounded-xl border border-red-400/40 bg-red-500/15 p-4 text-sm font-medium text-red-200 animate-in shake-in duration-300">
