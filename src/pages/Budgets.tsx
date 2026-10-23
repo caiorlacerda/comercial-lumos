@@ -234,13 +234,13 @@ export default function Budgets() {
         celebrateNewProject({ budgetId: id, projectName: b?.project_name || 'Novo projeto', code: b?.code ? formatBudgetCode(b.code) : '' });
 
         await syncBudgetApprovalFlow(id);
-        // OS automática no Drive (silenciosa; só sobe se já estiver logado no Google).
+        // OS automática no Drive (pela conta de serviço, sem depender do login do Google).
         // Fire-and-forget pra não travar a UI (gera PDF + espera a pasta provisionar).
         (async () => {
           try {
             const { data: proj } = await supabase.from('projects').select('id').eq('budget_id', id).maybeSingle();
             if (proj?.id) {
-              const r = await saveOsToDrive({ budgetId: id, projectId: proj.id, interactive: false });
+              const r = await saveOsToDrive({ budgetId: id, projectId: proj.id });
               if (r.ok) toast.success('OS salva no Drive do projeto!');
             }
           } catch { /* silencioso */ }
