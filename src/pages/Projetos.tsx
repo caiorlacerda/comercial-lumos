@@ -1,3 +1,4 @@
+import { registrarProjetoRecente } from '@/lib/projetosRecentes';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -2219,6 +2220,12 @@ export default function Projetos() {
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+  // Lembra o projeto aberto (a busca global mostra os recentes).
+  useEffect(() => {
+    if (!selectedProject) return;
+    registrarProjetoRecente({ id: selectedProject.id, name: selectedProject.name, client: clients.find(c => c.id === selectedProject.client_id)?.name ?? null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id]);
 
   const descDirty = !!selectedTask && normalizeDesc(descHTML) !== normalizeDesc(selectedTask.descricao);
 
