@@ -238,9 +238,11 @@ interface ServiceOrderPDFProps {
   version: BudgetVersion;
   contact?: any;
   items: BudgetItem[];
+  /** Nome do projeto, quando o orçamento não traz o dele. */
+  projectName?: string | null;
 }
 
-export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrderPDFProps) => {
+export const ServiceOrderPDF = ({ budget, version, contact, items, projectName }: ServiceOrderPDFProps) => {
   if (!budget || !version) return null;
 
   const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -263,7 +265,8 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
     : (budget.clients?.name || 'Cliente');
     
   const formattedCode = formatBudgetCode(budget.code);
-  const nomenclatureHeader = `${formattedCode} | Lumos + ${clientDisplayName} | ${budget.project_name}`;
+  const nomeProjeto = budget.project_name || projectName || '';
+  const nomenclatureHeader = `${formattedCode} | Lumos + ${clientDisplayName} | ${nomeProjeto}`;
 
   return (
     <Document title={`OS_${nomenclatureHeader}`}>
@@ -290,7 +293,7 @@ export const ServiceOrderPDF = ({ budget, version, contact, items }: ServiceOrde
         <View style={styles.idBlock}>
           <View style={styles.idRow}>
             <View style={styles.idLabelCol}><Text>Projeto</Text></View>
-            <View style={styles.idValueCol}><Text style={{ fontWeight: 700 }}>{budget.project_name}</Text></View>
+            <View style={styles.idValueCol}><Text style={{ fontWeight: 700 }}>{nomeProjeto}</Text></View>
             <View style={[styles.idMetaCol, { borderLeftWidth: 0.5, borderLeftColor: '#dcdcdc' }]}>
                <Text style={styles.idDate}>Emissão OS: {dateStr}</Text>
             </View>

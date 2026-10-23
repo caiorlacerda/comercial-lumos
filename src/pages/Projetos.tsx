@@ -138,11 +138,11 @@ import {
   MessageSquare,
   History,
   Edit2,
-  Menu,
-  FolderUp
+  Menu
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatBudgetCode } from '@/utils/formatters';
+import { getPdfFileName } from '@/utils/pdfFileName';
 
 // TipTap and DOMPurify imports for Rich Text
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -803,6 +803,9 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
 // -------------------------------------------------------------
 // Componente Projetos (Página Principal)
 // -------------------------------------------------------------
+// Projetos cuja OS já foi tentada nesta sessão (evita insistir se o Drive falhar).
+const osTentados = new Set<string>();
+
 export default function Projetos() {
   const { can, isAdmin, profile } = useAuth();
   const toast = useToast();
@@ -919,6 +922,13 @@ export default function Projetos() {
   const [savingOs, setSavingOs] = useState(false);
   const [osUrl, setOsUrl] = useState<string | null>(null); // OS já salva no Drive?
   const { saveOsToDrive } = useSaveOsToDrive();
+  // Espelhos pro efeito que salva a OS sozinha (ele só roda quando o projeto muda).
+  const projectsRef = useRef<Project[]>([]);
+  const canManageRef = useRef(false);
+  const selectedProjectIdRef = useRef<string | null>(null);
+  projectsRef.current = projects;
+  canManageRef.current = canManage;
+  selectedProjectIdRef.current = selectedProjectId;
 
   // Modal State for Manual Creation
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -976,7 +986,16 @@ export default function Projetos() {
     if (selectedProjectId) {
       supabase.from('project_documents').select('url').eq('project_id', selectedProjectId)
         .ilike('name', 'OS %').order('created_at', { ascending: false }).limit(1)
-        .then(({ data }) => setOsUrl(data?.[0]?.url || null));
+        .then(({ data }) => {
+          const url = data?.[0]?.url || null;
+          setOsUrl(url);
+          // Sem OS no Drive ainda: salva sozinho, uma tentativa por projeto por sessão.
+          const proj = projectsRef.current.find(p => p.id === selectedProjectId);
+          if (!url && proj?.budget_id && proj.status === 'ativo' && canManageRef.current && !osTentados.has(proj.id)) {
+            osTentados.add(proj.id);
+            handleSaveOs(proj.id, proj.budget_id);
+          }
+        });
       // Contadores leves das abas Entregas (vídeos = grupos) e Arquivos.
       supabase.from('video_versions').select('group_id').eq('project_id', selectedProjectId)
         .then(({ data }) => setEntregasCount(data ? new Set(data.map((v: any) => v.group_id)).size : null));
@@ -2027,9 +2046,7 @@ export default function Projetos() {
 
   // Generate OS PDF dynamics
   const handleDownloadOS = async (projectId: string, budgetId: string) => {
-    // Abre a aba JÁ no clique (dentro do gesto do usuário) pra não ser bloqueada
-    // pelo popup blocker; depois aponta ela pro PDF gerado.
-    const win = window.open('', '_blank');
+    const projectName = projectsRef.current.find(p => p.id === projectId)?.name || '';
     setIsGeneratingOS(projectId);
     try {
       const { data: budget, error: bErr } = await supabase
@@ -2040,7 +2057,6 @@ export default function Projetos() {
       if (bErr || !budget) throw new Error('Budget not found');
 
       if (!budget.active_version_id) {
-        win?.close();
         toast.error('Este orçamento não possui uma versão ativa configurada.');
         return;
       }
@@ -2065,17 +2081,29 @@ export default function Projetos() {
           version={version}
           contact={null}
           items={items}
+          projectName={projectName}
         />
       ).toBlob();
 
+      // Baixa com o nome padrão (#código | Lumos + Cliente | Projeto), igual ao do editor.
+      const fileName = getPdfFileName(
+        budget.code,
+        budget.clients?.name || 'Cliente',
+        budget.clients?.agency_name,
+        budget.project_name || projectName,
+        'OS_',
+      );
       const url = URL.createObjectURL(blob);
-      if (win) win.location.href = url; else window.open(url, '_blank');
-      // dá tempo do PDF carregar na aba antes de liberar o blob
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-      toast.success('Ordem de Serviço aberta em nova aba!');
+      toast.success('Ordem de Serviço baixada!');
     } catch (err: any) {
       console.error('Error generating OS:', err);
-      win?.close();
       toast.error('Erro ao gerar Ordem de Serviço PDF.');
     } finally {
       setIsGeneratingOS(null);
@@ -2085,9 +2113,9 @@ export default function Projetos() {
   const handleSaveOs = async (projectId: string, budgetId: string) => {
     setSavingOs(true);
     try {
-      const r = await saveOsToDrive({ budgetId, projectId, interactive: true });
-      if (r.ok) { toast.success('OS salva na pasta OS do projeto no Drive!'); if (r.url) setOsUrl(r.url); }
-      else if (!r.skipped) toast.error(r.error || 'Não foi possível salvar a OS.');
+      const r = await saveOsToDrive({ budgetId, projectId });
+      if (r.ok) { if (r.url && selectedProjectIdRef.current === projectId) setOsUrl(r.url); }
+      else if (!r.skipped) toast.error(r.error || 'Não foi possível salvar a OS no Drive.');
     } finally {
       setSavingOs(false);
     }
@@ -2351,7 +2379,7 @@ export default function Projetos() {
                         ) : (
                           <>
                             <FileText className="w-3.5 h-3.5" />
-                            Abrir OS (PDF)
+                            Baixar OS (PDF)
                           </>
                         )}
                       </button>
@@ -2368,17 +2396,11 @@ export default function Projetos() {
                         >
                           <Check className="w-3.5 h-3.5" /> OS no Drive
                         </a>
-                      ) : (
-                        <button
-                          onClick={() => handleSaveOs(selectedProject.id, selectedProject.budget_id!)}
-                          disabled={savingOs}
-                          className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
-                          title="Gera a OS e salva na subpasta OS do projeto no Drive"
-                        >
-                          {savingOs ? <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow" /> : <FolderUp className="w-3.5 h-3.5" />}
-                          {savingOs ? 'Salvando...' : 'Salvar OS no Drive'}
-                        </button>
-                      )
+                      ) : savingOs ? (
+                        <span className="py-2 px-3 flex items-center gap-2 text-xs font-semibold text-lumos-text-secondary">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-lumos-yellow" /> Salvando OS no Drive...
+                        </span>
+                      ) : null
                     )}
 
                       {/* Menu ⋯ com as ações menos frequentes */}
@@ -3391,7 +3413,7 @@ export default function Projetos() {
                                   onClick={() => handleDownloadOS(proj.id, proj.budget_id!)}
                                   disabled={isGeneratingOS === proj.id}
                                   className="p-1 rounded text-lumos-text-secondary hover:text-lumos-yellow transition-all"
-                                  title="Abrir Ordem de Serviço (PDF)"
+                                  title="Baixar Ordem de Serviço (PDF)"
                                 >
                                   {isGeneratingOS === proj.id ? (
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
