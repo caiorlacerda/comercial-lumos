@@ -10,6 +10,7 @@ import QuickForm from '@/components/common/QuickForm';
 import PedidosDeDiaria from '@/components/producao/PedidosDeDiaria';
 import BloqueiosDeAgenda from '@/components/producao/BloqueiosDeAgenda';
 import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
+import { SegmentedControl } from '@/components/ui/Tabs';
 
 /**
  * Diárias de gravação do projeto: data, duração, local e descrição, com
@@ -67,6 +68,8 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [catalogo, setCatalogo] = useState<PessoaCatalogo[]>([]);
   const [editandoFuncao, setEditandoFuncao] = useState<MembroDiaria | null>(null);
   const [bloqueiosAbertos, setBloqueiosAbertos] = useState(false);
+  // O que a lista mostra: por padrão só o que ainda precisa acontecer (hoje em diante e as sem data).
+  const [filtro, setFiltro] = useState<'afazer' | 'passadas' | 'todas'>('afazer');
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('project_diarias')
@@ -222,7 +225,14 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
 
   if (loading) return <div className="card p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>;
 
-  const comChuva = diarias.filter(d => (clima[d.id]?.chanceChuva ?? 0) >= 30);
+  // Já passou = data anterior a hoje. Sem data conta como "a fazer" (ainda vai ser marcada).
+  const hoje = hojeLocalISO();
+  const jaPassou = (d: Diaria) => !!d.data && d.data < hoje;
+  const aFazer = diarias.filter(d => !jaPassou(d));                       // já vem em ordem de data (a mais próxima primeiro)
+  const passadas = diarias.filter(jaPassou).reverse();                    // as mais recentes primeiro
+  const visiveis = filtro === 'afazer' ? aFazer : filtro === 'passadas' ? passadas : diarias;
+  // Previsão de chuva só interessa para o que ainda vai acontecer.
+  const comChuva = aFazer.filter(d => (clima[d.id]?.chanceChuva ?? 0) >= 30);
 
   return (
     <div className="space-y-3">
@@ -234,6 +244,14 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           <span className="truncate">Diárias de gravação</span>
           {diarias.length > 0 && <span className="text-lumos-text-secondary font-bold normal-case tracking-normal flex-shrink-0">· {diarias.length}</span>}
         </p>
+        {diarias.length > 0 && (
+          <SegmentedControl value={filtro} onChange={id => setFiltro(id as typeof filtro)}
+            items={[
+              { id: 'afazer', label: `A fazer · ${aFazer.length}` },
+              { id: 'passadas', label: `Já passaram · ${passadas.length}` },
+              { id: 'todas', label: `Todas · ${diarias.length}` },
+            ]} />
+        )}
         {(canManage || podeFechar) && (
           <button type="button" onClick={() => setBloqueiosAbertos(true)}
             className="text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary flex items-center gap-1.5 flex-shrink-0">
@@ -275,7 +293,21 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-          {diarias.map(d => {
+          {visiveis.length === 0 && (
+            <div className="card p-8 text-center col-span-full">
+              <CalendarDays className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" />
+              <p className="text-sm font-bold text-lumos-text-primary">
+                {filtro === 'afazer' ? 'Nenhuma diária pendente.' : 'Nenhuma diária aqui.'}
+              </p>
+              {filtro === 'afazer' && passadas.length > 0 && (
+                <button type="button" onClick={() => setFiltro('passadas')}
+                  className="mt-2 text-xs font-bold text-lumos-yellow hover:underline">
+                  Ver as {passadas.length} que já passaram
+                </button>
+              )}
+            </div>
+          )}
+          {visiveis.map(d => {
             const p = clima[d.id];
             const chuva = (p?.chanceChuva ?? 0) >= 30;
             const passada = !!d.data && d.data < hojeLocalISO();
