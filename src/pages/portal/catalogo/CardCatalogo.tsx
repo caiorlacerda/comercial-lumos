@@ -23,7 +23,7 @@ export default function CardCatalogo({ item, capa, observar, aoAbrir, mostrarPro
         {estado && <span className={`cat-selo ${estado.classe}`}>{estado.label}</span>}
       </span>
       <span className="cat-titulo">{item.nome}</span>
-      <span className="cat-meta">{meta}</span>
+      <span className="cat-meta" title={meta}>{meta}</span>
     </>
   );
   // Sem link de revisão não há para onde ir: vira um bloco comum, sem o jeito de clicável.

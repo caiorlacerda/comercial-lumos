@@ -195,6 +195,10 @@ function PortalClienteConteudo() {
     } catch { /* navegador sem sessão: só não tem botão de voltar */ }
   }, [token, aba, dados, abaProj]);
 
+  // Saiu do catálogo: a próxima visita não restaura rolagem de uma volta antiga
+  // (`carregar` liga a flag e troca a aba no mesmo lote, então isto não a apaga cedo).
+  useEffect(() => { if (aba !== 'catalogo') setVoltouAoCatalogo(false); }, [aba]);
+
   // Aba trocou: volta pro topo e pede as capas dos quadros que ela mostra.
   // Sem o topo, trocar de aba caía no meio da página anterior.
   useEffect(() => {

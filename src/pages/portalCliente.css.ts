@@ -911,7 +911,8 @@ export const PORTAL_CSS = String.raw`
   /* width: 0 + min-width: 100%: a largura do card vem só da capa, título comprido quebra de linha. */
   .cat-titulo { margin-top: 9px; font-size: 13.5px; font-weight: 600; line-height: 1.25; width: 0; min-width: 100%; overflow-wrap: anywhere;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-  .cat-meta { display: block; margin-top: 2px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); }
+  /* Como o título: a largura do card vem só da capa; o texto inteiro fica no title e no aria-label. */
+  .cat-meta { display: block; margin-top: 2px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); width: 0; min-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fileira-seta {
     /* centro da capa = 8px de folga da faixa + metade da altura; a seta tem 40px */
     position: absolute; top: calc(8px + var(--h) / 2 - 20px); z-index: 5; width: 40px; height: 40px;
@@ -949,4 +950,13 @@ export const PORTAL_CSS = String.raw`
   .topo .marca { min-width: 0; overflow: hidden; }
   .topo .marca .logotipo { flex-shrink: 0; }
   .topo .cliente { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+  /* Tablet (761 a 1019px): o menu (~590px) + a área do usuário não deixam coluna para a marca em
+     uma linha só (a logo sumia e o canto direito saía da tela). Aqui o menu desce para uma segunda
+     linha, centralizado; de 1020px para cima é a linha única e até 760px é o layout do celular. */
+  @media (min-width: 761px) and (max-width: 1019px) {
+    .topo-dentro { grid-template-columns: 1fr auto; row-gap: 8px; }
+    .topo-dentro > .marca { grid-column: 1; grid-row: 1; }
+    .topo-dentro > .quem { grid-column: 2; grid-row: 1; }
+    .topo-dentro > .navegacao { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  }
 `;

@@ -33,10 +33,13 @@ export default function FileiraCatalogo({ fileira, capas, observar, aoAbrir, mos
     // A seta que está para sumir não pode levar o foco do teclado junto: passa
     // para a seta do lado oposto (se ela está na tela) ou para a própria faixa.
     // Tem que ser agora, com o botão ainda no DOM.
+    // A oposta só serve se continuar montada depois desta medição (valores novos).
     const ativo = document.activeElement;
     if ((ativo === setaDir.current && !dir) || (ativo === setaEsq.current && !esq)) {
-      const oposta = ativo === setaDir.current ? setaEsq.current : setaDir.current;
-      const destino = oposta && oposta !== ativo ? oposta : el;
+      const eraDir = ativo === setaDir.current;
+      const oposta = eraDir ? setaEsq.current : setaDir.current;
+      const opostaFica = eraDir ? esq : dir;
+      const destino = oposta && opostaFica ? oposta : el;
       destino.focus({ preventScroll: true });
     }
     setPodeEsq(esq);
@@ -69,7 +72,10 @@ export default function FileiraCatalogo({ fileira, capas, observar, aoAbrir, mos
     const el = faixa.current;
     const card = (e.target as HTMLElement).closest('.cat-card');
     // Só foco de teclado: o toque ou o clique já escolhem o que está na tela.
-    if (!el || !card || !card.matches(':focus-visible')) return;
+    if (!el || !card) return;
+    let teclado = false;
+    try { teclado = card.matches(':focus-visible'); } catch { teclado = false; } // Safari antigo lança
+    if (!teclado) return;
     // O scroll-padding da faixa dá a folga nas pontas.
     card.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'auto' });
   };
