@@ -145,7 +145,7 @@ BEGIN
             u.id, 'portal_saude_piora', 'producao', 'high',
             r.name || ' vai aparecer como ' || v_rotulo || ' para o cliente',
             'Em 24 horas o portal do cliente passa a mostrar "' || v_rotulo || '". Corrija a causa ou abra o projeto e clique em Mostrar agora.',
-            '/producao/projetos?projectId=' || r.id::text,
+            '/producao/projetos?projectId=' || r.id::text || '&tab=resumo',
             jsonb_build_object('project_id', r.id, 'estado', v_calc.estado)
           );
         END LOOP;
