@@ -19,6 +19,10 @@ interface Portal {
    *  depois da migração 2026093336; antes dela, vem `undefined` e o
    *  interruptor aparece desligado, que é o padrão da coluna. */
   mostrar_equipe: boolean;
+  /** Prazo (dias úteis) para o cliente revisar um vídeo; null = sem prazo.
+   *  Só existe depois da migração 2026102406; antes dela a chave nem vem na
+   *  leitura (`undefined`) e o campo some do modal. */
+  prazo_revisao_dias?: number | null;
 }
 /** Pessoa do lado do cliente, com o que ela alcança. */
 interface Pessoa {
@@ -307,6 +311,34 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     patch({ antecedencia_dias: novo } as any, 'Antecedência salva.');
   };
 
+  /**
+   * Prazo de revisão: mesmo padrão da antecedência (input controlado que volta
+   * sozinho ao valor real se o `patch` falhar). Diferenças: campo vazio é um
+   * valor válido (sem prazo, grava null) e fora de 1 a 30 é recusado com aviso,
+   * em vez de ser ajustado em silêncio.
+   */
+  const [prazoInput, setPrazoInput] = useState('');
+  useEffect(() => { setPrazoInput(portal?.prazo_revisao_dias == null ? '' : String(portal.prazo_revisao_dias)); }, [portal?.prazo_revisao_dias]);
+
+  const salvarPrazo = () => {
+    if (!portal) return;
+    const atual = portal.prazo_revisao_dias ?? null;
+    const texto = prazoInput.trim();
+    let novo: number | null = null;
+    if (texto !== '') {
+      const n = Number(texto);
+      if (!Number.isFinite(n) || Math.round(n) < 1 || Math.round(n) > 30) {
+        toast.error('O prazo precisa ficar entre 1 e 30 dias úteis. Deixe em branco para não ter prazo.');
+        setPrazoInput(atual == null ? '' : String(atual));
+        return;
+      }
+      novo = Math.round(n);
+    }
+    setPrazoInput(novo == null ? '' : String(novo));
+    if (novo === atual) return; // nada mudou: sem toast, sem chamada à toa
+    patch({ prazo_revisao_dias: novo }, novo == null ? 'Prazo removido: o cliente não vê data limite.' : 'Prazo salvo.');
+  };
+
   // Revogar = desativa o link atual; gerar de novo cria token novo.
   const revoke = async () => {
     if (!portal) return;
@@ -550,6 +582,23 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                     onBlur={salvarAntecedencia}
                     className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />
                 </div>
+
+                {/* Só aparece se a leitura do portal trouxe a coluna: antes da
+                    migração 2026102406 a chave não existe e o campo some. */}
+                {'prazo_revisao_dias' in portal && (
+                  <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 border-t border-lumos-border/60">
+                    <span className="min-w-0">
+                      <label htmlFor="portal-prazo-revisao" className="block text-xs font-bold text-lumos-text-primary">Prazo para o cliente revisar (dias úteis)</label>
+                      <span className="block text-[10.5px] text-lumos-text-secondary">
+                        Vídeos esperando o cliente mostram 'Responder até…'. Em branco = sem prazo. Sábado e domingo não contam.
+                      </span>
+                    </span>
+                    <input id="portal-prazo-revisao" type="number" min={1} max={30} step={1} inputMode="numeric" placeholder="sem prazo" value={prazoInput}
+                      onChange={e => setPrazoInput(e.target.value)}
+                      onBlur={salvarPrazo}
+                      className="input-lumos w-16 h-8 text-[11px] text-center py-0 flex-shrink-0" />
+                  </div>
+                )}
 
                 <div className="divide-y divide-lumos-border/60">
                   {pessoas.map(p => (

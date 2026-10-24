@@ -31,6 +31,7 @@ export const NOTIFICATION_EVENTS = {
   DIARIA_SOLICITADA: { key: 'diaria_solicitada', category: 'producao', label: 'Cliente pediu uma diária pelo portal', defaultEnabled: true, priority: 'high' },
   BOAS_VINDAS_ITEM_ENVIADO: { key: 'boas_vindas_item_enviado', category: 'producao', label: 'Cliente enviou material do Bem-vindo à Lumos', defaultEnabled: true, priority: 'normal' },
   PORTAL_SAUDE_PIORA: { key: 'portal_saude_piora', category: 'producao', label: 'Projeto vai aparecer como Atenção ou Atrasado no portal do cliente (aviso 24 h antes)', defaultEnabled: true, priority: 'high' },
+  CLIENTE_ATRASADO_REVISAO: { key: 'cliente_atrasado_revisao', category: 'producao', label: 'Cliente está há dias sem responder a revisão de um vídeo', defaultEnabled: true, priority: 'normal' },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },
