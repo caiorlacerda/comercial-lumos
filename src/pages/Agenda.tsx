@@ -10,6 +10,8 @@ import { useAuth } from '@/hooks/useAuth';
 import Select from '@/components/ui/Select';
 import CalendarioEventos, { BarraDoCalendario } from '@/components/agenda/CalendarioEventos';
 import { useDiasFechados } from '@/components/agenda/useDiasFechados';
+import { TipoPilula } from '@/components/producao/TipoDeTarefa';
+import { useTiposTarefa } from '@/lib/tiposTarefa';
 import {
   DIAS_LONGOS as DIAS, MESES_CURTOS as MESES, addDias, diasDaJanela, domingoDe, hojeIso, isoDe as iso,
   type EventoCal, type Granularidade,
@@ -36,6 +38,7 @@ interface Item {
   projeto?: string | null;
   projectId?: string | null;
   respId?: string | null;
+  tipoId?: string | null; // tipo da tarefa (Edição, Motion...)
   link: string;
   atrasado?: boolean;
 }
@@ -66,6 +69,8 @@ export default function Agenda() {
   const [agenda, setAgenda] = useState<'geral' | 'minha'>('geral');
   const [cursor, setCursor] = useState(() => new Date());
   const diaFechado = useDiasFechados();
+  const { tipos: tiposTarefa, porId: tipoPorId } = useTiposTarefa();
+  const [tipoFiltro, setTipoFiltro] = useState('');
   const [tiposAtivos, setTiposAtivos] = useState<Set<Tipo>>(new Set(['diaria', 'ordem', 'tarefa', 'entrega']));
   const [projetoFiltro, setProjetoFiltro] = useState('');
   const [busca, setBusca] = useState('');
@@ -74,16 +79,16 @@ export default function Agenda() {
   const mudarGran = (g: Granularidade) => { setGran(g); try { localStorage.setItem('lumos_agenda_gran', g); } catch { /* ignora */ } };
 
   const load = useCallback(async () => {
-    // hora_entrega pode ainda não existir no banco (migration pendente) — cai
+    // hora_entrega e tipo_id podem ainda não existir no banco (migration pendente) — cai
     // pro select sem a coluna em vez de deixar a Agenda vazia.
     const buscarTarefas = async () => {
-      const q = await supabase.from('project_tasks')
-        .select('id, titulo, status, data_fim, hora_entrega, data_entrega_cliente, responsavel_id, project_id, projects(name)')
-        .is('deleted_at', null);
-      if (!q.error) return q;
-      return supabase.from('project_tasks')
-        .select('id, titulo, status, data_fim, data_entrega_cliente, responsavel_id, project_id, projects(name)')
-        .is('deleted_at', null);
+      const base = 'id, titulo, status, data_fim, data_entrega_cliente, responsavel_id, project_id, projects(name)';
+      let q: any;
+      for (const cols of [`${base}, hora_entrega, tipo_id`, `${base}, hora_entrega`, base]) {
+        q = await supabase.from('project_tasks').select(cols).is('deleted_at', null);
+        if (!q.error) break;
+      }
+      return q;
     };
     // Horário de fim das diárias e das ODs: se a coluna não existir, cai pro select antigo.
     const comPlanoB = async (tabela: string, completo: string, simples: string) => {
@@ -106,14 +111,14 @@ export default function Agenda() {
     for (const t of (tarefasQ.data as any[]) || []) {
       const aberta = ABERTAS.includes(t.status);
       if (t.data_fim) lista.push({
-        id: `tarefa:${t.id}`, tipo: 'tarefa', titulo: t.titulo, data: t.data_fim,
+        id: `tarefa:${t.id}`, tipo: 'tarefa', titulo: t.titulo, data: t.data_fim, tipoId: t.tipo_id || null,
         hora: t.hora_entrega ? String(t.hora_entrega).slice(0, 5) : null,
         projeto: t.projects?.name || null, projectId: t.project_id, respId: t.responsavel_id,
         link: `/producao/projetos?projectId=${t.project_id}&taskId=${t.id}`,
         atrasado: aberta && t.data_fim < hoje,
       });
       if (t.data_entrega_cliente) lista.push({
-        id: `entrega:${t.id}`, tipo: 'entrega', titulo: t.titulo, data: t.data_entrega_cliente,
+        id: `entrega:${t.id}`, tipo: 'entrega', titulo: t.titulo, data: t.data_entrega_cliente, tipoId: t.tipo_id || null,
         projeto: t.projects?.name || null, projectId: t.project_id, respId: t.responsavel_id,
         link: `/producao/projetos?projectId=${t.project_id}&taskId=${t.id}`,
         atrasado: aberta && t.data_entrega_cliente < hoje,
@@ -158,6 +163,7 @@ export default function Agenda() {
     return itens.filter(i => {
       if (!tiposAtivos.has(i.tipo)) return false;
       if (projetoFiltro && i.projectId !== projetoFiltro) return false;
+      if (tipoFiltro && i.tipoId !== tipoFiltro) return false;
       if (agenda === 'minha') {
         const minha = i.respId === profile?.id
           || (i.tipo !== 'diaria' && i.tipo !== 'ordem' && minhasTarefas.has(i.id.split(':')[1]));
@@ -166,7 +172,7 @@ export default function Agenda() {
       if (q && !`${i.titulo} ${i.projeto || ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [itens, tiposAtivos, projetoFiltro, agenda, busca, profile?.id, minhasTarefas]);
+  }, [itens, tiposAtivos, projetoFiltro, tipoFiltro, agenda, busca, profile?.id, minhasTarefas]);
 
   const porDia = useMemo(() => {
     const m = new Map<string, Item[]>();
@@ -190,12 +196,13 @@ export default function Agenda() {
         cor: i.atrasado ? '#ef4444' : T.cor,
         Icon: T.Icon,
         subtitulo: i.projeto,
+        tipo: tipoPorId(i.tipoId) ? { nome: tipoPorId(i.tipoId)!.nome, cor: tipoPorId(i.tipoId)!.cor } : null,
         detalhes: [ROTULO_CURTO(i.tipo)],
         selo: i.atrasado ? 'Atrasado' : null,
         passado: !i.atrasado && i.data < hoje,
       };
     });
-  }, [filtrados]);
+  }, [filtrados, tipoPorId]);
   const porId = useMemo(() => new Map(filtrados.map(i => [i.id, i])), [filtrados]);
 
   if (loading) return <div className="min-h-[50vh] grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>;
@@ -253,6 +260,12 @@ export default function Agenda() {
           <Select value={projetoFiltro} onChange={setProjetoFiltro} searchable className="input-lumos h-8 w-full text-xs"
             options={[{ value: '', label: 'Todos os projetos' }, ...projetos.map(([id, nome]) => ({ value: id, label: nome }))]} />
         </div>
+        {tiposTarefa.length > 0 && (
+          <div className="w-40 max-md:flex-1">
+            <Select value={tipoFiltro} onChange={setTipoFiltro} className="input-lumos h-8 w-full text-xs"
+              options={[{ value: '', label: 'Todos os tipos' }, ...tiposTarefa.map(t => ({ value: t.id, label: t.nome }))]} />
+          </div>
+        )}
         <div className="relative ml-auto max-md:ml-0 max-md:flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
@@ -297,6 +310,7 @@ export default function Agenda() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-lumos-text-primary/5 border-b border-lumos-border/40 last:border-0">
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: i.atrasado ? '#ef4444' : T.cor }} />
                       {i.hora && <span className="text-[11px] font-black tabular-nums text-lumos-text-primary flex-shrink-0">{i.hora}</span>}
+                      {tipoPorId(i.tipoId) && <TipoPilula tipo={tipoPorId(i.tipoId)!} pequeno />}
                       <span className="text-[12.5px] font-bold text-lumos-text-primary truncate flex-1">{i.titulo}</span>
                       {i.projeto && <span className="text-[10.5px] text-lumos-text-secondary truncate max-w-[200px]">{i.projeto}</span>}
                       <span className={clsx('text-[9px] font-black uppercase px-2 py-0.5 rounded-full border flex-shrink-0',
@@ -351,7 +365,10 @@ export default function Agenda() {
                             {new Date(i.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}{i.hora ? ` · ${i.hora}` : ''}
                           </span>
                         </span>
-                        <span className="block text-[12px] font-bold text-lumos-text-primary mt-1 leading-snug">{i.titulo}</span>
+                        <span className="block text-[12px] font-bold text-lumos-text-primary mt-1 leading-snug">
+                          {tipoPorId(i.tipoId) && <TipoPilula tipo={tipoPorId(i.tipoId)!} pequeno className="mr-1.5 align-[1px]" />}
+                          {i.titulo}
+                        </span>
                         {i.projeto && <span className="block text-[10px] text-lumos-text-secondary truncate mt-0.5">{i.projeto}</span>}
                       </button>
                     );

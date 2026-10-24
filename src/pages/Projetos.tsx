@@ -19,6 +19,8 @@ import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import { useConfirm, usePrompt } from '@/components/ui/useConfirm';
 import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
+import { TipoPilula, TipoSeletor } from '@/components/producao/TipoDeTarefa';
+import { tipoDoPrefixo, useTiposTarefa } from '@/lib/tiposTarefa';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
 import { supabase } from '@/lib/supabase';
 import { hojeLocalISO } from '@/lib/dataSemHora';
@@ -280,6 +282,8 @@ interface Task {
   responsavel_freela_id: string | null;
   /** Lista a que a tarefa pertence. Nulo = "Sem lista". */
   list_id?: string | null;
+  /** Tipo da tarefa (Roteiro, Edição, Motion...). Nulo = sem tipo. */
+  tipo_id?: string | null;
 }
 
 interface TeamUser {
@@ -892,6 +896,11 @@ export default function Projetos() {
   const [trashLoading, setTrashLoading] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const quickAddInputRef = useRef<HTMLInputElement>(null);
+  // Tipo de tarefa: catálogo, filtro da lista e o tipo "grudado" da linha de nova tarefa
+  // (quem cria várias de Edição em sequência não precisa escolher toda vez).
+  const { tipos: tiposTarefa, porId: tipoPorId } = useTiposTarefa();
+  const [tipoFilter, setTipoFilter] = useState('all');
+  const [novoTipo, setNovoTipo] = useState<string | null>(null);
   const [isConfirmTemplateOpen, setIsConfirmTemplateOpen] = useState(false);
 
   // Task Details Modal States
@@ -1376,6 +1385,7 @@ export default function Projetos() {
     if (tagFilter.length && !(taskTags[t.id] || []).some(id => tagFilter.includes(id))) return false;
     if (taskSearch.trim() && !normTxt(t.titulo).includes(normTxt(taskSearch))) return false;
     if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
+    if (tipoFilter === 'none' ? !!t.tipo_id : (tipoFilter !== 'all' && t.tipo_id !== tipoFilter)) return false;
     // Filtros de pessoa consideram também os colaboradores da tarefa.
     const collabs = taskCollabs[t.id] || [];
     if (taskAssigneeFilter === 'none') {
@@ -1399,7 +1409,7 @@ export default function Projetos() {
     .map(s => ({ status: s, tasks: filteredTasks.filter(t => groupKeyOf(t) === s) }))
     .filter(g => g.tasks.length > 0);
   const visibleTasks = taskGroups.flatMap(g => g.tasks);
-  const hasActiveFilters = !!taskSearch.trim() || taskStatusFilter !== 'all' || taskAssigneeFilter !== 'all' || onlyMine || tagFilter.length > 0;
+  const hasActiveFilters = !!taskSearch.trim() || taskStatusFilter !== 'all' || tipoFilter !== 'all' || taskAssigneeFilter !== 'all' || onlyMine || tagFilter.length > 0;
   const listaAberta = taskLists.find(l => l.id === listFilter) || null;
 
   // ── Lixeira ────────────────────────────────────────────────────────────────
@@ -1675,6 +1685,13 @@ export default function Projetos() {
   };
 
   // Inline update task details
+  // Renomear com prefixo ("EDIÇÃO | Nome"): vira Tipo + título limpo, sem a pessoa precisar saber.
+  const renomearTarefa = (task: Task, titulo: string) => {
+    const p = tipoDoPrefixo(titulo, tiposTarefa);
+    if (p) { handleUpdateTask(task.id, { titulo: p.titulo, tipo_id: p.tipo.id }); toast.success(`Tipo "${p.tipo.nome}" definido; o prefixo saiu do título.`); }
+    else handleUpdateTask(task.id, { titulo });
+  };
+
   const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
     try {
       setProjectTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
@@ -1835,6 +1852,10 @@ export default function Projetos() {
   const handleQuickAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim() || !selectedProjectId) return;
+    // "EDIÇÃO | Nome" digitado vira Tipo + título limpo; senão vale o tipo escolhido ao lado.
+    const comPrefixo = tipoDoPrefixo(newTaskTitle.trim(), tiposTarefa);
+    const tituloFinal = comPrefixo ? comPrefixo.titulo : newTaskTitle.trim();
+    const tipoFinal = comPrefixo ? comPrefixo.tipo.id : novoTipo;
 
     const nextOrder = projectTasks.length > 0 
       ? Math.max(...projectTasks.map(t => t.ordem)) + 10 
@@ -1845,7 +1866,8 @@ export default function Projetos() {
         .from('project_tasks')
         .insert({
           project_id: selectedProjectId,
-          titulo: newTaskTitle.trim(),
+          titulo: tituloFinal,
+          ...(tipoFinal ? { tipo_id: tipoFinal } : {}),
           descricao: '',
           status: 'na_fila',
           prioridade: 'media',
@@ -1865,6 +1887,7 @@ export default function Projetos() {
       // Fluxo rápido: sem toast e sem recarregar o painel. A tarefa entra direto
       // na lista (otimista) e o input mantém o foco para criação em sequência.
       setNewTaskTitle('');
+      if (comPrefixo) setNovoTipo(comPrefixo.tipo.id);
       setProjectTasks(prev => [...prev, newTask]);
       setTasks(prev => [...prev, { id: newTask.id, project_id: selectedProjectId, status: newTask.status }]);
       quickAddInputRef.current?.focus();
@@ -2746,6 +2769,14 @@ export default function Projetos() {
                           taskStatusFilter !== 'all' ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}
                         options={[{ value: 'all', label: 'Etapa: todas' }, ...STATUS_OPTIONS]} />
                     </div>
+                    {tiposTarefa.length > 0 && (
+                      <div className="w-36 flex-shrink-0">
+                        <Select value={tipoFilter} onChange={setTipoFilter} ariaLabel="Filtrar por tipo" menuClassName="min-w-[160px]"
+                          className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
+                            tipoFilter !== 'all' ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')}
+                          options={[{ value: 'all', label: 'Tipo: todos' }, ...tiposTarefa.map(t => ({ value: t.id, label: t.nome })), { value: 'none', label: 'Sem tipo' }]} />
+                      </div>
+                    )}
                     <div className="w-40 flex-shrink-0">
                       <Select value={taskAssigneeFilter} onChange={setTaskAssigneeFilter} ariaLabel="Filtrar por responsável" menuClassName="min-w-[190px]" searchable searchPlaceholder="Filtrar pessoa…"
                         className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
@@ -2922,6 +2953,11 @@ export default function Projetos() {
                                           className="min-w-0 flex-1 cursor-pointer"
                                           onClick={() => { if (renamingTaskId !== task.id) setSelectedTaskId(task.id); }}
                                         >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        {(tipoPorId(task.tipo_id) || canManage) && (
+                                          <TipoSeletor valor={task.tipo_id} tipos={tiposTarefa} pequeno discreto disabled={!canManage}
+                                            onChange={id => handleUpdateTask(task.id, { tipo_id: id })} />
+                                        )}
                                       {renamingTaskId === task.id ? (
                                         <input
                                           type="text"
@@ -2930,7 +2966,7 @@ export default function Projetos() {
                                           onBlur={(e) => {
                                             const val = e.target.value.trim();
                                             if (val && val !== task.titulo) {
-                                              handleUpdateTask(task.id, { titulo: val });
+                                              renomearTarefa(task, val);
                                             }
                                             setRenamingTaskId(null);
                                           }}
@@ -2938,7 +2974,7 @@ export default function Projetos() {
                                             if (e.key === 'Enter') {
                                               const val = (e.target as HTMLInputElement).value.trim();
                                               if (val && val !== task.titulo) {
-                                                handleUpdateTask(task.id, { titulo: val });
+                                                renomearTarefa(task, val);
                                               }
                                               setRenamingTaskId(null);
                                             }
@@ -2957,6 +2993,7 @@ export default function Projetos() {
                                           {task.titulo}
                                         </span>
                                       )}
+                                      </div>
                                       {(taskTags[task.id]?.length ?? 0) > 0 && (
                                         <div className="flex flex-wrap items-center gap-1 mt-1">
                                           {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR')).map(t => <TagChip key={t!.id} tag={t!} small />)}
@@ -3132,6 +3169,7 @@ export default function Projetos() {
                                     className="min-w-0 flex-1 text-left"
                                   >
                                     <span className={clsx('font-semibold text-sm text-lumos-text-primary', isTaskCompleted && 'line-through text-lumos-text-secondary/50')}>
+                                      {tipoPorId(task.tipo_id) && <TipoPilula tipo={tipoPorId(task.tipo_id)!} pequeno className="mr-1.5 align-[1px]" />}
                                       {task.titulo}
                                     </span>
                                     {(tags.length > 0 || videosPorTarefa[task.id]) && (
@@ -3274,10 +3312,11 @@ export default function Projetos() {
                       {/* Quick Add Row */}
                       {canManage && (
                         <form onSubmit={handleQuickAddTask} className="flex items-center gap-3 pt-3 border-t border-lumos-border/40 mt-2">
+                          <TipoSeletor valor={novoTipo} tipos={tiposTarefa} onChange={setNovoTipo} />
                           <input
                             ref={quickAddInputRef}
                             type="text"
-                            placeholder="Digitar nova tarefa... (Pressione Enter para adicionar)"
+                            placeholder={tiposTarefa.length ? 'Nome da tarefa... (escolha o Tipo ao lado e pressione Enter)' : 'Digitar nova tarefa... (Pressione Enter para adicionar)'}
                             value={newTaskTitle}
                             onChange={e => setNewTaskTitle(e.target.value)}
                             className="input-lumos flex-grow h-10 text-xs font-semibold"
@@ -3631,6 +3670,15 @@ export default function Projetos() {
                     variant="full"
                   />
                 </div>
+
+                {/* Tipo (Roteiro, Edição, Motion...) */}
+                {tiposTarefa.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Tipo</span>
+                    <TipoSeletor valor={selectedTask.tipo_id} tipos={tiposTarefa} disabled={!canManage} rotuloVazio="Escolher o tipo"
+                      onChange={id => handleUpdateTask(selectedTask.id, { tipo_id: id })} />
+                  </div>
+                )}
 
                 {/* Tags */}
                 <div className="space-y-1.5">

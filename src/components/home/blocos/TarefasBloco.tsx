@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import { TipoPilula } from '@/components/producao/TipoDeTarefa';
+import { useTipoDasTarefas } from '@/lib/tiposTarefa';
 import { AlertTriangle, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { DadosHome } from '../tipos';
@@ -41,6 +43,7 @@ const getStatusBadge = (status: string) => {
 export default function TarefasBloco({ dados }: { dados: DadosHome }) {
   const navigate = useNavigate();
   const { tarefas, ordenadas: sortedTasks, carregando: loadingTasks, hojeStr: todayStr } = dados;
+  const tipoDe = useTipoDasTarefas(sortedTasks.map(t => t.id));
 
   return (
     <div className="space-y-4">
@@ -102,6 +105,7 @@ export default function TarefasBloco({ dados }: { dados: DadosHome }) {
                     {getStatusBadge(task.status)}
                   </div>
                   <h4 className="text-[13px] font-semibold text-lumos-text-primary truncate group-hover:text-lumos-yellow transition-colors leading-tight">
+                    {tipoDe(task.id) && <TipoPilula tipo={tipoDe(task.id)!} pequeno className="mr-1.5 align-[1px]" />}
                     {task.titulo}
                   </h4>
                   <p className="text-[10px] text-lumos-text-secondary font-semibold uppercase tracking-wider">

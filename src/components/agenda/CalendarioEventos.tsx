@@ -3,6 +3,11 @@ import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { textoSobre } from '@/lib/cores';
+import { TipoPilula } from '@/components/producao/TipoDeTarefa';
+
+/** Pílula do tipo com um fio branco, para não sumir sobre a cor do evento. */
+const PilulaDoTipo = ({ e }: { e: EventoCal }) => e.tipo ? <TipoPilula tipo={e.tipo} pequeno className="shadow-[0_0_0_1px_rgba(255,255,255,0.75)]" /> : null;
 import {
   DIAS_CURTOS, DIAS_LONGOS, MESES_CURTOS, dataDeIso, diasDaJanela, empilhar, hhmm, hojeIso, isoDe,
   minDe, navegarJanela, tituloDaJanela, trechosDoEvento,
@@ -21,12 +26,6 @@ const tint = (cor: string, pct: number) => `color-mix(in srgb, ${cor} ${pct}%, t
 
 /** Preenchimento SÓLIDO do evento. O que já passou fica um pouco mais apagado, mas sem transparência. */
 const solido = (e: EventoCal) => (e.passado ? `color-mix(in srgb, ${e.cor} 70%, var(--color-lumos-surface))` : e.cor);
-/** Texto escuro sobre cor clara e branco sobre cor escura (luminância da cor do evento). */
-const textoSobre = (hex: string) => {
-  const n = parseInt(hex.replace('#', '').padEnd(6, '0').slice(0, 6), 16);
-  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-  return lum > 0.6 ? '#161616' : '#ffffff';
-};
 
 const horarioTexto = (e: EventoCal) => {
   if (!e.hora) return 'Dia todo';
@@ -66,6 +65,7 @@ function useCartaoDoEvento(e: EventoCal) {
         <span className="mt-1 h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: e.cor }} />
         <p className="text-[12.5px] font-black leading-snug text-lumos-text-primary">{e.titulo}</p>
       </div>
+      {e.tipo && <div className="mt-1.5"><TipoPilula tipo={e.tipo} /></div>}
       <p className="mt-1.5 text-[11px] font-bold text-lumos-text-primary tabular-nums">{horarioTexto(e)}</p>
       {e.subtitulo && <p className="mt-0.5 text-[11px] text-lumos-text-secondary">{e.subtitulo}</p>}
       {e.detalhes?.map((l, i) => <p key={i} className="mt-0.5 text-[10.5px] text-lumos-text-secondary leading-snug">{l}</p>)}
@@ -96,6 +96,7 @@ function ChipEvento({ e, onAbrir }: { e: EventoCal; onAbrir: (e: EventoCal) => v
         className="w-full flex items-center gap-1 rounded px-1.5 py-[3px] text-left text-[10px] font-bold transition-[filter] hover:brightness-110"
         style={{ background: solido(e), color: textoSobre(e.cor) }}>
         {e.hora && <span className="tabular-nums opacity-80 flex-shrink-0">{e.hora.slice(0, 5)}</span>}
+        <PilulaDoTipo e={e} />
         <span className="truncate">{e.titulo}</span>
       </button>
       {c.cartao}
@@ -122,8 +123,9 @@ function BlocoEvento({ t, col, cols, onAbrir }: { t: Trecho; col: number; cols: 
           boxShadow: '0 0 0 1px var(--color-lumos-surface)',
           ...(t.continuacao ? { borderTop: '3px dashed rgba(0,0,0,0.35)' } : {}),
         }}>
+        {e.tipo && !baixo && <span className="mb-1 block"><PilulaDoTipo e={e} /></span>}
         <span className={clsx('block text-[11px] font-black leading-snug break-words', baixo ? 'truncate' : 'line-clamp-3')}>
-          {t.continuacao && '↳ '}{e.titulo}
+          {t.continuacao && '↳ '}{baixo && e.tipo && <span className="mr-1 text-[9px] uppercase opacity-80">{e.tipo.nome} ·</span>}{e.titulo}
         </span>
         {!baixo && (
           <span className="block mt-0.5 text-[10px] font-semibold leading-snug tabular-nums opacity-85">
@@ -147,7 +149,10 @@ function LinhaEvento({ e, onAbrir }: { e: EventoCal; onAbrir: (e: EventoCal) => 
         {e.hora ? <>{e.hora.slice(0, 5)}{e.horaFim && <span className="block font-semibold text-lumos-text-secondary">{e.horaFim.slice(0, 5)}</span>}</> : <span className="font-semibold text-lumos-text-secondary">Dia todo</span>}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[12.5px] font-bold text-lumos-text-primary truncate">{e.titulo}</span>
+        <span className="flex items-center gap-1.5 min-w-0 text-[12.5px] font-bold text-lumos-text-primary">
+          <PilulaDoTipo e={e} />
+          <span className="truncate">{e.titulo}</span>
+        </span>
         {e.subtitulo && <span className="block text-[10.5px] text-lumos-text-secondary truncate">{e.subtitulo}</span>}
       </span>
       {e.selo && (

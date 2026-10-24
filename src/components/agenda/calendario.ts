@@ -19,6 +19,8 @@ export interface EventoCal {
   subtitulo?: string | null;
   /** Linhas do cartão que abre ao passar o mouse. */
   detalhes?: string[];
+  /** Tipo da tarefa (Edição, Motion...), mostrado como pílula pequena junto do título. */
+  tipo?: { nome: string; cor: string } | null;
   /** Selo curto: "Atrasado", "Feita"... */
   selo?: string | null;
   atrasado?: boolean;
