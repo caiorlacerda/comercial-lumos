@@ -78,4 +78,5 @@ SELECT p.proname,
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'portal_saude_calcular';
 
--- ROLLBACK (comentado): para voltar à regra anterior, rode de novo o corpo da função de 2026102402.
+-- ROLLBACK (comentado): para voltar à regra anterior, rode de novo o arquivo inteiro 2026102402_portal_saude_funcoes.sql
+-- (é idempotente e recria a função como era); desfazer este arquivo não afeta o cron.
