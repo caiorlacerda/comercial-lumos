@@ -9,11 +9,13 @@ const VALIDADE_MS = 30 * 60 * 1000;
 
 interface Posicao { quando: number; y: number; fileiras: Record<string, number> }
 
-export default function Catalogo({ dados, capas, pedirCapas, marcarVolta }: {
+export default function Catalogo({ dados, capas, pedirCapas, marcarVolta, restaurar }: {
   dados: Portal;
   capas: Record<string, string | null>;
   pedirCapas: (tokens: string[]) => Promise<void>;
   marcarVolta: () => void;
+  /** Só quando a pessoa voltou do vídeo (portal aberto com `?aba=catalogo`). Aberto de outro jeito, o bilhete velho é descartado. */
+  restaurar: boolean;
 }) {
   const fileiras = useMemo(() => montarFileiras(dados), [dados]);
   const observar = useCapasPorVisibilidade(pedirCapas);
@@ -38,6 +40,7 @@ export default function Catalogo({ dados, capas, pedirCapas, marcarVolta }: {
   // O bilhete é lido e apagado uma só vez e fica numa ref: no modo estrito o React
   // monta, desmonta e monta o efeito de novo, e sem a ref a segunda montagem
   // não acharia mais o bilhete (a primeira teve o temporizador cancelado).
+  // Sem `restaurar` (portal aberto sem `?aba=catalogo`) ele é apagado e ignorado.
   const bilhete = useRef<Posicao | null | undefined>(undefined);
   useEffect(() => {
     if (bilhete.current === undefined) {
@@ -47,7 +50,7 @@ export default function Catalogo({ dados, capas, pedirCapas, marcarVolta }: {
         sessionStorage.removeItem(CHAVE_ROLAGEM);
         p = bruto ? (JSON.parse(bruto) as Posicao) : null;
       } catch { p = null; }
-      bilhete.current = p && Number.isFinite(p.quando) && Date.now() - p.quando <= VALIDADE_MS ? p : null;
+      bilhete.current = restaurar && p && Number.isFinite(p.quando) && Date.now() - p.quando <= VALIDADE_MS ? p : null;
     }
     const alvo = bilhete.current;
     if (!alvo) return;
@@ -57,6 +60,7 @@ export default function Catalogo({ dados, capas, pedirCapas, marcarVolta }: {
       if (typeof alvo.y === 'number') window.scrollTo({ top: alvo.y, behavior: 'auto' });
     }, 160);
     return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lido uma vez, na montagem
   }, []);
 
   return (

@@ -13,13 +13,10 @@ export default function CardCatalogo({ item, capa, observar, aoAbrir, mostrarPro
 }) {
   const f = formato(item.largura, item.altura);
   const estado = ESTADO[item.status];
-  const ref = useCallback((el: HTMLAnchorElement | null) => observar(el, item.reviewToken), [observar, item.reviewToken]);
+  const ref = useCallback((el: HTMLElement | null) => observar(el, item.reviewToken), [observar, item.reviewToken]);
   const meta = `v${String(item.versao).padStart(2, '0')}${mostrarProjeto ? ` · ${item.projeto}` : ''}`;
-  return (
-    <a ref={ref} className={`cat-card ${f.classe}`}
-      href={item.reviewToken ? `/revisao/${item.reviewToken}` : undefined}
-      onClick={item.reviewToken ? () => aoAbrir() : undefined}
-      aria-label={`${item.nome}, ${meta}${estado ? `, ${estado.label}` : ''}`}>
+  const conteudo = (
+    <>
       <span className="cat-capa">
         {capa && <img className="foto" src={capa} alt="" loading="lazy" draggable={false} />}
         <span className="fmt">{f.rotulo}</span>
@@ -27,6 +24,18 @@ export default function CardCatalogo({ item, capa, observar, aoAbrir, mostrarPro
       </span>
       <span className="cat-titulo">{item.nome}</span>
       <span className="cat-meta">{meta}</span>
+    </>
+  );
+  // Sem link de revisão não há para onde ir: vira um bloco comum, sem o jeito de clicável.
+  if (!item.reviewToken) {
+    return <div ref={ref} className={`cat-card ${f.classe}`}>{conteudo}</div>;
+  }
+  return (
+    <a ref={ref} className={`cat-card ${f.classe}`}
+      href={`/revisao/${item.reviewToken}`}
+      onClick={() => aoAbrir()}
+      aria-label={`${item.nome}, ${f.rotulo}, ${meta}${estado ? `, ${estado.label}` : ''}`}>
+      {conteudo}
     </a>
   );
 }

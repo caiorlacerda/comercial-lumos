@@ -22,22 +22,38 @@ export default function FileiraCatalogo({ fileira, capas, observar, aoAbrir, mos
   const [podeEsq, setPodeEsq] = useState(false);
   const [podeDir, setPodeDir] = useState(false);
   const quadro = useRef<number | null>(null);
+  const setaEsq = useRef<HTMLButtonElement | null>(null);
+  const setaDir = useRef<HTMLButtonElement | null>(null);
 
   const medir = useCallback(() => {
     const el = faixa.current;
     if (!el) return;
-    setPodeEsq(el.scrollLeft > 4);
-    setPodeDir(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    const esq = el.scrollLeft > 4;
+    const dir = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    // A seta que está para sumir não pode levar o foco do teclado junto: passa
+    // para a seta do lado oposto (se ela está na tela) ou para a própria faixa.
+    // Tem que ser agora, com o botão ainda no DOM.
+    const ativo = document.activeElement;
+    if ((ativo === setaDir.current && !dir) || (ativo === setaEsq.current && !esq)) {
+      const oposta = ativo === setaDir.current ? setaEsq.current : setaDir.current;
+      const destino = oposta && oposta !== ativo ? oposta : el;
+      destino.focus({ preventScroll: true });
+    }
+    setPodeEsq(esq);
+    setPodeDir(dir);
   }, []);
 
+  // Mede de novo quando os vídeos mudam e acompanha o tamanho da faixa e do
+  // último card (que muda quando a capa/título altera a largura do conteúdo).
   useEffect(() => {
     medir();
     const el = faixa.current;
     if (!el) return;
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(medir) : null;
     ro?.observe(el);
+    if (el.lastElementChild) ro?.observe(el.lastElementChild);
     return () => { ro?.disconnect(); if (quadro.current !== null) cancelAnimationFrame(quadro.current); };
-  }, [medir, fileira.itens.length]);
+  }, [medir, fileira.itens]);
 
   const rolar = (dir: -1 | 1) => {
     const el = faixa.current;
@@ -52,27 +68,26 @@ export default function FileiraCatalogo({ fileira, capas, observar, aoAbrir, mos
   const trazerFoco = (e: FocusEvent<HTMLDivElement>) => {
     const el = faixa.current;
     const card = (e.target as HTMLElement).closest('.cat-card');
-    if (!el || !card) return;
-    const f = el.getBoundingClientRect();
-    const c = card.getBoundingClientRect();
-    if (c.left < f.left) el.scrollBy({ left: c.left - f.left - 8, behavior: 'auto' });
-    else if (c.right > f.right) el.scrollBy({ left: c.right - f.right + 8, behavior: 'auto' });
+    // Só foco de teclado: o toque ou o clique já escolhem o que está na tela.
+    if (!el || !card || !card.matches(':focus-visible')) return;
+    // O scroll-padding da faixa dá a folga nas pontas.
+    card.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'auto' });
   };
 
   const titulo = `fileira-${fileira.id}`;
   return (
     <section className="fileira" aria-labelledby={titulo}>
       <h3 id={titulo} className="fileira-titulo">
-        {fileira.titulo}
+        {fileira.titulo}{' '}
         <span className="fileira-n">{fileira.itens.length} {fileira.itens.length === 1 ? 'vídeo' : 'vídeos'}</span>
       </h3>
       <div className="fileira-moldura">
         {podeEsq && (
-          <button type="button" className="fileira-seta esq" aria-label={`Rolar ${fileira.titulo} para a esquerda`} onClick={() => rolar(-1)}>
+          <button type="button" ref={setaEsq} className="fileira-seta esq" aria-label={`Rolar ${fileira.titulo} para a esquerda`} onClick={() => rolar(-1)}>
             <SetaMes dir="esq" />
           </button>
         )}
-        <div className="fileira-faixa" ref={el => { faixa.current = el; registrar(fileira.id, el); }}
+        <div className="fileira-faixa" ref={el => { faixa.current = el; registrar(fileira.id, el); }} tabIndex={-1}
           onFocus={trazerFoco}
           onScroll={() => { if (quadro.current === null) quadro.current = requestAnimationFrame(() => { quadro.current = null; medir(); }); }}>
           {fileira.itens.map(it => (
@@ -81,7 +96,7 @@ export default function FileiraCatalogo({ fileira, capas, observar, aoAbrir, mos
           ))}
         </div>
         {podeDir && (
-          <button type="button" className="fileira-seta dir" aria-label={`Rolar ${fileira.titulo} para a direita`} onClick={() => rolar(1)}>
+          <button type="button" ref={setaDir} className="fileira-seta dir" aria-label={`Rolar ${fileira.titulo} para a direita`} onClick={() => rolar(1)}>
             <SetaMes dir="dir" />
           </button>
         )}

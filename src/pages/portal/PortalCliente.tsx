@@ -42,6 +42,8 @@ function PortalClienteConteudo() {
    *  os dados depois (sessão renovada, nova tentativa) não pode puxar a pessoa
    *  de volta pra uma aba que ela já deixou. */
   const urlAplicada = useRef(false);
+  /** O portal foi aberto com `?aba=catalogo`: a pessoa voltou do vídeo, então o catálogo restaura a rolagem. */
+  const [voltouAoCatalogo, setVoltouAoCatalogo] = useState(false);
   /** 'precisa_login' abre a tela de entrada; 'sem_acesso' explica e para por aí. */
   const [porta, setPorta] = useState<{ tipo: 'precisa_login' | 'sem_acesso'; cliente: string } | null>(null);
   const [emailLogin, setEmailLogin] = useState('');
@@ -134,6 +136,7 @@ function PortalClienteConteudo() {
           subRestaurada.current = subPedida as AbaProjeto;
         }
       }
+      if (pedida === 'catalogo') setVoltouAoCatalogo(true);
       setAba(pedida);
     } else if (d.abrir_projeto) {
       // Link antigo, de projeto: abre já na aba daquele projeto.
@@ -473,8 +476,8 @@ function PortalClienteConteudo() {
       )}
 
       {/* ── CATÁLOGO ───────────────────────────────────────────── */}
-      {aba === 'catalogo' && temCatalogo && (
-        <Catalogo dados={dados} capas={capas} pedirCapas={pedirCapas} marcarVolta={marcarVolta} />
+      {aba === 'catalogo' && (
+        <Catalogo dados={dados} capas={capas} pedirCapas={pedirCapas} marcarVolta={marcarVolta} restaurar={voltouAoCatalogo} />
       )}
 
       {/* ── PROJETO ────────────────────────────────────────────── */}

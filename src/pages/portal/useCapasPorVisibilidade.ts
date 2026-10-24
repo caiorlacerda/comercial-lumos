@@ -36,12 +36,9 @@ export function useCapasPorVisibilidade(pedirCapas: (tokens: string[]) => Promis
   }, []);
 
   useEffect(() => {
-    // Sem IntersectionObserver (navegador antigo): pede tudo de uma vez, como o portal já fazia.
-    if (typeof IntersectionObserver === 'undefined') {
-      const todos = [...tokenDe.current.values()];
-      if (todos.length) void pedirRef.current(todos);
-      return;
-    }
+    // Sem IntersectionObserver (navegador antigo): quem pede é a função de registro
+    // (abaixo), então aqui não há nada a observar.
+    if (typeof IntersectionObserver === 'undefined') return;
     observador.current = new IntersectionObserver(entradas => {
       entradas.forEach(en => {
         if (!en.isIntersecting) return;
@@ -75,6 +72,13 @@ export function useCapasPorVisibilidade(pedirCapas: (tokens: string[]) => Promis
     if (!reviewToken) return;
     if (tokenDe.current.get(el) === reviewToken) return;
     tokenDe.current.set(el, reviewToken);
+    // Sem IntersectionObserver (navegador antigo): pede na hora, também para cards
+    // que registram depois do primeiro commit. O mesmo atraso curto junta os pedidos.
+    if (typeof IntersectionObserver === 'undefined') {
+      pendentes.current.add(reviewToken);
+      if (temporizador.current === null) temporizador.current = window.setTimeout(despachar, 120);
+      return;
+    }
     observador.current?.observe(el);
-  }, [limpar]);
+  }, [limpar, despachar]);
 }

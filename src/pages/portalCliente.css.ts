@@ -880,7 +880,9 @@ export const PORTAL_CSS = String.raw`
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
   .fileira-faixa::-webkit-scrollbar { display: none; }
-  .cat-card { flex: 0 0 auto; scroll-snap-align: start; display: block; text-decoration: none; color: inherit; width: max-content; max-width: 70vw; border-radius: 10px; }
+  /* A faixa recebe o foco por script quando a seta em foco some: anel por dentro, para não ser cortado. */
+  .fileira-faixa:focus-visible { outline-offset: -2px; border-radius: 10px; }
+  .cat-card { flex: 0 0 auto; scroll-snap-align: start; display: block; text-decoration: none; color: inherit; width: max-content; border-radius: 10px; }
   /* O anel de foco vai na capa (a imagem), não no card inteiro com o título. */
   /* O app tem uma regra de foco com peso maior (html.visual-novo a:focus-visible): por isso o prefixo. */
   .portal-lumos .cat-card:focus-visible { outline: none; }
@@ -891,22 +893,24 @@ export const PORTAL_CSS = String.raw`
     box-shadow: 0 12px 30px -14px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,247,230,.09);
     transition: transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .22s;
   }
-  .cat-card.f169 .cat-capa { width: calc(var(--h) * 16 / 9); }
+  /* 70vw: em celular estreito (320px) a capa 16:9 de 263px estourava a coluna. */
+  .cat-card.f169 .cat-capa { width: min(calc(var(--h) * 16 / 9), 70vw); }
   .cat-card.f916 .cat-capa { width: calc(var(--h) * 9 / 16); }
   .cat-card.f11  .cat-capa { width: var(--h); }
   .cat-capa .foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: cat-aparece .35s ease both; }
   @keyframes cat-aparece { from { opacity: 0; } to { opacity: 1; } }
   .cat-capa::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,247,230,.55); font-size: 15px; transition: color .2s; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
-  .cat-card:hover .cat-capa, .cat-card:focus-visible .cat-capa { transform: translateY(-4px); box-shadow: 0 20px 40px -16px rgba(0,0,0,.85), 0 0 0 1px rgba(239,199,0,.5), 0 0 28px -6px rgba(239,199,0,.35); }
-  .cat-card:hover .cat-capa::after, .cat-card:focus-visible .cat-capa::after { color: var(--luz); }
+  .cat-card[href]:hover .cat-capa, .cat-card[href]:focus-visible .cat-capa { transform: translateY(-4px); box-shadow: 0 20px 40px -16px rgba(0,0,0,.85), 0 0 0 1px rgba(239,199,0,.5), 0 0 28px -6px rgba(239,199,0,.35); }
+  .cat-card[href]:hover .cat-capa::after, .cat-card[href]:focus-visible .cat-capa::after { color: var(--luz); }
   .cat-capa .fmt, .cat-capa .cat-selo { z-index: 2; position: absolute; }
   .cat-capa .fmt { top: 7px; right: 7px; left: auto; font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: .06em; background: rgba(10,9,8,.7); color: #F2EDE3; padding: 2px 6px; border-radius: 3px; }
   .cat-selo { left: 7px; bottom: 7px; max-width: calc(100% - 14px); line-height: 1.2; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 12px; background: rgba(10,9,8,.78); color: #F2EDE3; border: 1px solid rgba(255,247,230,.18); }
   .cat-selo.s-voce { color: var(--luz); border-color: rgba(239,199,0,.5); }
   .cat-selo.s-ok { color: var(--aprovado); border-color: color-mix(in srgb, var(--aprovado) 50%, transparent); }
   .cat-selo.s-aj { color: var(--ajuste); border-color: color-mix(in srgb, var(--ajuste) 50%, transparent); }
-  .cat-titulo { display: block; margin-top: 9px; font-size: 13.5px; font-weight: 600; line-height: 1.25; max-width: calc(var(--h) * 16 / 9); overflow-wrap: anywhere; }
-  .cat-card.f916 .cat-titulo { max-width: calc(var(--h) * 9 / 16 + 30px); }
+  /* width: 0 + min-width: 100%: a largura do card vem só da capa, título comprido quebra de linha. */
+  .cat-titulo { margin-top: 9px; font-size: 13.5px; font-weight: 600; line-height: 1.25; width: 0; min-width: 100%; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
   .cat-meta { display: block; margin-top: 2px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); }
   .fileira-seta {
     /* centro da capa = 8px de folga da faixa + metade da altura; a seta tem 40px */
@@ -920,7 +924,7 @@ export const PORTAL_CSS = String.raw`
   @media (hover: none) { .fileira-seta { display: none; } }
   @media (prefers-reduced-motion: reduce) {
     .cat-capa, .cat-capa::after { transition: none; }
-    .cat-card:hover .cat-capa, .cat-card:focus-visible .cat-capa { transform: none; }
+    .cat-card[href]:hover .cat-capa, .cat-card[href]:focus-visible .cat-capa { transform: none; }
     .cat-capa .foto { animation: none; }
   }
   @media (max-width: 619px) { .fileira { --h: 148px; } .fileira-titulo { font-size: 22px; } .fileira-seta.esq { left: -6px; } .fileira-seta.dir { right: -6px; } }
@@ -933,4 +937,16 @@ export const PORTAL_CSS = String.raw`
   .portal-lumos.claro .cat-selo.s-aj { color: #A83A26; border-color: rgba(168,58,38,.55); }
   .portal-lumos.claro .fileira-seta { background: rgba(255,255,255,.96); color: #1B1917; border-color: rgba(28,24,20,.55); box-shadow: 0 4px 14px -4px rgba(28,24,20,.35); }
   .portal-lumos.claro .fileira-seta:hover { color: #8A6D00; border-color: #8A6D00; }
+  /* O amarelo do anel padrão some no papel: no claro o anel é o mesmo âmbar escuro do texto de destaque. */
+  .portal-lumos.claro .cat-card[href]:focus-visible .cat-capa,
+  .portal-lumos.claro .fileira-seta:focus-visible,
+  .portal-lumos.claro .fileira-faixa:focus-visible { outline-color: #8A6D00; }
+
+  /* Cabeçalho: o nome do cliente encolhe com reticências em vez de passar por cima
+     do menu (a coluna da marca é 1fr e pode ficar menor que o conteúdo). A logo não encolhe. */
+  /* stretch (em vez do start do grid): com start a marca tinha a largura do conteúdo e passava da coluna. */
+  .topo-dentro > .marca { justify-self: stretch; }
+  .topo .marca { min-width: 0; overflow: hidden; }
+  .topo .marca .logotipo { flex-shrink: 0; }
+  .topo .cliente { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
 `;
