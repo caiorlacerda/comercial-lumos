@@ -5,6 +5,10 @@ BEGIN
   IF to_regclass('public.portal_pendencias') IS NULL THEN
     RAISE EXCEPTION 'Abortado: aplique antes 2026102401_portal_clareza_tabelas.sql.';
   END IF;
+  IF to_regclass('public.client_welcome_docs') IS NULL
+     OR to_regclass('public.client_welcome_doc_itens') IS NULL THEN
+    RAISE EXCEPTION 'Abortado: faltam as tabelas do Bem-vindo (2026093344_welcome_doc_schema.sql e 2026093346_checklist_dinamico.sql).';
+  END IF;
 END $$;
 
 -- Interna: resolve quem está olhando. Nunca exposta a visitante.
@@ -49,7 +53,7 @@ BEGIN
         'pendencias', COALESCE((
           SELECT jsonb_agg(jsonb_build_object('id', pe.id, 'texto', pe.texto, 'prazo', pe.prazo)
                            ORDER BY pe.prazo NULLS LAST, pe.created_at)
-          FROM portal_pendencias pe WHERE pe.project_id = p.id AND pe.concluida_em IS NULL
+          FROM portal_pendencias pe WHERE pe.project_id = p.id AND pe.client_id = p.client_id AND pe.concluida_em IS NULL
         ), '[]'::jsonb),
         'equipe', CASE WHEN NOT v_ctx.o_mostrar_equipe THEN '[]'::jsonb ELSE COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
@@ -58,7 +62,7 @@ BEGIN
             'foto', COALESCE(NULLIF(a.avatar_url, ''), tm.photo_url)
           ) ORDER BY e.ordem)
           FROM project_portal_equipe e
-          JOIN app_users a ON a.id = e.app_user_id AND a.status = 'ativo'
+          JOIN app_users a ON a.id = e.app_user_id AND a.status = 'ativo' AND NOT a.hidden
           LEFT JOIN team_members tm ON tm.app_user_id = a.id
           WHERE e.project_id = p.id
         ), '[]'::jsonb) END
@@ -77,12 +81,16 @@ BEGIN
       FROM portal_pendencias pe
       WHERE pe.client_id = v_ctx.o_client_id AND pe.project_id IS NULL AND pe.concluida_em IS NULL
     ), '[]'::jsonb),
+    -- Bem-vindo dirigido por modelo: itens do documento PUBLICADO do cliente que ainda não foram
+    -- concluídos (a conclusão casa por welcome_doc_item_id). Sem documento publicado: lista vazia.
     'boas_vindas_pendentes', COALESCE((
-      SELECT jsonb_agg(k.chave ORDER BY k.ord)
-      FROM (VALUES ('logo', 1), ('brand_book', 2), ('guidelines', 3), ('acessos', 4)) AS k(chave, ord)
-      WHERE NOT EXISTS (
-        SELECT 1 FROM client_boas_vindas_itens b
-        WHERE b.client_id = v_ctx.o_client_id AND b.item_key = k.chave)
+      SELECT jsonb_agg(jsonb_build_object('chave', i.item_key, 'titulo', i.titulo) ORDER BY i.sort_order, i.item_key)
+      FROM client_welcome_docs d
+      JOIN client_welcome_doc_itens i ON i.welcome_doc_id = d.id
+      WHERE d.client_id = v_ctx.o_client_id AND d.status = 'published'
+        AND NOT EXISTS (
+          SELECT 1 FROM client_boas_vindas_itens b
+          WHERE b.client_id = d.client_id AND b.welcome_doc_item_id = i.id)
     ), '[]'::jsonb)
   ) INTO v_res;
 

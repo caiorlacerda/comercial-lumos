@@ -7,6 +7,11 @@ BEGIN
   END IF;
 END $$;
 
+-- Criar tabela com política exige lock, e o app lendo ao mesmo tempo pode gerar deadlock.
+-- Com o limite, se o lock não vier em 15 s o comando falha com "lock timeout" em vez de ficar
+-- travado (e travar o app junto). Se falhar, espere alguns segundos e rode de novo.
+SET lock_timeout = '15s';
+
 -- 1) Saúde: uma linha por projeto
 CREATE TABLE IF NOT EXISTS public.project_portal_saude (
   project_id      uuid PRIMARY KEY REFERENCES public.projects(id) ON DELETE CASCADE,

@@ -97,6 +97,7 @@ BEGIN
     FROM projects p
     WHERE (p_project_id IS NULL OR p.id = p_project_id)
       AND (p.portal_visivel OR EXISTS (SELECT 1 FROM project_portal_saude s WHERE s.project_id = p.id))
+    ORDER BY p.id  -- ordem fixa dos locks (FOR UPDATE): duas execuções ao mesmo tempo não travam uma à outra
   LOOP
     SELECT * INTO v_calc FROM public.portal_saude_calcular(r.id);
     INSERT INTO project_portal_saude (project_id) VALUES (r.id) ON CONFLICT DO NOTHING;
@@ -134,7 +135,7 @@ BEGIN
         v_rotulo := CASE v_calc.estado WHEN 'atrasado' THEN 'Atrasado' ELSE 'Atenção' END;
         FOR u IN
           SELECT DISTINCT a.id FROM app_users a
-          WHERE a.status = 'ativo'
+          WHERE a.status = 'ativo' AND NOT a.hidden
             AND (a.role IN ('admin', 'atendimento')
                  OR a.id IN (SELECT unnest(cp.contact_user_ids) FROM client_portals cp
                              WHERE cp.client_id = r.client_id AND cp.active))
