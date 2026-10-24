@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2, Pencil, Archive, Handshake } from 'lucide-react';
+import { ChevronRight, ChevronDown, ClipboardList, Layers, Plus, RotateCcw, Trash2, Pencil, Archive, Handshake, Eye, EyeOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { formatBudgetCode } from '@/utils/formatters';
+import { montarArvore } from '@/lib/arvoreProjetos';
+import type { ProjetoArvore, ClienteBasico, ClienteNaArvore } from '@/lib/arvoreProjetos';
 import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import PortalModal from '@/components/producao/PortalModal';
+import EncerrarProjetoConfirmModal from '@/components/layout/EncerrarProjetoConfirmModal';
 
 // Cores disponíveis para clientes. A chave é o que fica salvo no banco
 // (client_colors.color); a classe é só apresentação.
@@ -36,27 +39,6 @@ const autoColorFor = (name: string) => {
   return AUTO_COLORS[sum % AUTO_COLORS.length];
 };
 
-interface TreeProject {
-  id: string;
-  name: string;
-  client_id: string | null;
-  code: string | null;
-  category: string | null;
-  status?: string;
-}
-
-// Sequência numérica do código (ex.: "2026-229" -> 229) para ordenar
-const codeSeq = (p: TreeProject) => {
-  const m = (p.code || '').match(/(\d+)\s*$/);
-  return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
-};
-
-interface TreeClient {
-  id: string;
-  name: string;
-  projects: TreeProject[];
-}
-
 // Item "Projetos" da sidebar de Produção: um dropdown (como no Momentum) que
 // expande para "Todos os Projetos" (Visão Geral) + árvore de clientes →
 // projetos ativos. Botão direito num cliente abre o seletor de cor.
@@ -67,11 +49,16 @@ export default function SidebarProjectTree() {
   const { isAdmin, can } = useAuth();
   // Mesma régua da página de projetos: quem toca em produção cuida do portal.
   const podeGerirPortal = isAdmin || can('ordem_do_dia');
+  // Mesma regra: quem toca em produção pode ocultar e encerrar projetos.
+  const podeEncerrar = isAdmin || can('ordem_do_dia');
 
   const [open, setOpen] = useState(true);
-  const [clients, setClients] = useState<TreeClient[]>([]);
-  const [noClientProjects, setNoClientProjects] = useState<TreeProject[]>([]);
-  const [concluded, setConcluded] = useState<TreeProject[]>([]);
+  // Todos os projetos carregados; a árvore é derivada daqui (ocultar, editar,
+  // excluir, encerrar e reabrir só mexem nesta lista).
+  const [todos, setTodos] = useState<ProjetoArvore[]>([]);
+  const [clientesLista, setClientesLista] = useState<ClienteBasico[]>([]);
+  // false enquanto a coluna oculto_na_barra não existe no banco (SQL pendente)
+  const [ocultarDisponivel, setOcultarDisponivel] = useState(false);
   const [colors, setColors] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -80,9 +67,11 @@ export default function SidebarProjectTree() {
   // repetido dentro de cada projeto.
   const [portalCliente, setPortalCliente] = useState<{ id: string; name: string } | null>(null);
   // Menu de contexto (botão direito) no projeto + exclusão definitiva (admin)
-  const [projMenu, setProjMenu] = useState<{ x: number; y: number; proj: TreeProject } | null>(null);
+  const [projMenu, setProjMenu] = useState<{ x: number; y: number; proj: ProjetoArvore } | null>(null);
+  // Encerrar/reabrir: projeto e ação pendentes da janela de confirmação
+  const [confirmStatus, setConfirmStatus] = useState<{ proj: ProjetoArvore; acao: 'encerrar' | 'reabrir' } | null>(null);
   // Edição de projeto (nome/código/categoria)
-  const [editProj, setEditProj] = useState<TreeProject | null>(null);
+  const [editProj, setEditProj] = useState<ProjetoArvore | null>(null);
   const [editForm, setEditForm] = useState({ name: '', code: '', category: 'digital' });
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
@@ -92,34 +81,28 @@ export default function SidebarProjectTree() {
     let cancelled = false;
     (async () => {
       try {
-        const [projRes, cliRes, colorRes] = await Promise.all([
-          supabase.from('projects').select('id, name, client_id, code, category, status').in('status', ['ativo', 'concluido']).order('name'),
+        const COLUNAS = 'id, name, client_id, code, category, status';
+        const buscar = (comOculto: boolean) =>
+          supabase.from('projects')
+            .select(comOculto ? `${COLUNAS}, oculto_na_barra` : COLUNAS)
+            .in('status', ['ativo', 'concluido'])
+            .order('name');
+        const [cliRes, colorRes, projPrimeira] = await Promise.all([
           supabase.from('clients').select('id, name').order('name'),
           supabase.from('client_colors').select('client_id, color'),
+          buscar(true),
         ]);
+        let projRes = projPrimeira;
+        let temColuna = true;
+        if (projRes.error) { // coluna ainda não existe (SQL pendente)
+          temColuna = false;
+          projRes = await buscar(false);
+        }
         if (cancelled) return;
 
-        const all = (projRes.data as TreeProject[]) || [];
-        const projects = all.filter(p => p.status !== 'concluido');
-        // Encerrados: lista plana (arquivo), mais recentes primeiro.
-        setConcluded(all.filter(p => p.status === 'concluido').sort((a, b) => codeSeq(b) - codeSeq(a)));
-        const byClient: Record<string, TreeProject[]> = {};
-        const orphans: TreeProject[] = [];
-        projects.forEach(p => {
-          if (p.client_id) (byClient[p.client_id] = byClient[p.client_id] || []).push(p);
-          else orphans.push(p);
-        });
-        // Ordena os projetos de cada cliente pelo código
-        Object.values(byClient).forEach(arr => arr.sort((a, b) => codeSeq(a) - codeSeq(b)));
-        orphans.sort((a, b) => codeSeq(a) - codeSeq(b));
-
-        // Só clientes com projetos ativos aparecem na árvore
-        const tree: TreeClient[] = ((cliRes.data as { id: string; name: string }[]) || [])
-          .filter(c => byClient[c.id]?.length)
-          .map(c => ({ ...c, projects: byClient[c.id] }));
-
-        setClients(tree);
-        setNoClientProjects(orphans);
+        setOcultarDisponivel(temColuna);
+        setTodos((projRes.data as unknown as ProjetoArvore[]) || []);
+        setClientesLista((cliRes.data as ClienteBasico[]) || []);
 
         // Cores personalizadas (tabela pode não existir ainda — ignora erro)
         if (!colorRes.error && colorRes.data) {
@@ -144,7 +127,10 @@ export default function SidebarProjectTree() {
     return () => window.removeEventListener('keydown', onKey);
   }, [colorMenu]);
 
-  const dotClassFor = (client: TreeClient) =>
+  const { clientes: clients, semCliente: noClientProjects, ocultos: hidden, encerrados: concluded } =
+    useMemo(() => montarArvore(todos, clientesLista), [todos, clientesLista]);
+
+  const dotClassFor = (client: ClienteNaArvore) =>
     colors[client.id] ? classForColorKey(colors[client.id]) : autoColorFor(client.name);
 
   const setClientColor = async (clientId: string, colorKey: string | null) => {
@@ -186,13 +172,13 @@ export default function SidebarProjectTree() {
     navigate(`/producao/projetos?projectId=${projectId}`);
   };
 
-  const openProjMenu = (e: React.MouseEvent, proj: TreeProject) => {
-    if (!isAdmin) return;
+  const openProjMenu = (e: React.MouseEvent, proj: ProjetoArvore) => {
+    if (!podeEncerrar) return;
     e.preventDefault();
     setProjMenu({ x: e.clientX, y: e.clientY, proj });
   };
 
-  const openEdit = (proj: TreeProject) => {
+  const openEdit = (proj: ProjetoArvore) => {
     setEditForm({ name: proj.name, code: proj.code || '', category: proj.category || 'digital' });
     setEditProj(proj);
     setProjMenu(null);
@@ -206,11 +192,7 @@ export default function SidebarProjectTree() {
     const { error } = await supabase.from('projects').update(patch).eq('id', editProj.id);
     setSavingEdit(false);
     if (error) { toast.error('Não foi possível salvar o projeto.'); return; }
-    const applyAndSort = (arr: TreeProject[]) =>
-      arr.map(p => (p.id === editProj.id ? { ...p, ...patch } : p)).sort((a, b) => codeSeq(a) - codeSeq(b));
-    setClients(prev => prev.map(c => ({ ...c, projects: applyAndSort(c.projects) })));
-    setNoClientProjects(prev => applyAndSort(prev));
-    setConcluded(prev => applyAndSort(prev));
+    setTodos(prev => prev.map(p => (p.id === editProj.id ? { ...p, ...patch } : p)));
     toast.success('Projeto atualizado!');
     setEditProj(null);
   };
@@ -226,11 +208,7 @@ export default function SidebarProjectTree() {
       if (error) throw error;
 
       // Remove da árvore local; some o cliente que ficar sem projetos ativos
-      setClients(prev => prev
-        .map(c => ({ ...c, projects: c.projects.filter(p => p.id !== id) }))
-        .filter(c => c.projects.length > 0));
-      setNoClientProjects(prev => prev.filter(p => p.id !== id));
-      setConcluded(prev => prev.filter(p => p.id !== id));
+      setTodos(prev => prev.filter(p => p.id !== id));
 
       toast.success(`Projeto "${name}" excluído.`);
       setConfirmDelete(null);
@@ -242,6 +220,18 @@ export default function SidebarProjectTree() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const alternarOculto = async (proj: ProjetoArvore, ocultar: boolean) => {
+    setProjMenu(null);
+    const { data, error } = await supabase.from('projects').update({ oculto_na_barra: ocultar }).eq('id', proj.id).select('id');
+    // 0 linhas sem erro = a RLS filtrou o UPDATE (sem permissão)
+    if (error || !data || data.length === 0) {
+      toast.error('Não foi possível salvar. Você pode não ter permissão para alterar este projeto.');
+      return;
+    }
+    setTodos(prev => prev.map(p => p.id === proj.id ? { ...p, oculto_na_barra: ocultar } : p));
+    toast.success(ocultar ? `"${proj.name}" ficou oculto da barra.` : `"${proj.name}" voltou para a barra.`);
   };
 
   // "Todos os Projetos" = Visão Geral (/producao)
@@ -258,7 +248,11 @@ export default function SidebarProjectTree() {
     if (client) setExpanded(prev => (prev[client.id] ? prev : { ...prev, [client.id]: true }));
     else if (noClientProjects.some(p => p.id === activeProjectId))
       setExpanded(prev => (prev.__none__ ? prev : { ...prev, __none__: true }));
-  }, [activeProjectId, clients, noClientProjects]);
+    else if (hidden.some(p => p.id === activeProjectId))
+      setExpanded(prev => (prev.__hidden__ ? prev : { ...prev, __hidden__: true }));
+    else if (concluded.some(p => p.id === activeProjectId))
+      setExpanded(prev => (prev.__done__ ? prev : { ...prev, __done__: true }));
+  }, [activeProjectId, clients, noClientProjects, hidden, concluded]);
 
   return (
     <div>
@@ -332,7 +326,7 @@ export default function SidebarProjectTree() {
                             key={proj.id}
                             onClick={() => openProject(proj.id)}
                             onContextMenu={e => openProjMenu(e, proj)}
-                            title={isAdmin ? `${proj.name} — botão direito para excluir` : proj.name}
+                            title={podeEncerrar ? `${proj.name} — botão direito para as opções` : proj.name}
                             className={clsx(
                               'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
                               proj.id === activeProjectId
@@ -370,7 +364,7 @@ export default function SidebarProjectTree() {
                           key={proj.id}
                           onClick={() => openProject(proj.id)}
                           onContextMenu={e => openProjMenu(e, proj)}
-                          title={isAdmin ? `${proj.name} — botão direito para excluir` : proj.name}
+                          title={podeEncerrar ? `${proj.name} — botão direito para as opções` : proj.name}
                           className={clsx(
                             'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
                             proj.id === activeProjectId
@@ -386,7 +380,45 @@ export default function SidebarProjectTree() {
                 </div>
               )}
 
-              {clients.length === 0 && noClientProjects.length === 0 && (
+              {/* Ocultos — projetos ativos escondidos da árvore por escolha da equipe */}
+              {hidden.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setExpanded(prev => ({ ...prev, __hidden__: !(prev.__hidden__ ?? false) }))}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lumos text-xs font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/5 transition-all"
+                  >
+                    {(expanded.__hidden__ ?? false)
+                      ? <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
+                      : <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-60" />}
+                    <EyeOff className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
+                    <span className="truncate flex-1 text-left">Ocultos</span>
+                    <span className="text-[9px] font-black opacity-40">{hidden.length}</span>
+                  </button>
+                  {(expanded.__hidden__ ?? false) && (
+                    <div className="ml-[22px] border-l border-lumos-border/40 pl-2 space-y-0.5 py-0.5">
+                      {hidden.map(proj => (
+                        <button
+                          key={proj.id}
+                          onClick={() => openProject(proj.id)}
+                          onContextMenu={e => openProjMenu(e, proj)}
+                          title={podeEncerrar ? `${proj.clienteNome ? `${proj.clienteNome} · ` : ''}${proj.name} — botão direito para as opções` : proj.name}
+                          className={clsx(
+                            'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
+                            proj.id === activeProjectId
+                              ? 'bg-lumos-yellow/10 text-lumos-yellow'
+                              : 'text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-text-secondary/5'
+                          )}
+                        >
+                          {proj.clienteNome && <span className="text-lumos-text-secondary/60">{proj.clienteNome} · </span>}
+                          {proj.code && <span className="font-mono text-[9px] text-lumos-text-secondary/50 mr-1">{formatBudgetCode(proj.code)}</span>}{proj.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {clients.length === 0 && noClientProjects.length === 0 && hidden.length === 0 && (
                 <p className="px-2.5 py-2 text-[10px] text-lumos-text-secondary/50 italic">Nenhum projeto ativo.</p>
               )}
 
@@ -411,7 +443,7 @@ export default function SidebarProjectTree() {
                           key={proj.id}
                           onClick={() => openProject(proj.id)}
                           onContextMenu={e => openProjMenu(e, proj)}
-                          title={proj.name}
+                          title={podeEncerrar ? `${proj.name} — botão direito para as opções` : proj.name}
                           className={clsx(
                             'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
                             proj.id === activeProjectId
@@ -492,24 +524,65 @@ export default function SidebarProjectTree() {
           <div className="fixed inset-0 z-[190]" onClick={() => setProjMenu(null)} onContextMenu={e => { e.preventDefault(); setProjMenu(null); }} />
           <div
             className="fixed z-[200] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl py-1.5 min-w-[190px] animate-in fade-in zoom-in-95 duration-100"
-            style={{ left: Math.min(projMenu.x, window.innerWidth - 210), top: Math.min(projMenu.y + 4, window.innerHeight - 80) }}
+            style={{ left: Math.min(projMenu.x, window.innerWidth - 210), top: Math.min(projMenu.y + 4, window.innerHeight - 190) }}
           >
+            {ocultarDisponivel && projMenu.proj.status !== 'concluido' && (
+              <button
+                onClick={() => alternarOculto(projMenu.proj, projMenu.proj.oculto_na_barra !== true)}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors text-left"
+              >
+                {projMenu.proj.oculto_na_barra === true
+                  ? <><Eye className="w-3.5 h-3.5" /> Mostrar na barra</>
+                  : <><EyeOff className="w-3.5 h-3.5" /> Ocultar da barra</>}
+              </button>
+            )}
             <button
-              onClick={() => openEdit(projMenu.proj)}
+              onClick={() => {
+                setConfirmStatus({ proj: projMenu.proj, acao: projMenu.proj.status === 'concluido' ? 'reabrir' : 'encerrar' });
+                setProjMenu(null);
+              }}
               className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors text-left"
             >
-              <Pencil className="w-3.5 h-3.5" />
-              Editar projeto…
+              {projMenu.proj.status === 'concluido'
+                ? <><RotateCcw className="w-3.5 h-3.5" /> Reabrir projeto…</>
+                : <><Archive className="w-3.5 h-3.5" /> Encerrar projeto…</>}
             </button>
-            <button
-              onClick={() => { setConfirmDelete({ id: projMenu.proj.id, name: projMenu.proj.name }); setProjMenu(null); }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Excluir projeto…
-            </button>
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => openEdit(projMenu.proj)}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors text-left"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Editar projeto…
+                </button>
+                <button
+                  onClick={() => { setConfirmDelete({ id: projMenu.proj.id, name: projMenu.proj.name }); setProjMenu(null); }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-colors text-left"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Excluir projeto…
+                </button>
+              </>
+            )}
           </div>
         </>
+      )}
+
+      {/* Confirmação de encerrar/reabrir (com a conferência do que está em aberto) */}
+      {confirmStatus && (
+        <EncerrarProjetoConfirmModal
+          key={confirmStatus.proj.id}
+          proj={confirmStatus.proj}
+          acao={confirmStatus.acao}
+          onClose={() => setConfirmStatus(null)}
+          onDone={novo => {
+            // Sempre por id: o projeto do menu pode ser um item de "Ocultos" (com clienteNome a mais)
+            const id = confirmStatus.proj.id;
+            setTodos(prev => prev.map(p => (p.id === id ? { ...p, status: novo } : p)));
+            setConfirmStatus(null);
+          }}
+        />
       )}
 
       {/* Confirmação de exclusão definitiva */}
