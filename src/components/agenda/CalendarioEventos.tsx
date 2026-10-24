@@ -19,6 +19,15 @@ import {
 const PX_HORA = 52;
 const tint = (cor: string, pct: number) => `color-mix(in srgb, ${cor} ${pct}%, transparent)`;
 
+/** Preenchimento SÓLIDO do evento. O que já passou fica um pouco mais apagado, mas sem transparência. */
+const solido = (e: EventoCal) => (e.passado ? `color-mix(in srgb, ${e.cor} 70%, var(--color-lumos-surface))` : e.cor);
+/** Texto escuro sobre cor clara e branco sobre cor escura (luminância da cor do evento). */
+const textoSobre = (hex: string) => {
+  const n = parseInt(hex.replace('#', '').padEnd(6, '0').slice(0, 6), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.6 ? '#161616' : '#ffffff';
+};
+
 const horarioTexto = (e: EventoCal) => {
   if (!e.hora) return 'Dia todo';
   const i = e.hora.slice(0, 5);
@@ -84,11 +93,10 @@ function ChipEvento({ e, onAbrir }: { e: EventoCal; onAbrir: (e: EventoCal) => v
     <>
       <button type="button" ref={c.ref as any} {...c.handlers}
         onClick={ev => { ev.stopPropagation(); onAbrir(e); }}
-        className={clsx('w-full flex items-center gap-1 rounded px-1.5 py-[3px] text-left text-[10px] font-bold transition-[filter] hover:brightness-110',
-          e.passado && 'opacity-60')}
-        style={{ background: tint(e.cor, 16), borderLeft: `3px solid ${e.cor}` }}>
-        {e.hora && <span className="tabular-nums text-lumos-text-secondary flex-shrink-0">{e.hora.slice(0, 5)}</span>}
-        <span className="truncate text-lumos-text-primary">{e.titulo}</span>
+        className="w-full flex items-center gap-1 rounded px-1.5 py-[3px] text-left text-[10px] font-bold transition-[filter] hover:brightness-110"
+        style={{ background: solido(e), color: textoSobre(e.cor) }}>
+        {e.hora && <span className="tabular-nums opacity-80 flex-shrink-0">{e.hora.slice(0, 5)}</span>}
+        <span className="truncate">{e.titulo}</span>
       </button>
       {c.cartao}
     </>
@@ -106,24 +114,23 @@ function BlocoEvento({ t, col, cols, onAbrir }: { t: Trecho; col: number; cols: 
       <button type="button" ref={c.ref as any} {...c.handlers}
         onClick={ev => { ev.stopPropagation(); onAbrir(e); }}
         aria-label={`${e.titulo}, ${horarioTexto(e)}`}
-        className={clsx('absolute overflow-hidden rounded-md px-1.5 py-1 text-left transition-[filter] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-lumos-yellow',
-          e.passado && 'opacity-60')}
+        className="absolute overflow-hidden rounded-md px-2 py-1.5 text-left transition-[filter] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-lumos-yellow"
         style={{
           top: (t.ini / 60) * PX_HORA + 1, height: alto,
           left: `calc(${(col / cols) * 100}% + 2px)`, width: `calc(${100 / cols}% - 4px)`,
-          background: tint(e.cor, 20),
-          borderLeft: `3px solid ${e.cor}`,
-          ...(t.continuacao ? { borderTop: `2px dashed ${e.cor}` } : {}),
+          background: solido(e), color: textoSobre(e.cor),
+          boxShadow: '0 0 0 1px var(--color-lumos-surface)',
+          ...(t.continuacao ? { borderTop: '3px dashed rgba(0,0,0,0.35)' } : {}),
         }}>
-        <span className="block text-[10.5px] font-black leading-tight text-lumos-text-primary truncate">
+        <span className={clsx('block text-[11px] font-black leading-snug break-words', baixo ? 'truncate' : 'line-clamp-3')}>
           {t.continuacao && '↳ '}{e.titulo}
         </span>
         {!baixo && (
-          <span className="block text-[9.5px] leading-tight text-lumos-text-secondary tabular-nums truncate">
+          <span className="block mt-0.5 text-[10px] font-semibold leading-snug tabular-nums opacity-85">
             {t.continuacao ? `até ${hhmm(t.fim)}` : t.continua ? `${hhmm(t.ini)} → dia seguinte` : `${hhmm(t.ini)} – ${hhmm(t.fim)}`}
           </span>
         )}
-        {!baixo && e.subtitulo && <span className="block text-[9.5px] leading-tight text-lumos-text-secondary truncate">{e.subtitulo}</span>}
+        {!baixo && e.subtitulo && <span className="block mt-0.5 text-[10px] leading-snug break-words line-clamp-3 opacity-85">{e.subtitulo}</span>}
       </button>
       {c.cartao}
     </>
@@ -381,7 +388,7 @@ export default function CalendarioEventos({ eventos, gran, cursor, onAbrir, onEs
           <div>
             {Array.from({ length: 24 }, (_, h) => (
               <div key={h} className="relative text-right pr-1.5" style={{ height: PX_HORA }}>
-                {h > 0 && <span className="absolute -top-[7px] right-1.5 text-[9.5px] tabular-nums text-lumos-text-secondary bg-lumos-surface px-0.5">{String(h).padStart(2, '0')}:00</span>}
+                {h > 0 && <span className="absolute -top-[7px] right-1.5 text-[9.5px] tabular-nums text-lumos-text-secondary">{String(h).padStart(2, '0')}:00</span>}
               </div>
             ))}
           </div>
