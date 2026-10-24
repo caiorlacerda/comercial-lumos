@@ -18,7 +18,7 @@ import ProjectRoteiros from '@/components/producao/ProjectRoteiros';
 import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import { useConfirm, usePrompt } from '@/components/ui/useConfirm';
-import { TagPicker, TagChip, type Tag } from '@/components/producao/TaskTags';
+import { TagPicker, type Tag } from '@/components/producao/TaskTags';
 import { TipoPilula, TipoSeletor } from '@/components/producao/TipoDeTarefa';
 import { tipoDoPrefixo, useTiposTarefa } from '@/lib/tiposTarefa';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
@@ -2994,11 +2994,6 @@ export default function Projetos() {
                                         </span>
                                       )}
                                       </div>
-                                      {(taskTags[task.id]?.length ?? 0) > 0 && (
-                                        <div className="flex flex-wrap items-center gap-1 mt-1">
-                                          {(taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR')).map(t => <TagChip key={t!.id} tag={t!} small />)}
-                                        </div>
-                                      )}
                                         </div>
                                       </div>
                                     </td>
@@ -3135,7 +3130,6 @@ export default function Projetos() {
                           </div>
                           {group.tasks.map((task) => {
                             const isTaskCompleted = task.status === 'concluido' || task.status === 'entregue';
-                            const tags = (taskTags[task.id] || []).map(id => tagById(id)).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name, 'pt-BR'));
                             return (
                               <div
                                 key={task.id}
@@ -3172,10 +3166,9 @@ export default function Projetos() {
                                       {tipoPorId(task.tipo_id) && <TipoPilula tipo={tipoPorId(task.tipo_id)!} pequeno className="mr-1.5 align-[1px]" />}
                                       {task.titulo}
                                     </span>
-                                    {(tags.length > 0 || videosPorTarefa[task.id]) && (
+                                    {videosPorTarefa[task.id] && (
                                       <div className="flex flex-wrap items-center gap-1 mt-1">
                                         <ContagemDeVideos conta={videosPorTarefa[task.id]} />
-                                        {tags.map(t => <TagChip key={t!.id} tag={t!} small />)}
                                       </div>
                                     )}
                                   </button>
