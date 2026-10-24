@@ -11,6 +11,8 @@ import PedidosDeDiaria from '@/components/producao/PedidosDeDiaria';
 import BloqueiosDeAgenda from '@/components/producao/BloqueiosDeAgenda';
 import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 import { SegmentedControl } from '@/components/ui/Tabs';
+import SeletorDeLocal from '@/components/producao/SeletorDeLocal';
+import { consultaDeClima, type Local } from '@/lib/locais';
 
 /**
  * Diárias de gravação do projeto: data, duração, local e descrição, com
@@ -33,7 +35,7 @@ interface PessoaCatalogo { tipo: 'user' | 'freela'; id: string; nome: string; fu
 interface Diaria {
   id: string; nome: string; data: string | null; duracao_horas: number;
   hora_inicio: string | null; hora_fim: string | null;
-  local: string | null; descricao: string | null; ordem: number;
+  local: string | null; local_id?: string | null; descricao: string | null; ordem: number;
   google_event_id?: string | null;
 }
 
@@ -60,6 +62,9 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [diarias, setDiarias] = useState<Diaria[]>([]);
   const [clima, setClima] = useState<Record<string, PrevisaoDia | null>>({});
+  // Locais cadastrados usados pelas diárias (observações no card e endereço pro clima) e o cliente do projeto.
+  const [locaisPorId, setLocaisPorId] = useState<Record<string, Local>>({});
+  const [cliente, setCliente] = useState<{ id: string | null; nome: string | null }>({ id: null, nome: null });
   const [editando, setEditando] = useState<Partial<Diaria> | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [equipes, setEquipes] = useState<Record<string, MembroDiaria[]>>({});
@@ -77,6 +82,14 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
       .order('data', { ascending: true, nullsFirst: false }).order('ordem');
     if (error) { toast.error('Não foi possível carregar as diárias.'); setLoading(false); return; }
     const lista = (data as Diaria[]) || [];
+    // Locais cadastrados (tabela pode não existir antes da migration: aí só não há observações).
+    const ids = [...new Set(lista.map(d => d.local_id).filter(Boolean))] as string[];
+    let mapa: Record<string, Local> = {};
+    if (ids.length > 0) {
+      const lr = await supabase.from('locais').select('id, nome, endereco, observacoes, client_id').in('id', ids);
+      if (!lr.error) mapa = Object.fromEntries(((lr.data as Local[]) || []).map(l => [l.id, l]));
+    }
+    setLocaisPorId(mapa);
     setDiarias(lista);
     setLoading(false);
     // Escala de cada diária (tabela pode não existir antes da migration).
@@ -98,6 +111,15 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     }
   }, [projectId]);
   useEffect(() => { load(); }, [load]);
+
+  // Cliente do projeto: define quais locais aparecem primeiro no seletor.
+  useEffect(() => {
+    supabase.from('projects').select('client_id, clients(name)').eq('id', projectId).maybeSingle()
+      .then(({ data }) => {
+        const d = data as any;
+        setCliente({ id: d?.client_id ?? null, nome: (Array.isArray(d?.clients) ? d.clients[0]?.name : d?.clients?.name) ?? null });
+      });
+  }, [projectId]);
 
   // Catálogo de quem pode ser escalado: equipe do projeto em destaque,
   // depois todos os fornecedores e o time Lumos.
@@ -158,7 +180,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   useEffect(() => {
     diarias.forEach(d => {
       if (!d.local || !d.data || clima[d.id] !== undefined) return;
-      previsaoParaDiaria(d.local, d.data).then(({ dados }) => setClima(c => ({ ...c, [d.id]: dados })));
+      previsaoParaDiaria(consultaDeClima(d.local_id ? locaisPorId[d.local_id] : null, d.local) || d.local, d.data).then(({ dados }) => setClima(c => ({ ...c, [d.id]: dados })));
     });
   }, [diarias]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -176,6 +198,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
       // com início e fim, a duração sai da conta; senão vale o que digitaram
       duracao_horas: (mi != null && mf != null) ? Math.round(((mf - mi) / 60) * 10) / 10 : (Number(editando.duracao_horas) || 10),
       local: editando.local?.trim() || null,
+      local_id: editando.local?.trim() ? (editando.local_id || null) : null,
       descricao: editando.descricao?.trim() || null,
     };
     let diariaId = editando.id || null;
@@ -190,6 +213,12 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
       res = await gravar(semHoras);
       err = (res.r as any).error;
       if (!err) toast.error('Diária salva sem horário: falta rodar a migração dos horários no banco.');
+    }
+    // Se a migration dos locais ainda não rodou, salva sem a ligação em vez de quebrar.
+    if (err && /local_id/.test(String(err.message))) {
+      const { local_id: _c, ...semLocalId } = payload as any;
+      res = await gravar(semLocalId);
+      err = (res.r as any).error;
     }
     if (err) { setSalvando(false); toast.error('Não foi possível salvar a diária.'); return; }
     diariaId = editando.id || (res.r as any).data?.id || null;
@@ -351,6 +380,11 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                       </a>
                     </p>
                   )}
+                  {d.local_id && locaisPorId[d.local_id]?.observacoes && (
+                    <p className="pl-[22px] text-[10.5px] text-lumos-text-secondary whitespace-pre-line leading-snug">
+                      {locaisPorId[d.local_id].observacoes}
+                    </p>
+                  )}
                   {p && !chuva && (
                     <p className="text-[10.5px] text-lumos-text-secondary">
                       Previsão: {p.tempMin}° a {p.tempMax}° · {p.chanceChuva}% de chuva
@@ -436,12 +470,13 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
               </div>
             </div>
             <p className="text-[10px] text-lumos-text-secondary -mt-1">Com horário, o evento entra no Google Calendar como compromisso com hora; sem, vira evento de dia inteiro.</p>
-            <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Local</label>
-              <input className="input-lumos w-full h-10 mt-1 text-sm" placeholder="Ex.: Praia da Reserva, Rio de Janeiro"
-                value={editando.local || ''} onChange={e => setEditando(s => ({ ...s, local: e.target.value }))} />
-              <p className="text-[10px] text-lumos-text-secondary mt-1">Com local e data, a previsão do tempo aparece sozinha no card.</p>
-            </div>
+            <SeletorDeLocal
+              clientId={cliente.id}
+              clienteNome={cliente.nome}
+              texto={editando.local || ''}
+              localId={editando.local_id || null}
+              onChange={(texto, localId) => setEditando(s => ({ ...s, local: texto, local_id: localId }))}
+            />
             <div>
               <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Descrição</label>
               <textarea rows={2} className="input-lumos w-full mt-1 text-sm resize-y" placeholder="O que se grava nessa diária"
