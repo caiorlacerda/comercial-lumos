@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
@@ -158,6 +159,19 @@ const motivoAgenda = (erro: string, exigeLogin: boolean) => {
 
 const NOME_SALVO = 'rev_nome';
 const EMAIL_SALVO = 'rev_email';
+
+/** O navegador pode negar o armazenamento (aba privada do Safari, bloqueio de
+ *  cookies): ler ou gravar aí lança erro, e erro durante o render é tela branca.
+ *  O portal funciona sem lembrar de nada, então qualquer falha aqui é ignorada. */
+const lerSalvo = (chave: string) => {
+  try { return localStorage.getItem(chave) || ''; } catch { return ''; }
+};
+const gravarSalvo = (chave: string, valor: string) => {
+  try { localStorage.setItem(chave, valor); } catch { /* sem armazenamento: só não lembra */ }
+};
+const apagarSalvo = (chave: string) => {
+  try { localStorage.removeItem(chave); } catch { /* idem */ }
+};
 
 const Sol = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -479,15 +493,22 @@ function useJanela(
   }, [aberta, modalRef, gatilhoRef]);
 }
 
-export default function PortalCliente() {
+function PortalClienteConteudo() {
   const { token = '' } = useParams();
   const [dados, setDados] = useState<Portal | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+  /** `rede`: falha de conexão, que merece "tentar de novo". Link morto não tem
+   *  o que tentar, então fica só o aviso. */
+  const [erro, setErro] = useState<{ texto: string; rede: boolean } | null>(null);
+  /** O que a URL pediu (`?aba=`, `?sub=`) vale só na primeira carga. Recarregar
+   *  os dados depois (sessão renovada, nova tentativa) não pode puxar a pessoa
+   *  de volta pra uma aba que ela já deixou. */
+  const urlAplicada = useRef(false);
   /** 'precisa_login' abre a tela de entrada; 'sem_acesso' explica e para por aí. */
   const [porta, setPorta] = useState<{ tipo: 'precisa_login' | 'sem_acesso'; cliente: string } | null>(null);
   const [emailLogin, setEmailLogin] = useState('');
   const [enviandoLink, setEnviandoLink] = useState(false);
   const [linkEnviado, setLinkEnviado] = useState(false);
+  const [erroLogin, setErroLogin] = useState<string | null>(null);
   const [aba, setAba] = useState<string>('boas_vindas');
   /** Aba de dentro do projeto. Volta pra "geral" ao trocar de projeto: manter
    *  "diarias" ao pular pra outro projeto mostraria o calendário de um projeto
@@ -508,7 +529,7 @@ export default function PortalCliente() {
     }
     setAbaProj('geral');
   }, [aba]);
-  const [nome, setNome] = useState(() => localStorage.getItem(NOME_SALVO) || '');
+  const [nome, setNome] = useState(() => lerSalvo(NOME_SALVO));
   /**
    * Capas dos quadros, buscadas DEPOIS e só das que estão na tela.
    * A imagem mora dentro da linha do vídeo: mandar todas junto seriam 3,3 MB
@@ -518,10 +539,8 @@ export default function PortalCliente() {
   const [digitando, setDigitando] = useState('');
   const [menuProjetos, setMenuProjetos] = useState(false);
   /** Tema do portal, lembrado por navegador. Começa escuro: é sala de projeção. */
-  const [tema, setTema] = useState<'escuro' | 'claro'>(() => {
-    try { return (localStorage.getItem('portal_tema') as 'escuro' | 'claro') || 'escuro'; } catch { return 'escuro'; }
-  });
-  useEffect(() => { try { localStorage.setItem('portal_tema', tema); } catch { /* ignore */ } }, [tema]);
+  const [tema, setTema] = useState<'escuro' | 'claro'>(() => (lerSalvo('portal_tema') === 'claro' ? 'claro' : 'escuro'));
+  useEffect(() => { gravarSalvo('portal_tema', tema); }, [tema]);
 
   // As fontes do portal (as do deck da Lumos) não são as do app: entram só aqui.
   useEffect(() => {
@@ -534,26 +553,42 @@ export default function PortalCliente() {
 
   const carregar = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_client_portal_v2', { p_token: token });
+    // Erro de transporte (sem internet, servidor fora) não é link inválido:
+    // dizer "desativado" faria o cliente desistir de um link que está bom.
+    if (error) {
+      setErro({ texto: 'Não conseguimos abrir o portal agora. Confira sua conexão e tente de novo.', rede: true });
+      return;
+    }
     const falha = (data as any)?.error;
     if (falha === 'precisa_login' || falha === 'sem_acesso') {
       setPorta({ tipo: falha, cliente: (data as any)?.cliente?.nome || '' });
       return;
     }
-    if (error || !data || falha) { setErro('Link inválido ou desativado.'); return; }
+    if (!data || falha) { setErro({ texto: 'Link inválido ou desativado.', rede: false }); return; }
     const d = data as Portal;
+    setErro(null);
     setPorta(null);
     // Nome verificado manda no digitado: é ele que assina as aprovações.
     if (d.voce?.nome) {
       setNome(d.voce.nome);
-      try { localStorage.setItem(NOME_SALVO, d.voce.nome); } catch { /* ignore */ }
+      gravarSalvo(NOME_SALVO, d.voce.nome);
     }
     setDados(d);
+    if (urlAplicada.current) return;
+    urlAplicada.current = true;
     // Voltando do player: reabre na aba de onde a pessoa saiu — e, se era de
     // dentro de um projeto, na aba interna também (`sub`).
     const params = new URLSearchParams(window.location.search);
     const pedida = params.get('aba');
     const ehProjeto = !!pedida && d.projetos.some(p => p.id === pedida);
-    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || ehProjeto)) {
+    // Usado o pedido, a URL volta a ser o endereço limpo do portal.
+    if (pedida) {
+      params.delete('aba');
+      params.delete('sub');
+      const resto = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${resto ? `?${resto}` : ''}${window.location.hash}`);
+    }
+    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || pedida === 'boas_vindas' || ehProjeto)) {
       if (ehProjeto) {
         const subPedida = params.get('sub');
         if (subPedida && (ABAS_PROJETO as readonly string[]).includes(subPedida)) {
@@ -607,7 +642,9 @@ export default function PortalCliente() {
       const dentroProjeto = dados?.projetos.some(p => p.id === aba) ?? false;
       const sub = dentroProjeto ? `&sub=${abaProj}` : '';
       sessionStorage.setItem(BILHETE, JSON.stringify({
-        url: `/portal/${token}${aba !== 'inicio' ? `?aba=${aba}${sub}` : ''}`,
+        // Sempre com a aba: sem `?aba=inicio` o portal reabria na aba padrão
+        // (Bem-vindo) e quem abriu o vídeo pelo Início voltava pro lugar errado.
+        url: `/portal/${token}?aba=${aba}${sub}`,
         rotulo: dados ? `Portal de ${dados.cliente.nome}` : 'Portal',
       }));
     } catch { /* navegador sem sessão: só não tem botão de voltar */ }
@@ -644,6 +681,14 @@ export default function PortalCliente() {
   const projetoAberto = dados?.projetos.find(p => p.id === aba) || null;
 
   const exigeLogin = !!dados?.portal.exige_login;
+
+  // Esc fecha o menu de projetos, como qualquer menu esperaria.
+  useEffect(() => {
+    if (!menuProjetos) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuProjetos(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuProjetos]);
 
   // ── Diárias: agenda do projeto aberto ──────────────────────────────
   const [agenda, setAgenda] = useState<Agenda | null>(null);
@@ -779,9 +824,7 @@ export default function PortalCliente() {
   const [pedDuracao, setPedDuracao] = useState(10);
   const [pedNome, setPedNome] = useState(nome);
   const pedNomeTocado = useRef(false);
-  const [pedEmail, setPedEmail] = useState(() => {
-    try { return localStorage.getItem(EMAIL_SALVO) || ''; } catch { return ''; }
-  });
+  const [pedEmail, setPedEmail] = useState(() => lerSalvo(EMAIL_SALVO));
   const [enviandoPedido, setEnviandoPedido] = useState(false);
   /** A mesma trava, mas síncrona. `enviandoPedido` é estado: dois cliques no
    *  mesmo tique do navegador leem os dois `false` (o React ainda não
@@ -844,10 +887,8 @@ export default function PortalCliente() {
       return;
     }
     if (!exigeLogin) {
-      try {
-        localStorage.setItem(NOME_SALVO, pedNome.trim());
-        localStorage.setItem(EMAIL_SALVO, pedEmail.trim());
-      } catch { /* ignore */ }
+      gravarSalvo(NOME_SALVO, pedNome.trim());
+      gravarSalvo(EMAIL_SALVO, pedEmail.trim());
     }
     setPedDescricao('');
     setPedLocal('');
@@ -891,7 +932,15 @@ export default function PortalCliente() {
       <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
         <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
         <style>{PORTAL_CSS}</style>
-        <p className="rotulo">{erro}</p>
+        <div style={{ textAlign: 'center', padding: 24 }} role="alert">
+          <p className="rotulo">{erro.texto}</p>
+          {erro.rede && (
+            <button type="button" className="botao" style={{ marginTop: 16 }}
+              onClick={() => { setErro(null); carregar(); }}>
+              Tentar de novo
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -903,11 +952,26 @@ export default function PortalCliente() {
       const email = emailLogin.trim().toLowerCase();
       if (!email || enviandoLink) return;
       setEnviandoLink(true);
-      // Confere antes de mandar, mas a tela responde a mesma coisa nos dois
-      // casos: o portal não vira jeito de descobrir quem trabalha no cliente.
-      const { data: pode } = await supabase.rpc('portal_pode_entrar', { p_token: token, p_email: email });
+      setErroLogin(null);
+      // Só falha de transporte e limite de envios viram aviso. O resto responde
+      // igual nos dois casos (e-mail liberado ou não): o portal não vira jeito
+      // de descobrir quem trabalha no cliente.
+      const transitorio = (e: { status?: number } | null) => !!e && (!e.status || e.status === 429 || e.status >= 500);
+      const { data: pode, error: erroPode } = await supabase.rpc('portal_pode_entrar', { p_token: token, p_email: email });
+      if (erroPode) {
+        setErroLogin('Não foi possível enviar agora. Confira sua conexão e tente de novo.');
+        setEnviandoLink(false);
+        return;
+      }
       if (pode) {
-        await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+        const { error: erroOtp } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+        if (transitorio(erroOtp)) {
+          setErroLogin(erroOtp?.status === 429
+            ? 'Muitos pedidos seguidos. Espere um minuto e tente de novo.'
+            : 'Não foi possível enviar agora. Confira sua conexão e tente de novo.');
+          setEnviandoLink(false);
+          return;
+        }
       }
       setEnviandoLink(false);
       setLinkEnviado(true);
@@ -952,8 +1016,10 @@ export default function PortalCliente() {
                 Entre com<br />seu e-mail
               </h1>
               <input autoFocus type="email" className="campo" placeholder="voce@empresa.com.br"
+                aria-label="Seu e-mail" autoComplete="email"
                 value={emailLogin} onChange={e => setEmailLogin(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') enviar(); }} />
+              {erroLogin && <p className="nota alerta" role="alert" style={{ marginTop: 10 }}>{erroLogin}</p>}
               <button className="botao" style={{ marginTop: 12, width: '100%' }}
                 disabled={!emailLogin.trim() || enviandoLink} onClick={enviar}>
                 {enviandoLink ? 'Enviando…' : 'Receber link de entrada'}
@@ -992,14 +1058,14 @@ export default function PortalCliente() {
             Como<br />te chamamos?
           </h1>
           <input
-            autoFocus value={digitando} onChange={e => setDigitando(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && digitando.trim()) { localStorage.setItem(NOME_SALVO, digitando.trim()); setNome(digitando.trim()); } }}
+            autoFocus aria-label="Seu nome" autoComplete="name" value={digitando} onChange={e => setDigitando(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && digitando.trim()) { gravarSalvo(NOME_SALVO, digitando.trim()); setNome(digitando.trim()); } }}
             placeholder="Seu nome"
             className="campo"
           />
           <button className="botao" style={{ marginTop: 12, width: '100%' }}
             disabled={!digitando.trim()}
-            onClick={() => { localStorage.setItem(NOME_SALVO, digitando.trim()); setNome(digitando.trim()); }}>
+            onClick={() => { gravarSalvo(NOME_SALVO, digitando.trim()); setNome(digitando.trim()); }}>
             Entrar
           </button>
           <p className="nota" style={{ marginTop: 14 }}>
@@ -1044,7 +1110,7 @@ export default function PortalCliente() {
                 aberto. Qual projeto está aberto já está no título da página, e
                 um botão que muda de nome faz a pessoa procurar o menu duas
                 vezes. O destaque em amarelo é que diz que ela está num deles. */}
-            <button type="button" className="link" aria-haspopup="menu" aria-expanded={menuProjetos}
+            <button type="button" className="link" aria-expanded={menuProjetos}
               aria-current={!!projetoAberto}
               onClick={() => setMenuProjetos(o => !o)}>
               Projetos
@@ -1053,12 +1119,13 @@ export default function PortalCliente() {
             {menuProjetos && (
               <>
                 <span className="fora" onClick={() => setMenuProjetos(false)} />
-                <span className="menu" role="menu">
+                <span className="menu">
                   {dados.projetos.map(p => {
                     const n = p.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE').length;
                     return (
-                      <button key={p.id} role="menuitem" type="button"
+                      <button key={p.id} type="button"
                         className={p.id === aba ? 'item atual' : 'item'}
+                        aria-current={p.id === aba}
                         onClick={() => { setAba(p.id); setMenuProjetos(false); }}>
                         <span className="rot">{p.nome.trim()}</span>
                         {n > 0 ? <span className="n">{n}</span>
@@ -1089,7 +1156,7 @@ export default function PortalCliente() {
           <span className="so-grande">Você é <b>{nome}</b></span>
           <button className="trocar" onClick={async () => {
             if (dados.portal.exige_login) { await supabase.auth.signOut(); location.reload(); return; }
-            localStorage.removeItem(NOME_SALVO); setNome(''); setDigitando('');
+            apagarSalvo(NOME_SALVO); setNome(''); setDigitando('');
           }}>{dados.portal.exige_login ? 'sair' : 'trocar'}</button>
         </span>
         </div>
@@ -1154,7 +1221,13 @@ export default function PortalCliente() {
                   const resto = n - ok - voce;
                   const pc = (x: number) => (n ? (x / n) * 100 : 0);
                   return (
-                    <a key={p.id} className="proj" onClick={() => setAba(p.id)}>
+                    <a key={p.id} className="proj" href={`/portal/${token}?aba=${p.id}`}
+                      onClick={e => {
+                        // Ctrl/Cmd/botão do meio seguem o link normal (nova aba).
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                        e.preventDefault();
+                        setAba(p.id);
+                      }}>
                       <span>
                         <span className="nome">{p.nome.trim()}</span>
                         <span className="sub">
@@ -1235,7 +1308,7 @@ export default function PortalCliente() {
                 ['diarias', 'Diárias'],
                 ['arquivos', 'Arquivos'],
               ] as const).map(([chave, rotulo]) => (
-                (chave !== 'arquivos' || projetoAberto.arquivos.length > 0) && (
+                (chave !== 'arquivos' || (blocos.arquivos !== false && projetoAberto.arquivos.length > 0)) && (
                   <button key={chave} type="button" className="link"
                     aria-current={abaProj === chave}
                     onClick={() => setAbaProj(chave)}>
@@ -1250,10 +1323,11 @@ export default function PortalCliente() {
 
             {abaProj === 'geral' && (
               <>
-                {blocos.escopo !== false && projetoAberto.escopo.length > 0 && (
+                {/* Meta zero não é pacote (seria "NaN%" e "3 de 0"): o item some. */}
+                {blocos.escopo !== false && projetoAberto.escopo.some(it => it.meta > 0) && (
                   <section className="secao">
                     <span className="rotulo">Seu pacote neste mês</span>
-                    {projetoAberto.escopo.map((it, i) => (
+                    {projetoAberto.escopo.filter(it => it.meta > 0).map((it, i) => (
                       <div key={i} className="proj" style={{ cursor: 'default' }}>
                         <span><span className="nome">{it.rotulo}</span></span>
                         <span className="barra">
@@ -1685,4 +1759,31 @@ export default function PortalCliente() {
       )}
     </div>
   );
+}
+
+/** Se qualquer parte da tela quebrar, o cliente vê um aviso com saída em vez de
+ *  uma página em branco. */
+class PortalErro extends Component<{ children: ReactNode }, { quebrou: boolean }> {
+  state = { quebrou: false };
+  static getDerivedStateFromError() { return { quebrou: true }; }
+  componentDidCatch(erro: unknown) { console.error('[portal] erro de tela', erro); }
+  render() {
+    if (!this.state.quebrou) return this.props.children;
+    const claro = lerSalvo('portal_tema') === 'claro';
+    return (
+      <div className={`portal-lumos ${claro ? 'claro' : ''}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <style>{PORTAL_CSS}</style>
+        <div style={{ textAlign: 'center' }} role="alert">
+          <p className="rotulo">Algo deu errado ao mostrar o portal.</p>
+          <button type="button" className="botao" style={{ marginTop: 16 }} onClick={() => window.location.reload()}>
+            Recarregar
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default function PortalCliente() {
+  return <PortalErro><PortalClienteConteudo /></PortalErro>;
 }
