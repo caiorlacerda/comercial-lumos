@@ -567,6 +567,7 @@ export default function SidebarProjectTree() {
       {/* Confirmação de encerrar/reabrir (com a conferência do que está em aberto) */}
       {confirmStatus && (
         <EncerrarProjetoConfirmModal
+          key={confirmStatus.proj.id}
           proj={confirmStatus.proj}
           acao={confirmStatus.acao}
           onClose={() => setConfirmStatus(null)}

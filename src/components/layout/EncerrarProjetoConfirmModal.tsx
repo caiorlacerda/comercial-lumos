@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/hooks/useAuth';
 import Modal from '@/components/common/Modal';
 import { resumoPendencias } from '@/lib/arvoreProjetos';
 import type { ProjetoArvore } from '@/lib/arvoreProjetos';
@@ -55,7 +56,10 @@ async function contarVideos(projectId: string): Promise<number | null> {
   }
 }
 
-async function somarAReceber(projectId: string): Promise<number | null | undefined> {
+async function somarAReceber(projectId: string, podeVerFinanceiro: boolean): Promise<number | null | undefined> {
+  // O banco só deixa admin e produção lerem projetos_financeiro; para os outros
+  // papéis a consulta voltaria vazia (sem erro) e pareceria que nada falta receber.
+  if (!podeVerFinanceiro) return null;
   try {
     const { data: fin, error: errFin } = await supabase
       .from('projetos_financeiro')
@@ -84,6 +88,8 @@ export default function EncerrarProjetoConfirmModal({ proj, acao, onClose, onDon
   onDone: (novoStatus: 'ativo' | 'concluido') => void;
 }) {
   const toast = useToast();
+  const { profile } = useAuth();
+  const podeVerFinanceiro = profile?.role === 'admin' || profile?.role === 'producao';
   const encerrando = acao === 'encerrar';
   const [conferindo, setConferindo] = useState(encerrando);
   const [conf, setConf] = useState<Conferencia | null>(null);
@@ -97,33 +103,39 @@ export default function EncerrarProjetoConfirmModal({ proj, acao, onClose, onDon
       const [tarefas, videos, aReceber] = await Promise.all([
         contarTarefas(proj.id),
         contarVideos(proj.id),
-        somarAReceber(proj.id),
+        somarAReceber(proj.id, podeVerFinanceiro),
       ]);
       if (cancelado) return;
       setConf({ tarefas, videos, aReceber });
       setConferindo(false);
     })();
     return () => { cancelado = true; };
-  }, [encerrando, proj.id]);
+  }, [encerrando, proj.id, podeVerFinanceiro]);
 
   const linhas = useMemo(() => (conf ? resumoPendencias(conf) : []), [conf]);
 
   const confirmar = async () => {
     if (salvando) return;
     setSalvando(true);
-    const de = encerrando ? 'ativo' : 'concluido';
-    const para = encerrando ? 'concluido' : 'ativo';
-    // Só grava se o projeto ainda está no status que a pessoa viu
-    const { data, error } = await supabase.from('projects')
-      .update({ status: para }).eq('id', proj.id).eq('status', de).select('id');
-    setSalvando(false);
-    if (error) { toast.error('Não foi possível salvar. Tente de novo.'); return; }
-    if (!data || data.length === 0) {
-      toast.error('Esse projeto já foi alterado por outra pessoa. Recarregue a barra.');
-      return;
+    try {
+      const de = encerrando ? 'ativo' : 'concluido';
+      const para = encerrando ? 'concluido' : 'ativo';
+      // Só grava se o projeto ainda está no status que a pessoa viu
+      const { data, error } = await supabase.from('projects')
+        .update({ status: para }).eq('id', proj.id).eq('status', de).select('id');
+      if (error) { toast.error('Não foi possível salvar. Tente de novo.'); return; }
+      if (!data || data.length === 0) {
+        toast.error('Esse projeto já foi alterado por outra pessoa. Recarregue a barra.');
+        onClose(); // não há o que tentar de novo
+        return;
+      }
+      toast.success(encerrando ? 'Projeto encerrado.' : 'Projeto reaberto.');
+      onDone(para);
+    } catch {
+      toast.error('Não foi possível salvar. Tente de novo.');
+    } finally {
+      setSalvando(false);
     }
-    toast.success(encerrando ? 'Projeto encerrado.' : 'Projeto reaberto.');
-    onDone(para);
   };
 
   return (
@@ -132,6 +144,7 @@ export default function EncerrarProjetoConfirmModal({ proj, acao, onClose, onDon
       onClose={salvando ? () => {} : onClose}
       title={encerrando ? 'Encerrar projeto' : 'Reabrir projeto'}
       size="md"
+      camada="z-[195]" // abaixo dos avisos (z-200), para o toast ficar nítido por cima
       footer={(
         <>
           <button onClick={onClose} disabled={salvando} className="btn-secondary h-10 px-4 text-xs font-bold">
