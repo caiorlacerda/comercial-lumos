@@ -1224,6 +1224,20 @@ export default function SecaoPortalProjeto({ projectId, clientId }: { projectId:
 }
 ```
 
+- [ ] **Step 2b: Degradar sem o banco novo.** Este PR pode ser mesclado **antes** de o Caio rodar o SQL do PR 2. Se as tabelas não existirem (código de erro `42P01` do Postgres ou `PGRST205` do PostgREST), a seção **não** pode estourar toast nem quebrar a página do projeto: mostra só um aviso discreto. No componente:
+
+```tsx
+const [semBanco, setSemBanco] = useState(false);
+const faltaTabela = (e: { code?: string } | null) => e?.code === '42P01' || e?.code === 'PGRST205';
+// em carregar(), logo depois do Promise.all:
+if (faltaTabela(s.error) || faltaTabela(p.error) || faltaTabela(m.error)) { setSemBanco(true); setCarregando(false); return; }
+// no render, logo depois do bloco `if (carregando)`:
+if (semBanco) {
+  return <p className="text-xs text-lumos-text-secondary py-4">O portal ainda não tem as tabelas desta seção. Ela aparece depois que o banco for atualizado.</p>;
+}
+```
+A chamada `supabase.rpc('portal_recalcular_saude', ...)` já não lança erro quando a função não existe (devolve `{ error }`); manter assim. A mesma regra vale no Task 13: se a consulta de `portal_pendencias` falhar com esses códigos, a seção de pendências do cliente nem é renderizada.
+
 - [ ] **Step 3: Verificar** — `tsc` sem linhas de `SecaoPortalProjeto`; no app (servidor de dev apontando para o banco **local**, com a migration aplicada), abrir um projeto de teste, conferir: saúde mostrada, "Mostrar agora" aparece só com piora segurada, adicionar/concluir/apagar pendência, adicionar/reordenar/tirar pessoa. Conferir em tela estreita (375 px) sem rolagem horizontal.
 
 - [ ] **Step 4: Commit**
