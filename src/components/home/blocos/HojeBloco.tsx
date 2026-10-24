@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { TipoPilula } from '@/components/producao/TipoDeTarefa';
+import { useTipoDasTarefas } from '@/lib/tiposTarefa';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -23,6 +25,7 @@ export default function HojeBloco({ dados }: { dados: DadosHome }) {
   const { profile } = useAuth();
   const userId = profile?.id;
   const { hojeStr } = dados;
+  const tipoDe = useTipoDasTarefas(dados.ordenadas.map(t => t.id));
   const [agenda, setAgenda] = useState<ItemHoje[]>([]);
   const [carregando, setCarregando] = useState(true);
 
@@ -108,7 +111,10 @@ export default function HojeBloco({ dados }: { dados: DadosHome }) {
                 {ROTULO[item.tipo]}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-semibold text-lumos-text-primary truncate group-hover:text-lumos-yellow transition-colors">{item.titulo}</span>
+                <span className="flex items-center gap-1.5 min-w-0 text-[13px] font-semibold text-lumos-text-primary group-hover:text-lumos-yellow transition-colors">
+                  {item.tipo === 'prazo' && tipoDe(item.id.split(':')[1]) && <TipoPilula tipo={tipoDe(item.id.split(':')[1])!} pequeno />}
+                  <span className="truncate">{item.titulo}</span>
+                </span>
                 {item.projeto && <span className="block text-[10px] uppercase tracking-wider text-lumos-text-secondary truncate">{item.projeto}</span>}
               </span>
               {item.hora && <span className="text-[11px] uppercase tracking-wider text-lumos-text-primary flex-shrink-0">{item.hora}</span>}

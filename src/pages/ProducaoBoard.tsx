@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { TipoPilula } from '@/components/producao/TipoDeTarefa';
+import { useTipoDasTarefas, type TipoTarefa } from '@/lib/tiposTarefa';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DndContext,
@@ -70,7 +72,7 @@ const todayStr = hojeLocalISO;
 // -------------------------------------------------------------
 // Conteúdo visual do card (usado no board e no DragOverlay)
 // -------------------------------------------------------------
-function BoardCardContent({ task, responsavel }: { task: BoardTask; responsavel: TeamUser | null }) {
+function BoardCardContent({ task, responsavel, tipo }: { task: BoardTask; responsavel: TeamUser | null; tipo?: TipoTarefa }) {
   const isOverdue = !!task.data_fim && task.data_fim < todayStr() && !CONCLUDED_STATUSES.has(task.status);
 
   return (
@@ -82,6 +84,7 @@ function BoardCardContent({ task, responsavel }: { task: BoardTask; responsavel:
 
       {/* Título */}
       <p className="text-xs font-bold text-lumos-text-primary leading-snug line-clamp-3">
+        {tipo && <TipoPilula tipo={tipo} pequeno className="mr-1.5 align-[1px]" />}
         {task.titulo}
         <ExternalLink className="w-3 h-3 inline-block ml-1 opacity-0 group-hover:opacity-50 transition-opacity" />
       </p>
@@ -115,11 +118,13 @@ function BoardCardContent({ task, responsavel }: { task: BoardTask; responsavel:
 function BoardCard({
   task,
   responsavel,
+  tipo,
   disabled,
   onOpen,
 }: {
   task: BoardTask;
   responsavel: TeamUser | null;
+  tipo?: TipoTarefa;
   disabled: boolean;
   onOpen: () => void;
 }) {
@@ -141,7 +146,7 @@ function BoardCard({
         !disabled && 'touch-none'
       )}
     >
-      <BoardCardContent task={task} responsavel={responsavel} />
+      <BoardCardContent task={task} responsavel={responsavel} tipo={tipo} />
     </div>
   );
 }
@@ -201,6 +206,7 @@ export default function ProducaoBoard() {
   const [searchParams] = useSearchParams();
 
   const [tasks, setTasks] = useState<BoardTask[]>([]);
+  const tipoDe = useTipoDasTarefas(tasks.map(t => t.id));
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -456,6 +462,7 @@ export default function ProducaoBoard() {
                       key={task.id}
                       task={task}
                       responsavel={task.responsavel_id ? userById[task.responsavel_id] || null : null}
+                      tipo={tipoDe(task.id)}
                       disabled={!canMove}
                       onOpen={() => openTask(task)}
                     />
@@ -472,6 +479,7 @@ export default function ProducaoBoard() {
                 <BoardCardContent
                   task={activeTask}
                   responsavel={activeTask.responsavel_id ? userById[activeTask.responsavel_id] || null : null}
+                  tipo={tipoDe(activeTask.id)}
                 />
               </div>
             ) : null}
