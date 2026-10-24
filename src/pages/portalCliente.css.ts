@@ -168,6 +168,8 @@ export const PORTAL_CSS = String.raw`
   .quadro .peca { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.2; }
   .quadro .meta { display: block; font-family: "JetBrains Mono", monospace; font-size: 9.5px; color: #cfc7bb; margin-top: 1px; }
   @media (prefers-reduced-motion: reduce) { .quadro .legenda { transition: none; } }
+  /* Tela de toque não tem hover: sem isto o celular nunca mostrava o nome do vídeo. */
+  @media (hover: none) { .quadro .legenda { opacity: 1; transform: none; } }
   .mais {
     align-self: stretch; min-height: var(--h, 150px); display: grid; place-items: center;
     font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--meia-luz);
