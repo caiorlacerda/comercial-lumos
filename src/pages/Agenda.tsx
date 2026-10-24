@@ -1,20 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Clapperboard, ClipboardList, Layers,
+  CalendarDays, Clapperboard, ClipboardList, Layers,
   List, LayoutGrid, Loader2, Search, Send, Video,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import Select from '@/components/ui/Select';
+import CalendarioEventos, { BarraDoCalendario } from '@/components/agenda/CalendarioEventos';
+import { useDiasFechados } from '@/components/agenda/useDiasFechados';
+import {
+  DIAS_LONGOS as DIAS, MESES_CURTOS as MESES, addDias, diasDaJanela, domingoDe, hojeIso, isoDe as iso,
+  type EventoCal, type Granularidade,
+} from '@/components/agenda/calendario';
 
 /**
  * AGENDA — o calendário geral da produção, no formato do benchmark: tudo que
  * tem data num lugar só (diárias, ordens do dia, prazos de tarefa e entregas
  * ao cliente), com três visualizações (calendário, lista e kanban),
  * granularidade mês/semana/dia, botão Hoje, filtros por tipo e projeto, e o
- * seletor Agenda Geral × Minha Agenda.
+ * seletor Agenda Geral × Minha Agenda. O calendário é o mesmo das Diárias do
+ * projeto (src/components/agenda): Semana e Dia em grade de horas.
  */
 
 type Tipo = 'diaria' | 'ordem' | 'tarefa' | 'entrega';
@@ -24,6 +31,8 @@ interface Item {
   titulo: string;
   data: string;         // AAAA-MM-DD
   hora?: string | null; // HH:MM quando existe
+  duracaoMin?: number | null; // duração planejada (diárias), quando não há hora de fim
+  horaFim?: string | null; // HH:MM do fim, quando existe (menor que o início = dia seguinte)
   projeto?: string | null;
   projectId?: string | null;
   respId?: string | null;
@@ -38,13 +47,7 @@ const TIPOS: Record<Tipo, { label: string; cor: string; chip: string; Icon: any 
   entrega: { label: 'Entregas ao cliente', cor: '#f87171', chip: 'bg-red-500/15 text-red-500 border-red-500/40', Icon: Send },
 };
 
-const p2 = (n: number) => String(n).padStart(2, '0');
-const iso = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
-const hojeIso = () => iso(new Date());
-const addDias = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const domingoDe = (d: Date) => addDias(d, -d.getDay());
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const ROTULO_CURTO = (t: Tipo) => TIPOS[t].label.replace(/s$/, '').replace(' ao cliente', '').replace(' de tarefa', '');
 
 export default function Agenda() {
   const navigate = useNavigate();
@@ -57,17 +60,18 @@ export default function Agenda() {
   const [visao, setVisao] = useState<'calendario' | 'lista' | 'kanban'>(() => {
     try { return (localStorage.getItem('lumos_agenda_visao') as any) || 'calendario'; } catch { return 'calendario'; }
   });
-  const [gran, setGran] = useState<'mes' | 'semana' | 'dia'>(() => {
+  const [gran, setGran] = useState<Granularidade>(() => {
     try { return (localStorage.getItem('lumos_agenda_gran') as any) || 'semana'; } catch { return 'semana'; }
   });
   const [agenda, setAgenda] = useState<'geral' | 'minha'>('geral');
   const [cursor, setCursor] = useState(() => new Date());
+  const diaFechado = useDiasFechados();
   const [tiposAtivos, setTiposAtivos] = useState<Set<Tipo>>(new Set(['diaria', 'ordem', 'tarefa', 'entrega']));
   const [projetoFiltro, setProjetoFiltro] = useState('');
   const [busca, setBusca] = useState('');
 
   const mudarVisao = (v: typeof visao) => { setVisao(v); try { localStorage.setItem('lumos_agenda_visao', v); } catch { /* ignora */ } };
-  const mudarGran = (g: typeof gran) => { setGran(g); try { localStorage.setItem('lumos_agenda_gran', g); } catch { /* ignora */ } };
+  const mudarGran = (g: Granularidade) => { setGran(g); try { localStorage.setItem('lumos_agenda_gran', g); } catch { /* ignora */ } };
 
   const load = useCallback(async () => {
     // hora_entrega pode ainda não existir no banco (migration pendente) — cai
@@ -81,12 +85,15 @@ export default function Agenda() {
         .select('id, titulo, status, data_fim, data_entrega_cliente, responsavel_id, project_id, projects(name)')
         .is('deleted_at', null);
     };
+    // Horário de fim das diárias e das ODs: se a coluna não existir, cai pro select antigo.
+    const comPlanoB = async (tabela: string, completo: string, simples: string) => {
+      const q = await supabase.from(tabela).select(completo);
+      return q.error ? supabase.from(tabela).select(simples) : q;
+    };
     const [tarefasQ, diariasQ, ordensQ, collabsQ] = await Promise.all([
       buscarTarefas(),
-      supabase.from('project_diarias')
-        .select('id, nome, data, hora_inicio, project_id, projects(name)'),
-      supabase.from('ordens_do_dia')
-        .select('id, titulo, data_producao, project_id, projects(name)'),
+      comPlanoB('project_diarias', 'id, nome, data, hora_inicio, hora_fim, duracao_horas, project_id, projects(name)', 'id, nome, data, hora_inicio, project_id, projects(name)'),
+      comPlanoB('ordens_do_dia', 'id, titulo, data_producao, hora_inicio, hora_fim, project_id, projects(name)', 'id, titulo, data_producao, project_id, projects(name)'),
       profile?.id
         ? supabase.from('task_collaborators').select('task_id').eq('user_id', profile.id)
         : Promise.resolve({ data: [] as { task_id: string }[] }),
@@ -117,6 +124,8 @@ export default function Agenda() {
       lista.push({
         id: `diaria:${d.id}`, tipo: 'diaria', titulo: d.nome, data: d.data,
         hora: d.hora_inicio ? String(d.hora_inicio).slice(0, 5) : null,
+        horaFim: d.hora_fim ? String(d.hora_fim).slice(0, 5) : null,
+        duracaoMin: d.duracao_horas ? Math.round(Number(d.duracao_horas) * 60) : null,
         projeto: d.projects?.name || null, projectId: d.project_id,
         link: `/producao/projetos?projectId=${d.project_id}&tab=diarias`,
       });
@@ -125,6 +134,8 @@ export default function Agenda() {
       if (!o.data_producao) continue;
       lista.push({
         id: `ordem:${o.id}`, tipo: 'ordem', titulo: o.titulo, data: o.data_producao,
+        hora: o.hora_inicio ? String(o.hora_inicio).slice(0, 5) : null,
+        horaFim: o.hora_fim ? String(o.hora_fim).slice(0, 5) : null,
         projeto: o.projects?.name || null, projectId: o.project_id,
         link: `/ordem-do-dia/${o.id}`,
       });
@@ -167,49 +178,30 @@ export default function Agenda() {
     return m;
   }, [filtrados]);
 
-  // janela visível conforme a granularidade
-  const janela = useMemo(() => {
-    if (gran === 'dia') return { ini: new Date(cursor), fim: new Date(cursor) };
-    if (gran === 'semana') { const d0 = domingoDe(cursor); return { ini: d0, fim: addDias(d0, 6) }; }
-    const primeiro = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const ultimo = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-    return { ini: domingoDe(primeiro), fim: addDias(domingoDe(ultimo), 6) };
-  }, [cursor, gran]);
-
-  const navegar = (dir: -1 | 1) => setCursor(c => {
-    if (gran === 'dia') return addDias(c, dir);
-    if (gran === 'semana') return addDias(c, dir * 7);
-    return new Date(c.getFullYear(), c.getMonth() + dir, 1);
-  });
-
-  const tituloJanela = useMemo(() => {
-    if (gran === 'mes') return `${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][cursor.getMonth()]} ${cursor.getFullYear()}`;
-    if (gran === 'dia') return `${DIAS[cursor.getDay()]}, ${cursor.getDate()} de ${MESES[cursor.getMonth()]} ${cursor.getFullYear()}`;
-    const { ini, fim } = janela;
-    return `${ini.getDate()} ${MESES[ini.getMonth()]} — ${fim.getDate()} ${MESES[fim.getMonth()]} ${fim.getFullYear()}`;
-  }, [cursor, gran, janela]);
-
-  const Chip = ({ i, compacto }: { i: Item; compacto?: boolean }) => {
-    const T = TIPOS[i.tipo];
-    return (
-      <button type="button" onClick={() => navigate(i.link)} title={`${T.label.replace(/s$/, '')} · ${i.titulo}${i.projeto ? ` · ${i.projeto}` : ''}`}
-        className={clsx('w-full text-left rounded px-1.5 py-1 border transition-colors hover:brightness-110',
-          i.atrasado ? 'bg-red-500/15 text-red-500 border-red-500/40' : T.chip)}>
-        <span className={clsx('flex items-center gap-1 font-bold truncate', compacto ? 'text-[9.5px]' : 'text-[10.5px]')}>
-          <T.Icon className="w-2.5 h-2.5 flex-shrink-0" />
-          {i.hora && <span className="tabular-nums">{i.hora}</span>}
-          <span className="truncate">{i.titulo}</span>
-        </span>
-        {!compacto && i.projeto && <span className="block text-[8.5px] opacity-70 truncate pl-3.5">{i.projeto}</span>}
-      </button>
-    );
-  };
+  // Itens no formato do calendário. Cor sólida por tipo; atrasado vira vermelho; o que já passou fica mais apagado.
+  const eventos = useMemo<EventoCal[]>(() => {
+    const hoje = hojeIso();
+    return filtrados.map(i => {
+      const T = TIPOS[i.tipo];
+      return {
+        id: i.id, titulo: i.titulo, data: i.data, hora: i.hora, horaFim: i.horaFim,
+        // Prazo é um ponto no tempo (30 min na grade); diária e OD usam o fim, ou a duração planejada.
+        duracaoPadraoMin: i.tipo === 'tarefa' ? 30 : (i.duracaoMin ?? 60),
+        cor: i.atrasado ? '#ef4444' : T.cor,
+        Icon: T.Icon,
+        subtitulo: i.projeto,
+        detalhes: [ROTULO_CURTO(i.tipo)],
+        selo: i.atrasado ? 'Atrasado' : null,
+        passado: !i.atrasado && i.data < hoje,
+      };
+    });
+  }, [filtrados]);
+  const porId = useMemo(() => new Map(filtrados.map(i => [i.id, i])), [filtrados]);
 
   if (loading) return <div className="min-h-[50vh] grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>;
 
   const hoje = hojeIso();
-  const diasVisiveis: Date[] = [];
-  for (let d = new Date(janela.ini); d <= janela.fim; d = addDias(d, 1)) diasVisiveis.push(new Date(d));
+  const diasVisiveis = diasDaJanela(cursor, gran);
 
   return (
     <div className="space-y-4 font-work-sans pb-16">
@@ -241,93 +233,55 @@ export default function Agenda() {
 
       {/* Filtros: tipos + projeto + busca */}
       <div className="flex items-center gap-2 flex-wrap">
+        {/* No celular os tipos viram uma fileira que rola, em vez de ocupar 3 linhas */}
+        <div className="flex items-center gap-2 max-md:w-full max-md:overflow-x-auto max-md:flex-nowrap no-scrollbar">
         {(Object.keys(TIPOS) as Tipo[]).map(t => {
           const ativo = tiposAtivos.has(t);
           const T = TIPOS[t];
           return (
             <button key={t} type="button" aria-pressed={ativo}
               onClick={() => setTiposAtivos(prev => { const n = new Set(prev); if (n.has(t)) n.delete(t); else n.add(t); return n; })}
-              className={clsx('chip-lumos h-8 px-3 rounded-full border text-[10.5px] font-black flex items-center gap-1.5 transition-colors',
+              className={clsx('chip-lumos h-8 px-3 rounded-full border text-[10.5px] font-black flex items-center gap-1.5 transition-colors flex-shrink-0 whitespace-nowrap',
                 ativo ? T.chip : 'border-lumos-border text-lumos-text-secondary/60 hover:text-lumos-text-secondary')}>
               <span className="w-2 h-2 rounded-full" style={{ background: ativo ? T.cor : 'currentColor', opacity: ativo ? 1 : 0.4 }} />
               {T.label}
             </button>
           );
         })}
-        <div className="w-52">
+        </div>
+        <div className="w-52 max-md:flex-1">
           <Select value={projetoFiltro} onChange={setProjetoFiltro} searchable className="input-lumos h-8 w-full text-xs"
             options={[{ value: '', label: 'Todos os projetos' }, ...projetos.map(([id, nome]) => ({ value: id, label: nome }))]} />
         </div>
-        <div className="relative ml-auto">
+        <div className="relative ml-auto max-md:ml-0 max-md:flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
-            className="input-lumos h-8 pl-8 w-44 text-xs" />
+            className="input-lumos h-8 pl-8 w-44 max-md:w-full text-xs" />
         </div>
       </div>
 
       {/* Navegação temporal (calendário e lista) */}
       {visao !== 'kanban' && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={() => navegar(-1)} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary"><ChevronLeft className="w-4 h-4" /></button>
-          <button type="button" onClick={() => navegar(1)} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary"><ChevronRight className="w-4 h-4" /></button>
-          <p className="text-sm font-black text-lumos-text-primary capitalize">{tituloJanela}</p>
-          <div className="ml-auto flex items-center gap-1.5">
-            <button type="button" onClick={() => setCursor(new Date())}
-              className="h-8 px-3 rounded-lumos border border-lumos-border text-[11px] font-black text-lumos-text-secondary hover:text-lumos-text-primary">Hoje</button>
-            <div className="segmentado-lumos flex items-center border border-lumos-border rounded-lumos overflow-hidden">
-              {([['mes', 'Mês'], ['semana', 'Semana'], ['dia', 'Dia']] as const).map(([key, label]) => (
-                <button key={key} type="button" onClick={() => mudarGran(key)} aria-pressed={gran === key}
-                  className={clsx('segmento-lumos h-8 px-3 text-[10.5px] font-black uppercase transition-colors',
-                    gran === key ? 'bg-lumos-text-primary/10 text-lumos-text-primary' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <BarraDoCalendario cursor={cursor} gran={gran} onCursor={setCursor} onGran={mudarGran} />
       )}
 
-      {/* ═══════ CALENDÁRIO ═══════ */}
-      {visao === 'calendario' && gran !== 'dia' && (
-        <div className="card overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-lumos-border">
-            {DIAS.map(d => (
-              <div key={d} className="px-2 py-2 text-center text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary">{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7">
-            {diasVisiveis.map((d, idx) => {
-              const dIso = iso(d);
-              const doDia = porDia.get(dIso) || [];
-              const foraDoMes = gran === 'mes' && d.getMonth() !== cursor.getMonth();
-              const max = gran === 'mes' ? 3 : 8;
-              return (
-                <div key={idx} className={clsx('border-b border-r border-lumos-border/60 p-1.5 space-y-1 align-top',
-                  gran === 'mes' ? 'min-h-[96px]' : 'min-h-[340px]',
-                  foraDoMes && 'opacity-40', dIso === hoje && 'bg-lumos-yellow/[0.05]')}>
-                  <p className={clsx('text-[10px] font-black tabular-nums',
-                    dIso === hoje ? 'text-lumos-yellow' : 'text-lumos-text-secondary')}>
-                    {d.getDate()}{dIso === hoje && ' · hoje'}
-                  </p>
-                  {doDia.slice(0, max).map(i => <Chip key={i.id} i={i} compacto={gran === 'mes'} />)}
-                  {doDia.length > max && (
-                    <button type="button" onClick={() => { setCursor(new Date(d)); mudarGran('dia'); }}
-                      className="text-[9px] font-black text-lumos-text-secondary hover:text-lumos-yellow">+ {doDia.length - max} mais</button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {/* ═══════ CALENDÁRIO: mês, e semana/dia em grade de horas ═══════ */}
+      {visao === 'calendario' && (
+        <CalendarioEventos
+          eventos={eventos} gran={gran} cursor={cursor}
+          diaFechado={diaFechado}
+          onEscolherDia={d => { setCursor(d); mudarGran('dia'); }}
+          onAbrir={e => { const i = porId.get(e.id); if (i) navigate(i.link); }}
+        />
       )}
 
-      {/* Dia (calendário) e LISTA compartilham o formato de lista por dia */}
-      {((visao === 'calendario' && gran === 'dia') || visao === 'lista') && (
+      {/* LISTA: um cartão por dia */}
+      {visao === 'lista' && (
         <div className="space-y-3">
-          {(visao === 'lista' ? diasVisiveis : [cursor]).map(d => {
+          {diasVisiveis.map(d => {
             const dIso = iso(d);
             const doDia = porDia.get(dIso) || [];
-            if (visao === 'lista' && doDia.length === 0) return null;
+            if (doDia.length === 0) return null;
             return (
               <div key={dIso} className="card overflow-hidden">
                 <p className={clsx('px-4 py-2 text-[10px] font-black uppercase tracking-widest border-b border-lumos-border',
@@ -347,7 +301,7 @@ export default function Agenda() {
                       {i.projeto && <span className="text-[10.5px] text-lumos-text-secondary truncate max-w-[200px]">{i.projeto}</span>}
                       <span className={clsx('text-[9px] font-black uppercase px-2 py-0.5 rounded-full border flex-shrink-0',
                         i.atrasado ? 'bg-red-500/15 text-red-500 border-red-500/40' : T.chip)}>
-                        {i.atrasado ? 'Atrasado' : T.label.replace(/s$/, '').replace(' ao cliente', '').replace(' de tarefa', '')}
+                        {i.atrasado ? 'Atrasado' : ROTULO_CURTO(i.tipo)}
                       </span>
                     </button>
                   );
@@ -355,7 +309,7 @@ export default function Agenda() {
               </div>
             );
           })}
-          {visao === 'lista' && diasVisiveis.every(d => !(porDia.get(iso(d)) || []).length) && (
+          {diasVisiveis.every(d => !(porDia.get(iso(d)) || []).length) && (
             <div className="card p-8 text-center">
               <CalendarDays className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" />
               <p className="text-sm font-bold text-lumos-text-primary">Nada com data neste período.</p>
@@ -392,7 +346,7 @@ export default function Agenda() {
                       <button key={i.id} type="button" onClick={() => navigate(i.link)}
                         className="w-full text-left card !bg-lumos-bg/40 p-2.5 hover:border-lumos-yellow/40 transition-colors">
                         <span className="flex items-center gap-1.5 text-[9px] font-black uppercase" style={{ color: i.atrasado ? '#ef4444' : T.cor }}>
-                          <T.Icon className="w-2.5 h-2.5" /> {T.label.replace(/s$/, '').replace(' ao cliente', '').replace(' de tarefa', '')}
+                          <T.Icon className="w-2.5 h-2.5" /> {ROTULO_CURTO(i.tipo)}
                           <span className="ml-auto text-lumos-text-secondary tabular-nums normal-case">
                             {new Date(i.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}{i.hora ? ` · ${i.hora}` : ''}
                           </span>
