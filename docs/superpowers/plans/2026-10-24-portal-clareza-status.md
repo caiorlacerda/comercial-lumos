@@ -1001,7 +1001,7 @@ ORDER BY (public.portal_saude_calcular(p.id)).estado DESC NULLS LAST, c.name, p.
   {
     chave: 'portal_saude_avisa',
     titulo: 'Projeto vai ficar "Atenção" ou "Atrasado" no portal',
-    faz: 'Quando o cálculo de prazo piora, o time é avisado 24 horas antes de o cliente ver. Desligada, o cliente vê a mudança na hora, sem aviso.',
+    faz: 'Quando o cálculo de prazo piora, o time é avisado 24 horas antes de o cliente ver. Desligada, ninguém é avisado; a mudança aparece para o cliente 24 horas depois.',
     quem: null,
   },
 ```
@@ -1296,7 +1296,7 @@ export interface VisaoProjeto {
 export interface VisaoProjetos {
   projetos: VisaoProjeto[];
   pendencias_cliente: ItemPendencia[];
-  boas_vindas_pendentes: string[];
+  boas_vindas_pendentes: { chave: string; titulo: string }[];
 }
 ```
 - `export function useVisaoProjetos(token: string, ativo: boolean): VisaoProjetos | null`
@@ -1519,19 +1519,23 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 - Consumes: `VisaoProjetos`, `Pendencias`.
 - Produces: `Inicio` ganha a prop opcional `visao?: VisaoProjetos | null`.
 
-- [ ] **Step 1:** Em `Inicio.tsx`, entre o destaque "Esperando você" e o bloco `duas`, montar, quando houver itens:
+- [ ] **Step 1:** Em `Inicio.tsx`, entre o destaque "Esperando você" e o bloco `duas`, montar, quando houver itens. Os itens do Bem-vindo vêm do banco como `{ chave, titulo }` (o checklist é dinâmico por cliente; o `titulo` já é o texto do item, sem mapa fixo):
 
 ```tsx
 {(() => {
-  const ROT: Record<string, string> = { logo: 'Enviar a logo da marca', brand_book: 'Enviar o brand book', guidelines: 'Enviar as guidelines', acessos: 'Informar os acessos' };
   const itens = [
     ...(visao?.pendencias_cliente || []).map(p => ({ chave: p.id, texto: p.texto, prazo: p.prazo })),
-    ...(visao?.boas_vindas_pendentes || []).map(k => ({ chave: `bv-${k}`, texto: ROT[k] || k, aoClicar: () => irParaAba('boas_vindas'), href: `/portal/${token}?aba=boas_vindas` })),
+    ...(visao?.boas_vindas_pendentes || []).map(b => ({
+      chave: `bv-${b.chave}`,
+      texto: `Bem-vindo à Lumos: ${b.titulo}`,
+      aoClicar: () => irParaAba('boas_vindas'),
+      href: `/portal/${token}?aba=boas_vindas`,
+    })),
   ];
   return itens.length ? <Pendencias itens={itens} /> : null;
 })()}
 ```
-Para o clique no item do Bem-vindo, o `Pendencias` chama `aoClicar` com `preventDefault` quando houver `aoClicar` (clique simples) e deixa o `href` valer para Ctrl/Cmd.
+O `Pendencias` chama `aoClicar` (com `preventDefault`) no clique simples e deixa o `href` valer para Ctrl/Cmd/botão do meio.
 
 - [ ] **Step 2: Verificar** — harness com `window.__visao` contendo `pendencias_cliente` e `boas_vindas_pendentes`; conferir que a seção aparece no Início e que o clique em "Enviar a logo da marca" abre a aba Bem-vindo. Com `__visao = null`, o Início fica idêntico ao baseline.
 - [ ] **Step 3: Commit, push, PR**

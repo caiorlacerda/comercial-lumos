@@ -21,7 +21,7 @@ No topo da aba **Visão geral** de cada projeto, nesta ordem:
 | Bloco | Conteúdo | Fonte |
 |---|---|---|
 | Saúde | "No prazo", "Atenção" ou "Atrasado" + frase neutra | `project_portal_saude.exibida` |
-| Próximo marco | Nome da próxima etapa ainda não feita e a data (`prazo_cliente` ou fim da etapa) | `cronograma` / `stages` que `get_client_portal_v2` já devolve |
+| Próximo marco | Nome da próxima etapa ainda não feita e a data (`prazo_cliente` ou fim da etapa; **a data some quando já passou**, porque o cronograma agrupa tarefas já concluídas) | `cronograma` / `stages` que `get_client_portal_v2` já devolve |
 | O que precisamos de você | Lista com texto e prazo opcional | vídeos em revisão do cliente + `portal_pendencias` |
 | Equipe do projeto | Foto, nome e função | `project_portal_equipe`, só se `mostrar_equipe` |
 
@@ -65,7 +65,7 @@ Ordem dos estados: `NULL(0) < no_prazo(1) < atencao(2) < atrasado(3)`. **Piora**
 
 **Alerta:** notificação in-app `portal_saude_piora`, prioridade alta, para admin, atendimento e `contact_user_ids` dos portais do cliente (mesmo público do aviso "cliente abriu o portal"). Texto: "**{Projeto}** vai aparecer como **{Atrasado|Atenção}** para o cliente em 24 horas." Link: `/producao/projetos?projectId={id}`. Criado direto no banco (é gatilho de banco), **sem** chamada `notify()` no cliente, para não duplicar. O tipo entra no catálogo `src/lib/notifications/events.ts`.
 
-Projeto sem portal ativo ou com `portal_visivel = false`: `exibida = nova` sem alerta (ninguém vê).
+Projeto sem portal ativo ou com `portal_visivel = false`: `calculada` acompanha o cálculo, **`exibida` fica vazia (NULL)** e não há alerta (ninguém vê). Assim, quando o portal for ativado, uma piora passa pela espera de 24 h e pelo aviso, e não aparece de imediato ao cliente. O alerta só chega a quem é da equipe e não está oculto (`hidden`).
 
 ## 4. Banco de dados
 
@@ -78,11 +78,11 @@ Migrations novas (nome `AAAAMMDDNN_descricao.sql`, rodadas manualmente pelo Caio
 **`project_portal_equipe`**: `project_id`, `app_user_id`, `ordem int`, PK `(project_id, app_user_id)`. Mesma RLS.
 
 **Funções:**
-- `portal_saude_calcular(uuid) → text` (STABLE, interna).
+- `portal_saude_calcular(uuid, OUT estado, OUT motivo)` (STABLE, interna: **só o servidor executa**; usuário logado, inclusive cliente com login, não pode chamar).
 - `portal_recalcular_saude(uuid DEFAULT NULL) → void` (SECURITY DEFINER; barra quem estiver logado e **não** for equipe; o cron roda sem `auth.uid()` e passa).
 - `portal_saude_liberar(uuid) → void` (SECURITY DEFINER, `is_team()`).
 - `portal_contexto(text) → record` (interna, **sem execução para anon/PUBLIC**): resolve token ativo, `exige_login`, pessoa, `restrito` e `client_id`, com as mesmas regras de `get_client_portal_v2`.
-- **`portal_visao_projetos(p_token text) → jsonb`** (SECURITY DEFINER, aberta a anon como o resto do portal): devolve, por projeto liberado, `{id, saude:{estado}|null, pendencias:[{id, texto, prazo}], equipe:[{nome, funcao, foto}]}` (a frase de cada estado fica no front, para a equipe poder ajustar o texto sem mexer no banco) e, no nível do cliente, `pendencias_cliente` e `boas_vindas_pendentes`. Respeita `restrito`, `portal_visivel` e `mostrar_equipe`. **Não** mexe em `get_client_portal_v2`.
+- **`portal_visao_projetos(p_token text) → jsonb`** (SECURITY DEFINER, aberta a anon como o resto do portal): devolve, por projeto liberado, `{id, saude:{estado}|null, pendencias:[{id, texto, prazo}], equipe:[{nome, funcao, foto}]}` (a frase de cada estado fica no front, para a equipe poder ajustar o texto sem mexer no banco) e, no nível do cliente, `pendencias_cliente` e `boas_vindas_pendentes` (lista `[{chave, titulo}]` do checklist **dinâmico** do doc Bem-vindo publicado do cliente, só o que ainda não foi feito). A equipe só inclui contas ativas e não ocultas. Respeita `restrito`, `portal_visivel` e `mostrar_equipe`. **Não** mexe em `get_client_portal_v2`.
 
 **Automação:** chave `portal_saude_avisa` na tabela `automacoes` (ausente = ligada), com entrada na página Configurações → Automações.
 
