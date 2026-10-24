@@ -15,10 +15,11 @@ export default function Diarias({ token, projeto, voce, nome, exigeLogin }: {
   const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
   const [erroAgenda, setErroAgenda] = useState<string | null>(null);
-  /** Geração da busca de agenda: cada montagem do componente soma um. Uma busca
+  /** Geração da busca de agenda: cada execução da busca soma um. Uma busca
    *  (a inicial ou um refetch pós-envio/cancelamento) só aplica o resultado
-   *  se a geração ainda for a mesma — senão a pessoa já saiu dali, e um
-   *  resultado tardio de outro projeto sobrescreveria a tela atual. */
+   *  se a geração ainda for a mesma — senão uma busca mais nova já foi
+   *  disparada (mudança de token/exigeLogin, ou a dupla execução do
+   *  StrictMode) e o resultado tardio da anterior sobrescreveria a tela atual. */
   const geracaoAgenda = useRef(0);
 
   // Só quando a aba abre: a maioria das visitas não vai ao calendário, e ele
@@ -165,8 +166,7 @@ export default function Diarias({ token, projeto, voce, nome, exigeLogin }: {
     if (!pedNomeTocado.current) setPedNome(nome);
   }, [nome]);
 
-  // Trocou de data: o aviso da tentativa anterior não
-  // vale mais.
+  // Trocou de data: o aviso da tentativa anterior não vale mais.
   useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
 
   // A janela de pedido (aberta quando há data escolhida) segue o mesmo
@@ -215,8 +215,9 @@ export default function Diarias({ token, projeto, voce, nome, exigeLogin }: {
     enviandoRef.current = false;
     setEnviandoPedido(false);
     const { data: nova, error: erroNova } = await supabase.rpc('portal_agenda', { p_token: token, p_project_id: projeto.id });
-    // Mesma guarda do efeito principal: se a pessoa já trocou de projeto
-    // enquanto isto rodava, este resultado é velho e não vale mais nada.
+    // Mesma guarda do efeito principal: se uma busca mais nova começou
+    // (token/exigeLogin mudou) enquanto isto rodava, este resultado é velho
+    // e não vale mais nada.
     if (geracaoAgenda.current === minhaGeracao && !erroNova && !(nova as any)?.error) {
       setAgenda(nova as Agenda);
     }

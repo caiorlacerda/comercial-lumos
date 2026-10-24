@@ -212,7 +212,7 @@ function PortalClienteConteudo() {
     };
   }, [dados]);
 
-  // Calculado antes dos retornos antecipados porque vários ramos abaixo o usam.
+  // Projeto da aba atual (null fora de um projeto): usado no menu e no painel do projeto.
   const projetoAberto = dados?.projetos.find(p => p.id === aba) || null;
 
   const exigeLogin = !!dados?.portal.exige_login;

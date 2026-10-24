@@ -3,6 +3,11 @@
 //   VITE_SUPABASE_URL=http://127.0.0.1:9 VITE_SUPABASE_ANON_KEY=teste npx vite --port 5199 --strictPort
 //   Abrir http://localhost:5199/portal/teste123 (aparece "Tentar de novo"), colar este arquivo no console.
 // Devolve um objeto com o que a tela mostrou. Compare o resultado antes e depois de mexer.
+// Cuidados:
+//   - Depois de subir o vite, a primeira carga pode dar 504 "Outdated Optimize Dep": recarregue uma vez antes de colar o roteiro.
+//   - Recarregue a página antes de colar o roteiro de novo (ele embrulha o `fetch`).
+//   - Rodar o vite altera `node_modules/.vite`, que é versionado no git: restaure com
+//     `git checkout -- node_modules/.vite` antes de commitar.
 (async () => {
   const wait = (ms) => new Promise(r => setTimeout(r, ms));
   const fake = {
