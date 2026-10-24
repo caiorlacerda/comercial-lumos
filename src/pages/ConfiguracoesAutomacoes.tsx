@@ -75,6 +75,12 @@ const CATALOGO: { chave: string; titulo: string; faz: string; quem: Quem }[] = [
     faz: 'Quando o cálculo de prazo piora, o time é avisado 24 horas antes de o cliente ver. Desligada, ninguém é avisado; a mudança aparece para o cliente 24 horas depois.',
     quem: null,
   },
+  {
+    chave: 'portal_revisao_lembra',
+    titulo: 'Cliente atrasado na revisão de um vídeo',
+    faz: 'Todo dia às 9h, a equipe é avisada dos vídeos que passaram do prazo de revisão sem resposta do cliente (de novo a cada 3 dias enquanto continuar parado, no máximo 10 por dia). Desligada, ninguém é avisado; ao religar, os vencidos são avisados na rodada seguinte.',
+    quem: null,
+  },
 ];
 
 /** Erro de tabela ou função que ainda não existe no banco. */
