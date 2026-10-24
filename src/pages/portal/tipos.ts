@@ -80,11 +80,15 @@ export const ABAS_PROJETO: readonly AbaProjeto[] = ['geral', 'entregas', 'diaria
 export type EstadoSaude = 'no_prazo' | 'atencao' | 'atrasado';
 export interface ItemPendencia { id: string; texto: string; prazo: string | null }
 /** O que `portal_visao_projetos` devolve de cada projeto. */
+export interface RevisaoVisao { review_token: string; n_versoes: number; prazo: string | null }
 export interface VisaoProjeto {
   id: string;
   saude: { estado: EstadoSaude } | null;
   pendencias: ItemPendencia[];
   equipe: { nome: string; funcao: string | null; foto: string | null }[];
+  /** Por vídeo (chave: link de revisão): quantas versões a página de revisão mostra e o prazo de resposta.
+   *  Antes da migração do prazo, ou em payload parcial, a chave nem chega. */
+  revisoes?: RevisaoVisao[];
 }
 export interface VisaoProjetos {
   projetos: VisaoProjeto[];

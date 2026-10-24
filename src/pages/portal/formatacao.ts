@@ -75,6 +75,21 @@ export const quandoRelativo = (s: string) => {
   return dia(s) || '';
 };
 
+/** "Responder até 30/10" enquanto o prazo vale; "Aguardando seu retorno" depois
+ *  (sem data, sem cobrança). Compara 'AAAA-MM-DD' pelo relógio LOCAL (toISOString
+ *  é UTC e viraria o dia cedo demais no fuso do Brasil). Data ausente ou
+ *  malformada devolve null: o texto de hoje fica como está. */
+export const rotuloPrazo = (prazo?: string | null): { texto: string; vencido: boolean } | null => {
+  if (!prazo || typeof prazo !== 'string') return null;
+  const d = prazo.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(new Date(`${d}T12:00:00`).getTime())) return null;
+  const h = new Date();
+  const hoje = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+  return d < hoje
+    ? { texto: 'Aguardando seu retorno', vencido: true }
+    : { texto: `Responder até ${dia(d)}`, vencido: false };
+};
+
 /** Nome de arquivo vira nome de peça: sem extensão e sem underline. */
 export const nomeBonito = (f: string) => f.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
 

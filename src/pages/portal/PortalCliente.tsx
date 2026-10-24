@@ -7,7 +7,7 @@ import { ABAS_PROJETO } from './tipos';
 import { useVisaoProjetos } from './useVisaoProjetos';
 import { NOME_SALVO, BILHETE, lerSalvo, gravarSalvo, apagarSalvo } from './armazenamento';
 import { dia } from './formatacao';
-import { montarFileiras } from './catalogo';
+import { montarFileiras, extrasDeRevisoes } from './catalogo';
 import { Sol, Lua, ChevronDown } from './icones';
 import Inicio from './abas/Inicio';
 import Catalogo from './abas/Catalogo';
@@ -232,6 +232,8 @@ function PortalClienteConteudo() {
 
   // Situação, pendências e equipe de cada projeto. Falhou ou ainda não existe: null, e a tela fica como era.
   const visao = useVisaoProjetos(token, !!dados && !porta, aba);
+  /** Versões e prazo de cada vídeo, pelo link de revisão. Sem a visão, vazio: o catálogo fica como era. */
+  const extrasCatalogo = useMemo(() => extrasDeRevisoes(visao?.projetos), [visao]);
 
   // Esc fecha o menu de projetos, como qualquer menu esperaria.
   useEffect(() => {
@@ -481,7 +483,7 @@ function PortalClienteConteudo() {
 
       {/* ── CATÁLOGO ───────────────────────────────────────────── */}
       {aba === 'catalogo' && (
-        <Catalogo dados={dados} capas={capas} pedirCapas={pedirCapas} marcarVolta={marcarVolta} restaurar={voltouAoCatalogo} />
+        <Catalogo dados={dados} extras={extrasCatalogo} capas={capas} pedirCapas={pedirCapas} marcarVolta={marcarVolta} restaurar={voltouAoCatalogo} />
       )}
 
       {/* ── PROJETO ────────────────────────────────────────────── */}

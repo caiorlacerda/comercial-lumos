@@ -913,6 +913,10 @@ export const PORTAL_CSS = String.raw`
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
   /* Como o título: a largura do card vem só da capa; o texto inteiro fica no title e no aria-label. */
   .cat-meta { display: block; margin-top: 2px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); width: 0; min-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Prazo de resposta: mesma técnica do meta (a largura do card vem só da capa). Sem vermelho nem alerta.
+     Quebra em até 2 linhas (e não uma só com reticências): na capa 9:16 (95px) a data é o que importa e não pode sumir. */
+  .cat-prazo { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin-top: 2px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; line-height: 1.3; color: var(--luz); width: 0; min-width: 100%; overflow: hidden; overflow-wrap: anywhere; }
+  .cat-prazo.vencido { color: var(--meia-luz); }
   .fileira-seta {
     /* centro da capa = 8px de folga da faixa + metade da altura; a seta tem 40px */
     position: absolute; top: calc(8px + var(--h) / 2 - 20px); z-index: 5; width: 40px; height: 40px;
@@ -936,6 +940,8 @@ export const PORTAL_CSS = String.raw`
   .portal-lumos.claro .cat-selo.s-voce { background: #EFC700; color: #241D00; border-color: #C79E00; }
   .portal-lumos.claro .cat-selo.s-ok { color: #1F6B3A; border-color: rgba(31,107,58,.55); }
   .portal-lumos.claro .cat-selo.s-aj { color: #A83A26; border-color: rgba(168,58,38,.55); }
+  .portal-lumos.claro .cat-prazo { color: #8A6D00; }
+  .portal-lumos.claro .cat-prazo.vencido { color: var(--meia-luz); }
   .portal-lumos.claro .fileira-seta { background: rgba(255,255,255,.96); color: #1B1917; border-color: rgba(28,24,20,.55); box-shadow: 0 4px 14px -4px rgba(28,24,20,.35); }
   .portal-lumos.claro .fileira-seta:hover { color: #8A6D00; border-color: #8A6D00; }
   /* O amarelo do anel padrão some no papel: no claro o anel é o mesmo âmbar escuro do texto de destaque. */

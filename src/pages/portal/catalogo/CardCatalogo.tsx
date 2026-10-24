@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { ItemCatalogo } from '../catalogo';
 import { ESTADO } from '../motivos';
-import { formato } from '../formatacao';
+import { formato, rotuloPrazo } from '../formatacao';
 
 /** Um vídeo do catálogo: capa no formato real, título embaixo, selo do estado. */
 export default function CardCatalogo({ item, capa, observar, aoAbrir, mostrarProjeto }: {
@@ -14,7 +14,10 @@ export default function CardCatalogo({ item, capa, observar, aoAbrir, mostrarPro
   const f = formato(item.largura, item.altura);
   const estado = ESTADO[item.status];
   const ref = useCallback((el: HTMLElement | null) => observar(el, item.reviewToken), [observar, item.reviewToken]);
-  const meta = `v${String(item.versao).padStart(2, '0')}${mostrarProjeto ? ` · ${item.projeto}` : ''}`;
+  const versoes = item.nVersoes > 1 ? ` · ${item.nVersoes} versões` : '';
+  const meta = `v${String(item.versao).padStart(2, '0')}${versoes}${mostrarProjeto ? ` · ${item.projeto}` : ''}`;
+  // O prazo só importa enquanto o vídeo espera o cliente.
+  const prazo = item.status === 'EM_REVISAO_CLIENTE' ? rotuloPrazo(item.prazo) : null;
   const conteudo = (
     <>
       <span className="cat-capa">
@@ -24,6 +27,7 @@ export default function CardCatalogo({ item, capa, observar, aoAbrir, mostrarPro
       </span>
       <span className="cat-titulo">{item.nome}</span>
       <span className="cat-meta" title={meta}>{meta}</span>
+      {prazo && <span className={`cat-prazo${prazo.vencido ? ' vencido' : ''}`} title={prazo.texto}>{prazo.texto}</span>}
     </>
   );
   // Sem link de revisão não há para onde ir: vira um bloco comum, sem o jeito de clicável.
@@ -34,7 +38,7 @@ export default function CardCatalogo({ item, capa, observar, aoAbrir, mostrarPro
     <a ref={ref} className={`cat-card ${f.classe}`}
       href={`/revisao/${item.reviewToken}`}
       onClick={() => aoAbrir()}
-      aria-label={`${item.nome}, ${f.rotulo}, ${meta}${estado ? `, ${estado.label}` : ''}`}>
+      aria-label={`${item.nome}, ${f.rotulo}, ${meta}${estado ? `, ${estado.label}` : ''}${prazo ? `, ${prazo.texto}` : ''}`}>
       {conteudo}
     </a>
   );
