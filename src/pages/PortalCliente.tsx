@@ -130,6 +130,11 @@ const MOTIVOS: Record<string, string> = {
   sem_descricao: 'Conte o que precisa gravar.',
   sem_nome: 'Diga seu nome e seu e-mail.',
   sem_acesso: 'Este projeto não está disponível para você.',
+  data_invalida: 'Escolha uma data dentro do próximo ano.',
+  duracao_invalida: 'A duração precisa ficar entre 30 minutos e 24 horas.',
+  texto_longo: 'Algum campo ficou longo demais. Resuma e tente de novo.',
+  email_invalido: 'Esse e-mail não parece certo. Confira e tente de novo.',
+  muitos_pedidos: 'Você já tem muitos pedidos em aberto. Fale com a produção da Lumos.',
 };
 const MOTIVO_GENERICO = 'Não foi possível fazer isso agora. Tente de novo em instantes.';
 const motivoPedido = (erro: string) => MOTIVOS[erro] || MOTIVO_GENERICO;
