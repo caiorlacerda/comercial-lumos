@@ -24,7 +24,8 @@ CREATE POLICY saude_equipe_le ON public.project_portal_saude
   FOR SELECT TO authenticated USING ((SELECT public.is_team()));
 -- Escrita só pelas funções do portal (SECURITY DEFINER).
 -- O Supabase concede tudo ao anon por padrão em tabelas novas; fecha o acesso direto do visitante.
-REVOKE ALL ON public.project_portal_saude FROM anon;
+-- Idem para authenticated (TRUNCATE não passa por RLS): revoga tudo e devolve só o necessário.
+REVOKE ALL ON public.project_portal_saude FROM anon, authenticated;
 GRANT SELECT ON public.project_portal_saude TO authenticated;
 GRANT ALL ON public.project_portal_saude TO service_role;
 
@@ -40,12 +41,14 @@ CREATE TABLE IF NOT EXISTS public.portal_pendencias (
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS portal_pendencias_cliente_idx ON public.portal_pendencias (client_id, project_id);
+CREATE INDEX IF NOT EXISTS portal_pendencias_project_idx ON public.portal_pendencias (project_id) WHERE project_id IS NOT NULL;
 ALTER TABLE public.portal_pendencias ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS pendencias_equipe ON public.portal_pendencias;
 CREATE POLICY pendencias_equipe ON public.portal_pendencias
   FOR ALL TO authenticated USING ((SELECT public.is_team())) WITH CHECK ((SELECT public.is_team()));
-REVOKE ALL ON public.portal_pendencias FROM anon;
-GRANT ALL ON public.portal_pendencias TO authenticated, service_role;
+REVOKE ALL ON public.portal_pendencias FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.portal_pendencias TO authenticated;
+GRANT ALL ON public.portal_pendencias TO service_role;
 
 -- 3) Equipe que aparece no portal, por projeto
 CREATE TABLE IF NOT EXISTS public.project_portal_equipe (
@@ -58,17 +61,19 @@ ALTER TABLE public.project_portal_equipe ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS equipe_portal_equipe ON public.project_portal_equipe;
 CREATE POLICY equipe_portal_equipe ON public.project_portal_equipe
   FOR ALL TO authenticated USING ((SELECT public.is_team())) WITH CHECK ((SELECT public.is_team()));
-REVOKE ALL ON public.project_portal_equipe FROM anon;
-GRANT ALL ON public.project_portal_equipe TO authenticated, service_role;
+REVOKE ALL ON public.project_portal_equipe FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_portal_equipe TO authenticated;
+GRANT ALL ON public.project_portal_equipe TO service_role;
 
 -- CONFERÊNCIA: as três tabelas existem, com RLS ligada, e o visitante não tem acesso direto.
 SELECT c.relname, c.relrowsecurity AS rls,
-       has_table_privilege('anon', c.oid, 'SELECT') AS anon_le
+       has_table_privilege('anon', c.oid, 'SELECT') AS anon_le,
+       has_table_privilege('authenticated', c.oid, 'TRUNCATE') AS auth_trunca
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public'
   AND c.relname IN ('project_portal_saude', 'portal_pendencias', 'project_portal_equipe')
 ORDER BY 1;
--- Esperado: rls = true e anon_le = false nas três.
+-- Esperado: rls = true, anon_le = false e auth_trunca = false nas três.
 
 -- ROLLBACK (comentado)
 -- DROP TABLE IF EXISTS public.project_portal_equipe, public.portal_pendencias, public.project_portal_saude;
