@@ -1,10 +1,8 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { PORTAL_CSS, LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
+import { LOGO_LUMOS, LOGO_LUMOS_ESCURO } from './portalCliente.css';
 import WelcomeDocPage from './welcome-doc/WelcomeDocPage';
-import FundoDeck from '@/components/common/FundoDeck';
 import type { Entrega, EscopoItem, FaseRaw, Projeto, Portal, Agenda, Gravacao, AbaProjeto } from './portal/tipos';
 import { ABAS_PROJETO } from './portal/tipos';
 import { ESTADO, ESTADO_PEDIDO, MARCOS, MOTIVO_GENERICO, motivoPedido, motivoCancelar, motivoAgenda } from './portal/motivos';
@@ -13,6 +11,8 @@ import { dia, mesPorExtenso, dataPorExtenso, horario, noDia, duracaoTexto, mesDe
 import { Sol, Lua, IconeZap, IconeSlack, IconeMail, ChevronDown, IconeFechar } from './portal/icones';
 import Calendario from './portal/Calendario';
 import { useJanela } from './portal/useJanela';
+import PortalFrame from './portal/PortalFrame';
+import PortalErro from './portal/PortalErro';
 
 /**
  * PORTAL DO CLIENTE — um link por cliente, uma aba por projeto.
@@ -462,9 +462,7 @@ function PortalClienteConteudo() {
 
   if (erro) {
     return (
-      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
-        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
-        <style>{PORTAL_CSS}</style>
+      <PortalFrame tema={tema} centralizado>
         <div style={{ textAlign: 'center', padding: 24 }} role="alert">
           <p className="rotulo">{erro.texto}</p>
           {erro.rede && (
@@ -474,7 +472,7 @@ function PortalClienteConteudo() {
             </button>
           )}
         </div>
-      </div>
+      </PortalFrame>
     );
   }
   // Vem ANTES do "carregando": com login ligado e ninguém logado, não há dados
@@ -510,9 +508,7 @@ function PortalClienteConteudo() {
       setLinkEnviado(true);
     };
     return (
-      <div className={`portal-lumos ${tema === 'claro' ? 'claro' : ''}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
-        <style>{PORTAL_CSS}</style>
+      <PortalFrame tema={tema} centralizado padding={24}>
         <div style={{ width: '100%', maxWidth: 400 }}>
           <img className="logotipo" src={tema === 'claro' ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
           <p className="rotulo">Portal de {porta.cliente}</p>
@@ -563,17 +559,15 @@ function PortalClienteConteudo() {
             </>
           )}
         </div>
-      </div>
+      </PortalFrame>
     );
   }
 
   if (!dados) {
     return (
-      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
-        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
-        <style>{PORTAL_CSS}</style>
+      <PortalFrame tema={tema} centralizado>
         <span className="farol" />
-      </div>
+      </PortalFrame>
     );
   }
 
@@ -581,9 +575,7 @@ function PortalClienteConteudo() {
   // ficar sem dono agora que o link é da empresa inteira.
   if (!nome) {
     return (
-      <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
-        <style>{PORTAL_CSS}</style>
+      <PortalFrame tema={tema} centralizado padding={24}>
         <div style={{ width: '100%', maxWidth: 380 }}>
           <img className="logotipo" src={tema === "claro" ? LOGO_LUMOS_ESCURO : LOGO_LUMOS} alt="Produtora Lumos" style={{ height: 26, marginBottom: 26 }} />
           <p className="rotulo">Portal de {dados.cliente.nome}</p>
@@ -605,16 +597,14 @@ function PortalClienteConteudo() {
             Serve pra sabermos quem aprovou cada vídeo. Sem senha e sem cadastro.
           </p>
         </div>
-      </div>
+      </PortalFrame>
     );
   }
 
   const blocos = dados.portal.blocks || {};
 
   return (
-    <div className={`portal-lumos ${tema === "claro" ? "claro" : ""}`}>
-        <div className="fundo-portal" aria-hidden><FundoDeck tema={tema === 'claro' ? 'light' : 'dark'} /></div>
-      <style>{PORTAL_CSS}</style>
+    <PortalFrame tema={tema}>
 
       {/* Cabeçalho em uma linha só: marca à esquerda, navegação no meio,
           quem está vendo à direita. Os projetos saíram da fita e viraram um
@@ -1290,31 +1280,8 @@ function PortalClienteConteudo() {
           </div>
         </main>
       )}
-    </div>
+    </PortalFrame>
   );
-}
-
-/** Se qualquer parte da tela quebrar, o cliente vê um aviso com saída em vez de
- *  uma página em branco. */
-class PortalErro extends Component<{ children: ReactNode }, { quebrou: boolean }> {
-  state = { quebrou: false };
-  static getDerivedStateFromError() { return { quebrou: true }; }
-  componentDidCatch(erro: unknown) { console.error('[portal] erro de tela', erro); }
-  render() {
-    if (!this.state.quebrou) return this.props.children;
-    const claro = lerSalvo('portal_tema') === 'claro';
-    return (
-      <div className={`portal-lumos ${claro ? 'claro' : ''}`} style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <style>{PORTAL_CSS}</style>
-        <div style={{ textAlign: 'center' }} role="alert">
-          <p className="rotulo">Algo deu errado ao mostrar o portal.</p>
-          <button type="button" className="botao" style={{ marginTop: 16 }} onClick={() => window.location.reload()}>
-            Recarregar
-          </button>
-        </div>
-      </div>
-    );
-  }
 }
 
 export default function PortalCliente() {
