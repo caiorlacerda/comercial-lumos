@@ -5,10 +5,18 @@
 --
 -- Quem recebe: usuários ATIVOS e NÃO ocultos que sejam admin ou atendimento, mais os contatos do portal do cliente.
 -- Quando avisa: a versão MAIS NOVA do vídeo está em EM_REVISAO_CLIENTE, o link de revisão está ativo, o projeto está
--- visível no portal, o portal do cliente está ativo e tem prazo configurado, e o prazo (dias úteis a partir da entrega,
--- fuso America/Sao_Paulo) já passou. Se a versão mais nova for interna, o link do cliente está bloqueado e NÃO se avisa.
--- Repete a cada 3 dias enquanto o vídeo continuar parado. Com a automação "portal_revisao_lembra" desligada a função
--- não avisa nem anota nada (ao religar, sai o que ainda estiver vencido).
+-- visível no portal e NÃO está concluído/cancelado/arquivado, o portal do cliente está ativo e tem prazo configurado,
+-- e o prazo (dias úteis a partir da entrega, fuso America/Sao_Paulo) já passou. Se a versão mais nova for interna, o
+-- link do cliente está bloqueado e NÃO se avisa.
+-- Repete a cada 3 dias de São Paulo enquanto o vídeo continuar parado. Com a automação "portal_revisao_lembra"
+-- desligada a função não avisa nem anota nada (ao religar, sai o que ainda estiver vencido).
+-- TETO: no máximo 10 vídeos por rodada (nunca lembrados primeiro, depois os há mais tempo sem lembrete), então um
+-- acúmulo antigo escoa em vários dias em vez de uma rajada de notificações e pushes.
+--
+-- Datas: um vídeo devolvido internamente e reenviado mantém o entregue_em ORIGINAL (só é gravado na primeira vez que
+-- vai ao cliente); o prazo dele pode já estar vencido e o N do título ("está há N dias") fica inflado. O prazo conta
+-- dias ÚTEIS (sem feriados), mas o N do título conta dias CORRIDOS desde a entrega.
+-- Só o servidor executa a função (cron e service_role); a equipe logada não a chama pelo app.
 --
 -- ATENÇÃO — ao agendar a rotina (arquivo 408), todo vídeo que já esteja esperando o cliente além do prazo recebe um
 -- lembrete na primeira rodada. Para ver quantos, rode antes a consulta de ensaio (só lê) que está no cabeçalho do 408.
@@ -39,6 +47,7 @@ GRANT ALL ON public.portal_lembretes_revisao TO service_role;
 CREATE OR REPLACE FUNCTION public.portal_lembrar_revisoes()
 RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
+  c_teto   constant integer := 10;  -- no máximo 10 vídeos por rodada: um acúmulo antigo escoa em vários dias, sem rajada de pushes
   v_hoje   date := (now() AT TIME ZONE 'America/Sao_Paulo')::date;
   v_avisar boolean;
   v_total  integer := 0;
@@ -50,6 +59,8 @@ BEGIN
   IF auth.uid() IS NOT NULL AND NOT public.is_team() THEN RAISE EXCEPTION 'sem_acesso'; END IF;
   v_avisar := public.automacao_ativa('portal_revisao_lembra');
   IF NOT v_avisar THEN RETURN 0; END IF;
+  -- Uma chamada manual não pode se sobrepor à do cron (a segunda espera a primeira terminar e já enxerga as linhas dela).
+  PERFORM pg_advisory_xact_lock(hashtext('portal_lembrar_revisoes'));
 
   FOR r IN
     SELECT COALESCE(e.group_id, e.id) AS grupo, e.versao, e.file_name,
@@ -65,18 +76,21 @@ BEGIN
       FROM video_versions vv
       ORDER BY COALESCE(vv.group_id, vv.id), vv.versao DESC
     ) e
-    JOIN projects p ON p.id = e.project_id AND p.portal_visivel
+    JOIN projects p ON p.id = e.project_id AND p.portal_visivel AND p.status NOT IN ('concluido', 'cancelado', 'arquivado')
     JOIN clients c ON c.id = p.client_id
     JOIN client_portals cp ON cp.client_id = p.client_id AND cp.active AND cp.prazo_revisao_dias IS NOT NULL
+    LEFT JOIN portal_lembretes_revisao l ON l.group_id = COALESCE(e.group_id, e.id)
     WHERE e.status = 'EM_REVISAO_CLIENTE'
       AND EXISTS (SELECT 1 FROM review_links rl WHERE rl.group_id = e.group_id AND rl.active)
       AND public.portal_somar_dias_uteis(
             (COALESCE(e.entregue_em, e.uploaded_at, e.created_at) AT TIME ZONE 'America/Sao_Paulo')::date,
             cp.prazo_revisao_dias) < v_hoje
-      AND NOT EXISTS (
-            SELECT 1 FROM portal_lembretes_revisao l
-            WHERE l.group_id = COALESCE(e.group_id, e.id) AND l.ultimo_em > now() - interval '3 days')
-    ORDER BY COALESCE(e.group_id, e.id)
+      -- Repetição por DIA de São Paulo (não por carimbo de hora): o cron roda sempre no mesmo horário e um
+      -- carimbo com milissegundos de diferença empurraria o lembrete para o quarto dia.
+      AND (l.group_id IS NULL OR (l.ultimo_em AT TIME ZONE 'America/Sao_Paulo')::date <= v_hoje - 3)
+    -- Quem nunca foi lembrado vem primeiro; depois quem está há mais tempo sem lembrete; depois o prazo mais antigo.
+    ORDER BY l.ultimo_em NULLS FIRST, prazo, COALESCE(e.group_id, e.id)
+    LIMIT c_teto
   LOOP
     v_nome := regexp_replace(r.file_name, '\.[^.]+$', '');
     FOR u IN
@@ -100,15 +114,16 @@ BEGIN
   RETURN v_total;
 END; $$;
 
--- A trava de equipe está no corpo da função (authenticated pode executar, mas só a equipe passa); visitante (anon) não executa.
-REVOKE ALL ON FUNCTION public.portal_lembrar_revisoes() FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.portal_lembrar_revisoes() TO authenticated, service_role;
+-- Só o servidor executa (cron roda como dono do banco; service_role para chamadas administrativas). A trava de equipe
+-- dentro do corpo fica como segunda camada, sem efeito prático para quem não tem EXECUTE.
+REVOKE ALL ON FUNCTION public.portal_lembrar_revisoes() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.portal_lembrar_revisoes() TO service_role;
 
 -- ROLLBACK (comentado): apague antes o job do arquivo 2026102408 (cron.unschedule), depois:
 -- DROP FUNCTION IF EXISTS public.portal_lembrar_revisoes();
 -- DROP TABLE IF EXISTS public.portal_lembretes_revisao;
 
--- CONFERÊNCIA (último comando; esperado: anon_executa = false, authenticated_executa = true (a trava de equipe está no corpo),
+-- CONFERÊNCIA (último comando; esperado: anon_executa = false, authenticated_executa = false (função só do servidor),
 -- anon_le_tabela = false, authenticated_le_tabela = false, lembretes_registrados = 0 antes da primeira rodada).
 SELECT has_function_privilege('anon', 'public.portal_lembrar_revisoes()', 'EXECUTE')          AS anon_executa,
        has_function_privilege('authenticated', 'public.portal_lembrar_revisoes()', 'EXECUTE') AS authenticated_executa,
