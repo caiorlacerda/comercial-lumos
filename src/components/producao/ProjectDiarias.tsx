@@ -14,7 +14,8 @@ import { SegmentedControl } from '@/components/ui/Tabs';
 import SeletorDeLocal from '@/components/producao/SeletorDeLocal';
 import { consultaDeClima, type Local } from '@/lib/locais';
 import CalendarioEventos, { BarraDoCalendario } from '@/components/agenda/CalendarioEventos';
-import { dataDeIso, type EventoCal, type Granularidade } from '@/components/agenda/calendario';
+import { type EventoCal, type Granularidade } from '@/components/agenda/calendario';
+import { useDiasFechados } from '@/components/agenda/useDiasFechados';
 
 /**
  * Diárias de gravação do projeto: data, duração, local e descrição, com
@@ -85,7 +86,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [gran, setGran] = useState<Granularidade>('mes');
   const [cursor, setCursor] = useState(() => new Date());
   // Dias fechados da produtora (agenda bloqueada), pra sombrear no calendário.
-  const [fechados, setFechados] = useState<{ datas: Map<string, string>; semana: Map<number, string> }>({ datas: new Map(), semana: new Map() });
+  const diaFechado = useDiasFechados();
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('project_diarias')
@@ -258,19 +259,6 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     load();
   };
 
-  useEffect(() => {
-    (async () => {
-      const [b, w] = await Promise.all([
-        supabase.from('agenda_bloqueios').select('data, motivo'),
-        supabase.from('agenda_semana_fechada').select('dia_semana, motivo'),
-      ]);
-      setFechados({
-        datas: new Map(((b.data as any[]) || []).map(r => [String(r.data).slice(0, 10), r.motivo || 'Fechada'])),
-        semana: new Map(((w.data as any[]) || []).map(r => [Number(r.dia_semana), r.motivo || 'Fechada'])),
-      });
-    })();
-  }, []);
-
   // Diárias no formato do calendário. Cor pelo estado: chuva (âmbar), já feita (verde), a fazer (amarelo).
   const eventos = useMemo<EventoCal[]>(() => {
     const agoraIso = hojeLocalISO();
@@ -298,8 +286,6 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
       };
     });
   }, [diarias, clima, equipes, locaisPorId]);
-
-  const diaFechado = useCallback((iso: string) => fechados.datas.get(iso) ?? fechados.semana.get(dataDeIso(iso).getDay()) ?? null, [fechados]);
 
   const duplicar = () => {
     if (!editando) return;
