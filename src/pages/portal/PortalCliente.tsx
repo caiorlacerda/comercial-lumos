@@ -457,7 +457,7 @@ function PortalClienteConteudo() {
       {/* ── INÍCIO ─────────────────────────────────────────────── */}
       {aba === 'inicio' && (
         <Inicio dados={dados} esperando={esperando} capas={capas} blocos={blocos} token={token}
-          marcarVolta={marcarVolta} irParaAba={setAba} />
+          marcarVolta={marcarVolta} irParaAba={setAba} visao={visao} />
       )}
 
       {/* ── PROJETO ────────────────────────────────────────────── */}
