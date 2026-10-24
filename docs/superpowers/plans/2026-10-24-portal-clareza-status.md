@@ -1403,6 +1403,8 @@ export interface ItemPendente {
   chave: string; texto: string; prazo?: string | null; href?: string;
   /** Clique simples faz isto em vez de seguir o link; Ctrl/Cmd/botão do meio seguem o `href`. */
   aoClicar?: () => void;
+  /** Roda antes de a navegação normal acontecer (o link segue seu caminho). Usado para deixar o bilhete de volta. */
+  aoNavegar?: () => void;
 }
 
 export default function Pendencias({ itens }: { itens: ItemPendente[] }) {
@@ -1414,6 +1416,7 @@ export default function Pendencias({ itens }: { itens: ItemPendente[] }) {
           <li key={i.chave}>
             {i.href ? (
               <a href={i.href} onClick={e => {
+                i.aoNavegar?.();
                 if (!i.aoClicar || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
                 e.preventDefault();
                 i.aoClicar();
@@ -1463,7 +1466,7 @@ export default function EquipeProjeto({ equipe }: { equipe: VisaoProjeto['equipe
 })()}
 {visao && visao.equipe.length > 0 && <EquipeProjeto equipe={visao.equipe} />}
 ```
-O link do vídeo precisa do bilhete de volta: passar `marcarVolta` como prop de `Geral` e, em cada item de vídeo, `aoClicar: marcarVolta`. Como o `aoClicar` faz `preventDefault`, o item de vídeo precisa seguir o link depois de marcar: para os itens de vídeo, **não** use `aoClicar`; use `onMouseDown`-equivalente chamando `marcarVolta()` antes de navegar — a forma mais simples é `aoClicar: () => { marcarVolta(); window.location.href = href; }`.
+O link do vídeo precisa do bilhete de volta: passar `marcarVolta` como prop de `Geral` e, em cada item de vídeo, `aoNavegar: marcarVolta` (o link segue normalmente para `/revisao/...`).
 
 - [ ] **Step 3: CSS** (em `portalCliente.css.ts`, junto dos outros blocos; usar as variáveis existentes):
 
