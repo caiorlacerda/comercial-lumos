@@ -15,7 +15,7 @@ export default function Diarias({ token, projeto, voce, nome, exigeLogin }: {
   const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
   const [erroAgenda, setErroAgenda] = useState<string | null>(null);
-  /** Geração da busca de agenda: cada troca de projeto/aba soma um. Uma busca
+  /** Geração da busca de agenda: cada montagem do componente soma um. Uma busca
    *  (a inicial ou um refetch pós-envio/cancelamento) só aplica o resultado
    *  se a geração ainda for a mesma — senão a pessoa já saiu dali, e um
    *  resultado tardio de outro projeto sobrescreveria a tela atual. */
@@ -165,7 +165,7 @@ export default function Diarias({ token, projeto, voce, nome, exigeLogin }: {
     if (!pedNomeTocado.current) setPedNome(nome);
   }, [nome]);
 
-  // Trocou de data, de aba ou de projeto: o aviso da tentativa anterior não
+  // Trocou de data: o aviso da tentativa anterior não
   // vale mais.
   useEffect(() => { setErroPedido(null); }, [dataEscolhida]);
 
