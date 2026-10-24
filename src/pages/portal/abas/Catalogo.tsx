@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Portal } from '../tipos';
-import { montarFileiras } from '../catalogo';
+import { montarFileiras, type ExtrasCatalogo } from '../catalogo';
 import { useCapasPorVisibilidade } from '../useCapasPorVisibilidade';
 import FileiraCatalogo from '../catalogo/FileiraCatalogo';
 
@@ -9,15 +9,17 @@ const VALIDADE_MS = 30 * 60 * 1000;
 
 interface Posicao { quando: number; y: number; fileiras: Record<string, number> }
 
-export default function Catalogo({ dados, capas, pedirCapas, marcarVolta, restaurar }: {
+export default function Catalogo({ dados, extras, capas, pedirCapas, marcarVolta, restaurar }: {
   dados: Portal;
+  /** Versões e prazo por link de revisão; sem isso os cards ficam como eram. */
+  extras?: ExtrasCatalogo;
   capas: Record<string, string | null>;
   pedirCapas: (tokens: string[]) => Promise<void>;
   marcarVolta: () => void;
   /** Só quando a pessoa voltou do vídeo (portal aberto com `?aba=catalogo`). Aberto de outro jeito, o bilhete velho é descartado. */
   restaurar: boolean;
 }) {
-  const fileiras = useMemo(() => montarFileiras(dados), [dados]);
+  const fileiras = useMemo(() => montarFileiras(dados, extras), [dados, extras]);
   const observar = useCapasPorVisibilidade(pedirCapas);
   const faixas = useRef(new Map<string, HTMLDivElement>());
 

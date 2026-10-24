@@ -1,7 +1,8 @@
 import type { Projeto, Entrega, VisaoProjeto } from '../../tipos';
 import { MARCOS } from '../../motivos';
 import { proximoMarco } from '../../marcos';
-import { dia, nomeBonito } from '../../formatacao';
+import { dia, nomeBonito, rotuloPrazo } from '../../formatacao';
+import { extrasDeRevisoes } from '../../catalogo';
 import Saude from '../../projeto/Saude';
 import ProximoMarco from '../../projeto/ProximoMarco';
 import Pendencias from '../../projeto/Pendencias';
@@ -23,13 +24,21 @@ interface Props {
 
 export default function Geral({ projeto, blocos, visao, esperando, marcarVolta }: Props) {
   const marco = proximoMarco(projeto);
+  const extras = extrasDeRevisoes([visao]);
   const itens = [
-    ...esperando.map((e, i) => ({
-      chave: `v-${e.file_name}-${e.versao}-${i}`,
-      texto: `Aprovar ou pedir ajuste: ${nomeBonito(e.file_name)} (v${String(e.versao).padStart(2, '0')})`,
-      href: e.review_token ? `/revisao/${e.review_token}` : undefined,
-      aoNavegar: marcarVolta,
-    })),
+    ...esperando.map((e, i) => {
+      const x = e.review_token && Object.prototype.hasOwnProperty.call(extras, e.review_token) ? extras[e.review_token] : null;
+      const p = rotuloPrazo(x?.prazo);
+      const base = `Aprovar ou pedir ajuste: ${nomeBonito(e.file_name)} (v${String(e.versao).padStart(2, '0')})`;
+      return {
+        chave: `v-${e.file_name}-${e.versao}-${i}`,
+        // Vencido: sem data e sem cobrança, só um tom calmo.
+        texto: p?.vencido ? `${base} · aguardando seu retorno` : base,
+        prazo: p && !p.vencido ? x?.prazo : undefined,
+        href: e.review_token ? `/revisao/${e.review_token}` : undefined,
+        aoNavegar: marcarVolta,
+      };
+    }),
     ...(visao?.pendencias ?? []).map(p => ({ chave: p.id, texto: p.texto, prazo: p.prazo })),
   ];
   const equipe = visao?.equipe ?? [];
