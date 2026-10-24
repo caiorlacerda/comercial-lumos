@@ -6,11 +6,12 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import { formatBudgetCode } from '@/utils/formatters';
-import { codeSeq, montarArvore } from '@/lib/arvoreProjetos';
+import { montarArvore } from '@/lib/arvoreProjetos';
 import type { ProjetoArvore, ClienteBasico, ClienteNaArvore } from '@/lib/arvoreProjetos';
 import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import PortalModal from '@/components/producao/PortalModal';
+import EncerrarProjetoConfirmModal from '@/components/layout/EncerrarProjetoConfirmModal';
 
 // Cores disponíveis para clientes. A chave é o que fica salvo no banco
 // (client_colors.color); a classe é só apresentação.
@@ -67,7 +68,7 @@ export default function SidebarProjectTree() {
   const [portalCliente, setPortalCliente] = useState<{ id: string; name: string } | null>(null);
   // Menu de contexto (botão direito) no projeto + exclusão definitiva (admin)
   const [projMenu, setProjMenu] = useState<{ x: number; y: number; proj: ProjetoArvore } | null>(null);
-  // Encerrar/reabrir: a janela de confirmação é conectada na Task 4
+  // Encerrar/reabrir: projeto e ação pendentes da janela de confirmação
   const [confirmStatus, setConfirmStatus] = useState<{ proj: ProjetoArvore; acao: 'encerrar' | 'reabrir' } | null>(null);
   // Edição de projeto (nome/código/categoria)
   const [editProj, setEditProj] = useState<ProjetoArvore | null>(null);
@@ -244,7 +245,9 @@ export default function SidebarProjectTree() {
       setExpanded(prev => (prev.__none__ ? prev : { ...prev, __none__: true }));
     else if (hidden.some(p => p.id === activeProjectId))
       setExpanded(prev => (prev.__hidden__ ? prev : { ...prev, __hidden__: true }));
-  }, [activeProjectId, clients, noClientProjects, hidden]);
+    else if (concluded.some(p => p.id === activeProjectId))
+      setExpanded(prev => (prev.__done__ ? prev : { ...prev, __done__: true }));
+  }, [activeProjectId, clients, noClientProjects, hidden, concluded]);
 
   return (
     <div>
@@ -393,7 +396,7 @@ export default function SidebarProjectTree() {
                           key={proj.id}
                           onClick={() => openProject(proj.id)}
                           onContextMenu={e => openProjMenu(e, proj)}
-                          title={podeEncerrar ? `${proj.name} — botão direito para as opções` : proj.name}
+                          title={podeEncerrar ? `${proj.clienteNome ? `${proj.clienteNome} · ` : ''}${proj.name} — botão direito para as opções` : proj.name}
                           className={clsx(
                             'w-full text-left px-2 py-1.5 rounded text-[11px] font-semibold transition-all truncate block',
                             proj.id === activeProjectId
@@ -410,7 +413,7 @@ export default function SidebarProjectTree() {
                 </div>
               )}
 
-              {clients.length === 0 && noClientProjects.length === 0 && (
+              {clients.length === 0 && noClientProjects.length === 0 && hidden.length === 0 && (
                 <p className="px-2.5 py-2 text-[10px] text-lumos-text-secondary/50 italic">Nenhum projeto ativo.</p>
               )}
 
@@ -561,8 +564,20 @@ export default function SidebarProjectTree() {
         </>
       )}
 
-      {/* Task 4: aqui entra a janela de encerrar/reabrir, usando confirmStatus */}
-      {confirmStatus && null}
+      {/* Confirmação de encerrar/reabrir (com a conferência do que está em aberto) */}
+      {confirmStatus && (
+        <EncerrarProjetoConfirmModal
+          proj={confirmStatus.proj}
+          acao={confirmStatus.acao}
+          onClose={() => setConfirmStatus(null)}
+          onDone={novo => {
+            // Sempre por id: o projeto do menu pode ser um item de "Ocultos" (com clienteNome a mais)
+            const id = confirmStatus.proj.id;
+            setTodos(prev => prev.map(p => (p.id === id ? { ...p, status: novo } : p)));
+            setConfirmStatus(null);
+          }}
+        />
+      )}
 
       {/* Confirmação de exclusão definitiva */}
       {confirmDelete && (
