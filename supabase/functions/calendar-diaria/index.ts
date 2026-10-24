@@ -94,6 +94,8 @@ serve(async (req) => {
     const hIni = (d.hora_inicio as string | null)?.slice(0, 5) ?? null
     const hFim = (d.hora_fim as string | null)?.slice(0, 5) ?? null
     const comHora = !!(hIni && hFim)
+    // Fim menor que o início = termina de madrugada, no dia seguinte.
+    const viraODia = !!(hIni && hFim && hFim < hIni)
     const fimDia = new Date(new Date(d.data + 'T12:00:00').getTime() + 86400000).toISOString().slice(0, 10)
     const evento = {
       // Padrão do time: CLIENTE | NOME DO PROJETO | NOME DA DIÁRIA.
@@ -106,7 +108,7 @@ serve(async (req) => {
         `\nCriado pelo app Lumos (aba Diárias do projeto).`,
       ...(d.local ? { location: d.local } : {}),
       start: comHora ? { dateTime: `${d.data}T${hIni}:00`, timeZone: TZ } : { date: d.data },
-      end: comHora ? { dateTime: `${d.data}T${hFim}:00`, timeZone: TZ } : { date: fimDia },
+      end: comHora ? { dateTime: `${viraODia ? fimDia : d.data}T${hFim}:00`, timeZone: TZ } : { date: fimDia },
       extendedProperties: { private: { lumos_diaria: d.id } },
     }
 

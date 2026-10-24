@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
+import { duracaoDaDiaria, horarioInvalido } from '@/lib/horarioDiaria';
 
 /**
  * Ordens do Dia do projeto. A OD nasce sempre de uma DIÁRIA: o modal pede
@@ -119,16 +120,14 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
         toast.error('Dê um nome e uma data pra diária.');
         return;
       }
-      const mi = dInicio ? Number(dInicio.slice(0, 2)) * 60 + Number(dInicio.slice(3, 5)) : null;
-      const mf = dFim ? Number(dFim.slice(0, 2)) * 60 + Number(dFim.slice(3, 5)) : null;
-      if (mi != null && mf != null && mf <= mi) { setSalvando(false); toast.error('O horário final precisa ser depois do início.'); return; }
+      if (horarioInvalido(dInicio, dFim)) { setSalvando(false); toast.error('Início e fim não podem ser iguais. Se termina de madrugada, ponha o horário do dia seguinte.'); return; }
       const payload: Record<string, unknown> = {
         project_id: projectId,
         nome: dNome.trim(),
         data: dData,
         hora_inicio: dInicio || null,
         hora_fim: dFim || null,
-        duracao_horas: (mi != null && mf != null) ? Math.round(((mf - mi) / 60) * 10) / 10 : 10,
+        duracao_horas: duracaoDaDiaria(dInicio, dFim) ?? 10,
         local: dLocal.trim() || null,
         created_by: profile?.id || null,
       };
