@@ -2620,9 +2620,7 @@ export default function Projetos() {
 
                 {/* ============ PORTAL DO CLIENTE (saúde, pendências, equipe) ============ */}
                 {canManage && (
-                  <div className="card p-5 md:p-6">
-                    <SecaoPortalProjeto key={'po' + selectedProject.id} projectId={selectedProject.id} clientId={selectedProject.client_id ?? null} />
-                  </div>
+                  <SecaoPortalProjeto key={'po' + selectedProject.id} projectId={selectedProject.id} clientId={selectedProject.client_id ?? null} />
                 )}
                 </div>
                 )}

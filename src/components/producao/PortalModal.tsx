@@ -185,16 +185,17 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
       .eq('client_id', clientId).is('project_id', null).order('created_at');
     if (minha !== seqPend.current) return;
     if (faltaTabela(error)) { setSemTabelaPend(true); return; }
-    if (error) { toastRef.current.error('Não foi possível carregar as pendências do cliente.'); setPendPronta(true); return; }
+    if (error) { toastRef.current.error('Não foi possível carregar as pendências do cliente.'); setPendCliente([]); setPendPronta(true); return; }
     setSemTabelaPend(false);
     setPendCliente((data as PendenciaCliente[]) || []);
     setPendPronta(true);
   }, [clientId]);
   useEffect(() => {
     if (!open) return;
+    setPendCliente([]);
     setPendPronta(false);
     // Falha de rede não pode virar promise sem tratamento.
-    carregarPendCliente().catch(() => { toastRef.current.error('Não foi possível carregar as pendências do cliente.'); setPendPronta(true); });
+    carregarPendCliente().catch(() => { toastRef.current.error('Não foi possível carregar as pendências do cliente.'); setPendCliente([]); setPendPronta(true); });
   }, [open, carregarPendCliente]);
 
   const adicionarPendCliente = async () => {
@@ -207,12 +208,12 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     setSalvandoPend(false);
     if (error) { toast.error('Não foi possível salvar.'); return; }
     setNovaPendTexto(''); setNovaPendPrazo('');
-    carregarPendCliente();
+    carregarPendCliente().catch(() => {});
   };
   const concluirPendCliente = async (id: string) => {
     const { error } = await supabase.from('portal_pendencias').update({ concluida_em: new Date().toISOString() }).eq('id', id);
     if (error) { toast.error('Não foi possível salvar.'); return; }
-    carregarPendCliente();
+    carregarPendCliente().catch(() => {});
   };
   const apagarPendCliente = async (p: PendenciaCliente) => {
     if (!await confirm({
@@ -222,7 +223,7 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
     })) return;
     const { error } = await supabase.from('portal_pendencias').delete().eq('id', p.id);
     if (error) { toast.error('Não foi possível apagar.'); return; }
-    carregarPendCliente();
+    carregarPendCliente().catch(() => {});
   };
 
   /** Encerrado há mais de 90 dias sai do portal sozinho, mesmo ligado. */
@@ -498,7 +499,7 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                       placeholder="Ex.: enviar logo em vetor" aria-label="Nova pendência do cliente"
                       className="input-lumos h-10 text-xs flex-1 min-w-[10rem]" />
                     <label className="flex flex-col gap-0.5 text-[10px] font-bold text-lumos-text-secondary">
-                      Prazo
+                      Prazo (opcional)
                       <input type="date" value={novaPendPrazo} onChange={e => setNovaPendPrazo(e.target.value)}
                         aria-label="Prazo (opcional)" title="Prazo (opcional)"
                         className="input-lumos h-10 text-xs" />
