@@ -34,7 +34,7 @@ export default function Geral({ projeto, blocos, visao, esperando, marcarVolta }
         chave: `v-${e.file_name}-${e.versao}-${i}`,
         // Vencido: sem data e sem cobrança, só um tom calmo.
         texto: p?.vencido ? `${base} · aguardando seu retorno` : base,
-        prazo: p && !p.vencido ? x?.prazo : undefined,
+        prazo: p && !p.vencido ? x?.prazo?.slice(0, 10) : undefined,
         href: e.review_token ? `/revisao/${e.review_token}` : undefined,
         aoNavegar: marcarVolta,
       };
