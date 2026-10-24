@@ -13,7 +13,7 @@
 ALTER TABLE public.projects
   ADD COLUMN IF NOT EXISTS oculto_na_barra boolean NOT NULL DEFAULT false;
 
--- Conferência: deve devolver 1 linha (coluna existe) e 0 projetos ocultos.
+-- Conferência: deve mostrar coluna_existe = true e ocultos = 0.
 SELECT
   EXISTS (
     SELECT 1 FROM information_schema.columns
