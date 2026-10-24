@@ -187,7 +187,7 @@ SELECT p.proname,
        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_executa,
        (SELECT count(*) FROM public.client_portals)                                    AS portais,
        (SELECT count(*) FROM public.client_portals WHERE prazo_revisao_dias IS NOT NULL) AS com_prazo,
-       (SELECT count(*) FROM public.client_portals cp WHERE cp.active AND NOT cp.exige_login AND public.portal_visao_projetos(cp.token) ? 'projetos') AS visao_ok,
+       (SELECT count(*) FROM public.client_portals cp WHERE cp.active AND NOT cp.exige_login AND (public.portal_visao_projetos(cp.token) -> 'projetos') IS NOT NULL) AS visao_ok,
        (SELECT count(*) FROM public.client_portals cp WHERE cp.active AND NOT cp.exige_login) AS portais_sem_login
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname IN ('portal_visao_projetos', 'portal_somar_dias_uteis') ORDER BY 1;
