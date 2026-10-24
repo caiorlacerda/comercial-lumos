@@ -35,6 +35,37 @@ const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 // arquivo gigante. O front checa o mesmo número antes de tentar enviar.
 const MAX_BYTES = 25 * 1024 * 1024
 
+// Quem tem o link do portal pode mandar arquivo para o Drive da empresa, e a equipe depois
+// abre esse arquivo. Por isso só entram tipos de material de marca (documentos, imagens,
+// design, fontes, planilhas, apresentações e compactados). Executáveis, scripts e páginas
+// web ficam de fora. O tipo declarado pelo navegador não vale: manda a extensão.
+// A mesma lista está em src/pages/BoasVindasLumos.tsx (para a mensagem aparecer antes do envio).
+const MIME_POR_EXTENSAO: Record<string, string> = {
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
+  gif: 'image/gif', svg: 'image/svg+xml', tif: 'image/tiff', tiff: 'image/tiff', heic: 'image/heic',
+  ai: 'application/postscript', eps: 'application/postscript', psd: 'image/vnd.adobe.photoshop',
+  indd: 'application/octet-stream', ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2',
+  zip: 'application/zip', '7z': 'application/x-7z-compressed', rar: 'application/vnd.rar',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  key: 'application/octet-stream', pages: 'application/octet-stream', numbers: 'application/octet-stream',
+  csv: 'text/csv', txt: 'text/plain', rtf: 'application/rtf', mp4: 'video/mp4', mov: 'video/quicktime',
+}
+// Teto de envios por cliente: o portal é aberto a quem tem o link e grava no Drive da empresa.
+const MAX_POR_HORA = 15
+const MAX_POR_DIA = 40
+
+function extensaoDe(nome: string): string {
+  const m = /\.([A-Za-z0-9]{1,8})$/.exec(nome)
+  return m ? m[1].toLowerCase() : ''
+}
+// Sem barras, sem caracteres de controle, sem ponto na frente e com até 120 caracteres
+// (pega o FIM, para a extensão nunca ser cortada).
+function nomeSeguro(nome: string): string {
+  return nome.replace(/[\\/\u0000-\u001f\u007f]/g, '_').replace(/^\.+/, '').trim().slice(-120) || 'arquivo'
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'content-type, authorization',
@@ -293,12 +324,14 @@ serve(async (req) => {
 
   const token = String(form.get('token') || '')
   const itemKey = String(form.get('item_key') || '')
-  const nomePessoa = String(form.get('nome_pessoa') || '')
+  const nomePessoa = String(form.get('nome_pessoa') || '').trim().slice(0, 80)
   const arquivo = form.get('arquivo')
 
   if (!token || !itemKey) return json({ error: 'token e item_key obrigatórios' }, 400)
   if (!(arquivo instanceof File)) return json({ error: 'arquivo obrigatório' }, 400)
   if (arquivo.size > MAX_BYTES) return json({ error: 'arquivo muito grande, o limite é 25MB' }, 413)
+  if (arquivo.size === 0) return json({ error: 'arquivo vazio' }, 400)
+  if (!MIME_POR_EXTENSAO[extensaoDe(arquivo.name)]) return json({ error: 'tipo_nao_permitido' }, 415)
 
   const { data: portal } = await db.from('client_portals')
     .select('client_id, exige_login').eq('token', token).eq('active', true).maybeSingle()
@@ -335,11 +368,25 @@ serve(async (req) => {
   const item = await buscarItemUpload(client.id, itemKey)
   if (!item) return json({ error: 'item_key inválido' }, 400)
 
+  // Teto de envios por cliente (por hora e por dia), contado no próprio log do Drive.
+  const desde = (ms: number) => new Date(Date.now() - ms).toISOString()
+  const contar = async (ms: number) => {
+    const { count } = await db.from('drive_sync_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('entity_type', 'client').eq('entity_id', client.id)
+      .eq('action', 'boas_vindas_upload').gte('created_at', desde(ms))
+    return count ?? 0
+  }
+  if ((await contar(3600_000)) >= MAX_POR_HORA || (await contar(86_400_000)) >= MAX_POR_DIA) {
+    return json({ error: 'muitos_envios' }, 429)
+  }
+
   try {
     const assetsId = await ensureClientAssetsFolder(client)
     const subfolderId = await ensureFolder(assetsId, PASTA_LEGADO[itemKey] ?? nomeSubpasta(itemKey))
     const bytes = new Uint8Array(await arquivo.arrayBuffer())
-    const fileId = await uploadFile(subfolderId, arquivo.name, arquivo.type, bytes)
+    const nomeFinal = nomeSeguro(arquivo.name)
+    const fileId = await uploadFile(subfolderId, nomeFinal, MIME_POR_EXTENSAO[extensaoDe(nomeFinal)] ?? 'application/octet-stream', bytes)
 
     const { error: upsertError } = await db.from('client_boas_vindas_itens').upsert({
       client_id: client.id,
@@ -347,11 +394,19 @@ serve(async (req) => {
       welcome_doc_item_id: item.id,
       tipo: 'arquivo',
       drive_file_id: fileId,
-      nome_arquivo: arquivo.name,
+      nome_arquivo: nomeFinal,
       concluido_por: assinatura,
       concluido_em: new Date().toISOString(),
     }, { onConflict: 'client_id,item_key' })
     if (upsertError) throw upsertError
+
+    // Registra o envio (alimenta o teto por hora e por dia acima).
+    try {
+      await db.from('drive_sync_log').insert([{
+        entity_type: 'client', entity_id: client.id, action: 'boas_vindas_upload',
+        detail: `${itemKey}: ${nomeFinal} (${arquivo.size} bytes)`.slice(0, 300), status: 'ok',
+      }])
+    } catch (_) { /* o registro nunca derruba um envio que já deu certo */ }
 
     // Notificação nunca deve transformar um upload que já deu certo em erro
     // pro cliente — mesmo princípio do resto do projeto (pg_net triggers só
@@ -362,7 +417,7 @@ serve(async (req) => {
       console.error('boas-vindas-upload: notificação falhou (upload já concluído):', notifyErr)
     }
 
-    return json({ ok: true, drive_file_id: fileId, nome_arquivo: arquivo.name })
+    return json({ ok: true, drive_file_id: fileId, nome_arquivo: nomeFinal })
   } catch (err) {
     try {
       await db.from('drive_sync_log').insert([{
