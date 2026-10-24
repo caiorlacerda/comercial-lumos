@@ -57,8 +57,8 @@ async function contarVideos(projectId: string): Promise<number | null> {
 }
 
 async function somarAReceber(projectId: string, podeVerFinanceiro: boolean): Promise<number | null | undefined> {
-  // O banco só deixa admin e produção lerem projetos_financeiro; para os outros
-  // papéis a consulta voltaria vazia (sem erro) e pareceria que nada falta receber.
+  // O banco só deixa admin ler as parcelas (receivables); para os outros papéis
+  // a consulta voltaria vazia (sem erro) e pareceria que nada falta receber.
   if (!podeVerFinanceiro) return null;
   try {
     const { data: fin, error: errFin } = await supabase
@@ -89,7 +89,7 @@ export default function EncerrarProjetoConfirmModal({ proj, acao, onClose, onDon
 }) {
   const toast = useToast();
   const { profile } = useAuth();
-  const podeVerFinanceiro = profile?.role === 'admin' || profile?.role === 'producao';
+  const podeVerFinanceiro = profile?.role === 'admin';
   const encerrando = acao === 'encerrar';
   const [conferindo, setConferindo] = useState(encerrando);
   const [conf, setConf] = useState<Conferencia | null>(null);
