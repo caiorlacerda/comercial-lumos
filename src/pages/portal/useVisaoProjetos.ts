@@ -4,9 +4,13 @@ import type { VisaoProjetos } from './tipos';
 
 /** Busca saúde, pendências e equipe. Qualquer falha (função ainda não criada,
  *  rede, erro de acesso) devolve null e os blocos novos simplesmente não aparecem:
- *  o resto do portal nunca depende desta chamada. */
-export function useVisaoProjetos(token: string, ativo: boolean): VisaoProjetos | null {
+ *  o resto do portal nunca depende desta chamada.
+ *  `recarregarCom`: chave de recarga (ex.: a aba atual). Quando só ela muda, busca de novo
+ *  mantendo a visão anterior até a resposta chegar (sem piscar). */
+export function useVisaoProjetos(token: string, ativo: boolean, recarregarCom?: unknown): VisaoProjetos | null {
   const [visao, setVisao] = useState<VisaoProjetos | null>(null);
+  // Troca de token: não mostrar a visão de outro portal.
+  useEffect(() => { setVisao(null); }, [token]);
   useEffect(() => {
     if (!ativo) return;
     let vivo = true;
@@ -16,6 +20,6 @@ export function useVisaoProjetos(token: string, ativo: boolean): VisaoProjetos |
       setVisao(data as VisaoProjetos);
     });
     return () => { vivo = false; };
-  }, [token, ativo]);
+  }, [token, ativo, recarregarCom]);
   return visao;
 }

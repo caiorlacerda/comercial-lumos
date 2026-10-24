@@ -272,7 +272,7 @@ export const PORTAL_CSS = String.raw`
   .saude-atrasado .saude-ponto { background: var(--ajuste); }
   .marco-linha { font-size: 16px; margin: 6px 0 0; }
   .pendencias { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
-  .pendencias li { padding: 12px 0; border-bottom: 1px solid var(--fio); font-size: 14px; }
+  .pendencias li { padding: 12px 0; border-bottom: 1px solid var(--fio); font-size: 14px; overflow-wrap: anywhere; }
   .pendencias li:last-child { border-bottom: 0; }
   .pendencias a { color: var(--luz); text-decoration: none; }
   .pendencias a:hover, .pendencias a:focus-visible { text-decoration: underline; }
@@ -821,6 +821,7 @@ export const PORTAL_CSS = String.raw`
   .secao:last-child { padding-bottom: 24px; }
   .duas { gap: 16px; }
   .duas .secao { padding-bottom: 24px; margin-top: 0; }
+  .secao + .duas { margin-top: 16px; }
   .fita-proj + .secao { padding-top: 24px; }
   .peca-bloco { background: var(--mesa); border: 1px solid var(--fio); border-radius: var(--raio);
     padding: 20px 22px; margin-top: 14px; backdrop-filter: var(--vidro); }

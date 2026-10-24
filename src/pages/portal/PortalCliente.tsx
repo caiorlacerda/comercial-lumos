@@ -219,7 +219,7 @@ function PortalClienteConteudo() {
   const exigeLogin = !!dados?.portal.exige_login;
 
   // Situação, pendências e equipe de cada projeto. Falhou ou ainda não existe: null, e a tela fica como era.
-  const visao = useVisaoProjetos(token, !!dados && !porta);
+  const visao = useVisaoProjetos(token, !!dados && !porta, aba);
 
   // Esc fecha o menu de projetos, como qualquer menu esperaria.
   useEffect(() => {

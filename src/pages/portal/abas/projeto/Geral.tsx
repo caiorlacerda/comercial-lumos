@@ -36,7 +36,7 @@ export default function Geral({ projeto, blocos, visao, esperando, marcarVolta }
   return (
     <>
       {visao?.saude?.estado && <Saude estado={visao.saude.estado} />}
-      {marco && <ProximoMarco marco={marco} />}
+      {blocos.cronograma !== false && marco && <ProximoMarco marco={marco} />}
       {itens.length > 0 && <Pendencias itens={itens} />}
       {equipe.length > 0 && <EquipeProjeto equipe={equipe} />}
 
