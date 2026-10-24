@@ -22,6 +22,16 @@ const EDGE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/boa
 // Mesmo teto que a edge function aplica do lado de lá, pra mensagem bater.
 const MAX_BYTES = 25 * 1024 * 1024;
 const MSG_GRANDE = 'Esse arquivo passa de 25MB. Manda uma versão menor, ou o link do Drive/WeTransfer por WhatsApp.';
+// Mesma lista da edge function boas-vindas-upload: o aviso aparece antes de tentar enviar.
+const EXTENSOES_OK = [
+  'pdf', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'tif', 'tiff', 'heic', 'ai', 'eps', 'psd', 'indd',
+  'ttf', 'otf', 'woff', 'woff2', 'zip', '7z', 'rar', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
+  'key', 'pages', 'numbers', 'csv', 'txt', 'rtf', 'mp4', 'mov',
+];
+const ACCEPT_ARQUIVOS = EXTENSOES_OK.map(e => `.${e}`).join(',');
+const tipoPermitido = (nome: string) => EXTENSOES_OK.includes((nome.split('.').pop() || '').toLowerCase());
+const MSG_TIPO = 'Esse tipo de arquivo não pode ser enviado por aqui. Mande PDF, imagem, arquivo de design, fonte, planilha, apresentação ou um .zip.';
+const MSG_MUITOS = 'Você já enviou muitos arquivos agora há pouco. Espere um pouco e tente de novo, ou fale com a produção da Lumos.';
 const MSG_LOGIN = 'Você precisa estar logado nesse portal pra enviar isso. Atualiza a página e entra de novo.';
 
 // Rótulo de cada grupo do checklist (spec, "Checklist do template"). Grupo que
@@ -93,6 +103,10 @@ export default function BoasVindasLumos({
         setErro(MSG_LOGIN);
       } else if (codigo === 'arquivo muito grande, o limite é 25MB') {
         setErro(MSG_GRANDE);
+      } else if (codigo === 'tipo_nao_permitido') {
+        setErro(MSG_TIPO);
+      } else if (codigo === 'muitos_envios') {
+        setErro(MSG_MUITOS);
       } else {
         setErro('Não deu pra enviar agora. Tenta de novo, ou manda por WhatsApp/e-mail enquanto isso.');
       }
@@ -145,9 +159,11 @@ export default function BoasVindasLumos({
                         <input
                           ref={el => { inputRefs.current[def.item_key] = el; }}
                           type="file"
+                          accept={ACCEPT_ARQUIVOS}
                           onChange={e => {
                             const f = e.target.files?.[0];
                             if (f && f.size > MAX_BYTES) setErro(MSG_GRANDE);
+                            else if (f && !tipoPermitido(f.name)) setErro(MSG_TIPO);
                             else if (f) enviarArquivo(def.item_key, f);
                             e.target.value = '';
                           }}
