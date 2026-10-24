@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { LOGO_LUMOS, LOGO_LUMOS_ESCURO } from '../portalCliente.css';
 import type { Portal, AbaProjeto } from './tipos';
 import { ABAS_PROJETO } from './tipos';
+import { useVisaoProjetos } from './useVisaoProjetos';
 import { NOME_SALVO, BILHETE, lerSalvo, gravarSalvo, apagarSalvo } from './armazenamento';
 import { dia } from './formatacao';
 import { Sol, Lua, ChevronDown } from './icones';
@@ -216,6 +217,9 @@ function PortalClienteConteudo() {
   const projetoAberto = dados?.projetos.find(p => p.id === aba) || null;
 
   const exigeLogin = !!dados?.portal.exige_login;
+
+  // Situação, pendências e equipe de cada projeto. Falhou ou ainda não existe: null, e a tela fica como era.
+  const visao = useVisaoProjetos(token, !!dados && !porta, aba);
 
   // Esc fecha o menu de projetos, como qualquer menu esperaria.
   useEffect(() => {
@@ -453,7 +457,7 @@ function PortalClienteConteudo() {
       {/* ── INÍCIO ─────────────────────────────────────────────── */}
       {aba === 'inicio' && (
         <Inicio dados={dados} esperando={esperando} capas={capas} blocos={blocos} token={token}
-          marcarVolta={marcarVolta} irParaAba={setAba} />
+          marcarVolta={marcarVolta} irParaAba={setAba} visao={visao} />
       )}
 
       {/* ── PROJETO ────────────────────────────────────────────── */}
@@ -501,7 +505,10 @@ function PortalClienteConteudo() {
               ))}
             </nav>
 
-            {abaProj === 'geral' && <Geral projeto={projetoAberto} blocos={blocos} />}
+            {abaProj === 'geral' && <Geral projeto={projetoAberto} blocos={blocos}
+              visao={(visao?.projetos ?? []).find(v => v.id === projetoAberto.id) || null}
+              esperando={projetoAberto.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE')}
+              marcarVolta={marcarVolta} />}
 
             {abaProj === 'entregas' && <Entregas projeto={projetoAberto} capas={capas} marcarVolta={marcarVolta} />}
 

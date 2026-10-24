@@ -1,7 +1,8 @@
-import type { Entrega, Portal } from '../tipos';
+import type { Entrega, Portal, VisaoProjetos } from '../tipos';
 import { dia, quandoRelativo, nomeBonito, formato } from '../formatacao';
+import Pendencias from '../projeto/Pendencias';
 
-export default function Inicio({ dados, esperando, capas, blocos, token, marcarVolta, irParaAba }: {
+export default function Inicio({ dados, esperando, capas, blocos, token, marcarVolta, irParaAba, visao }: {
   dados: Portal;
   esperando: (Entrega & { projeto: string })[];
   capas: Record<string, string | null>;
@@ -9,6 +10,7 @@ export default function Inicio({ dados, esperando, capas, blocos, token, marcarV
   token: string;
   marcarVolta: () => void;
   irParaAba: (aba: string) => void;
+  visao?: VisaoProjetos | null;
 }) {
   return (
     <main className="painel">
@@ -57,6 +59,20 @@ export default function Inicio({ dados, esperando, capas, blocos, token, marcarV
             )}
           </div>
         </section>
+
+        {(() => {
+          // Vídeos esperando já estão no destaque acima; aqui só o que não é vídeo.
+          const itens = [
+            ...(visao?.pendencias_cliente ?? []).map(p => ({ chave: p.id, texto: p.texto, prazo: p.prazo })),
+            ...(visao?.boas_vindas_pendentes ?? []).map(b => ({
+              chave: `bv-${b.chave}`,
+              texto: `Bem-vindo à Lumos: ${b.titulo}`,
+              aoClicar: () => irParaAba('boas_vindas'),
+              href: `/portal/${token}?aba=boas_vindas`,
+            })),
+          ];
+          return itens.length ? <Pendencias itens={itens} /> : null;
+        })()}
 
         <div className="duas">
           <section className="secao">

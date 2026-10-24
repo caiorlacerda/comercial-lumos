@@ -75,3 +75,19 @@ export type Gravacao = Agenda['agendadas'][number];
 /** As quatro abas de dentro de um projeto. */
 export type AbaProjeto = 'geral' | 'entregas' | 'diarias' | 'arquivos';
 export const ABAS_PROJETO: readonly AbaProjeto[] = ['geral', 'entregas', 'diarias', 'arquivos'];
+
+/** Como o projeto anda frente ao prazo, na leitura do cliente. */
+export type EstadoSaude = 'no_prazo' | 'atencao' | 'atrasado';
+export interface ItemPendencia { id: string; texto: string; prazo: string | null }
+/** O que `portal_visao_projetos` devolve de cada projeto. */
+export interface VisaoProjeto {
+  id: string;
+  saude: { estado: EstadoSaude } | null;
+  pendencias: ItemPendencia[];
+  equipe: { nome: string; funcao: string | null; foto: string | null }[];
+}
+export interface VisaoProjetos {
+  projetos: VisaoProjeto[];
+  pendencias_cliente: ItemPendencia[];
+  boas_vindas_pendentes: { chave: string; titulo: string }[];
+}

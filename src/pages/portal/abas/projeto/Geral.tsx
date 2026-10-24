@@ -1,10 +1,45 @@
-import type { Projeto } from '../../tipos';
+import type { Projeto, Entrega, VisaoProjeto } from '../../tipos';
 import { MARCOS } from '../../motivos';
-import { dia } from '../../formatacao';
+import { proximoMarco } from '../../marcos';
+import { dia, nomeBonito } from '../../formatacao';
+import Saude from '../../projeto/Saude';
+import ProximoMarco from '../../projeto/ProximoMarco';
+import Pendencias from '../../projeto/Pendencias';
+import EquipeProjeto from '../../projeto/EquipeProjeto';
 
-export default function Geral({ projeto, blocos }: { projeto: Projeto; blocos: Record<string, boolean> }) {
+interface Props {
+  projeto: Projeto;
+  blocos: Record<string, boolean>;
+  /** O que `portal_visao_projetos` diz deste projeto. Só Situação, pendências
+   *  manuais e Equipe dependem dela: sem ela (função ainda não publicada, falha
+   *  de rede) esses blocos não aparecem. Próximo passo e a pendência de vídeo
+   *  saem de dados que o portal já tem. */
+  visao?: VisaoProjeto | null;
+  /** Vídeos deste projeto esperando a decisão do cliente. */
+  esperando: Entrega[];
+  /** Deixa o bilhete de volta antes de sair pro player. */
+  marcarVolta: () => void;
+}
+
+export default function Geral({ projeto, blocos, visao, esperando, marcarVolta }: Props) {
+  const marco = proximoMarco(projeto);
+  const itens = [
+    ...esperando.map((e, i) => ({
+      chave: `v-${e.file_name}-${e.versao}-${i}`,
+      texto: `Aprovar ou pedir ajuste: ${nomeBonito(e.file_name)} (v${String(e.versao).padStart(2, '0')})`,
+      href: e.review_token ? `/revisao/${e.review_token}` : undefined,
+      aoNavegar: marcarVolta,
+    })),
+    ...(visao?.pendencias ?? []).map(p => ({ chave: p.id, texto: p.texto, prazo: p.prazo })),
+  ];
+  const equipe = visao?.equipe ?? [];
   return (
     <>
+      {visao?.saude?.estado && <Saude estado={visao.saude.estado} />}
+      {blocos.cronograma !== false && marco && <ProximoMarco marco={marco} />}
+      {itens.length > 0 && <Pendencias itens={itens} />}
+      {equipe.length > 0 && <EquipeProjeto equipe={equipe} />}
+
       {/* Meta zero não é pacote (seria "NaN%" e "3 de 0"): o item some. */}
       {blocos.escopo !== false && projeto.escopo.some(it => it.meta > 0) && (
         <section className="secao">
