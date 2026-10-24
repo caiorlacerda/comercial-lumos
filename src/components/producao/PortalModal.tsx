@@ -590,7 +590,7 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                     <span className="min-w-0">
                       <label htmlFor="portal-prazo-revisao" className="block text-xs font-bold text-lumos-text-primary">Prazo para o cliente revisar (dias úteis)</label>
                       <span className="block text-[10.5px] text-lumos-text-secondary">
-                        Vídeos esperando o cliente mostram 'Responder até…'. Em branco = sem prazo. Sábado e domingo não contam.
+                        O lembrete interno à equipe usa este prazo (o aviso 'Responder até…' no portal chega na próxima atualização). Em branco = sem prazo. Sábado e domingo não contam.
                       </span>
                     </span>
                     <input id="portal-prazo-revisao" type="number" min={1} max={30} step={1} inputMode="numeric" placeholder="sem prazo" value={prazoInput}

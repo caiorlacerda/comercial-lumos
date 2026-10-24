@@ -18,13 +18,18 @@
 -- dias ÚTEIS (sem feriados), mas o N do título conta dias CORRIDOS desde a entrega.
 -- Só o servidor executa a função (cron e service_role); a equipe logada não a chama pelo app.
 --
--- ATENÇÃO — ao agendar a rotina (arquivo 408), todo vídeo que já esteja esperando o cliente além do prazo recebe um
--- lembrete na primeira rodada. Para ver quantos, rode antes a consulta de ensaio (só lê) que está no cabeçalho do 408.
+-- ATENÇÃO — ao agendar a rotina (arquivo 408), os vídeos que já esperam o cliente além do prazo entram na fila: no máximo
+-- 10 por rodada (os de prazo mais antigo primeiro); o acúmulo escoa em vários dias. A trava acompanha cerca de 30 vídeos
+-- vencidos ao mesmo tempo (10 por dia x o ciclo de 3 dias); acima disso, as repetições se espaçam. Para ver quantos há,
+-- rode antes a consulta de ensaio (só lê) que está no cabeçalho do 408.
 --
 -- Pré-requisitos: 2026102406_portal_prazo_revisao.sql (coluna prazo_revisao_dias e portal_somar_dias_uteis) e a função
 -- automacao_ativa(). Idempotente (pode rodar de novo).
 DO $$
 BEGIN
+  IF to_regprocedure('public.is_team()') IS NULL THEN
+    RAISE EXCEPTION 'Abortado: falta is_team() (2026102300_somente_equipe.sql).';
+  END IF;
   IF to_regprocedure('public.portal_somar_dias_uteis(date,integer)') IS NULL THEN
     RAISE EXCEPTION 'Abortado: aplique antes 2026102406_portal_prazo_revisao.sql.';
   END IF;

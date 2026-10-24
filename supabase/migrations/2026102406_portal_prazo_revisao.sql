@@ -8,6 +8,8 @@
 -- do PR seguinte for ao ar, e a rotina de lembrete da próxima migration contará os atrasos a partir desse prazo.
 -- Quem não deve ter prazo precisa ficar com o campo vazio (NULL) no modal do portal. A conferência no fim mostra
 -- quantos portais ficaram com prazo.
+-- Revogar o portal e gerar de novo volta ao padrão de 3 dias úteis (como toda configuração do portal hoje): clientes
+-- que devem ficar "sem prazo" precisam ter o campo limpo outra vez.
 --
 -- ATENÇÃO — vídeos que já estão com o cliente podem aparecer como ATRASADOS logo depois desta migration:
 -- entregue_em só é gravado na PRIMEIRA vez que o vídeo vai ao cliente (gatilho da 2026093324), e as linhas antigas
@@ -174,11 +176,18 @@ GRANT EXECUTE ON FUNCTION public.portal_visao_projetos(text) TO anon, authentica
 -- ALTER TABLE public.client_portals DROP COLUMN IF EXISTS prazo_revisao_dias;
 
 -- CONFERÊNCIA (último comando; esperado: portal_visao_projetos -> true / true; portal_somar_dias_uteis -> false / false;
--- portais = total de portais, com_prazo = quantos ficaram com prazo configurado).
+-- portais = total de portais, com_prazo = quantos ficaram com prazo configurado; visao_ok = portais_sem_login).
+-- visao_ok EXECUTA a visão nova para cada portal ativo sem login e conta os que respondem com a chave 'projetos'
+-- (o plpgsql só resolve nomes na execução e o front engole erros, então sem isto uma divergência entre o git e a produção
+-- esconderia em silêncio os blocos de cada cliente). Um erro de execução aqui desfaz o arquivo inteiro (o editor roda tudo
+-- numa transação) e a visão antiga continua no ar. Portais com login (exige_login) respondem 'precisa_login' para o
+-- dono do banco e, por isso, não entram neste teste.
 SELECT p.proname,
        has_function_privilege('anon', p.oid, 'EXECUTE')          AS anon_executa,
        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_executa,
        (SELECT count(*) FROM public.client_portals)                                    AS portais,
-       (SELECT count(*) FROM public.client_portals WHERE prazo_revisao_dias IS NOT NULL) AS com_prazo
+       (SELECT count(*) FROM public.client_portals WHERE prazo_revisao_dias IS NOT NULL) AS com_prazo,
+       (SELECT count(*) FROM public.client_portals cp WHERE cp.active AND NOT cp.exige_login AND public.portal_visao_projetos(cp.token) ? 'projetos') AS visao_ok,
+       (SELECT count(*) FROM public.client_portals cp WHERE cp.active AND NOT cp.exige_login) AS portais_sem_login
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname IN ('portal_visao_projetos', 'portal_somar_dias_uteis') ORDER BY 1;
