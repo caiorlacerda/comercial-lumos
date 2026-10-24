@@ -75,7 +75,7 @@
   out.entregas = document.querySelectorAll('a.quadro').length;
   abas.find(b => b.textContent.startsWith('Diárias'))?.click(); await wait(800);
   out.diarias = !!document.querySelector('.mes');
-  nav()[3].click(); await wait(400);                       // Atendimento
+  nav()[4].click(); await wait(400);                       // Atendimento (índice 4: com vídeos no fake, o menu ganha o botão Catálogo na posição 2)
   out.atendimento = document.querySelector('.pessoa .nm')?.textContent;
   nav()[0].click(); await wait(400);                       // Bem-vindo
   out.bemVindo = !!document.querySelector('.folha');

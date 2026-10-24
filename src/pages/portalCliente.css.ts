@@ -860,4 +860,103 @@ export const PORTAL_CSS = String.raw`
     .navegacao::-webkit-scrollbar { display: none; }
     .secao, .peca-bloco { padding: 18px 16px; }
   }
+
+  /* ── CATÁLOGO: fileiras que rolam de lado, estilo Netflix ───────────────
+     A capa é escura nos dois temas (filme se vê no escuro): quem fica por
+     cima dela (formato, selo, seta) tem cor própria, sem depender de
+     --gesso, que no tema claro vira preto. */
+  .fileira { --h: 168px; margin-top: 34px; }
+  .fileira-titulo { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: 26px; margin: 0 0 12px; display: flex; align-items: baseline; gap: 12px; }
+  .fileira-n { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--meia-luz); letter-spacing: .04em; }
+  .fileira-moldura { position: relative; }
+  .fileira-faixa {
+    display: flex; gap: 14px; align-items: flex-start;
+    overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity; scroll-padding: 0 18px;
+    /* Folga em volta, compensada pela margem negativa (o layout não muda): o
+       overflow da faixa corta o que passa da borda, e sem ela o anel de foco e
+       a sombra do card apareciam com a ponta cortada. */
+    padding: 12px 18px 26px; margin: -4px -18px -12px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .fileira-faixa::-webkit-scrollbar { display: none; }
+  /* A faixa recebe o foco por script quando a seta em foco some: anel por dentro, para não ser cortado. */
+  .fileira-faixa:focus-visible { outline-offset: -2px; border-radius: 10px; }
+  .cat-card { flex: 0 0 auto; scroll-snap-align: start; display: block; text-decoration: none; color: inherit; width: max-content; border-radius: 10px; }
+  /* O anel de foco vai na capa (a imagem), não no card inteiro com o título. */
+  /* O app tem uma regra de foco com peso maior (html.visual-novo a:focus-visible): por isso o prefixo. */
+  .portal-lumos .cat-card:focus-visible { outline: none; }
+  .cat-card:focus-visible .cat-capa { outline: 2px solid var(--luz); outline-offset: 2px; }
+  .cat-capa {
+    display: block; position: relative; overflow: hidden; border-radius: 10px; height: var(--h);
+    background: linear-gradient(160deg, #4b4239, #211e1c 70%);
+    box-shadow: 0 12px 30px -14px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,247,230,.09);
+    transition: transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .22s;
+  }
+  /* 70vw: em celular estreito (320px) a capa 16:9 de 263px estourava a coluna. */
+  .cat-card.f169 .cat-capa { width: min(calc(var(--h) * 16 / 9), 70vw); }
+  .cat-card.f916 .cat-capa { width: calc(var(--h) * 9 / 16); }
+  .cat-card.f11  .cat-capa { width: var(--h); }
+  .cat-capa .foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: cat-aparece .35s ease both; }
+  @keyframes cat-aparece { from { opacity: 0; } to { opacity: 1; } }
+  .cat-capa::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,247,230,.55); font-size: 15px; transition: color .2s; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+  .cat-card[href]:hover .cat-capa, .cat-card[href]:focus-visible .cat-capa { transform: translateY(-4px); box-shadow: 0 20px 40px -16px rgba(0,0,0,.85), 0 0 0 1px rgba(239,199,0,.5), 0 0 28px -6px rgba(239,199,0,.35); }
+  .cat-card[href]:hover .cat-capa::after, .cat-card[href]:focus-visible .cat-capa::after { color: var(--luz); }
+  .cat-capa .fmt, .cat-capa .cat-selo { z-index: 2; position: absolute; }
+  .cat-capa .fmt { top: 7px; right: 7px; left: auto; font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: .06em; background: rgba(10,9,8,.7); color: #F2EDE3; padding: 2px 6px; border-radius: 3px; }
+  .cat-selo { left: 7px; bottom: 7px; max-width: calc(100% - 14px); line-height: 1.2; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 12px; background: rgba(10,9,8,.78); color: #F2EDE3; border: 1px solid rgba(255,247,230,.18); }
+  .cat-selo.s-voce { color: var(--luz); border-color: rgba(239,199,0,.5); }
+  .cat-selo.s-ok { color: var(--aprovado); border-color: color-mix(in srgb, var(--aprovado) 50%, transparent); }
+  .cat-selo.s-aj { color: var(--ajuste); border-color: color-mix(in srgb, var(--ajuste) 50%, transparent); }
+  /* width: 0 + min-width: 100%: a largura do card vem só da capa, título comprido quebra de linha. */
+  .cat-titulo { margin-top: 9px; font-size: 13.5px; font-weight: 600; line-height: 1.25; width: 0; min-width: 100%; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  /* Como o título: a largura do card vem só da capa; o texto inteiro fica no title e no aria-label. */
+  .cat-meta { display: block; margin-top: 2px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--meia-luz); width: 0; min-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fileira-seta {
+    /* centro da capa = 8px de folga da faixa + metade da altura; a seta tem 40px */
+    position: absolute; top: calc(8px + var(--h) / 2 - 20px); z-index: 5; width: 40px; height: 40px;
+    display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(255,247,230,.35);
+    background: rgba(10,9,8,.82); color: #F2EDE3; cursor: pointer; backdrop-filter: blur(6px);
+  }
+  .fileira-seta svg { width: 16px; height: 16px; }
+  .fileira-seta.esq { left: -14px; } .fileira-seta.dir { right: -14px; }
+  .fileira-seta:hover { color: var(--luz); border-color: rgba(239,199,0,.6); }
+  @media (hover: none) { .fileira-seta { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .cat-capa, .cat-capa::after { transition: none; }
+    .cat-card[href]:hover .cat-capa, .cat-card[href]:focus-visible .cat-capa { transform: none; }
+    .cat-capa .foto { animation: none; }
+  }
+  @media (max-width: 619px) { .fileira { --h: 148px; } .fileira-titulo { font-size: 22px; } .fileira-seta.esq { left: -6px; } .fileira-seta.dir { right: -6px; } }
+
+  /* Tema claro: selo e seta são claros (o texto escuro passa de 4,5:1 e a
+     borda da seta passa de 3:1 contra o papel). A capa segue escura. */
+  .portal-lumos.claro .cat-selo { background: rgba(255,255,255,.94); color: #1B1917; border-color: rgba(28,24,20,.35); }
+  .portal-lumos.claro .cat-selo.s-voce { background: #EFC700; color: #241D00; border-color: #C79E00; }
+  .portal-lumos.claro .cat-selo.s-ok { color: #1F6B3A; border-color: rgba(31,107,58,.55); }
+  .portal-lumos.claro .cat-selo.s-aj { color: #A83A26; border-color: rgba(168,58,38,.55); }
+  .portal-lumos.claro .fileira-seta { background: rgba(255,255,255,.96); color: #1B1917; border-color: rgba(28,24,20,.55); box-shadow: 0 4px 14px -4px rgba(28,24,20,.35); }
+  .portal-lumos.claro .fileira-seta:hover { color: #8A6D00; border-color: #8A6D00; }
+  /* O amarelo do anel padrão some no papel: no claro o anel é o mesmo âmbar escuro do texto de destaque. */
+  .portal-lumos.claro .cat-card[href]:focus-visible .cat-capa,
+  .portal-lumos.claro .fileira-seta:focus-visible,
+  .portal-lumos.claro .fileira-faixa:focus-visible { outline-color: #8A6D00; }
+
+  /* Cabeçalho: o nome do cliente encolhe com reticências em vez de passar por cima
+     do menu (a coluna da marca é 1fr e pode ficar menor que o conteúdo). A logo não encolhe. */
+  /* stretch (em vez do start do grid): com start a marca tinha a largura do conteúdo e passava da coluna. */
+  .topo-dentro > .marca { justify-self: stretch; }
+  .topo .marca { min-width: 0; overflow: hidden; }
+  .topo .marca .logotipo { flex-shrink: 0; }
+  .topo .cliente { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+  /* Tablet (761 a 1019px): o menu (~590px) + a área do usuário não deixam coluna para a marca em
+     uma linha só (a logo sumia e o canto direito saía da tela). Aqui o menu desce para uma segunda
+     linha, centralizado; de 1020px para cima é a linha única e até 760px é o layout do celular. */
+  @media (min-width: 761px) and (max-width: 1019px) {
+    .topo-dentro { grid-template-columns: 1fr auto; row-gap: 8px; }
+    .topo-dentro > .marca { grid-column: 1; grid-row: 1; }
+    .topo-dentro > .quem { grid-column: 2; grid-row: 1; }
+    .topo-dentro > .navegacao { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  }
 `;

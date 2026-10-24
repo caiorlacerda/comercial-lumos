@@ -7,8 +7,10 @@ import { ABAS_PROJETO } from './tipos';
 import { useVisaoProjetos } from './useVisaoProjetos';
 import { NOME_SALVO, BILHETE, lerSalvo, gravarSalvo, apagarSalvo } from './armazenamento';
 import { dia } from './formatacao';
+import { montarFileiras } from './catalogo';
 import { Sol, Lua, ChevronDown } from './icones';
 import Inicio from './abas/Inicio';
+import Catalogo from './abas/Catalogo';
 import Atendimento from './abas/Atendimento';
 import BoasVindas from './abas/BoasVindas';
 import Geral from './abas/projeto/Geral';
@@ -40,6 +42,8 @@ function PortalClienteConteudo() {
    *  os dados depois (sessão renovada, nova tentativa) não pode puxar a pessoa
    *  de volta pra uma aba que ela já deixou. */
   const urlAplicada = useRef(false);
+  /** O portal foi aberto com `?aba=catalogo`: a pessoa voltou do vídeo, então o catálogo restaura a rolagem. */
+  const [voltouAoCatalogo, setVoltouAoCatalogo] = useState(false);
   /** 'precisa_login' abre a tela de entrada; 'sem_acesso' explica e para por aí. */
   const [porta, setPorta] = useState<{ tipo: 'precisa_login' | 'sem_acesso'; cliente: string } | null>(null);
   const [emailLogin, setEmailLogin] = useState('');
@@ -125,13 +129,14 @@ function PortalClienteConteudo() {
       const resto = params.toString();
       window.history.replaceState(null, '', `${window.location.pathname}${resto ? `?${resto}` : ''}${window.location.hash}`);
     }
-    if (pedida && (pedida === 'inicio' || pedida === 'atendimento' || pedida === 'boas_vindas' || ehProjeto)) {
+    if (pedida && (pedida === 'inicio' || (pedida === 'catalogo' && montarFileiras(d).length > 0) || pedida === 'atendimento' || pedida === 'boas_vindas' || ehProjeto)) {
       if (ehProjeto) {
         const subPedida = params.get('sub');
         if (subPedida && (ABAS_PROJETO as readonly string[]).includes(subPedida)) {
           subRestaurada.current = subPedida as AbaProjeto;
         }
       }
+      if (pedida === 'catalogo') setVoltouAoCatalogo(true);
       setAba(pedida);
     } else if (d.abrir_projeto) {
       // Link antigo, de projeto: abre já na aba daquele projeto.
@@ -171,6 +176,9 @@ function PortalClienteConteudo() {
       p.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE').map(e => ({ ...e, projeto: p.nome })));
   }, [dados]);
 
+  /** A aba Catálogo só existe se houver vídeo para mostrar. */
+  const temCatalogo = useMemo(() => !!dados && montarFileiras(dados).length > 0, [dados]);
+
   /** Deixa o bilhete de volta antes de sair pro player. */
   const marcarVolta = useCallback(() => {
     try {
@@ -186,6 +194,10 @@ function PortalClienteConteudo() {
       }));
     } catch { /* navegador sem sessão: só não tem botão de voltar */ }
   }, [token, aba, dados, abaProj]);
+
+  // Saiu do catálogo: a próxima visita não restaura rolagem de uma volta antiga
+  // (`carregar` liga a flag e troca a aba no mesmo lote, então isto não a apaga cedo).
+  useEffect(() => { if (aba !== 'catalogo') setVoltouAoCatalogo(false); }, [aba]);
 
   // Aba trocou: volta pro topo e pede as capas dos quadros que ela mostra.
   // Sem o topo, trocar de aba caía no meio da página anterior.
@@ -397,6 +409,13 @@ function PortalClienteConteudo() {
             Início
           </button>
 
+          {temCatalogo && (
+            <button type="button" className="link" aria-current={aba === 'catalogo'}
+              onClick={() => setAba('catalogo')}>
+              Catálogo
+            </button>
+          )}
+
           <span className="menu-abre">
             {/* Sempre "Projetos": o rótulo é o nome do lugar, não o do item
                 aberto. Qual projeto está aberto já está no título da página, e
@@ -458,6 +477,11 @@ function PortalClienteConteudo() {
       {aba === 'inicio' && (
         <Inicio dados={dados} esperando={esperando} capas={capas} blocos={blocos} token={token}
           marcarVolta={marcarVolta} irParaAba={setAba} visao={visao} />
+      )}
+
+      {/* ── CATÁLOGO ───────────────────────────────────────────── */}
+      {aba === 'catalogo' && (
+        <Catalogo dados={dados} capas={capas} pedirCapas={pedirCapas} marcarVolta={marcarVolta} restaurar={voltouAoCatalogo} />
       )}
 
       {/* ── PROJETO ────────────────────────────────────────────── */}
