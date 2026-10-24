@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Copy, ExternalLink, Loader2, RefreshCw, Eye, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Copy, ExternalLink, Loader2, RefreshCw, Eye, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,6 +35,11 @@ const BLOCOS: { key: keyof Blocks; label: string; desc: string }[] = [
   { key: 'atividade', label: 'Últimos dias', desc: 'o que foi entregue e aprovado, em todos os projetos' },
 ];
 const BLOCKS_PADRAO: Blocks = { escopo: true, cronograma: true, arquivos: true, atividade: true };
+
+/** Pendência do cliente inteiro (project_id nulo): vale para todos os projetos dele. */
+interface PendenciaCliente { id: string; texto: string; prazo: string | null; concluida_em: string | null }
+/** Banco ainda sem a tabela (migração não rodada): a seção some, sem erro. */
+const faltaTabela = (e: { code?: string } | null) => e?.code === '42P01' || e?.code === 'PGRST205';
 
 interface Props {
   /** Só para marcar "aberto" na lista, quando o modal vem de dentro de um projeto. */
@@ -155,6 +160,70 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
       ? await supabase.from('client_user_projects').insert({ client_user_id: p.id, project_id: projectId })
       : await supabase.from('client_user_projects').delete().eq('client_user_id', p.id).eq('project_id', projectId);
     if (error) { toast.error('Não foi possível salvar.'); carregarPessoas(); }
+  };
+
+  /**
+   * O que precisamos do cliente, valendo para todos os projetos dele
+   * (pendências sem projeto). As de um projeto só ficam na página do projeto.
+   * Se a tabela ainda não existe no banco, a seção simplesmente não aparece.
+   */
+  const toastRef = useRef(toast);
+  toastRef.current = toast; // o objeto do toast muda a cada render; a ref evita recriar o carregador
+  const [pendCliente, setPendCliente] = useState<PendenciaCliente[]>([]);
+  const [pendPronta, setPendPronta] = useState(false);
+  const [semTabelaPend, setSemTabelaPend] = useState(false);
+  const [novaPendTexto, setNovaPendTexto] = useState('');
+  const [novaPendPrazo, setNovaPendPrazo] = useState('');
+  const [salvandoPend, setSalvandoPend] = useState(false);
+  const seqPend = useRef(0);
+
+  const carregarPendCliente = useCallback(async () => {
+    const minha = ++seqPend.current; // resposta atrasada não sobrescreve a mais nova
+    if (!clientId) { setPendCliente([]); setPendPronta(false); return; }
+    const { data, error } = await supabase.from('portal_pendencias')
+      .select('id, texto, prazo, concluida_em')
+      .eq('client_id', clientId).is('project_id', null).order('created_at');
+    if (minha !== seqPend.current) return;
+    if (faltaTabela(error)) { setSemTabelaPend(true); return; }
+    if (error) { toastRef.current.error('Não foi possível carregar as pendências do cliente.'); setPendCliente([]); setPendPronta(true); return; }
+    setSemTabelaPend(false);
+    setPendCliente((data as PendenciaCliente[]) || []);
+    setPendPronta(true);
+  }, [clientId]);
+  useEffect(() => {
+    if (!open) return;
+    setPendCliente([]);
+    setPendPronta(false);
+    // Falha de rede não pode virar promise sem tratamento.
+    carregarPendCliente().catch(() => { toastRef.current.error('Não foi possível carregar as pendências do cliente.'); setPendCliente([]); setPendPronta(true); });
+  }, [open, carregarPendCliente]);
+
+  const adicionarPendCliente = async () => {
+    if (!novaPendTexto.trim() || !clientId || salvandoPend) return;
+    setSalvandoPend(true);
+    const { error } = await supabase.from('portal_pendencias').insert({
+      client_id: clientId, project_id: null, texto: novaPendTexto.trim().slice(0, 200),
+      prazo: novaPendPrazo || null, created_by: profile?.id ?? null,
+    });
+    setSalvandoPend(false);
+    if (error) { toast.error('Não foi possível salvar.'); return; }
+    setNovaPendTexto(''); setNovaPendPrazo('');
+    carregarPendCliente().catch(() => {});
+  };
+  const concluirPendCliente = async (id: string) => {
+    const { error } = await supabase.from('portal_pendencias').update({ concluida_em: new Date().toISOString() }).eq('id', id);
+    if (error) { toast.error('Não foi possível salvar.'); return; }
+    carregarPendCliente().catch(() => {});
+  };
+  const apagarPendCliente = async (p: PendenciaCliente) => {
+    if (!await confirm({
+      title: 'Apagar pendência',
+      message: `Apagar "${p.texto}"? O cliente deixa de ver esse pedido.`,
+      confirmLabel: 'Apagar', danger: true,
+    })) return;
+    const { error } = await supabase.from('portal_pendencias').delete().eq('id', p.id);
+    if (error) { toast.error('Não foi possível apagar.'); return; }
+    carregarPendCliente().catch(() => {});
   };
 
   /** Encerrado há mais de 90 dias sai do portal sozinho, mesmo ligado. */
@@ -396,6 +465,56 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
                 Desligado, o projeto some da lista de abas do cliente. Nada é apagado.
               </p>
             </div>
+
+            {/* O que precisamos do cliente, em todos os projetos dele */}
+            {clientId && !semTabelaPend && pendPronta && (
+              <div>
+                <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">
+                  O que precisamos do cliente (vale para todos os projetos)
+                </label>
+                <div className="mt-1.5 border border-lumos-border rounded-lumos divide-y divide-lumos-border/60">
+                  {pendCliente.filter(p => !p.concluida_em).map(p => (
+                    <div key={p.id} className="flex items-center gap-2 px-3.5 py-2.5">
+                      <span className="flex-1 min-w-0 text-xs font-bold text-lumos-text-primary break-words">
+                        {p.texto}{p.prazo && <span className="font-normal text-[10.5px] text-lumos-text-secondary"> · até {p.prazo.split('-').reverse().join('/')}</span>}
+                      </span>
+                      <button type="button" onClick={() => concluirPendCliente(p.id)}
+                        aria-label={`Marcar como feita: "${p.texto}"`} title="Marcar como feita"
+                        className="h-9 w-9 flex-shrink-0 flex items-center justify-center rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary">
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => apagarPendCliente(p)}
+                        aria-label={`Apagar: "${p.texto}"`} title="Apagar"
+                        className="h-9 w-9 flex-shrink-0 flex items-center justify-center rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {pendCliente.filter(p => !p.concluida_em).length === 0 && (
+                    <p className="px-3.5 py-3 text-[11.5px] text-lumos-text-secondary">Nenhuma pendência em aberto.</p>
+                  )}
+                  <div className="flex items-end gap-2 px-3.5 py-2.5 flex-wrap">
+                    <input value={novaPendTexto} onChange={e => setNovaPendTexto(e.target.value)} maxLength={200}
+                      onKeyDown={e => { if (e.key === 'Enter') adicionarPendCliente(); }}
+                      placeholder="Ex.: enviar logo em vetor" aria-label="Nova pendência do cliente"
+                      className="input-lumos h-10 text-xs flex-1 min-w-[10rem]" />
+                    <label className="flex flex-col gap-0.5 text-[10px] font-bold text-lumos-text-secondary">
+                      Prazo (opcional)
+                      <input type="date" value={novaPendPrazo} onChange={e => setNovaPendPrazo(e.target.value)}
+                        aria-label="Prazo (opcional)" title="Prazo (opcional)"
+                        className="input-lumos h-10 text-xs" />
+                    </label>
+                    <button type="button" onClick={adicionarPendCliente} disabled={!novaPendTexto.trim() || salvandoPend}
+                      className="btn-primary h-10 px-4 text-xs font-black disabled:opacity-60">
+                      {salvandoPend ? 'Salvando…' : 'Adicionar'}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[10.5px] text-lumos-text-secondary mt-1.5">
+                  Aparece para o cliente em todos os projetos dele. Pedido de um projeto só vai na página do projeto.
+                </p>
+              </div>
+            )}
 
             </div>
 

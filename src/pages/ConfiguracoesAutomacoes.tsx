@@ -69,6 +69,12 @@ const CATALOGO: { chave: string; titulo: string; faz: string; quem: Quem }[] = [
     faz: 'Quando um cliente abre o portal, o time é avisado, no máximo uma vez por hora por cliente. Desligada, o portal abre igual e a contagem de aberturas continua sendo guardada.',
     quem: null,
   },
+  {
+    chave: 'portal_saude_avisa',
+    titulo: 'Projeto vai ficar "Atenção" ou "Atrasado" no portal',
+    faz: 'Quando o cálculo de prazo piora, o time é avisado 24 horas antes de o cliente ver. Desligada, ninguém é avisado; a mudança aparece para o cliente 24 horas depois.',
+    quem: null,
+  },
 ];
 
 /** Erro de tabela ou função que ainda não existe no banco. */

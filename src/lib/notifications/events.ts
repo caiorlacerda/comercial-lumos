@@ -30,6 +30,7 @@ export const NOTIFICATION_EVENTS = {
   VIDEO_COM_CLIENTE: { key: 'video_com_cliente', category: 'producao', label: 'Vídeo foi para a revisão do cliente (atendimento do projeto)', defaultEnabled: true, priority: 'high' },
   DIARIA_SOLICITADA: { key: 'diaria_solicitada', category: 'producao', label: 'Cliente pediu uma diária pelo portal', defaultEnabled: true, priority: 'high' },
   BOAS_VINDAS_ITEM_ENVIADO: { key: 'boas_vindas_item_enviado', category: 'producao', label: 'Cliente enviou material do Bem-vindo à Lumos', defaultEnabled: true, priority: 'normal' },
+  PORTAL_SAUDE_PIORA: { key: 'portal_saude_piora', category: 'producao', label: 'Projeto vai aparecer como Atenção ou Atrasado no portal do cliente (aviso 24 h antes)', defaultEnabled: true, priority: 'high' },
 
   // COMERCIAL
   ORCAMENTO_CRIADO: { key: 'orcamento_criado', category: 'comercial', label: 'Novo orçamento criado', defaultEnabled: false },
