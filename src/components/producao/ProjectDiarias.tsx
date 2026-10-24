@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, CalendarOff, Clock, CloudRain, Copy, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CalendarDays, CalendarOff, Clock, CloudRain, Copy, LayoutGrid, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { hojeLocalISO } from '@/lib/dataSemHora';
@@ -14,6 +14,9 @@ import { SegmentedControl } from '@/components/ui/Tabs';
 import SeletorDeLocal from '@/components/producao/SeletorDeLocal';
 import { duracaoDaDiaria, horarioInvalido, viraODia } from '@/lib/horarioDiaria';
 import { consultaDeClima, type Local } from '@/lib/locais';
+import CalendarioEventos, { BarraDoCalendario } from '@/components/agenda/CalendarioEventos';
+import { type EventoCal, type Granularidade } from '@/components/agenda/calendario';
+import { useDiasFechados } from '@/components/agenda/useDiasFechados';
 
 /**
  * Diárias de gravação do projeto: data, duração, local e descrição, com
@@ -74,6 +77,15 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [bloqueiosAbertos, setBloqueiosAbertos] = useState(false);
   // O que a lista mostra: por padrão só o que ainda precisa acontecer (hoje em diante e as sem data).
   const [filtro, setFiltro] = useState<'afazer' | 'passadas' | 'todas'>('afazer');
+  // Calendário (padrão) ou cards. A escolha fica salva no navegador.
+  const [visao, setVisao] = useState<'calendario' | 'cards'>(() => {
+    try { return localStorage.getItem('lumos_diarias_visao') === 'cards' ? 'cards' : 'calendario'; } catch { return 'calendario'; }
+  });
+  const mudarVisao = (v: 'calendario' | 'cards') => { setVisao(v); try { localStorage.setItem('lumos_diarias_visao', v); } catch { /* sem armazenamento */ } };
+  const [gran, setGran] = useState<Granularidade>('mes');
+  const [cursor, setCursor] = useState(() => new Date());
+  // Dias fechados da produtora (agenda bloqueada), pra sombrear no calendário.
+  const diaFechado = useDiasFechados();
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('project_diarias')
@@ -245,6 +257,34 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     load();
   };
 
+  // Diárias no formato do calendário. Cor pelo estado: chuva (âmbar), já feita (verde), a fazer (amarelo).
+  const eventos = useMemo<EventoCal[]>(() => {
+    const agoraIso = hojeLocalISO();
+    return diarias.filter(d => !!d.data).map(d => {
+      const p = clima[d.id];
+      const chuva = (p?.chanceChuva ?? 0) >= 30;
+      const passada = d.data! < agoraIso;
+      const loc = d.local_id ? locaisPorId[d.local_id] : null;
+      const nomes = (equipes[d.id] || []).map(m => m.freela?.nome || m.user?.full_name).filter(Boolean) as string[];
+      const detalhes: string[] = [];
+      if (loc?.observacoes) detalhes.push(loc.observacoes);
+      detalhes.push(nomes.length ? `Equipe: ${nomes.join(', ')}` : 'Equipe ainda não escalada');
+      if (p) detalhes.push(`Previsão: ${p.tempMin}° a ${p.tempMax}° · ${p.chanceChuva}% de chuva`);
+      return {
+        id: d.id, titulo: d.nome, data: d.data!,
+        hora: d.hora_inicio ? d.hora_inicio.slice(0, 5) : null,
+        horaFim: d.hora_fim ? d.hora_fim.slice(0, 5) : null,
+        duracaoPadraoMin: Math.round((Number(d.duracao_horas) || 10) * 60),
+        cor: chuva ? '#f59e0b' : passada ? '#16a34a' : '#EFC700',
+        Icon: CalendarDays,
+        subtitulo: d.local,
+        detalhes,
+        selo: chuva ? `Chuva ${p!.chanceChuva}%` : passada ? 'Feita' : null,
+        passado: passada,
+      };
+    });
+  }, [diarias, clima, equipes, locaisPorId]);
+
   const duplicar = () => {
     if (!editando) return;
     setEditando({ ...editando, id: undefined, nome: `${editando.nome} (cópia)` });
@@ -272,6 +312,13 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           {diarias.length > 0 && <span className="text-lumos-text-secondary font-bold normal-case tracking-normal flex-shrink-0">· {diarias.length}</span>}
         </p>
         {diarias.length > 0 && (
+          <SegmentedControl value={visao} onChange={id => mudarVisao(id as typeof visao)}
+            items={[
+              { id: 'calendario', label: 'Calendário', icon: <CalendarDays className="w-3.5 h-3.5" /> },
+              { id: 'cards', label: 'Cards', icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+            ]} />
+        )}
+        {diarias.length > 0 && visao === 'cards' && (
           <SegmentedControl value={filtro} onChange={id => setFiltro(id as typeof filtro)}
             items={[
               { id: 'afazer', label: `A fazer · ${aFazer.length}` },
@@ -316,6 +363,21 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           <p className="text-sm font-bold text-lumos-text-primary">Nenhuma diária planejada.</p>
           <p className="text-xs text-lumos-text-secondary mt-1 max-w-md mx-auto">
             Cadastre as diárias com data e local: a previsão do tempo aparece sozinha, e a etapa "Diárias planejadas" do Status marca automaticamente.
+          </p>
+        </div>
+      ) : visao === 'calendario' ? (
+        <div className="space-y-3">
+          <BarraDoCalendario cursor={cursor} gran={gran} onCursor={setCursor} onGran={setGran} />
+          <CalendarioEventos
+            eventos={eventos} gran={gran} cursor={cursor}
+            diaFechado={diaFechado}
+            onEscolherDia={d => { setCursor(d); setGran('dia'); }}
+            onAbrir={e => { const d = diarias.find(x => x.id === e.id); if (d && canManage) setEditando(d); }}
+            onNovoNoDia={canManage ? (iso, hora) => setEditando({ duracao_horas: 10, data: iso, ...(hora ? { hora_inicio: hora } : {}) }) : undefined}
+          />
+          <p className="text-[10.5px] text-lumos-text-secondary">
+            {canManage ? 'Clique num dia (ou num horário, na Semana e no Dia) para criar uma diária; clique numa diária para editar.' : 'Passe o mouse numa diária para ver os detalhes.'}
+            {' '}Verde: já feita · âmbar: chuva na previsão · listrado: agenda fechada.
           </p>
         </div>
       ) : (
