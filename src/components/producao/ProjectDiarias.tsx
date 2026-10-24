@@ -12,6 +12,7 @@ import BloqueiosDeAgenda from '@/components/producao/BloqueiosDeAgenda';
 import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 import { SegmentedControl } from '@/components/ui/Tabs';
 import SeletorDeLocal from '@/components/producao/SeletorDeLocal';
+import { duracaoDaDiaria, horarioInvalido, viraODia } from '@/lib/horarioDiaria';
 import { consultaDeClima, type Local } from '@/lib/locais';
 
 /**
@@ -39,8 +40,6 @@ interface Diaria {
   google_event_id?: string | null;
 }
 
-// "08:00" → minutos, pra derivar a duração quando há início e fim.
-const min = (h?: string | null) => { if (!h) return null; const [a, b] = h.split(':').map(Number); return a * 60 + b; };
 const fmtHora = (h?: string | null) => h ? h.slice(0, 5) : null;
 
 interface Props { projectId: string; canManage: boolean }
@@ -187,8 +186,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const salvar = async () => {
     if (!editando?.nome?.trim()) { toast.error('Dê um nome pra diária.'); return; }
     setSalvando(true);
-    const mi = min(editando.hora_inicio), mf = min(editando.hora_fim);
-    if (mi != null && mf != null && mf <= mi) { setSalvando(false); toast.error('O horário final precisa ser depois do início.'); return; }
+    if (horarioInvalido(editando.hora_inicio, editando.hora_fim)) { setSalvando(false); toast.error('Início e fim não podem ser iguais. Se termina de madrugada, ponha o horário do dia seguinte (ex.: 20:00 → 04:00).'); return; }
     const payload = {
       project_id: projectId,
       nome: editando.nome.trim(),
@@ -196,7 +194,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
       hora_inicio: editando.hora_inicio || null,
       hora_fim: editando.hora_fim || null,
       // com início e fim, a duração sai da conta; senão vale o que digitaram
-      duracao_horas: (mi != null && mf != null) ? Math.round(((mf - mi) / 60) * 10) / 10 : (Number(editando.duracao_horas) || 10),
+      duracao_horas: duracaoDaDiaria(editando.hora_inicio, editando.hora_fim) ?? (Number(editando.duracao_horas) || 10),
       local: editando.local?.trim() || null,
       local_id: editando.local?.trim() ? (editando.local_id || null) : null,
       descricao: editando.descricao?.trim() || null,
@@ -367,7 +365,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                   <p className="flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
                     {d.hora_inicio && d.hora_fim
-                      ? <>{fmtHora(d.hora_inicio)} → {fmtHora(d.hora_fim)} · {Number(d.duracao_horas).toLocaleString('pt-BR')}h</>
+                      ? <>{fmtHora(d.hora_inicio)} → {fmtHora(d.hora_fim)}{viraODia(d.hora_inicio, d.hora_fim) && <span className="font-bold"> (dia seguinte)</span>} · {Number(d.duracao_horas).toLocaleString('pt-BR')}h</>
                       : <>{Number(d.duracao_horas).toLocaleString('pt-BR')} horas</>}
                   </p>
                   {d.local && (
@@ -469,7 +467,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
                 </div>
               </div>
             </div>
-            <p className="text-[10px] text-lumos-text-secondary -mt-1">Com horário, o evento entra no Google Calendar como compromisso com hora; sem, vira evento de dia inteiro.</p>
+            <p className="text-[10px] text-lumos-text-secondary -mt-1">Com horário, o evento entra no Google Calendar como compromisso com hora; sem, vira evento de dia inteiro. Se termina de madrugada, ponha o fim do dia seguinte (ex.: 20:00 → 04:00).</p>
             <SeletorDeLocal
               clientId={cliente.id}
               clienteNome={cliente.nome}

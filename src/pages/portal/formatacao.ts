@@ -34,7 +34,8 @@ export const horario = (g: { hora_inicio: string | null; hora_fim: string | null
   const i = g.hora_inicio?.slice(0, 5);
   const f = g.hora_fim?.slice(0, 5);
   if (!i) return null;
-  return f ? `${i} às ${f}` : `a partir das ${i}`;
+  if (!f) return `a partir das ${i}`;
+  return f < i ? `${i} às ${f} (dia seguinte)` : `${i} às ${f}`;
 };
 
 /** O que a ordem do dia aprovada tem pro cliente, já limpo: ponto de encontro,

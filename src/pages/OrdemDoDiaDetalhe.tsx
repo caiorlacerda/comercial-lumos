@@ -1112,7 +1112,10 @@ export default function OrdemDoDiaDetalhe() {
     });
     const rows = comEfetivo.slice().sort((a, b) => (a.iniEfetivo ?? 9999) - (b.iniEfetivo ?? 9999));
     const inicio = rows.length ? rows[0].iniEfetivo : minutos(od?.hora_inicio);
-    const fim = rows.length ? Math.max(...rows.map(r => r.fimEfetivo ?? r.iniEfetivo ?? 0)) : minutos(od?.hora_fim);
+    // Sem cronograma, o fim vem do horário da diária; se termina de madrugada (fim < início), conta no dia seguinte.
+    const fimDiaria = minutos(od?.hora_fim);
+    const fim = rows.length ? Math.max(...rows.map(r => r.fimEfetivo ?? r.iniEfetivo ?? 0))
+      : (fimDiaria != null && inicio != null && fimDiaria < inicio ? fimDiaria + 1440 : fimDiaria);
     const total = inicio != null && fim != null && fim > inicio ? fim - inicio : null;
 
     const hoje = od?.data_producao === hojeLocal();
