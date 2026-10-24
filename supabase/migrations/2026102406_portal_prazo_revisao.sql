@@ -9,9 +9,20 @@
 -- Quem não deve ter prazo precisa ficar com o campo vazio (NULL) no modal do portal. A conferência no fim mostra
 -- quantos portais ficaram com prazo.
 --
+-- ATENÇÃO — vídeos que já estão com o cliente podem aparecer como ATRASADOS logo depois desta migration:
+-- entregue_em só é gravado na PRIMEIRA vez que o vídeo vai ao cliente (gatilho da 2026093324), e as linhas antigas
+-- receberam datas preenchidas retroativamente. Um vídeo devolvido internamente e reenviado mantém a data original.
+-- Entrega em sábado ou domingo: o primeiro dia útil conta como dia 1 (sábado + 1 dia útil = segunda-feira).
+--
 -- Regras da contagem: sábado e domingo não contam; FERIADOS NÃO SÃO CONSIDERADOS (só fins de semana).
 -- O dia de partida é a data de entrega do vídeo (entregue_em, senão uploaded_at, senão created_at) no fuso
 -- America/Sao_Paulo. O prazo só existe para vídeo esperando o cliente (EM_REVISAO_CLIENTE).
+--
+-- n_versoes segue a mesma regra da página de revisão (get_public_review): não conta versão interna
+-- (EM_REVISAO_INTERNA / ALTERACOES_INTERNAS), exceto a que o próprio cliente comentou.
+--
+-- ROLLBACK: antes, apague os objetos de 2026102407 e 2026102408 (lembrete e rotina: dependem da coluna e do
+-- helper). DROP COLUMN apaga a configuração de prazo de TODOS os portais. Comandos no fim do arquivo.
 --
 -- Pré-requisitos: 2026102403_portal_visao_projetos.sql. Idempotente (pode rodar de novo).
 DO $$
@@ -38,10 +49,11 @@ END $$;
 
 -- Interna: soma p_dias dias úteis a p_data (sábado e domingo não contam; feriados não entram).
 CREATE OR REPLACE FUNCTION public.portal_somar_dias_uteis(p_data date, p_dias integer)
-RETURNS date LANGUAGE plpgsql IMMUTABLE AS $$
+RETURNS date LANGUAGE plpgsql IMMUTABLE SET search_path = '' AS $$
 DECLARE v date := p_data; n integer := 0;
 BEGIN
   IF p_data IS NULL OR p_dias IS NULL THEN RETURN NULL; END IF;
+  IF p_dias > 366 THEN RAISE EXCEPTION 'p_dias fora do limite'; END IF;
   WHILE n < p_dias LOOP
     v := v + 1;
     IF extract(isodow FROM v) < 6 THEN n := n + 1; END IF;
@@ -114,7 +126,10 @@ BEGIN
           ) rt ON true
           JOIN LATERAL (
             SELECT count(*)::int AS n FROM video_versions x
-            WHERE COALESCE(x.group_id, x.id) = COALESCE(e.group_id, e.id)
+            WHERE x.group_id = e.group_id
+              AND (x.status NOT IN ('EM_REVISAO_INTERNA', 'ALTERACOES_INTERNAS')
+                   OR EXISTS (SELECT 1 FROM review_comments c2
+                              WHERE c2.video_version_id = x.id AND c2.is_team = false))
           ) nv ON true
         ), '[]'::jsonb)
       ) ORDER BY (p.status = 'concluido'), p.created_at DESC)
@@ -152,7 +167,8 @@ END; $$;
 REVOKE ALL ON FUNCTION public.portal_visao_projetos(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.portal_visao_projetos(text) TO anon, authenticated, service_role;
 
--- ROLLBACK (comentado): volta a visão para a versão de 2026102403 (reexecute aquele arquivo), depois:
+-- ROLLBACK (comentado): primeiro apague os objetos de 2026102407 e 2026102408 (dependem da coluna e do helper);
+-- volte a visão para a versão de 2026102403 (reexecute aquele arquivo); depois:
 -- DROP FUNCTION IF EXISTS public.portal_somar_dias_uteis(date, integer);
 -- ALTER TABLE public.client_portals DROP CONSTRAINT IF EXISTS client_portals_prazo_revisao_dias_check;
 -- ALTER TABLE public.client_portals DROP COLUMN IF EXISTS prazo_revisao_dias;
