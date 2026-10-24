@@ -8,6 +8,7 @@ import TaskRoteiros, { prefetchRoteirosDoProjeto } from '@/components/producao/T
 import ProjectEscopo from '@/components/producao/ProjectEscopo';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
 import ProjectNotes from '@/components/producao/ProjectNotes';
+import SecaoPortalProjeto from '@/components/producao/SecaoPortalProjeto';
 import ProjectStatusPipeline from '@/components/producao/ProjectStatusPipeline';
 import ProjectBriefing from '@/components/producao/ProjectBriefing';
 import ProjectDiarias from '@/components/producao/ProjectDiarias';
@@ -2616,6 +2617,13 @@ export default function Projetos() {
                 {/* key por projeto: remonta o editor ao trocar de projeto, evitando
                     que o autosave (closure) salve no projeto errado. */}
                 <ProjectNotes key={selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+
+                {/* ============ PORTAL DO CLIENTE (saúde, pendências, equipe) ============ */}
+                {canManage && (
+                  <div className="card p-5 md:p-6">
+                    <SecaoPortalProjeto key={'po' + selectedProject.id} projectId={selectedProject.id} clientId={selectedProject.client_id ?? null} />
+                  </div>
+                )}
                 </div>
                 )}
 
