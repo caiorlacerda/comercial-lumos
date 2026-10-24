@@ -605,7 +605,7 @@ export const PORTAL_CSS = String.raw`
   .portal-lumos.claro .s-prod { background: rgba(44,110,163,.14); color: #245B87; }
   .portal-lumos.claro .s-voce { background: #EFC700; color: #241D00; }
   .portal-lumos.claro .botao { background: #EFC700; color: #241D00; }
-  .portal-lumos.claro .saude-atencao .saude-ponto { background: #C79E00; }
+  .portal-lumos.claro .saude-atencao .saude-ponto { background: #A67F00; }
   .portal-lumos.claro .pendencias a { color: #8A6D00; }
   .portal-lumos.claro .baixar:hover,
   .portal-lumos.claro .pessoa a { color: #8A6D00; border-color: rgba(239,199,0,.55); }

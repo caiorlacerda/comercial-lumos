@@ -506,7 +506,7 @@ function PortalClienteConteudo() {
             </nav>
 
             {abaProj === 'geral' && <Geral projeto={projetoAberto} blocos={blocos}
-              visao={visao?.projetos.find(v => v.id === projetoAberto.id) || null}
+              visao={(visao?.projetos ?? []).find(v => v.id === projetoAberto.id) || null}
               esperando={projetoAberto.entregas.filter(e => e.status === 'EM_REVISAO_CLIENTE')}
               marcarVolta={marcarVolta} />}
 

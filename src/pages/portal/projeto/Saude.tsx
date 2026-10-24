@@ -10,6 +10,7 @@ const TEXTO: Record<EstadoSaude, { titulo: string; frase: string }> = {
 
 export default function Saude({ estado }: { estado: EstadoSaude }) {
   const t = TEXTO[estado];
+  if (!t) return null; // estado desconhecido: sem bloco, nunca tela branca
   return (
     <section className={`secao saude saude-${estado}`} aria-label="Situação do projeto">
       <span className="rotulo">Situação</span>
