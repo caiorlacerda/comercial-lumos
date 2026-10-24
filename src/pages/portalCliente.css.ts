@@ -265,6 +265,18 @@ export const PORTAL_CSS = String.raw`
   .pessoa a:hover { background: rgba(239,199,0,.1); }
   .nota { font-size: 12.5px; color: var(--meia-luz); max-width: 60ch; }
 
+  /* ── Visão geral do projeto: situação, próximo passo, pendências ── */
+  .saude-linha { display: flex; align-items: center; gap: 10px; font-size: 18px; margin: 6px 0 2px; }
+  .saude-ponto { width: 11px; height: 11px; border-radius: 50%; background: var(--aprovado); flex: 0 0 auto; }
+  .saude-atencao .saude-ponto { background: var(--luz); }
+  .saude-atrasado .saude-ponto { background: var(--ajuste); }
+  .marco-linha { font-size: 16px; margin: 6px 0 0; }
+  .pendencias { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+  .pendencias li { padding: 12px 0; border-bottom: 1px solid var(--fio); font-size: 14px; }
+  .pendencias li:last-child { border-bottom: 0; }
+  .pendencias a { color: var(--luz); text-decoration: none; }
+  .pendencias a:hover, .pendencias a:focus-visible { text-decoration: underline; }
+
   .rodape { border-top: 1px solid var(--fio); margin-top: 46px; padding: 22px 0 0; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .rodape .rotulo { margin: 0; }
 
@@ -593,6 +605,8 @@ export const PORTAL_CSS = String.raw`
   .portal-lumos.claro .s-prod { background: rgba(44,110,163,.14); color: #245B87; }
   .portal-lumos.claro .s-voce { background: #EFC700; color: #241D00; }
   .portal-lumos.claro .botao { background: #EFC700; color: #241D00; }
+  .portal-lumos.claro .saude-atencao .saude-ponto { background: #C79E00; }
+  .portal-lumos.claro .pendencias a { color: #8A6D00; }
   .portal-lumos.claro .baixar:hover,
   .portal-lumos.claro .pessoa a { color: #8A6D00; border-color: rgba(239,199,0,.55); }
   .portal-lumos.claro .calend .dia.livre { background: var(--mesa); }

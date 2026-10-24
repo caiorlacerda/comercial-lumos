@@ -1,10 +1,42 @@
-import type { Projeto } from '../../tipos';
+import type { Projeto, Entrega, VisaoProjeto } from '../../tipos';
 import { MARCOS } from '../../motivos';
-import { dia } from '../../formatacao';
+import { proximoMarco } from '../../marcos';
+import { dia, nomeBonito } from '../../formatacao';
+import Saude from '../../projeto/Saude';
+import ProximoMarco from '../../projeto/ProximoMarco';
+import Pendencias from '../../projeto/Pendencias';
+import EquipeProjeto from '../../projeto/EquipeProjeto';
 
-export default function Geral({ projeto, blocos }: { projeto: Projeto; blocos: Record<string, boolean> }) {
+interface Props {
+  projeto: Projeto;
+  blocos: Record<string, boolean>;
+  /** O que `portal_visao_projetos` diz deste projeto. Sem ela (função ainda não
+   *  publicada, falha de rede) nenhum bloco novo aparece e a tela fica como era. */
+  visao?: VisaoProjeto | null;
+  /** Vídeos deste projeto esperando a decisão do cliente. */
+  esperando: Entrega[];
+  /** Deixa o bilhete de volta antes de sair pro player. */
+  marcarVolta: () => void;
+}
+
+export default function Geral({ projeto, blocos, visao, esperando, marcarVolta }: Props) {
+  const marco = visao ? proximoMarco(projeto) : null;
+  const itens = visao ? [
+    ...esperando.map(e => ({
+      chave: `v-${e.file_name}-${e.versao}`,
+      texto: `Aprovar ou pedir ajuste: ${nomeBonito(e.file_name)} (v${String(e.versao).padStart(2, '0')})`,
+      href: e.review_token ? `/revisao/${e.review_token}` : undefined,
+      aoNavegar: marcarVolta,
+    })),
+    ...visao.pendencias.map(p => ({ chave: p.id, texto: p.texto, prazo: p.prazo })),
+  ] : [];
   return (
     <>
+      {visao?.saude && <Saude estado={visao.saude.estado} />}
+      {marco && <ProximoMarco marco={marco} />}
+      {itens.length > 0 && <Pendencias itens={itens} />}
+      {visao && visao.equipe.length > 0 && <EquipeProjeto equipe={visao.equipe} />}
+
       {/* Meta zero não é pacote (seria "NaN%" e "3 de 0"): o item some. */}
       {blocos.escopo !== false && projeto.escopo.some(it => it.meta > 0) && (
         <section className="secao">
