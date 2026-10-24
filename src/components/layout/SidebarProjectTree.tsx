@@ -87,11 +87,12 @@ export default function SidebarProjectTree() {
             .select(comOculto ? `${COLUNAS}, oculto_na_barra` : COLUNAS)
             .in('status', ['ativo', 'concluido'])
             .order('name');
-        const [cliRes, colorRes] = await Promise.all([
+        const [cliRes, colorRes, projPrimeira] = await Promise.all([
           supabase.from('clients').select('id, name').order('name'),
           supabase.from('client_colors').select('client_id, color'),
+          buscar(true),
         ]);
-        let projRes = await buscar(true);
+        let projRes = projPrimeira;
         let temColuna = true;
         if (projRes.error) { // coluna ainda não existe (SQL pendente)
           temColuna = false;
@@ -223,8 +224,12 @@ export default function SidebarProjectTree() {
 
   const alternarOculto = async (proj: ProjetoArvore, ocultar: boolean) => {
     setProjMenu(null);
-    const { error } = await supabase.from('projects').update({ oculto_na_barra: ocultar }).eq('id', proj.id);
-    if (error) { toast.error('Não foi possível salvar. Tente de novo.'); return; }
+    const { data, error } = await supabase.from('projects').update({ oculto_na_barra: ocultar }).eq('id', proj.id).select('id');
+    // 0 linhas sem erro = a RLS filtrou o UPDATE (sem permissão)
+    if (error || !data || data.length === 0) {
+      toast.error('Não foi possível salvar. Você pode não ter permissão para alterar este projeto.');
+      return;
+    }
     setTodos(prev => prev.map(p => p.id === proj.id ? { ...p, oculto_na_barra: ocultar } : p));
     toast.success(ocultar ? `"${proj.name}" ficou oculto da barra.` : `"${proj.name}" voltou para a barra.`);
   };

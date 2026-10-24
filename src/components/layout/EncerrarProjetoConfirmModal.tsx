@@ -37,15 +37,15 @@ async function contarVideos(projectId: string): Promise<number | null> {
   try {
     const { data, error } = await supabase
       .from('video_versions')
-      .select('group_id, status, updated_at')
+      .select('id, group_id, status, versao')
       .eq('project_id', projectId)
-      .order('updated_at', { ascending: false });
+      .order('versao', { ascending: false });
     if (error || !data) return null;
-    // A primeira linha de cada grupo é a versão mais recente
+    // A primeira linha de cada grupo é a versão mais recente (maior `versao`)
     const vistos = new Set<string>();
     let emRevisao = 0;
-    (data as { group_id: string | null; status: string }[]).forEach((v, i) => {
-      const chave = v.group_id ?? `__sem_grupo_${i}`;
+    (data as { id: string; group_id: string | null; status: string }[]).forEach(v => {
+      const chave = v.group_id ?? v.id;
       if (vistos.has(chave)) return;
       vistos.add(chave);
       if (v.status === 'EM_REVISAO_CLIENTE') emRevisao++;
@@ -125,7 +125,15 @@ export default function EncerrarProjetoConfirmModal({ proj, acao, onClose, onDon
         .update({ status: para }).eq('id', proj.id).eq('status', de).select('id');
       if (error) { toast.error('Não foi possível salvar. Tente de novo.'); return; }
       if (!data || data.length === 0) {
-        toast.error('Esse projeto já foi alterado por outra pessoa. Recarregue a barra.');
+        // 0 linhas: ou a RLS filtrou o UPDATE (sem permissão) ou o status já mudou
+        let statusAtual: string | null = null;
+        try {
+          const { data: atual } = await supabase.from('projects').select('status').eq('id', proj.id).maybeSingle();
+          statusAtual = (atual as { status?: string } | null)?.status ?? null;
+        } catch { /* sem releitura: cai no texto genérico */ }
+        toast.error(statusAtual === de
+          ? 'Você não tem permissão para alterar este projeto.'
+          : 'Esse projeto mudou desde que a barra carregou. Recarregue a página.');
         onClose(); // não há o que tentar de novo
         return;
       }
@@ -195,7 +203,10 @@ export default function EncerrarProjetoConfirmModal({ proj, acao, onClose, onDon
         </div>
       ) : (
         <p className="text-sm text-lumos-text-primary leading-relaxed">
-          Reabrir <span className="font-bold">{proj.name}</span>? Ele volta para a árvore de projetos ativos.
+          Reabrir <span className="font-bold">{proj.name}</span>?{' '}
+          {proj.oculto_na_barra === true
+            ? 'Ele volta para o grupo "Ocultos" da barra (use "Mostrar na barra" para trazê-lo de volta à lista do cliente).'
+            : 'Ele volta para a árvore de projetos ativos.'}
         </p>
       )}
     </Modal>
