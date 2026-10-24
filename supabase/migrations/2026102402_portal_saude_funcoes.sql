@@ -69,6 +69,11 @@ BEGIN
 END; $$;
 
 -- Recalcula e aplica a regra das 24 h. Sem argumento, passa por todos os projetos do portal.
+-- Projeto SEM portal ativo (cliente sem portal, portal inativo ou portal_visivel = false): ninguém está
+-- olhando, então não há aviso; guarda só o calculado e deixa exibida = NULL. Assim, quando o portal for
+-- ativado, o estado calculado aparece como piora (calculada vs exibida NULL) e passa pela espera de 24 h
+-- com aviso à equipe, em vez de o cliente ver "Atrasado" de imediato. Melhora/igual com portal ativo
+-- aparece na hora.
 CREATE OR REPLACE FUNCTION public.portal_recalcular_saude(p_project_id uuid DEFAULT NULL)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -95,15 +100,23 @@ BEGIN
   LOOP
     SELECT * INTO v_calc FROM public.portal_saude_calcular(r.id);
     INSERT INTO project_portal_saude (project_id) VALUES (r.id) ON CONFLICT DO NOTHING;
-    SELECT * INTO v_atual FROM project_portal_saude WHERE project_id = r.id;
+    SELECT * INTO v_atual FROM project_portal_saude WHERE project_id = r.id FOR UPDATE;
 
     v_piora := v_calc.estado IN ('atencao', 'atrasado')
                AND public.portal_saude_ordem(v_calc.estado) > public.portal_saude_ordem(v_atual.exibida);
     v_tem_portal := r.portal_visivel
                     AND EXISTS (SELECT 1 FROM client_portals cp WHERE cp.client_id = r.client_id AND cp.active);
 
-    IF NOT v_piora OR NOT v_tem_portal THEN
-      -- Igual, melhora, ou ninguém está olhando: o que o cliente vê acompanha o calculado.
+    IF NOT v_tem_portal THEN
+      -- Ninguém está olhando: guarda o calculado, não mostra nada e não avisa.
+      UPDATE project_portal_saude SET
+        calculada = v_calc.estado, motivo = v_calc.motivo,
+        calculada_desde = CASE WHEN calculada IS DISTINCT FROM v_calc.estado THEN now() ELSE calculada_desde END,
+        exibida = NULL, liberar_em = NULL, liberada_por = NULL, updated_at = now()
+      WHERE project_id = r.id;
+
+    ELSIF NOT v_piora THEN
+      -- Portal ativo e estado igual ou melhor: o que o cliente vê acompanha o calculado.
       UPDATE project_portal_saude SET
         calculada = v_calc.estado, exibida = v_calc.estado, motivo = v_calc.motivo,
         calculada_desde = CASE WHEN calculada IS DISTINCT FROM v_calc.estado THEN now() ELSE calculada_desde END,
@@ -159,18 +172,22 @@ BEGIN
   WHERE project_id = p_project_id;
 END; $$;
 
--- Permissões: nada para visitante; a equipe logada e o servidor executam.
-REVOKE ALL ON FUNCTION public.portal_saude_ordem(text) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.portal_saude_calcular(uuid) FROM PUBLIC, anon;
+-- Permissões: calcular/ordem (internas, expõem o motivo) só para o servidor; as duas funções
+-- com trava de equipe (recalcular, liberar) para a equipe logada e o servidor. Nada para visitante.
+REVOKE ALL ON FUNCTION public.portal_saude_ordem(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.portal_saude_calcular(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.portal_recalcular_saude(uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.portal_saude_liberar(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.portal_saude_ordem(text) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.portal_saude_calcular(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.portal_saude_ordem(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.portal_saude_calcular(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.portal_recalcular_saude(uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.portal_saude_liberar(uuid) TO authenticated, service_role;
 
--- CONFERÊNCIA: nenhuma das quatro executa como visitante (anon_executa = false nas quatro).
-SELECT p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_executa
+-- CONFERÊNCIA (esperado): anon_executa = false nas quatro; authenticated_executa = false em
+-- portal_saude_calcular e portal_saude_ordem, true em portal_recalcular_saude e portal_saude_liberar.
+SELECT p.proname,
+       has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_executa,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_executa
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public'
   AND p.proname IN ('portal_saude_ordem', 'portal_saude_calcular', 'portal_recalcular_saude', 'portal_saude_liberar')
