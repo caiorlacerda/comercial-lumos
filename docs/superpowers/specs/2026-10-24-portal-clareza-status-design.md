@@ -82,7 +82,7 @@ Migrations novas (nome `AAAAMMDDNN_descricao.sql`, rodadas manualmente pelo Caio
 - `portal_recalcular_saude(uuid DEFAULT NULL) → void` (SECURITY DEFINER; barra quem estiver logado e **não** for equipe; o cron roda sem `auth.uid()` e passa).
 - `portal_saude_liberar(uuid) → void` (SECURITY DEFINER, `is_team()`).
 - `portal_contexto(text) → record` (interna, **sem execução para anon/PUBLIC**): resolve token ativo, `exige_login`, pessoa, `restrito` e `client_id`, com as mesmas regras de `get_client_portal_v2`.
-- **`portal_visao_projetos(p_token text) → jsonb`** (SECURITY DEFINER, aberta a anon como o resto do portal): devolve, por projeto liberado, `{id, saude:{estado, frase}|null, pendencias:[{texto, prazo}], equipe:[{nome, funcao, foto}]}` e, no nível do cliente, `pendencias_cliente` e `boas_vindas_pendentes`. Respeita `restrito`, `portal_visivel` e `mostrar_equipe`. **Não** mexe em `get_client_portal_v2`.
+- **`portal_visao_projetos(p_token text) → jsonb`** (SECURITY DEFINER, aberta a anon como o resto do portal): devolve, por projeto liberado, `{id, saude:{estado}|null, pendencias:[{id, texto, prazo}], equipe:[{nome, funcao, foto}]}` (a frase de cada estado fica no front, para a equipe poder ajustar o texto sem mexer no banco) e, no nível do cliente, `pendencias_cliente` e `boas_vindas_pendentes`. Respeita `restrito`, `portal_visivel` e `mostrar_equipe`. **Não** mexe em `get_client_portal_v2`.
 
 **Automação:** chave `portal_saude_avisa` na tabela `automacoes` (ausente = ligada), com entrada na página Configurações → Automações.
 
@@ -132,4 +132,5 @@ Pacotes B (versões e prazo de revisão), C (financeiro útil), D (combinados e 
 - **Regra de saúde ruidosa** → ensaio antes do cron, regra em uma função só.
 - **Função nova exposta a anon** → só `portal_visao_projetos` é aberta; as demais passam pelo mesmo REVOKE do PR #354 e por teste de conferência.
 - **Refatoração quebrar o portal público** → PR próprio, sem lógica nova, com roteiro de comparação antes e depois.
+- **Rascunho do pedido de diária:** ao mover o estado das diárias para a própria aba, o texto digitado e não enviado passa a ser limpo quando a pessoa sai da aba Diárias (hoje sobrevive). Única diferença de comportamento da refatoração, aceita e citada no PR.
 - **Notificação duplicada** → só gatilho de banco para este evento, nada de `notify()` no cliente (regra do CLAUDE.md).
