@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -60,7 +61,7 @@ export default function VideosAjustesBloco({ dados }: { dados: DadosHome }) {
       <span className="text-[10px] font-black uppercase bg-red-500/10 text-red-500 px-2 py-0.5 rounded">{itens.length}</span>
     ) : undefined}>
       {carregando ? (
-        <p className="text-xs text-lumos-text-secondary italic text-center py-4">Carregando…</p>
+        <EsqueletoItens n={2} />
       ) : itens.length === 0 ? (
         <p className="text-xs text-lumos-text-secondary italic text-center py-6">Nenhum vídeo seu com ajustes pendentes.</p>
       ) : (

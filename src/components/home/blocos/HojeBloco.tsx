@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { TipoPilula } from '@/components/producao/TipoDeTarefa';
 import { useTipoDasTarefas } from '@/lib/tiposTarefa';
 import { useNavigate } from 'react-router-dom';
@@ -96,7 +97,7 @@ export default function HojeBloco({ dados }: { dados: DadosHome }) {
       <span className="text-[10px] font-black uppercase bg-lumos-yellow/10 text-lumos-yellow px-2 py-0.5 rounded">{itens.length}</span>
     ) : undefined}>
       {carregando && dados.carregando ? (
-        <p className="text-xs text-lumos-text-secondary italic text-center py-4">Carregando…</p>
+        <EsqueletoItens n={2} />
       ) : itens.length === 0 ? (
         <p className="text-xs text-lumos-text-secondary italic text-center py-6">Nada marcado para hoje.</p>
       ) : (

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderOpen, Activity, CalendarDays, AlertTriangle,
@@ -115,6 +117,7 @@ export default function ProducaoOverview() {
   // Tarefas em que o usuário entra como colaborador (aparecem na Minha fila).
   const [myCollabTaskIds, setMyCollabTaskIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   // Pipeline: incluir concluídas na barra? / etapa expandida (lista inline)
   const [pipeWithDone, setPipeWithDone] = useState(false);
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
@@ -361,11 +364,7 @@ export default function ProducaoOverview() {
   // Render
   // -----------------------------------------------------------
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" />
-      </div>
-    );
+    return <EsqueletoPagina />;
   }
 
   const stageChipCls = (s: string) => clsx('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', getStatusDetails(s).color);

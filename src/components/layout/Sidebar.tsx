@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
 import DesktopNav from '@/components/layout/DesktopNav';
 import MobileHeader from '@/components/layout/MobileHeader';
 import MobileSubNav from '@/components/layout/MobileSubNav';
@@ -11,6 +10,15 @@ import { WikiProvider } from '@/context/WikiContext';
 import FundoDeck from '@/components/common/FundoDeck';
 import { carregarFontesDeck } from '@/lib/fontesDeck';
 import { useVisualNovo } from '@/lib/visualNovo';
+import BarraDeCarregamento from '@/components/ui/BarraDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+
+/** Enquanto o código da página chega: esqueleto no lugar do círculo e a barra do topo correndo. */
+function FallbackDePagina() {
+  useBarraDeCarregamento(true);
+  return <EsqueletoPagina />;
+}
 
 // Largura do conteúdo por tipo de tela (só com o visual novo): formulário até 768px, painel até 1280px,
 // lista/tabela até 1600px. As demais rotas (editor, board, timeline, wiki) ficam livres.
@@ -56,23 +64,18 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-lumos-bg transition-colors duration-300 pb-20 md:pb-0">
           {/* Fundo de luz difusa fixo atrás de todas as telas; o conteúdo (relative z-10) fica acima */}
           {visualNovo && <FundoDeck />}
-          <AnimatePresence mode="wait">
-            <PageTransition key={transitionKey}>
-              <div data-largura={visualNovo ? LARGURA_POR_ROTA[location.pathname] : undefined} className={visualNovo ? 'lumos-deck relative z-10 w-full p-4 md:p-6 lg:p-8' : 'w-full p-4 md:p-6 lg:p-8'}>
-                <React.Suspense
-                  fallback={
-                    <div className="flex items-center justify-center py-32">
-                      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" />
-                    </div>
-                  }
-                >
-                  {children}
-                </React.Suspense>
-              </div>
-            </PageTransition>
-          </AnimatePresence>
+          <PageTransition key={transitionKey}>
+            <div data-largura={visualNovo ? LARGURA_POR_ROTA[location.pathname] : undefined} className={visualNovo ? 'lumos-deck relative z-10 w-full p-4 md:p-6 lg:p-8' : 'w-full p-4 md:p-6 lg:p-8'}>
+              <React.Suspense fallback={<FallbackDePagina />}>
+                {children}
+              </React.Suspense>
+            </div>
+          </PageTransition>
         </main>
       </div>
+
+      {/* Barra fina de carregamento no topo (aparece só se demorar mais que ~150 ms) */}
+      <BarraDeCarregamento />
 
       {/* Tab bar inferior (só celular) */}
       <MobileTabBar />

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { ChevronRight, CheckCircle2, Film, CalendarPlus, Wrench, Truck, UserX, Receipt, FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import BlocoCartao from '../BlocoCartao';
@@ -36,7 +37,7 @@ export default function PrecisoDeVoceBloco({ dados }: { dados: DadosHome }) {
       <span className="text-[10px] font-black uppercase bg-warn/10 text-warn-fg px-2 py-0.5 rounded">{total}</span>
     ) : undefined}>
       {g.carregando ? (
-        <p className="text-xs text-lumos-text-secondary italic text-center py-4">Carregando…</p>
+        <EsqueletoItens n={2} />
       ) : linhas.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-6 text-center">
           <CheckCircle2 className="w-6 h-6 text-ok-fg" />

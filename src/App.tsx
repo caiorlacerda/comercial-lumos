@@ -11,6 +11,9 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PermissionGuard } from '@/components/auth/PermissionGuard';
 import { LayoutProvider } from '@/context/LayoutContext';
 import NewProjectCelebration from '@/components/common/NewProjectCelebration';
+import BarraDeCarregamento from '@/components/ui/BarraDeCarregamento';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { iniciarPrefetch } from '@/lib/prefetchRotas';
 
 // Páginas carregadas sob demanda (code-splitting por rota). Cada uma vira um
 // chunk separado, tirando libs pesadas (PDF, gráficos, Excel, editor) do
@@ -78,12 +81,11 @@ const PortalCliente = lazy(() => import('@/pages/PortalCliente'));
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
 // Fallback exibido enquanto o chunk da rota está sendo baixado.
+// Tela cheia de espera (entrada do app e páginas fora do menu): fundo limpo e a barra do topo,
+// em vez de um círculo girando no meio.
 function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
-    </div>
-  );
+  useBarraDeCarregamento(true);
+  return <div className="min-h-screen bg-lumos-bg"><BarraDeCarregamento /></div>;
 }
 
 function AuthWrapper({ children }: { children: React.ReactNode }) {
@@ -158,9 +160,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
 
   if (loading || !profileChecked) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
-      </div>
+      <PageLoader />
     );
   }
 
@@ -186,9 +186,7 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   // mostra o loader em vez de piscar o "Acesso Pendente".
   if (user && profileChecked && !profile && !pendingConfirmed) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
-      </div>
+      <PageLoader />
     );
   }
   if (user && profileChecked && !profile) {
@@ -423,6 +421,8 @@ function RevisaoDeVideosGuard() {
 }
 
 function AppContent() {
+  // Pré-carrega as páginas principais (e a que o mouse está prestes a abrir).
+  useEffect(() => { iniciarPrefetch(); }, []);
   return (
     <Router>
       <VersionWatcher />

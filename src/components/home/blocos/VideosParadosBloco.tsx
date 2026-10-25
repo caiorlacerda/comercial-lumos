@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { ChevronRight } from 'lucide-react';
 import BlocoCartao from '../BlocoCartao';
 import type { DadosHome } from '../tipos';
@@ -16,7 +17,7 @@ export default function VideosParadosBloco({ dados }: { dados: DadosHome }) {
       <span className="text-[10px] font-black uppercase bg-warn/10 text-warn-fg px-2 py-0.5 rounded">{g.parados.length}</span>
     ) : undefined}>
       {g.carregando ? (
-        <p className="text-xs text-lumos-text-secondary italic text-center py-4">Carregando…</p>
+        <EsqueletoItens n={2} />
       ) : g.parados.length === 0 ? (
         <p className="text-xs text-lumos-text-secondary italic text-center py-6">Nenhum vídeo parado em revisão.</p>
       ) : (
