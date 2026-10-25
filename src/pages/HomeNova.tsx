@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Flame, SlidersHorizontal } from 'lucide-react';
@@ -37,6 +38,7 @@ export default function Home() {
   const { profile } = useAuth();
   const papel = papelDaHome(profile?.role);
   const minhas = useMinhasTarefas();
+  useBarraDeCarregamento(minhas.carregando);
   const gestao = useGestaoHome(papel !== 'time');
   const admin = useAdminHome(papel === 'admin');
   const dados = useMemo(() => ({ ...minhas, gestao, admin }), [minhas, gestao, admin]);

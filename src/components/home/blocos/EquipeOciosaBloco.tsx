@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { EsqueletoLinhas } from '@/components/ui/Esqueleto';
 import BlocoCartao from '../BlocoCartao';
 import UserAvatar from '@/components/common/UserAvatar';
 import type { DadosHome } from '../tipos';
@@ -15,7 +16,7 @@ export default function EquipeOciosaBloco({ dados }: { dados: DadosHome }) {
       <span className="text-[10px] font-black uppercase bg-ok/10 text-ok-fg px-2 py-0.5 rounded">{lista.length}</span>
     ) : undefined}>
       {g.carregando ? (
-        <p className="text-xs text-lumos-text-secondary italic text-center py-4">Carregando…</p>
+        <EsqueletoLinhas n={3} className="py-1" />
       ) : lista.length === 0 ? (
         <p className="text-xs text-lumos-text-secondary italic text-center py-6">Todo mundo tem tarefa aberta.</p>
       ) : (

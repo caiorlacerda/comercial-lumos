@@ -1,4 +1,6 @@
 import { registrarProjetoRecente } from '@/lib/projetosRecentes';
+import { EsqueletoLinhas, EsqueletoProjeto, EsqueletoTarefas } from '@/components/ui/Esqueleto';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -853,6 +855,7 @@ export default function Projetos() {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selTaskIds, setSelTaskIds] = useState<Set<string>>(new Set()); // seleção em lote
   const [tasksLoading, setTasksLoading] = useState(false);
+  useBarraDeCarregamento(loading || tasksLoading);
   // ── Hub do projeto (Fase 1 do redesign): abas + ferramentas da lista ──
   /**
    * O projeto abre no RESUMO.
@@ -2324,10 +2327,7 @@ export default function Projetos() {
       )}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <Loader2 className="w-10 h-10 animate-spin text-lumos-yellow mb-4" />
-          <p className="text-xs text-lumos-text-secondary font-semibold uppercase tracking-wider">Carregando painel...</p>
-        </div>
+        <EsqueletoProjeto />
       ) : (
         <div className="min-h-[600px]">
           
@@ -2809,8 +2809,8 @@ export default function Projetos() {
                 {/* Tab Content */}
                 <div className="flex-1 min-h-[300px] flex flex-col">
                   {tasksLoading ? (
-                    <div className="flex-grow flex items-center justify-center py-16">
-                      <Loader2 className="w-8 h-8 animate-spin text-lumos-yellow" />
+                    <div className="flex-grow py-3">
+                      <EsqueletoTarefas n={6} />
                     </div>
                   ) : (
                     /* ================= LIST VIEW (Ativas / Finalizadas) ================= */
@@ -3764,9 +3764,7 @@ export default function Projetos() {
                 {rightTab === 'activity' && (
                   <div className="flex-grow overflow-y-auto custom-scrollbar py-4 min-h-0 text-xs">
                     {activityLoading ? (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" />
-                      </div>
+                      <EsqueletoLinhas n={5} className="py-2" />
                     ) : activity.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-center text-lumos-text-secondary/50">
                         <History className="w-6 h-6 mb-2 opacity-20" />
@@ -3798,9 +3796,7 @@ export default function Projetos() {
                 {rightTab === 'comments' && (
                 <div className="flex-grow overflow-y-auto custom-scrollbar py-4 space-y-4 min-h-0 text-xs">
                   {commentsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" />
-                    </div>
+                    <EsqueletoLinhas n={4} className="py-2" />
                   ) : comments.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center text-lumos-text-secondary/50">
                       <MessageSquare className="w-6 h-6 mb-2 opacity-20" />
@@ -4007,7 +4003,7 @@ export default function Projetos() {
             </p>
             <div className="mt-4">
               {trashLoading ? (
-                <div className="flex items-center justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
+                <EsqueletoLinhas n={3} className="py-3" />
               ) : trashedTasks.length === 0 ? (
                 <div className="text-center py-10 text-xs text-lumos-text-secondary/70">A lixeira está vazia.</div>
               ) : (

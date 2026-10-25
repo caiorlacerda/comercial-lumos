@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { EsqueletoLinhas } from '@/components/ui/Esqueleto';
 import { ChevronRight } from 'lucide-react';
 import BlocoCartao from '../BlocoCartao';
 import type { DadosHome } from '../tipos';
@@ -15,7 +16,7 @@ export default function ComercialResumoBloco({ dados }: { dados: DadosHome }) {
       <button type="button" onClick={() => navigate('/orcamentos')} className="text-[10px] uppercase tracking-wider text-lumos-text-secondary hover:text-lumos-yellow transition-colors cursor-pointer">ver orçamentos</button>
     }>
       {a.carregando ? (
-        <p className="text-xs text-lumos-text-secondary italic text-center py-4">Carregando…</p>
+        <EsqueletoLinhas n={4} className="py-1" />
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">

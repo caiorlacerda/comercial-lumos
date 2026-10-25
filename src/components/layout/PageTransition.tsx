@@ -5,19 +5,18 @@ interface PageTransitionProps {
   children: React.ReactNode;
 }
 
-// Transição de página: cross-fade puro (só opacity), igual à troca de abas do
-// perfil da Equipe. A página que sai faz fade-out e a que entra faz fade-in.
+// Transição de página: só a entrada, um fade curto (só opacity). A página antiga sai na hora e a
+// nova já aparece subindo de 0 a 1 em ~0,14 s. Antes a saída esperava terminar (0,2 s) para a
+// entrada começar (mais 0,2 s): eram 0,4 s de tela vazia a cada troca.
 //
-// Importante: NÃO deslizar na horizontal. A "piscada" de antes vinha do slide
-// de saída (a tela era arrastada pra fora revelando o fundo), não do fade em si.
-// Com fade puro sobre o `bg-lumos-bg`, a troca nunca mostra um quadro em branco.
+// Importante: NÃO deslizar na horizontal. A "piscada" de antigamente vinha do slide de saída.
+// Com o fundo fixo (FundoDeck / bg-lumos-bg) atrás, a troca nunca mostra um quadro em branco.
 export default function PageTransition({ children }: PageTransitionProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
+      transition={{ duration: 0.14, ease: 'easeOut' }}
       className="w-full flex flex-col flex-1"
     >
       {children}

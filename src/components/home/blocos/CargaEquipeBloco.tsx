@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { EsqueletoLinhas } from '@/components/ui/Esqueleto';
 import BlocoCartao from '../BlocoCartao';
 import UserAvatar from '@/components/common/UserAvatar';
 import type { DadosHome } from '../tipos';
@@ -13,7 +14,7 @@ export default function CargaEquipeBloco({ dados }: { dados: DadosHome }) {
   return (
     <BlocoCartao titulo="Carga da equipe" direita={<span className="text-[10px] uppercase tracking-wider text-lumos-text-secondary">abertas</span>}>
       {g.carregando ? (
-        <p className="text-xs text-lumos-text-secondary italic text-center py-4">Carregando…</p>
+        <EsqueletoLinhas n={4} className="py-1" />
       ) : pessoas.length === 0 && semResponsavel === 0 ? (
         <p className="text-xs text-lumos-text-secondary italic text-center py-6">Nenhuma tarefa aberta.</p>
       ) : (
