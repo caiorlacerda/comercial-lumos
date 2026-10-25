@@ -1055,3 +1055,28 @@ html.visual-novo .border-sky-400 { border-color: color-mix(in oklab, var(--color
 @media (prefers-reduced-motion: reduce) {
   .entra-suave { animation: none; }
 }
+
+/* ───────── Texto colaborativo: cursor e nome de quem está digitando junto ───────── */
+.collaboration-carets__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid;
+  border-right: none;
+  word-break: normal;
+  pointer-events: none;
+}
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.55em;
+  left: -2px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px 4px 4px 0;
+  color: #fff;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}

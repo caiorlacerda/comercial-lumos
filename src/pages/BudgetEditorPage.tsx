@@ -68,6 +68,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePresencaDoDocumento } from '@/lib/colaboracao/presenca';
 import { alteradoLocalmente, camposAlterados, itensAlteradosLocalmente, mesclarItens, mesclarObjeto } from '@/lib/colaboracao/mesclar';
 import PresencaNoDocumento, { EtiquetaDeEdicao } from '@/components/colaboracao/PresencaNoDocumento';
+import RichTextEditorColaborativo from '@/components/common/RichTextEditorColaborativo';
+import { corDaPessoa } from '@/lib/colaboracao/presenca';
+import type { Editor } from '@tiptap/core';
 import type { Pessoa } from '@/lib/colaboracao/presenca';
 import DatePicker from '@/components/ui/DatePicker';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
@@ -206,6 +209,7 @@ export default function BudgetEditorPage() {
   const versionRef = useRef<BudgetVersion | null>(null);
   const itemsRef = useRef<BudgetItem[]>([]);
   budgetRef.current = budget; versionRef.current = version; itemsRef.current = items;
+  const briefingEditorRef = useRef<Editor | null>(null);
   const salvamentosEmAndamento = useRef(0);   // salvamentos desta pessoa no ar: a sincronização espera
   const marcaDeSalvamento = useRef(0);        // muda a cada salvamento: invalida uma busca que ficou velha no caminho
   const sincronizarRef = useRef<() => void>(() => {});
@@ -282,8 +286,13 @@ export default function BudgetEditorPage() {
     if (version?.notes_client && version.notes_client.trim() !== '') {
       if (!confirm('Substituir o briefing atual pelo template?')) return;
     }
-    setVersion(v => v ? { ...v, notes_client: content } : null);
-    isDirty.current = true;
+    if (briefingEditorRef.current) {
+      // Texto em conjunto: o template entra no documento compartilhado (e some para todos os que estão vendo).
+      briefingEditorRef.current.commands.setContent(content);
+    } else {
+      setVersion(v => v ? { ...v, notes_client: content } : null);
+      isDirty.current = true;
+    }
     setIsBriefingPopoverOpen(false);
     setShowBriefingSuggestion(false);
   };
@@ -1052,19 +1061,22 @@ export default function BudgetEditorPage() {
     if (versionRef.current?.id !== vr.data.id) return; // trocou de versão no meio
 
     const base = baseRef.current;
+    // O briefing é um texto em conjunto (documento compartilhado): não passa pela mesclagem de campos.
+    const remotoVersao = { ...vr.data } as Record<string, any>;
+    delete remotoVersao.notes_client;
     const lb = budgetRef.current!, lv = versionRef.current!, li = itemsRef.current;
     const remotoItens = (ir.data as BudgetItem[]) || [];
     const camposItem = [...CAMPOS_ITEM];
     const pendente = !base
       || alteradoLocalmente(base.budget, lb, Object.keys(br.data))
-      || alteradoLocalmente(base.version, lv, Object.keys(vr.data))
+      || alteradoLocalmente(base.version, lv, Object.keys(remotoVersao))
       || itensAlteradosLocalmente(base.items, li, camposItem);
 
     let novoBudget: any = lb, novoVersion: any = lv, novosItens: BudgetItem[] = li;
     let alterados: string[] = [], conflitos: string[] = [], camposMudados = 0;
     if (!pendente) {
       // Nada pendente aqui: vale o servidor inteiro (inclusive a ordem dos itens).
-      const mb = mesclarObjeto(lb as any, lb as any, br.data), mv = mesclarObjeto(lv as any, lv as any, vr.data);
+      const mb = mesclarObjeto(lb as any, lb as any, br.data), mv = mesclarObjeto(lv as any, lv as any, remotoVersao as any);
       camposMudados = mb.aplicados.length + mv.aplicados.length;
       novoBudget = mb.resultado; novoVersion = mv.resultado;
       const mi = mesclarItens(li, li, remotoItens);
@@ -1072,14 +1084,14 @@ export default function BudgetEditorPage() {
       const mesmaOrdem = li.length === remotoItens.length && li.every((it, i) => it.id === remotoItens[i].id);
       if (mi.alterados.length || !mesmaOrdem) novosItens = remotoItens;
     } else {
-      const mb = mesclarObjeto(base?.budget ?? null, lb as any, br.data), mv = mesclarObjeto(base?.version ?? null, lv as any, vr.data);
+      const mb = mesclarObjeto(base?.budget ?? null, lb as any, br.data), mv = mesclarObjeto(base?.version ?? null, lv as any, remotoVersao as any);
       camposMudados = mb.aplicados.length + mv.aplicados.length;
       novoBudget = mb.resultado; novoVersion = mv.resultado;
       const mi = mesclarItens(base?.items ?? [], li, remotoItens);
       novosItens = mi.itens; alterados = [...mi.alterados]; conflitos = [...mi.conflitos, ...mb.conflitos, ...mv.conflitos];
     }
 
-    guardarNaBase({ budget: { ...lb, ...br.data }, version: { ...lv, ...vr.data }, items: remotoItens });
+    guardarNaBase({ budget: { ...lb, ...br.data }, version: { ...lv, ...remotoVersao }, items: remotoItens });
     const ordemOuItens = novosItens !== li && (!pendente || alterados.length > 0);
     if (!camposMudados && !alterados.length && !conflitos.length && !ordemOuItens) return;
     if (camposMudados) { setBudget(novoBudget); setVersion(novoVersion); }
@@ -1716,15 +1728,45 @@ export default function BudgetEditorPage() {
                   <div className="relative rounded-lumos" onFocusCapture={() => definirCampo('briefing')} onBlurCapture={() => definirCampo(null)}
                     style={quemEdita('briefing') ? { outline: `2px solid ${quemEdita('briefing')!.cor}`, outlineOffset: '2px' } : undefined}>
                     {quemEdita('briefing') && <EtiquetaDeEdicao pessoa={quemEdita('briefing')!} />}
-                    <RichTextEditor
-                      editable={!isReadOnly}
-                      minHeight={360}
-                      value={version?.notes_client || ''}
-                      onChange={(html) => {
-                        setVersion(v => v ? { ...v, notes_client: html } : null);
-                        isDirty.current = true;
-                      }}
-                    />
+                    {!isDraft && version?.id && profile?.id ? (
+                      <RichTextEditorColaborativo
+                        chave={`orcamento-briefing:${version.id}`}
+                        htmlInicial={version.notes_client || ''}
+                        usuario={{ nome: profile.full_name || 'Alguém', cor: corDaPessoa(profile.id) }}
+                        editable={!isReadOnly}
+                        minHeight={360}
+                        onEditorPronto={(ed) => { briefingEditorRef.current = ed; }}
+                        // O texto em conjunto se salva sozinho: a cópia na tela só acompanha, sem marcar "alterado".
+                        onChange={(html) => setVersion(v => v ? { ...v, notes_client: html } : null)}
+                        onChangeRemoto={(html) => setVersion(v => v && v.notes_client !== html ? { ...v, notes_client: html } : v)}
+                        espelho={async (html) => {
+                          const { error } = await supabase.from('budget_versions').update({ notes_client: html }).eq('id', version.id);
+                          if (!error) guardarNaBase({ version: { ...(baseRef.current?.version || {}), notes_client: html } });
+                        }}
+                        // Sem a tabela de documentos (SQL pendente), volta ao editor de sempre.
+                        alternativa={(
+                          <RichTextEditor
+                            editable={!isReadOnly}
+                            minHeight={360}
+                            value={version?.notes_client || ''}
+                            onChange={(html) => {
+                              setVersion(v => v ? { ...v, notes_client: html } : null);
+                              isDirty.current = true;
+                            }}
+                          />
+                        )}
+                      />
+                    ) : (
+                      <RichTextEditor
+                        editable={!isReadOnly}
+                        minHeight={360}
+                        value={version?.notes_client || ''}
+                        onChange={(html) => {
+                          setVersion(v => v ? { ...v, notes_client: html } : null);
+                          isDirty.current = true;
+                        }}
+                      />
+                    )}
                   </div>
                   
                   {/* Logistics Fields */}
