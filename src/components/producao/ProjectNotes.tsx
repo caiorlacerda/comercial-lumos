@@ -11,6 +11,10 @@ import { clsx } from 'clsx';
 import Select from '@/components/ui/Select';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
+import CollaborationCaret from '@tiptap/extension-collaboration-caret';
+import { useTextoColaborativo } from '@/lib/colaboracao/useTextoColaborativo';
+import { corDaPessoa } from '@/lib/colaboracao/presenca';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, Quote, Minus, Undo2, Redo2, StickyNote, User, FileText, Film, Loader2,
@@ -182,7 +186,6 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
   const peopleRef = useRef<MItem[]>([]);
   const tasksRef = useRef<MItem[]>([]);
   const docsRef = useRef<MItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Fonte da verdade síncrona do projeto atual + trava anti-perda: só salvamos
@@ -236,32 +239,83 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
     }, 800);
   };
 
+  // Extensões do editor. No modo colaborativo o histórico (desfazer/refazer) é o do documento compartilhado.
+  const montarExtensoes = (colaborativo: boolean) => [
+    StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5] }, ...(colaborativo ? { undoRedo: false as const } : {}) }),
+    Underline,
+    LumosMention.configure({
+      HTMLAttributes: { class: 'lumos-mention' },
+      suggestions: [
+        makeSuggestion('@', PERSON_KEY, () => peopleRef.current, true),
+        makeSuggestion('@@', TASK_KEY, () => tasksRef.current, true),
+        makeSuggestion('@@@', DOC_KEY, () => docsRef.current, false),
+      ],
+    }),
+  ];
+
+  // Anotações em conjunto (estilo Google Docs): várias pessoas digitam ao mesmo tempo, cada uma com o cursor
+  // colorido. O texto atual do projeto só serve para criar o documento compartilhado na primeira vez.
+  const [notasIniciais, setNotasIniciais] = useState<string | null>(null);
+  const usuarioColab = { nome: profile?.full_name || 'Alguém', cor: corDaPessoa(profile?.id || 'anon') };
+  const colab = useTextoColaborativo({
+    chave: `projeto-notas:${projectId}`,
+    htmlInicial: notasIniciais ?? '',
+    ativo: notasIniciais !== null,
+    usuario: usuarioColab,
+    extensoesParaSemear: () => montarExtensoes(true),
+  });
+  const colaborando = colab.estado === 'pronto' && !!colab.doc && !!colab.provedor;
+  const colabRef = useRef(colaborando);
+  colabRef.current = colaborando;
+  const loading = notasIniciais === null || colab.estado === 'inativo' || colab.estado === 'carregando';
+
   const editor = useEditor({
     editable: canManage,
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5] } }),
-      Underline,
-      LumosMention.configure({
-        HTMLAttributes: { class: 'lumos-mention' },
-        suggestions: [
-          makeSuggestion('@', PERSON_KEY, () => peopleRef.current, true),
-          makeSuggestion('@@', TASK_KEY, () => tasksRef.current, true),
-          makeSuggestion('@@@', DOC_KEY, () => docsRef.current, false),
-        ],
-      }),
+      ...montarExtensoes(colaborando),
+      ...(colaborando ? [
+        Collaboration.configure({ document: colab.doc! }),
+        CollaborationCaret.configure({ provider: colab.provedor!, user: usuarioColab }),
+      ] : []),
     ],
     content: '',
-    onUpdate: ({ editor }) => { if (canManage) save(editor.getHTML()); },
+    onUpdate: ({ editor, transaction }) => {
+      if (!canManage) return;
+      if (colabRef.current) { if (!isChangeOrigin(transaction)) setSaveState('saving'); return; } // quem salva é o espelho
+      save(editor.getHTML());
+    },
     // lumos-notes: espaçamento compacto fixo, escoped nas anotações (ver index.css).
     editorProps: { attributes: { class: 'ProseMirror focus:outline-none lumos-notes' } },
-  });
+  }, [colaborando, colab.provedor]);
+
+  // Modo em conjunto: depois de cada gravação do documento, o HTML vai para a coluna do projeto (e o histórico).
+  useEffect(() => {
+    if (!colaborando || !editor || !colab.provedor) return;
+    const provedor = colab.provedor;
+    loadedRef.current = true;
+    provedor.aoGravar = async () => {
+      const html = editor.getHTML();
+      await supabase.from('projects').update({ notes: html }).eq('id', projectIdRef.current);
+      maybeSnapshot(html);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 1500);
+    };
+    return () => { provedor.aoGravar = null; };
+  }, [colaborando, editor, colab.provedor]);
+
+  // Sem a tabela dos documentos (SQL pendente): volta ao editor de sempre, com o texto carregado.
+  useEffect(() => {
+    if (colab.estado !== 'falhou' || !editor || notasIniciais === null) return;
+    editor.commands.setContent(notasIniciais, { emitUpdate: false });
+    loadedRef.current = true;
+  }, [colab.estado, editor, notasIniciais]);
 
   // Carrega itens de menção + as notas do projeto
   useEffect(() => {
     let alive = true;
     loadedRef.current = false;
+    setNotasIniciais(null);
     (async () => {
-      setLoading(true);
       const [u, tasks, docs, vids, proj] = await Promise.all([
         supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
         supabase.from('project_tasks').select('id, titulo').eq('project_id', projectId).is('deleted_at', null).order('ordem'),
@@ -278,14 +332,12 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
         ...((vids.data as any[]) || []).map(x => ({ id: x.id, label: `v${x.versao} · ${x.file_name}`, mtype: 'video' as const, url: x.drive_web_link || undefined })),
       ];
       const loadedNotes = (proj.data as any)?.notes || '';
-      editor?.commands.setContent(loadedNotes, { emitUpdate: false });
       lastNonEmptyRef.current = plainText(loadedNotes).length > 0;
-      loadedRef.current = true; // a partir daqui, edições podem salvar
-      setLoading(false);
+      setNotasIniciais(loadedNotes);   // libera a criação do documento em conjunto (ou o editor de sempre)
       fetchHistory();
     })();
     return () => { alive = false; };
-  }, [projectId, editor]);
+  }, [projectId]);
 
   useEffect(() => { editor?.setEditable(canManage); }, [canManage, editor]);
 

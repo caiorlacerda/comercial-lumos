@@ -21,6 +21,13 @@ import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import { useConfirm, usePrompt } from '@/components/ui/useConfirm';
 import { TagPicker, type Tag } from '@/components/producao/TaskTags';
+import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
+import CollaborationCaret from '@tiptap/extension-collaboration-caret';
+import { useTextoColaborativo } from '@/lib/colaboracao/useTextoColaborativo';
+import type { ProvedorYjsSupabase } from '@/lib/colaboracao/yjsSupabase';
+import { corDaPessoa, usePresencaDoDocumento } from '@/lib/colaboracao/presenca';
+import PresencaNoDocumento, { EtiquetaDeEdicao } from '@/components/colaboracao/PresencaNoDocumento';
+import type * as YType from 'yjs';
 import { TipoPilula, TipoSeletor } from '@/components/producao/TipoDeTarefa';
 import { tipoDoPrefixo, useTiposTarefa } from '@/lib/tiposTarefa';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
@@ -454,6 +461,10 @@ interface TipTapEditorProps {
   content: string;
   onChange: (html: string) => void;
   editable: boolean;
+  /** Texto em conjunto: o documento compartilhado e o provedor (cursores). Sem isso, o editor de sempre. */
+  colaborar?: { doc: YType.Doc; provedor: ProvedorYjsSupabase; usuario: { nome: string; cor: string }; espelho?: (html: string) => void };
+  /** Outra pessoa mexeu no texto (modo em conjunto). */
+  onRemoto?: (html: string) => void;
 }
 
 interface SlashCommandItem {
@@ -564,7 +575,76 @@ const HEADING_OPTS = [
   { value: '3', label: 'Título 3' }, { value: '4', label: 'Título 4' }, { value: '5', label: 'Título 5' },
 ];
 
-function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
+/**
+ * Descrição da tarefa em conjunto (estilo Google Docs). Carrega/cria o documento compartilhado e, quando
+ * pronto, mostra o editor com os cursores de quem está junto. Sem a tabela dos documentos (SQL pendente)
+ * cai no editor de sempre (`alternativa`). O HTML vai para `project_tasks.descricao` no máximo a cada 20 s,
+ * para não lotar o histórico de atividade da tarefa com "alterou a descrição".
+ */
+function DescricaoColaborativa({ taskId, htmlInicial, usuario, onHtml, onColaborando, alternativa }: {
+  taskId: string; htmlInicial: string; usuario: { nome: string; cor: string };
+  onHtml: (html: string) => void; onColaborando: (v: boolean) => void; alternativa: React.ReactNode;
+}) {
+  const colab = useTextoColaborativo({
+    chave: `tarefa-descricao:${taskId}`, htmlInicial, ativo: true, usuario,
+    extensoesParaSemear: () => extensoesDaDescricao(true),
+  });
+  const pronto = colab.estado === 'pronto' && !!colab.doc && !!colab.provedor;
+  useEffect(() => { onColaborando(pronto); return () => onColaborando(false); }, [pronto]);
+
+  // Espelho no HTML da tarefa, com intervalo mínimo.
+  const htmlRef = useRef<string | null>(null);
+  const ultimoRef = useRef(0);
+  const timerRef = useRef<number | null>(null);
+  const escrever = async () => {
+    if (htmlRef.current === null) return;
+    const html = htmlRef.current; htmlRef.current = null; ultimoRef.current = Date.now();
+    await supabase.from('project_tasks').update({ descricao: html }).eq('id', taskId);
+  };
+  const espelho = (html: string) => {
+    htmlRef.current = html;
+    const espera = Math.max(0, 20000 - (Date.now() - ultimoRef.current));
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => { timerRef.current = null; void escrever(); }, espera);
+  };
+  // Ao fechar a descrição, o que ainda estava na fila vai agora.
+  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current); void escrever(); }, []);
+
+  if (colab.estado === 'falhou') return <>{alternativa}</>;
+  if (!pronto) return <div className="rounded-lumos border border-lumos-border bg-lumos-surface p-4 min-h-[140px]"><EsqueletoLinhas n={4} /></div>;
+  return (
+    <TipTapEditor content="" editable onChange={onHtml} onRemoto={onHtml}
+      colaborar={{ doc: colab.doc!, provedor: colab.provedor!, usuario, espelho }} />
+  );
+}
+
+/** Extensões do editor da descrição. No modo em conjunto o histórico (desfazer/refazer) é o do documento compartilhado. */
+function extensoesDaDescricao(colaborativo: boolean) {
+  return [
+    colaborativo ? StarterKit.configure({ undoRedo: false }) : StarterKit,
+    Underline,
+    Color,
+    TextStyle,
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: {
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        class: 'text-lumos-yellow underline hover:text-yellow-400'
+      }
+    }),
+    TaskList,
+    TaskItem.configure({
+      nested: true,
+      HTMLAttributes: {
+        class: 'flex items-start gap-2 my-1'
+      }
+    }),
+    Callout
+  ];
+}
+
+function TipTapEditor({ content, onChange, editable, colaborar, onRemoto }: TipTapEditorProps) {
   const { prompt: perguntarLink, dialog: dialogoLink } = usePrompt();
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number; text: string; range: { from: number; to: number } } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -586,30 +666,17 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      Underline,
-      Color,
-      TextStyle,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          target: '_blank',
-          rel: 'noopener noreferrer',
-          class: 'text-lumos-yellow underline hover:text-yellow-400'
-        }
-      }),
-      TaskList,
-      TaskItem.configure({
-        nested: true,
-        HTMLAttributes: {
-          class: 'flex items-start gap-2 my-1'
-        }
-      }),
-      Callout
+      ...extensoesDaDescricao(!!colaborar),
+      ...(colaborar ? [
+        Collaboration.configure({ document: colaborar.doc }),
+        CollaborationCaret.configure({ provider: colaborar.provedor, user: colaborar.usuario }),
+      ] : []),
     ],
-    content: content || '',
+    content: colaborar ? '' : (content || ''),
     editable: editable,
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
+      // Texto em conjunto: o que veio de outra pessoa só atualiza a cópia do pai (e não mexe no menu "/").
+      if (colaborar && isChangeOrigin(transaction)) { onRemoto?.(editor.getHTML()); return; }
       onChange(editor.getHTML());
       
       const { selection } = editor.state;
@@ -698,9 +765,18 @@ function TipTapEditor({ content, onChange, editable }: TipTapEditorProps) {
     }
   });
 
+  // Texto em conjunto: depois de cada gravação do documento, o HTML vai para a coluna de origem.
+  useEffect(() => {
+    if (!editor || !colaborar) return;
+    const provedor = colaborar.provedor;
+    provedor.aoGravar = () => colaborar.espelho?.(editor.getHTML());
+    return () => { provedor.aoGravar = null; };
+  }, [editor]);
+
   useEffect(() => {
     if (editor) {
-      if (editor.getHTML() !== (content || '')) {
+      // Em conjunto, quem manda é o documento compartilhado (não se "empurra" o texto de fora).
+      if (!colaborar && editor.getHTML() !== (content || '')) {
         editor.commands.setContent(content || '');
       }
       editor.setEditable(editable);
@@ -909,6 +985,13 @@ export default function Projetos() {
   // Task Details Modal States
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [descHTML, setDescHTML] = useState('');
+  // A descrição está em texto em conjunto (salva sozinha): sem o botão "Salvar" e sem aviso de alteração não salva.
+  const [descColab, setDescColab] = useState(false);
+  // Quem mais está com esta tarefa aberta e qual campo está editando.
+  const { pessoas: pessoasNaTarefa, definirCampo: definirCampoTarefa, quemEdita: quemEditaTarefa } = usePresencaDoDocumento(
+    selectedTaskId ? `tarefa:${selectedTaskId}` : null,
+    profile?.id ? { id: profile.id, nome: profile.full_name || 'Alguém', avatar: (profile as any).avatar_url ?? null } : null,
+  );
   const [isSavingDesc, setIsSavingDesc] = useState(false);
 
   // Task Comments & Mentions States
@@ -1176,7 +1259,7 @@ export default function Projetos() {
           setRenamingTaskId(null);
         } else if (selectedTaskId) {
           const taskObj = projectTasks.find(t => t.id === selectedTaskId);
-          if (taskObj && normalizeDesc(descHTML) !== normalizeDesc(taskObj.descricao)) {
+          if (taskObj && !descColab && normalizeDesc(descHTML) !== normalizeDesc(taskObj.descricao)) {
             confirm({ title: 'Alterações não salvas', message: 'Você tem alterações não salvas na descrição. Deseja realmente fechar?', confirmLabel: 'Fechar sem salvar', danger: true })
               .then(ok => { if (ok) setSelectedTaskId(null); });
           } else {
@@ -1197,7 +1280,7 @@ export default function Projetos() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('click', handleGlobalClick);
     };
-  }, [selectedTaskId, renamingTaskId, descHTML, projectTasks, mentionAutocomplete]);
+  }, [selectedTaskId, renamingTaskId, descHTML, descColab, projectTasks, mentionAutocomplete]);
 
   // silent = refetch sem spinner (realtime): os dados antigos ficam na tela
   async function fetchData(silent = false) {
@@ -2282,7 +2365,7 @@ export default function Projetos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProject?.id]);
 
-  const descDirty = !!selectedTask && normalizeDesc(descHTML) !== normalizeDesc(selectedTask.descricao);
+  const descDirty = !descColab && !!selectedTask && normalizeDesc(descHTML) !== normalizeDesc(selectedTask.descricao);
 
   // Fecha o modal da tarefa. Só pede confirmação se houver descrição não salva
   // de verdade; sem alteração, fecha direto.
@@ -3540,6 +3623,7 @@ export default function Projetos() {
               </div>
               
               <div className="flex items-center gap-2">
+                <PresencaNoDocumento pessoas={pessoasNaTarefa} rotuloCampo={(c) => c === 'titulo' ? 'o título' : c === 'descricao' ? 'a descrição' : null} className="mr-2" />
                 {canManage && descDirty && (
                   <button
                     onClick={handleSaveDescription}
@@ -3570,7 +3654,9 @@ export default function Projetos() {
               <div className="lg:col-span-2 overflow-y-auto custom-scrollbar p-6 space-y-6 border-r border-lumos-border/40">
                 
                 {/* Title */}
-                <div className="space-y-1">
+                <div className="relative space-y-1" onFocusCapture={() => definirCampoTarefa('titulo')} onBlurCapture={() => definirCampoTarefa(null)}
+                  style={quemEditaTarefa('titulo') ? { outline: `2px solid ${quemEditaTarefa('titulo')!.cor}`, outlineOffset: '4px', borderRadius: 6 } : undefined}>
+                  {quemEditaTarefa('titulo') && <EtiquetaDeEdicao pessoa={quemEditaTarefa('titulo')!} />}
                   <input
                     type="text"
                     value={selectedTask.titulo}
@@ -3714,10 +3800,20 @@ export default function Projetos() {
                   </div>
 
                   {canManage ? (
-                    <TipTapEditor
-                      content={descHTML}
-                      onChange={(html) => setDescHTML(html)}
-                      editable={true}
+                    <DescricaoColaborativa
+                      key={selectedTask.id}
+                      taskId={selectedTask.id}
+                      htmlInicial={selectedTask.descricao || ''}
+                      usuario={{ nome: profile?.full_name || 'Alguém', cor: corDaPessoa(profile?.id || 'anon') }}
+                      onHtml={(html) => setDescHTML(html)}
+                      onColaborando={setDescColab}
+                      alternativa={(
+                        <TipTapEditor
+                          content={descHTML}
+                          onChange={(html) => setDescHTML(html)}
+                          editable={true}
+                        />
+                      )}
                     />
                   ) : (
                     <div 
