@@ -99,6 +99,31 @@ async function gravar(id: string, campos: Record<string, unknown>) {
   await db.from('video_versions').update(semHls).eq('id', id)
 }
 
+// O Stream recusa rajada de pedidos ("Please wait and consider throttling your
+// request speed"). Subir vários vídeos de uma vez (um pacote de campanha) fazia os
+// últimos caírem em 'erro' — e erro não é reenviado sozinho, então eles ficavam
+// tocando pelo caminho antigo, que gasta a cota de egress do Supabase.
+const ehLimite = (status: number, msg: string) => status === 429 || /throttl|too many|rate limit/i.test(msg)
+const dormir = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// Pergunta ao Stream como está UMA cópia e grava o resultado. É o mesmo trabalho
+// da ação 'conferir'; fica aqui para os dois usarem a mesma regra.
+async function conferirUma(v: { id: string; stream_uid: string }): Promise<'pronto' | 'erro' | 'andando'> {
+  const r = await cf(`/${v.stream_uid}`)
+  if (r.corpo?.result?.readyToStream) {
+    // O endereço do manifesto vem do próprio Cloudflare: é ele que carrega
+    // o código da conta, e não dá pra montar na mão sem chutar.
+    await gravar(v.id, { stream_status: 'pronto', stream_hls: r.corpo?.result?.playback?.hls ?? null })
+    return 'pronto'
+  }
+  if (r.corpo?.result?.status?.state === 'error') {
+    const erro = String(r.corpo?.result?.status?.errorReasonText || 'erro no processamento').slice(0, 300)
+    await db.from('video_versions').update({ stream_status: 'erro', stream_error: erro }).eq('id', v.id)
+    return 'erro'
+  }
+  return 'andando'
+}
+
 async function enviarUma(v: { id: string; file_name: string | null }): Promise<Record<string, unknown>> {
   const url = await urlAssinada(v.id)
   const r = await cf('/copy', {
@@ -113,7 +138,7 @@ async function enviarUma(v: { id: string; file_name: string | null }): Promise<R
   if (!r.ok) {
     const erro = String(r.corpo?.errors?.[0]?.message || r.status).slice(0, 300)
     await db.from('video_versions').update({ stream_status: 'erro', stream_error: erro }).eq('id', v.id)
-    return { id: v.id, ok: false, erro }
+    return { id: v.id, ok: false, erro, limite: ehLimite(r.status, erro) }
   }
   const uid = r.corpo?.result?.uid
   await gravar(v.id, {
@@ -123,6 +148,36 @@ async function enviarUma(v: { id: string; file_name: string | null }): Promise<R
     stream_error: null,
   })
   return { id: v.id, ok: true, uid }
+}
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined
+
+// Depois de responder ao gatilho do banco, a função continua trabalhando por uns
+// minutos, sem ninguém esperando:
+//  · se o Stream recusou por excesso de pedidos, tenta de novo com intervalos
+//    crescentes;
+//  · se a cópia foi aceita, confere de tempos em tempos e marca 'pronto' assim
+//    que ficar pronta. Antes isso só acontecia quando um admin abria a tela de
+//    migração — até lá o vídeo tocava pelo caminho antigo, mesmo já estando no
+//    Stream.
+// O que passar de ~5 minutos fica para a conferência da tela de migração.
+async function acompanhar(v: { id: string; file_name: string | null }, primeira: Record<string, unknown>) {
+  try {
+    let atual = primeira
+    for (const espera of [15_000, 40_000, 80_000]) {
+      if (atual.ok || !atual.limite) break
+      await dormir(espera)
+      atual = await enviarUma(v)
+    }
+    const uid = atual.ok ? String(atual.uid || '') : ''
+    if (!uid) return
+    for (let i = 0; i < 10; i++) {
+      await dormir(20_000)
+      if (await conferirUma({ id: v.id, stream_uid: uid }) !== 'andando') return
+    }
+  } catch (err) {
+    console.error('acompanhar falhou', v.id, err)
+  }
 }
 
 serve(async (req) => {
@@ -145,7 +200,9 @@ serve(async (req) => {
     try {
       const { data: v } = await db.from('video_versions').select('id, file_name').eq('id', corpo.version_id).maybeSingle()
       if (!v) return json({ error: 'versão não encontrada' }, 404)
-      return json(await enviarUma(v))
+      const resultado = await enviarUma(v)
+      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(acompanhar(v, resultado))
+      return json(resultado)
     } catch (err: any) {
       return json({ error: String(err?.message || err).slice(0, 300) }, 500)
     }
@@ -180,9 +237,11 @@ serve(async (req) => {
       // acervo" repete o lote até acabar, um vídeo com erro era puxado de novo a
       // cada rodada — com arquivo de ~1,5 GB, isso pesa. Resolva o erro (veja
       // stream_error) e então reenvie por 'enviar' ou com incluirErros: true.
+      // Exceção: erro por excesso de pedidos (throttling) não é defeito do vídeo, é
+      // do ritmo do envio — esses entram sempre.
       const filtroStatus = corpo.incluirErros === true
         ? 'stream_status.is.null,stream_status.eq.erro'
-        : 'stream_status.is.null'
+        : 'stream_status.is.null,and(stream_status.eq.erro,stream_error.ilike.*throttl*)'
       const { data: pendentes } = await db.from('video_versions')
         .select('id, file_name')
         .is('stream_uid', null)
@@ -190,7 +249,14 @@ serve(async (req) => {
         .order('created_at', { ascending: false })
         .limit(limite)
       const feitos = []
-      for (const v of pendentes || []) feitos.push(await enviarUma(v))
+      for (const v of pendentes || []) {
+        const r = await enviarUma(v)
+        feitos.push(r)
+        // Bateu no limite do Stream: insistir só piora. Para aqui; a próxima
+        // rodada continua de onde parou.
+        if (!r.ok && r.limite) break
+        await dormir(1_500)
+      }
       const { count } = await db.from('video_versions')
         .select('id', { count: 'exact', head: true }).is('stream_uid', null)
       return json({ enviados: feitos.filter(f => f.ok).length, falhas: feitos.filter(f => !f.ok), aindaFaltam: count ?? null })
@@ -215,19 +281,9 @@ serve(async (req) => {
 
       let prontos = 0, comErro = 0
       for (const v of emAndamento || []) {
-        const r = await cf(`/${v.stream_uid}`)
-        const st = r.corpo?.result?.status?.state
-        if (r.corpo?.result?.readyToStream) {
-          // O endereço do manifesto vem do próprio Cloudflare: é ele que carrega
-          // o código da conta, e não dá pra montar na mão sem chutar.
-          await gravar(v.id, {
-            stream_status: 'pronto',
-            stream_hls: r.corpo?.result?.playback?.hls ?? null,
-          }); prontos++
-        } else if (st === 'error') {
-          const erro = String(r.corpo?.result?.status?.errorReasonText || 'erro no processamento').slice(0, 300)
-          await db.from('video_versions').update({ stream_status: 'erro', stream_error: erro }).eq('id', v.id); comErro++
-        }
+        const res = await conferirUma({ id: v.id, stream_uid: v.stream_uid as string })
+        if (res === 'pronto') prontos++
+        else if (res === 'erro') comErro++
       }
       return json({ conferidos: (emAndamento || []).length, viraramPronto: prontos, comErro, manifestosRecuperados })
     }
