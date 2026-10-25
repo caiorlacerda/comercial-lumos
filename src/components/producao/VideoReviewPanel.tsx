@@ -1064,9 +1064,14 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         </div>
 
         {/* Status */}
-        <span className={clsx('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 w-[132px] text-center', STATUS_UI[v.status].color)}>
-          {STATUS_UI[v.status].label}
-        </span>
+        {/* A coluna tem largura fixa (alinha as linhas); a pílula dentro dela
+            mede o próprio texto. Com largura fixa NA pílula, o rótulo mais
+            longo ("Alterações (cliente)") vazava pra fora do contorno. */}
+        <div className="flex-shrink-0 w-[188px] flex justify-center">
+          <span className={clsx('text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border whitespace-nowrap max-w-full',STATUS_UI[v.status].color)}>
+            {STATUS_UI[v.status].label}
+          </span>
+        </div>
 
         {/* Tarefa */}
         <div className="w-40 flex-shrink-0">

@@ -36,6 +36,14 @@ import { hojeLocalISO } from '@/lib/dataSemHora';
 
 // Pipeline da Lumos, na ordem do fluxo. Cada etapa tem um time dono (exibido
 // no cabeçalho do grupo), pra ficar claro de quem é a bola.
+/**
+ * Abas do projeto desativadas por enquanto: saem da barra e dos links, mas o
+ * código (ProjectStatusPipeline, ProjectBriefing) segue aqui. Pra trazer uma
+ * de volta, é só tirar o nome desta lista. Link que aponta pra uma delas cai
+ * no Resumo.
+ */
+const ABAS_DESATIVADAS: string[] = ['status', 'briefing', 'arquivos'];
+
 const STATUS_OPTIONS = [
   { value: 'na_fila', label: 'Na fila' },
   { value: 'roteiro', label: 'Roteiro' },
@@ -1141,7 +1149,8 @@ export default function Projetos() {
        * abria o projeto e parava ali.
        */
       const tab = searchParams.get('tab');
-      const abas = ['resumo', 'status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos'];
+      const abas = ['resumo', 'status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos']
+        .filter(a => !ABAS_DESATIVADAS.includes(a));
       // Links antigos seguem valendo: 'geral' era o nome do que hoje é o Resumo,
       // e 'arquivos' virou sub-aba do Briefing.
       const pedida = searchParams.get('review') ? 'entregas'
@@ -2558,7 +2567,7 @@ export default function Projetos() {
                       { key: 'diarias' as const, label: 'Diárias', count: null as number | null },
                       { key: 'ordemdia' as const, label: 'Ordem do dia', count: null as number | null },
                       { key: 'equipe' as const, label: 'Equipe', count: null as number | null },
-                    ]).map(t => (
+                    ]).filter(t => !ABAS_DESATIVADAS.includes(t.key)).map(t => (
                       <button key={t.key} onClick={() => setProjTab(t.key)}
                         className={clsx('px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors',
                           projTab === t.key ? 'border-lumos-yellow text-lumos-yellow' : 'border-transparent text-lumos-text-secondary hover:text-lumos-text-primary')}>
