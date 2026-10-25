@@ -58,6 +58,7 @@ const ProducaoDashboard = lazy(() => import('@/pages/ProducaoDashboard'));
 const ProducaoBoard = lazy(() => import('@/pages/ProducaoBoard'));
 const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
 const Agenda = lazy(() => import('@/pages/Agenda'));
+const RevisaoDeVideos = lazy(() => import('@/pages/RevisaoDeVideos'));
 const Projetos = lazy(() => import('@/pages/Projetos'));
 const TemplatesTarefas = lazy(() => import('@/pages/TemplatesTarefas'));
 const Acessos = lazy(() => import('@/pages/Acessos'));
@@ -413,6 +414,14 @@ function AgendaGuard() {
   return <Agenda />;
 }
 
+// A Revisão de vídeos é de quem sobe, revisa e aprova vídeo: produção, admin, editores e quem recebeu o aval interno.
+function RevisaoDeVideosGuard() {
+  const { isAdmin, can } = useAuth();
+  const pode = isAdmin || can('ordem_do_dia') || can('cronograma_edicao') || can('revisao_interna');
+  if (!pode) return <Navigate to="/" replace />;
+  return <RevisaoDeVideos />;
+}
+
 function AppContent() {
   return (
     <Router>
@@ -710,6 +719,7 @@ function AppContent() {
             <Route path="/producao/schedule" element={<PermissionGuard permission="ordem_do_dia"><ProducaoSchedule /></PermissionGuard>} />
             <Route path="/producao/cronograma-edicao" element={<PermissionGuard permission="cronograma_edicao"><CronogramaEdicao /></PermissionGuard>} />
             <Route path="/producao/agenda" element={<AgendaGuard />} />
+            <Route path="/producao/revisao-de-videos" element={<RevisaoDeVideosGuard />} />
             {/* Gerenciador de Projetos agora vive DENTRO do layout: as pills de
                 views ficam visíveis também na página do projeto. */}
             <Route path="/producao/projetos" element={<PermissionGuard permission="ordem_do_dia"><Projetos /></PermissionGuard>} />
