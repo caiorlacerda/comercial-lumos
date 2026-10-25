@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { gravarCache, lerCache } from '@/lib/cacheDeTela';
 import Pagination from '@/components/common/Pagination';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
@@ -41,8 +42,8 @@ interface Client {
 
 export default function Clients() {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<Client[]>(() => lerCache<Client[]>('clientes') ?? []);
+  const [loading, setLoading] = useState(() => !lerCache('clientes'));
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 12;
@@ -67,7 +68,7 @@ export default function Clients() {
 
   async function fetchClients(silent = false) {
     try {
-      if (!silent) setLoading(true);
+      if (!silent && !lerCache('clientes')) setLoading(true);
       const { data, error } = await supabase
         .from('clients')
         .select(`
@@ -119,6 +120,7 @@ export default function Clients() {
       });
 
       setClients(processedClients || []);
+      gravarCache('clientes', processedClients || []);
     } catch (err) {
       console.error('Error fetching clients:', err);
     } finally {

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { supabase } from '@/lib/supabase';
@@ -60,6 +62,7 @@ export default function ClientProfile() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
@@ -132,9 +135,7 @@ export default function ClientProfile() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
-      </div>
+      <EsqueletoPagina />
     );
   }
 

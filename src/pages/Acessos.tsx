@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { KeyRound, Plus, Trash2, Eye, EyeOff, Copy, Loader2, ShieldAlert, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -28,6 +30,7 @@ export default function Acessos() {
   const { confirm, dialog } = useConfirm();
   const [rows, setRows] = useState<Cred[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [newService, setNewService] = useState('');
   const [newServiceUrl, setNewServiceUrl] = useState('');
@@ -127,7 +130,7 @@ export default function Acessos() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-lumos-yellow" /></div>
+        <EsqueletoItens n={4} />
       ) : (
         <div className="space-y-5">
           {groups.map(group => {

@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
@@ -72,6 +74,7 @@ export default function FinanceiroRelatorios() {
   const { isAdmin } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [data, setData] = useState<ProjetoRentabilidade[]>([]);
   const [clients, setClients] = useState<DimensionItem[]>([]);
   const [categories, setCategories] = useState<DimensionItem[]>([]);
@@ -325,9 +328,7 @@ export default function FinanceiroRelatorios() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] bg-lumos-bg">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-lumos-yellow" />
-      </div>
+      <EsqueletoPagina />
     );
   }
 

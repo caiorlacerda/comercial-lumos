@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { Check, ChevronDown, Loader2, Pencil, Plus, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -152,7 +153,7 @@ export default function ProjectBriefing({ projectId, canManage }: Props) {
     void persist({ ...sec, confirmar: sec.confirmar.filter((_, j) => j !== i) });
   };
 
-  if (loading) return <div className="card p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>;
+  if (loading) return <EsqueletoItens n={4} />;
 
   const temValor = (campo: keyof Sections) => {
     const v = sec[campo] as unknown;

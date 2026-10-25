@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { ArrowLeft, Truck, Plus, Trash2, Save } from 'lucide-react';
@@ -232,9 +233,7 @@ export default function FornecedorEditor() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
-      </div>
+      <EsqueletoPagina />
     );
   }
 

@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -197,6 +199,7 @@ export default function ProducaoDashboard() {
   const [calView, setCalView] = useState<'mes' | 'semana'>('mes');
   const [ordens, setOrdens] = useState<OrdemDoDiaEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
 
   // Aniversários da equipe (chave "mês-dia" → nomes), para pintar no calendário
   const [birthdaysMap, setBirthdaysMap] = useState<Record<string, string[]>>({});
@@ -840,10 +843,7 @@ export default function ProducaoDashboard() {
         </div>
 
         {loading ? (
-          <div className="card p-20 text-center flex flex-col items-center justify-center gap-3">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow mx-auto"></div>
-            <p className="text-xs text-lumos-text-secondary font-bold uppercase tracking-wider">Carregando calendário...</p>
-          </div>
+          <EsqueletoItens n={4} />
         ) : (
           <div className="card p-6 flex flex-col min-h-[750px] shadow-sm">
             

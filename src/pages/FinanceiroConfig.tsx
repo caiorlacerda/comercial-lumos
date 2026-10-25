@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { supabase } from '@/lib/supabase';
 import { 
   Settings, 
@@ -42,6 +44,7 @@ interface TipoServico {
 export default function FinanceiroConfig() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [savingConfig, setSavingConfig] = useState(false);
   const [savingCategory, setSavingCategory] = useState(false);
   const [savingService, setSavingService] = useState(false);
@@ -231,9 +234,7 @@ export default function FinanceiroConfig() {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh] bg-lumos-bg">
-      <Loader2 className="animate-spin text-lumos-yellow w-10 h-10" />
-    </div>
+    <EsqueletoPagina />
   );
 
   return (

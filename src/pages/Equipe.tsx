@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import Modal from '@/components/common/Modal';
 import {
   Users2, UserPlus, Search, Shield, Mail, Phone, MessageSquare, Loader2, Trash2, Camera,
@@ -90,6 +92,7 @@ export default function Equipe() {
   const [usersRows, setUsersRows] = useState<AppUserProfile[]>([]);
   const [teamRows, setTeamRows] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   // A coluna revisor_fixo chegou na migração 2026093339. Enquanto ela não rodar,
@@ -318,7 +321,7 @@ export default function Equipe() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-lumos-yellow" /></div>
+        <EsqueletoItens n={4} />
       ) : filtered.length === 0 ? (
         <p className="text-sm text-lumos-text-secondary italic py-12 text-center">Ninguém encontrado.</p>
       ) : viewMode === 'grid' ? (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { ExternalLink, Link2, Loader2, Plus, ScrollText, Unlink } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -138,7 +139,7 @@ export default function TaskRoteiros({ projectId, taskId, canManage }: Props) {
       <span className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Roteiro</span>
 
       {loading ? (
-        <div className="p-3 flex justify-center"><Loader2 className="w-4 h-4 animate-spin text-lumos-yellow" /></div>
+        <EsqueletoItens n={4} />
       ) : (
         <div className="space-y-2">
           {meus.map(r => (

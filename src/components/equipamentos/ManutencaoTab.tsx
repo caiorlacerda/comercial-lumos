@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { Plus, Loader2, Wrench, Play, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -74,7 +75,7 @@ export default function ManutencaoTab({ equipment, open, onClose }: { equipment:
   return (
     <div className="space-y-4">
       {loading ? (
-        <div className="card p-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : rows.length === 0 ? (
         <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">Nenhuma manutenção registrada.</div>
       ) : (

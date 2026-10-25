@@ -17,6 +17,20 @@
     href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Work+Sans:wght@300;400;500;600&display=swap"
     rel="stylesheet">
   <script>
+    /* Tema antes de tudo, para a tela de abertura já nascer na cor certa (sem piscar escuro no tema claro). */
+    try { if (localStorage.getItem('lumos-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (_) {}
+  </script>
+  <style>
+    /* Tela de abertura: a logo respirando, no fundo do tema. É a mesma que o app mostra
+       enquanto verifica a sessão (PageLoader), então a troca entre as duas não pisca. */
+    html:not(.dark) body { background: #F5F5F3; }
+    .splash-lumos { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; background: #F5F5F3; }
+    html.dark .splash-lumos { background: #222222; }
+    .splash-logo { width: 64px; height: 64px; animation: splash-respira 1.6s ease-in-out infinite; }
+    @keyframes splash-respira { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: 1; transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { .splash-logo { animation: none; } }
+  </style>
+  <script>
     window.global = window;
     window.Buffer = window.Buffer || { isBuffer: () => false };
   </script>
@@ -64,7 +78,7 @@
 </head>
 
 <body class="bg-[#222222] text-white font-body">
-  <div id="root"></div>
+  <div id="root"><div class="splash-lumos"><img class="splash-logo" src="/logo-lumos.svg" width="64" height="64" alt=""></div></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

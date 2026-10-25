@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { Check, Copy, ExternalLink, Loader2, RefreshCw, Eye, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -376,7 +377,7 @@ export default function PortalModal({ projectId, clientId, clientName, open, onC
       <div className="space-y-5">
 
         {loading ? (
-          <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
+          <EsqueletoItens n={4} />
         ) : !portal ? (
           <div className="border border-dashed border-lumos-border rounded-lumos p-6 text-center">
             <p className="text-sm font-bold text-lumos-text-primary">

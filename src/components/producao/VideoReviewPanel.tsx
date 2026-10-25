@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { haQuanto, textoEnvio } from '@/lib/dataEnvio';
 import { createPortal } from 'react-dom';
 import { Ban, Lock, Film, ExternalLink, Check, AlertTriangle, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
@@ -1353,7 +1354,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
       )}
 
       {loading ? (
-        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-7 w-7 border-t-2 border-b-2 border-lumos-yellow" /></div>
+        <EsqueletoItens n={4} />
       ) : groups.length === 0 ? (
         <div className="text-center py-8 border border-dashed border-lumos-border/50 rounded-lumos">
           <Film className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-2" />

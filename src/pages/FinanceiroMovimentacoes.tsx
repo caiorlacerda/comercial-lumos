@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import {
   ArrowDownCircle, ArrowUpCircle, FileUp, Loader2, Pencil, Plus, Search, Trash2, Upload, X,
 } from 'lucide-react';
@@ -51,6 +53,7 @@ export default function FinanceiroMovimentacoes() {
   const { profile } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [movs, setMovs] = useState<Movimentacao[]>([]);
   const [projetos, setProjetos] = useState<{ id: string; name: string }[]>([]);
   const [indisponivel, setIndisponivel] = useState(false);
@@ -304,7 +307,7 @@ export default function FinanceiroMovimentacoes() {
       </div>
 
       {loading ? (
-        <div className="card p-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : indisponivel ? (
         <div className="card p-10 text-center space-y-2">
           <p className="text-sm font-bold text-lumos-text-primary">Movimentações ainda não ativadas</p>

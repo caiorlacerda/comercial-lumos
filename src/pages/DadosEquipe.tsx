@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import Modal from '@/components/common/Modal';
 import {
   Users2, Plus, Loader2, ShieldAlert, Search, Trash2, Cake, Phone,
@@ -57,6 +59,7 @@ export default function DadosEquipe() {
   const { confirm, dialog } = useConfirm();
   const [rows, setRows] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('lumos-equipe-view') as ViewMode) || 'list');
   useEffect(() => { localStorage.setItem('lumos-equipe-view', viewMode); }, [viewMode]);
@@ -160,7 +163,7 @@ export default function DadosEquipe() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-lumos-yellow" /></div>
+        <EsqueletoItens n={4} />
       ) : filtered.length === 0 ? (
         <p className="text-sm text-lumos-text-secondary italic py-12 text-center">
           {rows.length === 0 ? 'Nenhum membro cadastrado ainda. Clique em "Novo membro".' : 'Ninguém encontrado com esse filtro.'}

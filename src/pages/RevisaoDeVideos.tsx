@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { gravarCache, lerCache } from '@/lib/cacheDeTela';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { CheckCircle2, Clock, Film, LayoutGrid, List, Loader2, MessageSquare, PenLine, Search, Timer } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -96,9 +99,10 @@ const passaRapida = (v: Video, r: Rapida) => {
 const POR_PAGINA = 40;
 
 export default function RevisaoDeVideos() {
-  const [rows, setRows] = useState<VV[]>([]);
-  const [abertosPorVersao, setAbertosPorVersao] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<VV[]>(() => lerCache<{ rows: VV[] }>('revisao-videos')?.rows ?? []);
+  const [abertosPorVersao, setAbertosPorVersao] = useState<Record<string, number>>(() => lerCache<{ abertos: Record<string, number> }>('revisao-videos')?.abertos ?? {});
+  const [loading, setLoading] = useState(() => !lerCache('revisao-videos'));
+  useBarraDeCarregamento(loading);
 
   const [visao, setVisao] = useState<'lista' | 'quadro'>(() => {
     try { return localStorage.getItem('lumos_revisao_visao') === 'quadro' ? 'quadro' : 'lista'; } catch { return 'lista'; }
@@ -118,7 +122,7 @@ export default function RevisaoDeVideos() {
   const [tarefasAbertas, setTarefasAbertas] = useState<{ id: string; titulo: string; status?: string }[]>([]);
 
   const carregar = useCallback(async (silencioso = false) => {
-    if (!silencioso) setLoading(true);
+    if (!silencioso && !lerCache('revisao-videos')) setLoading(true);
     const proj = 'project:projects(id, name, code, status, client:clients(name))';
     // entregue_em pode não existir (migration pendente): cai pro select sem a coluna.
     let res: any = await supabase.from('video_versions')
@@ -129,12 +133,14 @@ export default function RevisaoDeVideos() {
         .select(`id, project_id, group_id, task_id, versao, status, file_name, created_at, updated_at, uploaded_at, uploaded_by, ${proj}`)
         .order('updated_at', { ascending: false });
     }
-    setRows((res.data as VV[]) || []);
+    const novasRows = (res.data as VV[]) || [];
+    setRows(novasRows);
     // Comentários em aberto (poucos): contados por versão.
     const c = await supabase.from('review_comments').select('video_version_id').eq('resolved', false);
     const m: Record<string, number> = {};
     for (const r of (c.data as { video_version_id: string }[]) || []) m[r.video_version_id] = (m[r.video_version_id] || 0) + 1;
     setAbertosPorVersao(m);
+    gravarCache('revisao-videos', { rows: novasRows, abertos: m });
     setLoading(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
@@ -347,7 +353,7 @@ export default function RevisaoDeVideos() {
       </div>
 
       {loading ? (
-        <div className="min-h-[30vh] grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
+        <EsqueletoPagina />
       ) : lista.length === 0 ? (
         <div className="card p-10 text-center">
           <Film className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" />

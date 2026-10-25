@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoLinhasTabela } from '@/components/ui/Esqueleto';
 import {
   ArrowUpCircle,
   Plus,
@@ -44,6 +46,7 @@ export default function ContasPagar() {
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
@@ -464,7 +467,7 @@ export default function ContasPagar() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={8} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <EsqueletoLinhasTabela colunas={8} />
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhuma conta encontrada.</td></tr>
               ) : (

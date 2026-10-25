@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { ExternalLink, Loader2, Pencil, Plus, ScrollText, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -114,7 +115,7 @@ export default function ProjectRoteiros({ projectId, canManage, tasks = [] }: Pr
     load();
   };
 
-  if (loading) return <div className="card p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>;
+  if (loading) return <EsqueletoItens n={4} />;
 
   return (
     <div className="space-y-3">

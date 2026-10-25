@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, Search, TrendingUp, TrendingDown, ChevronRight, ChevronUp, ChevronDown, Target, Check, Pencil, Plus, AlertTriangle, Users, SlidersHorizontal, Archive, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -105,6 +107,7 @@ export default function CustosProjeto() {
   const [projects, setProjects] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [searchTerm, setSearchTerm] = useState('');
   const [clientFilter, setClientFilter] = useState<string>(''); // '' = todos
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -957,9 +960,7 @@ export default function CustosProjeto() {
       {/* RENDERIZAÇÃO DOS PROJETOS */}
       <div className="space-y-6">
         {loading ? (
-          <div className="card p-12 text-center bg-lumos-surface border border-lumos-border rounded-lumos">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div>
-          </div>
+          <EsqueletoItens n={4} />
         ) : filtered.length === 0 ? (
           <div className="card p-12 text-center text-lumos-text-secondary text-sm italic bg-lumos-surface border border-lumos-border rounded-lumos">
             Nenhum projeto encontrado.

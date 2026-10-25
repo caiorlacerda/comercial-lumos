@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { supabase } from '@/lib/supabase';
@@ -132,6 +134,7 @@ export default function BudgetEditorPage() {
   const { user, profile } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [version, setVersion] = useState<BudgetVersion | null>(null);
   const [items, setItems] = useState<BudgetItem[]>([]);
@@ -1253,10 +1256,7 @@ export default function BudgetEditorPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
-        <p className="text-lumos-text-secondary animate-pulse font-bold uppercase tracking-widest text-[10px]">Carregando editor de orçamento...</p>
-      </div>
+      <EsqueletoPagina />
     );
   }
 

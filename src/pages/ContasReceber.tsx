@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoLinhasTabela } from '@/components/ui/Esqueleto';
 import {
   ArrowDownCircle,
   Search,
@@ -53,6 +55,7 @@ export default function ContasReceber() {
   // Lucro líquido por orçamento (vw_rentabilidade), para a coluna Lucro.
   const [lucroByBudget, setLucroByBudget] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -760,7 +763,7 @@ export default function ContasReceber() {
             </thead>
             <tbody className="divide-y divide-lumos-border">
               {loading ? (
-                <tr><td colSpan={8} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div></td></tr>
+                <EsqueletoLinhasTabela colunas={8} />
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="py-12 text-center text-lumos-text-secondary text-sm italic">Nenhum recebível encontrado com esse filtro.</td></tr>
               ) : groupByClient ? (

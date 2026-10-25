@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import Modal from '@/components/common/Modal';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -121,7 +122,7 @@ export default function VideoReviewHub() {
       <StreamMigracao />
 
       {loading ? (
-        <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : projects.length === 0 ? (
         <div className="py-10 text-center text-sm text-lumos-text-secondary">
           Nenhuma revisão de vídeo ainda. Quando um projeto recebe um vídeo, ele aparece aqui pra revisar direto.

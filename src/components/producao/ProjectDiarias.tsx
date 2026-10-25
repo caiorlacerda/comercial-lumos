@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { CalendarDays, CalendarOff, Clock, CloudRain, Copy, LayoutGrid, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -290,7 +291,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     setEditando({ ...editando, id: undefined, nome: `${editando.nome} (cópia)` });
   };
 
-  if (loading) return <div className="card p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>;
+  if (loading) return <EsqueletoItens n={4} />;
 
   // Já passou = data anterior a hoje. Sem data conta como "a fazer" (ainda vai ser marcada).
   const hoje = hojeLocalISO();

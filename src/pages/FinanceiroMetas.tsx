@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { ChevronRight, Lightbulb, Loader2, Pencil, Target, TrendingUp, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
@@ -66,6 +68,7 @@ function MetaLucroModal({ onClose }: { onClose: () => void }) {
   const { profile } = useAuth();
   const [ano, setAno] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [indisponivel, setIndisponivel] = useState(false);
   const [metas, setMetas] = useState<number[]>(Array(12).fill(0));
   const [realizado, setRealizado] = useState<(number | null)[]>(Array(12).fill(null));
@@ -160,7 +163,7 @@ function MetaLucroModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {loading ? (
-          <div className="h-64 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>
+          <EsqueletoItens n={4} />
         ) : indisponivel ? (
           <div className="h-40 flex flex-col items-center justify-center gap-2 text-center">
             <Target className="w-7 h-7 text-lumos-text-secondary" />

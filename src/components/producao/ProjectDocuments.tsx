@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { createPortal } from 'react-dom';
 import {
   FileText, FileSpreadsheet, Presentation, File as FileIcon, Link2,
@@ -432,7 +433,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
 
       {/* Lista */}
       {loading ? (
-        <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : visibleDocs.length === 0 ? (
         <div className="py-10 text-center text-sm text-lumos-text-secondary">
           {docs.length === 0

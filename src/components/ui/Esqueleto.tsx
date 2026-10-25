@@ -114,3 +114,22 @@ export function EsqueletoProjeto() {
     </GrupoEsqueleto>
   );
 }
+
+/** Linhas de uma tabela enquanto carrega (dentro do <tbody>). */
+export function EsqueletoLinhasTabela({ colunas = 6, n = 5 }: { colunas?: number; n?: number }) {
+  return (
+    <>
+      {Array.from({ length: n }, (_, i) => (
+        <tr key={i} aria-hidden>
+          <td colSpan={colunas} className="px-3 py-3.5">
+            <div className="flex items-center gap-3">
+              <Esqueleto className={clsx('h-3.5', i % 2 ? 'w-1/3' : 'w-2/5')} />
+              <Esqueleto className="ml-auto h-3.5 w-1/6" />
+              <Esqueleto className="hidden h-3.5 w-1/6 md:block" />
+            </div>
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}

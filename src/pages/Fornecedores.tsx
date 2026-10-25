@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, Trash2, Edit2, AlertTriangle, Link2, CheckCircle2, MessageCircle,
@@ -49,6 +51,7 @@ export default function Fornecedores() {
 
   const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -203,9 +206,7 @@ export default function Fornecedores() {
       </div>
 
       {loading ? (
-        <div className="card p-12 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div>
-        </div>
+        <EsqueletoItens n={4} />
 
       ) : listaAtiva.length === 0 ? (
         <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { EsqueletoLinhas } from '@/components/ui/Esqueleto';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -145,7 +146,7 @@ export default function Wiki() {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {loading ? (
-            <div className="flex justify-center py-32"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow/70" /></div>
+            <EsqueletoLinhas n={6} className="p-6" />
           ) : !activePage ? (
             <div className="max-w-2xl mx-auto text-center py-32 px-6">
               <BookOpen className="w-10 h-10 text-lumos-text-secondary/40 mx-auto mb-4" />

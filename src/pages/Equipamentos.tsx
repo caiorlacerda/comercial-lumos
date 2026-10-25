@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, ImagePlus, Loader2, MapPin, Boxes, CalendarClock, Wrench, ListChecks } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -59,6 +61,7 @@ export default function Equipamentos() {
   const { profile } = useAuth();
   const [items, setItems] = useState<Equip[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -208,7 +211,7 @@ export default function Equipamentos() {
       </div>
 
       {loading ? (
-        <div className="card p-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : filtered.length === 0 ? (
         <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">
           {items.length === 0 ? 'Nenhum equipamento cadastrado ainda. Clique em “Novo equipamento”.' : 'Nenhum equipamento encontrado com esses filtros.'}

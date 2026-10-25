@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { Plus, Loader2, AlertTriangle, Check, X, CornerDownLeft, CalendarClock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -86,7 +87,7 @@ export default function ReservasTab({ equipment, projects, open, onClose }: { eq
   return (
     <div className="space-y-4">
       {loading ? (
-        <div className="card p-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : rows.length === 0 ? (
         <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">Nenhuma reserva ainda.</div>
       ) : (

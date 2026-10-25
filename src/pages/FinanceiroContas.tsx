@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useSearchParams } from 'react-router-dom';
 import { Banknote, Copy, Landmark, Loader2, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -51,6 +53,7 @@ export default function FinanceiroContas() {
   const [contas, setContas] = useState<Conta[]>([]);
   const [saldoExtrato, setSaldoExtrato] = useState<{ valor: number; quando: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [indisponivel, setIndisponivel] = useState(false);
   const [editando, setEditando] = useState<Partial<Conta> | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -140,11 +143,11 @@ export default function FinanceiroContas() {
       </div>
 
       {aba !== 'bancos' ? (
-        <Suspense fallback={<div className="card p-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>}>
+        <Suspense fallback={<EsqueletoItens n={4} />}>
           {aba === 'pagar' ? <ContasPagar /> : <ContasReceber />}
         </Suspense>
       ) : loading ? (
-        <div className="card p-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : indisponivel ? (
         <div className="card p-10 text-center space-y-2">
           <Landmark className="w-8 h-8 text-lumos-text-secondary mx-auto" />

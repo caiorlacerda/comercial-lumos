@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Check, ChevronRight, Link2, Loader2, Plus, ScrollText, Video } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -192,7 +193,7 @@ export default function ProjectOrdens({ projectId, projectName, projectCode, can
     load();
   };
 
-  if (loading) return <div className="card p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>;
+  if (loading) return <EsqueletoItens n={4} />;
 
   return (
     <div className="space-y-3">

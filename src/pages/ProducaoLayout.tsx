@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -18,7 +19,7 @@ export default function ProducaoLayout() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
       >
-        <Suspense fallback={<div className="flex items-center justify-center py-24"><div className="animate-spin rounded-full h-9 w-9 border-t-2 border-b-2 border-lumos-yellow" /></div>}>
+        <Suspense fallback={<EsqueletoPagina />}>
           {outlet}
         </Suspense>
       </motion.div>
