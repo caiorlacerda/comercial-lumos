@@ -2597,6 +2597,11 @@ export default function Projetos() {
                   </div>
                 )}
 
+                {/* ============ ANOTAÇÕES DO PROJETO (rich text + menções) ============ */}
+                {/* key por projeto: remonta o editor ao trocar de projeto, evitando
+                    que o autosave (closure) salve no projeto errado. */}
+                <ProjectNotes key={selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+
                 {/* Próximos prazos + atividade recente */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="card p-0 overflow-hidden">
@@ -2635,11 +2640,6 @@ export default function Projetos() {
                     ))}
                   </div>
                 </div>
-
-                {/* ============ ANOTAÇÕES DO PROJETO (rich text + menções) ============ */}
-                {/* key por projeto: remonta o editor ao trocar de projeto, evitando
-                    que o autosave (closure) salve no projeto errado. */}
-                <ProjectNotes key={selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
 
                 {/* ============ PORTAL DO CLIENTE (saúde, pendências, equipe) ============ */}
                 {canManage && (
