@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
+import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
@@ -127,6 +128,22 @@ function TBtn({ active, onClick, title, children }: { active?: boolean; onClick:
 }
 const Sep = () => <span className="w-px h-4 bg-lumos-border/70 mx-1" />;
 
+/**
+ * Extensões do editor. Compartilhadas com o editor colaborativo, que precisa do MESMO esquema de texto.
+ * `colaborativo`: o histórico (desfazer/refazer) passa a ser o do Yjs, então o do StarterKit sai.
+ */
+export function extensoesDoEditor(getPages?: () => MentionPage[], colaborativo = false) {
+  return [
+    // O StarterKit v3 já traz Link e Underline, então desabilitamos os embutidos e usamos os explícitos
+    // (com config própria) — sem isso ficam extensões DUPLICADAS, que geram marcas ambíguas no schema.
+    StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5] }, link: false, underline: false, ...(colaborativo ? { undoRedo: false as const } : {}) }),
+    Underline,
+    Link.configure({ openOnClick: false }),
+    // Menção de páginas só quando o caller habilita (ex.: Wiki).
+    ...(getPages ? [makePageMention(getPages)] : []),
+  ];
+}
+
 // Editor rich text reutilizável (estilo ClickUp): títulos H1–H5, negrito,
 // itálico, sublinhado, listas, citação e divisória. Emite HTML.
 export default function RichTextEditor({ value, onChange, editable = true, className, minHeight = 160, mentionPages }: Props) {
@@ -137,19 +154,9 @@ export default function RichTextEditor({ value, onChange, editable = true, class
 
   const editor = useEditor({
     editable,
-    // immediatelyRender: false é o recomendado pro React (evita edge cases de
-    // render/flushSync). O StarterKit v3 já traz Link e Underline, então
-    // desabilitamos os embutidos e usamos os explícitos (com config própria) —
-    // sem isso ficam extensões DUPLICADAS ('link'/'underline'), que geram
-    // marcas ambíguas no schema e instabilidade.
+    // immediatelyRender: false é o recomendado pro React (evita edge cases de render/flushSync).
     immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5] }, link: false, underline: false }),
-      Underline,
-      Link.configure({ openOnClick: false }),
-      // Menção de páginas só quando o caller habilita (ex.: Wiki).
-      ...(mentionPages ? [makePageMention(() => pagesRef.current)] : []),
-    ],
+    extensions: extensoesDoEditor(mentionPages ? () => pagesRef.current : undefined),
     content: value || '',
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: { attributes: { class: 'ProseMirror focus:outline-none' } },
@@ -164,15 +171,13 @@ export default function RichTextEditor({ value, onChange, editable = true, class
 
   useEffect(() => { editor?.setEditable(editable); }, [editable, editor]);
 
-  // ANTES do return abaixo, e não depois: com `immediatelyRender: false`, o
-  // editor é nulo na primeira renderização e a gente saía cedo. Na segunda,
-  // com o editor pronto, este hook passava a ser chamado e o React via mais
-  // hooks do que na anterior (erro #310), derrubando a árvore inteira: tela
-  // preta em toda página com editor, entre elas o orçamento novo. Hook não
-  // pode viver depois de um return condicional.
-  const { prompt, dialog: dialogoPrompt } = usePrompt();
-
   if (!editor) return null;
+  return <EditorVisual editor={editor} editable={editable} className={className} minHeight={minHeight} />;
+}
+
+/** Barra de ferramentas + área de texto de um editor já criado (usado pelo editor normal e pelo colaborativo). */
+export function EditorVisual({ editor, editable, className, minHeight }: { editor: Editor; editable: boolean; className?: string; minHeight: number }) {
+  const { prompt, dialog: dialogoPrompt } = usePrompt();
 
   const curLevel = ([1, 2, 3, 4, 5] as const).find(l => editor.isActive('heading', { level: l }));
   const headingValue = curLevel ? String(curLevel) : 'p';
