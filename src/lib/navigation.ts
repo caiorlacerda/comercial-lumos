@@ -2,7 +2,7 @@ import {
   Users, BookOpen, LayoutDashboard, Settings, FileText, FileStack,
   BarChart3, PieChart, ArrowUpCircle, ArrowDownCircle, Receipt,
   Briefcase, ClipboardList, TrendingUp, Landmark,
-  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone, Newspaper, Package, Bot
+  CalendarDays, Truck, Users2, KeyRound, Radio, Megaphone, Newspaper, Package, Bot, Film
 } from 'lucide-react';
 import type { SectionType } from '@/context/LayoutContext';
 
@@ -55,6 +55,8 @@ export const NAV_SECTIONS: Section[] = [
       // Templates de Tarefas e Cronograma de Edição — as páginas continuam
       // existindo por rota e pelas abas dos projetos.
       { icon: CalendarDays, label: 'Agenda', path: '/producao/agenda' },
+      // Todos os vídeos de todos os projetos num lugar só (o que precisa de revisão, de ajuste, aprovado...).
+      { icon: Film, label: 'Revisão de vídeos', path: '/producao/revisao-de-videos' },
       { icon: Truck, label: 'Fornecedores', path: '/producao/fornecedores', permission: 'fornecedores' },
       { icon: Package, label: 'Equipamentos', path: '/producao/equipamentos', permission: 'equipamentos' },
       { icon: KeyRound, label: 'Acessos & Senhas', path: '/producao/acessos', permission: 'acessos' },
