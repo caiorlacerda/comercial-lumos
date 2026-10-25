@@ -2859,7 +2859,7 @@ export default function Projetos() {
                         <div className="overflow-x-auto hidden lg:block">
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
-                              <tr className="border-b border-lumos-border/40 text-lumos-text-secondary font-black uppercase tracking-wider text-[9px] opacity-70">
+                              <tr className="group/head border-b border-lumos-border/40 text-lumos-text-secondary font-black uppercase tracking-wider text-[9px] opacity-70">
                                 {canManage && (
                                   <th className="py-2.5 px-2 w-8 text-center">
                                     <input
@@ -2867,7 +2867,8 @@ export default function Projetos() {
                                       checked={visibleTasks.length > 0 && visibleTasks.every(t => selTaskIds.has(t.id))}
                                       onChange={toggleSelAll}
                                       title="Selecionar todas"
-                                      className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-3.5 w-3.5 bg-lumos-bg cursor-pointer"
+                                      className={clsx('rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-3.5 w-3.5 bg-lumos-bg cursor-pointer transition-opacity',
+                                        selTaskIds.size === 0 && 'opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100')}
                                     />
                                   </th>
                                 )}
@@ -2928,7 +2929,8 @@ export default function Projetos() {
                                           checked={selTaskIds.has(task.id)}
                                           onChange={() => toggleSelTask(task.id)}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-3.5 w-3.5 bg-lumos-bg cursor-pointer"
+                                          className={clsx('rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-3.5 w-3.5 bg-lumos-bg cursor-pointer transition-opacity',
+                                            selTaskIds.size === 0 && 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100')}
                                         />
                                       </td>
                                     )}
@@ -2942,8 +2944,8 @@ export default function Projetos() {
                                           onClick={(e) => { e.stopPropagation(); handleUpdateTask(task.id, { status: isTaskCompleted ? 'na_fila' : 'concluido' }); }}
                                           title={isTaskCompleted ? 'Reabrir tarefa' : 'Concluir tarefa'}
                                           className={clsx(
-                                            'mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors',
-                                            isTaskCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-lumos-border text-transparent hover:border-green-500 hover:text-green-500/60',
+                                            'mt-0.5 w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                                            isTaskCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-lumos-text-secondary/60 bg-lumos-surface text-transparent hover:border-green-500 hover:text-green-500',
                                             !canManage && 'cursor-not-allowed opacity-40',
                                           )}
                                         >
@@ -2951,7 +2953,11 @@ export default function Projetos() {
                                         </button>
                                         <div
                                           className="min-w-0 flex-1 cursor-pointer"
-                                          onClick={() => { if (renamingTaskId !== task.id) setSelectedTaskId(task.id); }}
+                                          onClick={(e) => {
+                                            if (renamingTaskId === task.id) return;
+                                            if (canManage && (e.metaKey || e.ctrlKey)) { toggleSelTask(task.id); return; }
+                                            setSelectedTaskId(task.id);
+                                          }}
                                         >
                                       <div className="flex items-center gap-1.5 min-w-0">
                                         {(tipoPorId(task.tipo_id) || canManage) && (
@@ -3137,7 +3143,7 @@ export default function Projetos() {
                                 className={clsx('py-3', selTaskIds.has(task.id) && 'bg-lumos-yellow/[0.05]')}
                               >
                                 <div className="flex items-start gap-2.5">
-                                  {canManage && (
+                                  {canManage && selTaskIds.size > 0 && (
                                     <input
                                       type="checkbox"
                                       checked={selTaskIds.has(task.id)}
@@ -3150,8 +3156,8 @@ export default function Projetos() {
                                     disabled={!canManage}
                                     onClick={() => handleUpdateTask(task.id, { status: isTaskCompleted ? 'na_fila' : 'concluido' })}
                                     className={clsx(
-                                      'mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors',
-                                      isTaskCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-lumos-border text-transparent',
+                                      'mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                                      isTaskCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-lumos-text-secondary/60 bg-lumos-surface text-transparent',
                                       !canManage && 'opacity-40'
                                     )}
                                   >
@@ -3929,6 +3935,18 @@ export default function Projetos() {
             <ChevronRight className="w-3.5 h-3.5 text-lumos-yellow" />
             Ver detalhes
           </button>
+          {canManage && (
+            <button
+              onClick={() => {
+                toggleSelTask(contextMenu.taskId);
+                setContextMenu(null);
+              }}
+              className="px-3 py-1.5 text-[11px] font-semibold text-left text-lumos-text-primary hover:bg-lumos-bg rounded transition-all flex items-center gap-1.5"
+            >
+              <Check className="w-3.5 h-3.5 text-lumos-yellow" />
+              {selTaskIds.has(contextMenu.taskId) ? 'Tirar da seleção' : 'Selecionar'}
+            </button>
+          )}
           <button
             onClick={() => {
               setRenamingTaskId(contextMenu.taskId);
