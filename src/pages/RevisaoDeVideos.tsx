@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { textoSobre } from '@/lib/cores';
 import { formatBudgetCode } from '@/utils/formatters';
+import { haQuanto, textoEnvio } from '@/lib/dataEnvio';
 import Select from '@/components/ui/Select';
 import Modal from '@/components/common/Modal';
 import VideoThumb from '@/components/producao/VideoThumb';
@@ -41,6 +42,8 @@ interface VV {
   file_name: string;
   created_at: string;
   updated_at: string;
+  uploaded_at?: string | null;
+  uploaded_by?: string | null;
   entregue_em?: string | null;
   project: { id: string; name: string; code: string | null; status: string; client: { name: string } | null } | null;
 }
@@ -106,7 +109,7 @@ export default function RevisaoDeVideos() {
   const [projetoFiltro, setProjetoFiltro] = useState('');
   const [clienteFiltro, setClienteFiltro] = useState('');
   const [busca, setBusca] = useState('');
-  const [ordem, setOrdem] = useState<'recentes' | 'parados' | 'projeto' | 'status'>('recentes');
+  const [ordem, setOrdem] = useState<'recentes' | 'enviados' | 'parados' | 'projeto' | 'status'>('recentes');
   const [comEncerrados, setComEncerrados] = useState(false);
   const [limite, setLimite] = useState(POR_PAGINA);
 
@@ -119,11 +122,11 @@ export default function RevisaoDeVideos() {
     const proj = 'project:projects(id, name, code, status, client:clients(name))';
     // entregue_em pode não existir (migration pendente): cai pro select sem a coluna.
     let res: any = await supabase.from('video_versions')
-      .select(`id, project_id, group_id, task_id, versao, status, file_name, created_at, updated_at, entregue_em, ${proj}`)
+      .select(`id, project_id, group_id, task_id, versao, status, file_name, created_at, updated_at, uploaded_at, uploaded_by, entregue_em, ${proj}`)
       .order('updated_at', { ascending: false });
     if (res.error) {
       res = await supabase.from('video_versions')
-        .select(`id, project_id, group_id, task_id, versao, status, file_name, created_at, updated_at, ${proj}`)
+        .select(`id, project_id, group_id, task_id, versao, status, file_name, created_at, updated_at, uploaded_at, uploaded_by, ${proj}`)
         .order('updated_at', { ascending: false });
     }
     setRows((res.data as VV[]) || []);
@@ -179,6 +182,7 @@ export default function RevisaoDeVideos() {
     const f = noEscopo.filter(v => passaRapida(v, rapida) && (statusSel.size === 0 || statusSel.has(v.atual.status)));
     const ord = [...f];
     if (ordem === 'recentes') ord.sort((a, b) => b.atual.updated_at.localeCompare(a.atual.updated_at));
+    if (ordem === 'enviados') ord.sort((a, b) => (b.atual.uploaded_at || b.atual.created_at).localeCompare(a.atual.uploaded_at || a.atual.created_at));
     if (ordem === 'parados') ord.sort((a, b) => (Number(b.atual.status !== 'APROVADO') - Number(a.atual.status !== 'APROVADO')) || b.dias - a.dias);
     if (ordem === 'projeto') ord.sort((a, b) => a.atual.project!.name.localeCompare(b.atual.project!.name, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'));
     if (ordem === 'status') ord.sort((a, b) => ORDEM_STATUS.indexOf(a.atual.status) - ORDEM_STATUS.indexOf(b.atual.status) || b.atual.updated_at.localeCompare(a.atual.updated_at));
@@ -241,6 +245,11 @@ export default function RevisaoDeVideos() {
       {v.atual.project!.name}{v.atual.project!.client?.name ? ` · ${v.atual.project!.client.name}` : ''}
     </span>
   );
+  const Envio = ({ v }: { v: Video }) => (
+    <span className="block text-[10.5px] text-lumos-text-secondary truncate" title={`Versão ${v.atual.versao} · enviada ${haQuanto(v.atual.uploaded_at || v.atual.created_at)}`}>
+      {textoEnvio(v.atual.uploaded_at, v.atual.created_at, v.atual.uploaded_by)}
+    </span>
+  );
   const Marcas = ({ v }: { v: Video }) => (
     <span className="inline-flex items-center gap-1.5 flex-wrap">
       {v.parado && <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-500"><Timer className="w-3 h-3" />parado {quando(v.dias)}</span>}
@@ -301,7 +310,8 @@ export default function RevisaoDeVideos() {
           <div className="w-44 max-md:flex-1">
             <Select value={ordem} onChange={v => setOrdem(v as typeof ordem)} className="input-lumos h-9 w-full text-xs" ariaLabel="Ordenar"
               options={[
-                { value: 'recentes', label: 'Mais recentes' },
+                { value: 'recentes', label: 'Último movimento' },
+                { value: 'enviados', label: 'Último envio' },
                 { value: 'parados', label: 'Mais tempo parado' },
                 { value: 'status', label: 'Por status' },
                 { value: 'projeto', label: 'Por projeto' },
@@ -358,6 +368,7 @@ export default function RevisaoDeVideos() {
                     <span className="text-[10px] font-black text-lumos-text-secondary flex-shrink-0">v{v.atual.versao}{v.versoes > 1 ? ` · ${v.versoes} versões` : ''}</span>
                   </span>
                   <Projeto v={v} />
+                  <Envio v={v} />
                   <span className="md:hidden mt-1 flex items-center gap-2 flex-wrap"><Selo s={v.atual.status} curto /><Marcas v={v} /></span>
                 </span>
                 <span className="hidden md:flex flex-col items-start gap-1 w-44 flex-shrink-0"><Selo s={v.atual.status} /><Marcas v={v} /></span>
@@ -392,6 +403,7 @@ export default function RevisaoDeVideos() {
                         <span className="text-[9.5px] font-black text-lumos-text-secondary flex-shrink-0">v{v.atual.versao}</span>
                       </span>
                       <Projeto v={v} />
+                      <Envio v={v} />
                       <span className="flex items-center justify-between gap-2"><Marcas v={v} /><span className="text-[10px] text-lumos-text-secondary">{quando(v.dias)}</span></span>
                     </span>
                   </button>
