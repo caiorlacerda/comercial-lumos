@@ -42,7 +42,7 @@ import { hojeLocalISO } from '@/lib/dataSemHora';
  * de volta, é só tirar o nome desta lista. Link que aponta pra uma delas cai
  * no Resumo.
  */
-const ABAS_DESATIVADAS: string[] = ['status', 'briefing', 'arquivos'];
+const ABAS_DESATIVADAS: string[] = ['status', 'briefing'];
 
 const STATUS_OPTIONS = [
   { value: 'na_fila', label: 'Na fila' },
@@ -1151,8 +1151,7 @@ export default function Projetos() {
       const tab = searchParams.get('tab');
       const abas = ['resumo', 'status', 'briefing', 'geral', 'tarefas', 'entregas', 'diarias', 'ordemdia', 'equipe', 'roteiros', 'arquivos']
         .filter(a => !ABAS_DESATIVADAS.includes(a));
-      // Links antigos seguem valendo: 'geral' era o nome do que hoje é o Resumo,
-      // e 'arquivos' virou sub-aba do Briefing.
+      // Links antigos seguem valendo: 'geral' era o nome do que hoje é o Resumo.
       const pedida = searchParams.get('review') ? 'entregas'
         : tab && abas.includes(tab) ? (tab === 'geral' ? 'resumo' : tab)
         : null;
@@ -1182,8 +1181,7 @@ export default function Projetos() {
     const alvo = abaPedidaRef.current;
     abaPedidaRef.current = null;
     if (!alvo) return false;
-    if (alvo === 'arquivos') { setProjTab('briefing'); setBriefingSub('arquivos'); }
-    else setProjTab(alvo as any);
+    setProjTab(alvo as any);
     return true;
   }, []);
   useEffect(() => {
@@ -2567,6 +2565,7 @@ export default function Projetos() {
                       { key: 'diarias' as const, label: 'Diárias', count: null as number | null },
                       { key: 'ordemdia' as const, label: 'Ordem do dia', count: null as number | null },
                       { key: 'equipe' as const, label: 'Equipe', count: null as number | null },
+                      { key: 'arquivos' as const, label: 'Arquivos', count: null as number | null },
                     ]).filter(t => !ABAS_DESATIVADAS.includes(t.key)).map(t => (
                       <button key={t.key} onClick={() => setProjTab(t.key)}
                         className={clsx('px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors',
@@ -2620,6 +2619,11 @@ export default function Projetos() {
                 {/* ================= ABA: EQUIPE ================= */}
                 {projTab === 'equipe' && (
                 <ProjectEquipe key={'eq' + selectedProject.id} projectId={selectedProject.id} canManage={canManage} />
+                )}
+
+                {/* ================= ABA: ARQUIVOS ================= */}
+                {projTab === 'arquivos' && (
+                <ProjectDocuments key={'ar' + selectedProject.id} projectId={selectedProject.id} driveFolderId={selectedProject.drive_folder_id} canManage={canManage} />
                 )}
 
                 {/* ================= ABA: ROTEIROS ================= */}
