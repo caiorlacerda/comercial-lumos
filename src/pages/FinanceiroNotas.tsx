@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import {
-  Ban, CheckCircle2, Copy, FileText, Loader2, Plus, Receipt, RotateCcw, Search, Send,
+  AlertTriangle, Ban, CheckCircle2, Copy, FileText, Loader2, MailCheck, Plus, Receipt, RotateCcw, Search, Send,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -50,6 +50,18 @@ const diasAte = (iso: string) => {
   const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
   const alvo = new Date(`${iso}T12:00:00`);
   return Math.round((alvo.getTime() - hoje.getTime()) / 86400000);
+};
+
+/**
+ * O que impede a cobrança agendada de sair. O e-mail só vai com fornecedor que
+ * tenha e-mail E valor definido; sem isso o cron pula todo dia em silêncio, e
+ * foi assim que cobranças ficaram paradas sem ninguém ver.
+ */
+const problemaDaCobranca = (n: NotaRequest): 'Falta e-mail' | 'Falta valor' | null => {
+  if (n.status !== 'agendada') return null;
+  if (!n.fornecedor?.email) return 'Falta e-mail';
+  if (n.valor == null) return 'Falta valor';
+  return null;
 };
 
 const ORIGEM_LABEL: Record<string, string> = {
@@ -110,6 +122,7 @@ export default function FinanceiroNotas() {
   const [indisponivel, setIndisponivel] = useState(false);
   const [enviandoId, setEnviandoId] = useState<string | null>(null);
   const [novaCobranca, setNovaCobranca] = useState(false);
+  const [recebendo, setRecebendo] = useState<NotaRequest | null>(null);
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string; email: string | null }[]>([]);
 
   const [statusFiltro, setStatusFiltro] = useState('');
@@ -157,6 +170,10 @@ export default function FinanceiroNotas() {
   }, [notas, statusFiltro, projetoFiltro, fornecedorFiltro, busca]);
 
   const pendentes = notas.filter(n => ['agendada', 'email_enviado', 'nota_recebida'].includes(n.status)).length;
+  const travadas = useMemo(() => ({
+    semEmail: notas.filter(n => problemaDaCobranca(n) === 'Falta e-mail').length,
+    semValor: notas.filter(n => problemaDaCobranca(n) === 'Falta valor').length,
+  }), [notas]);
 
   // ── Ações ────────────────────────────────────────────────────────────────
   const atualizar = async (id: string, patch: Record<string, unknown>) => {
@@ -167,6 +184,7 @@ export default function FinanceiroNotas() {
 
   const enviarAgora = async (n: NotaRequest) => {
     if (!n.fornecedor?.email) { toast.error('Esse fornecedor não tem e-mail cadastrado.'); return; }
+    if (n.valor == null) { toast.error('Defina o valor antes de enviar a cobrança (clique em "definir valor").'); return; }
     setEnviandoId(n.id);
     try {
       const { data, error } = await supabase.functions.invoke('nota-cron', { body: { id: n.id } });
@@ -202,6 +220,11 @@ export default function FinanceiroNotas() {
             className="p-1.5 text-lumos-yellow hover:bg-lumos-yellow/10 rounded-full transition-all disabled:opacity-50"
             title={n.status === 'agendada' ? 'Enviar e-mail de cobrança agora' : 'Reenviar e-mail de cobrança'}>
             {enviandoId === n.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </button>
+          <button onClick={() => setRecebendo(n)}
+            className="p-1.5 text-green-500 hover:bg-green-500/10 rounded-full transition-all"
+            title="A nota chegou por e-mail: registrar como recebida">
+            <MailCheck className="w-4 h-4" />
           </button>
           <button onClick={() => copiarLink(n)}
             className="p-1.5 text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 rounded-full transition-all"
@@ -245,12 +268,19 @@ export default function FinanceiroNotas() {
     const s = NOTA_STATUS[n.status] || NOTA_STATUS.agendada;
     let label = s.label;
     let title: string | undefined = n.origem ? ORIGEM_LABEL[n.origem] : undefined;
+    let cls = s.cls;
     if (n.status === 'agendada') {
       const dias = diasAte(n.enviar_em);
       label = dias <= 0 ? 'Envia hoje' : dias === 1 ? 'Envia amanhã' : `Envia em ${dias} dias`;
       title = `E-mail automático em ${brData(n.enviar_em)}${title ? `, ${title}` : ''}`;
+      const problema = problemaDaCobranca(n);
+      if (problema) {
+        label = problema;
+        cls = 'bg-red-500/15 text-red-500 border-red-500/30';
+        title = `${problema === 'Falta e-mail' ? 'O fornecedor não tem e-mail cadastrado' : 'O valor da cobrança não foi definido'}: o e-mail não sai até corrigir (previsto para ${brData(n.enviar_em)}).`;
+      }
     }
-    return <span title={title} className={clsx('text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', s.cls)}>{label}</span>;
+    return <span title={title} className={clsx('text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', cls)}>{label}</span>;
   };
 
   return (
@@ -269,6 +299,19 @@ export default function FinanceiroNotas() {
           <Plus className="w-4 h-4" /> Nova cobrança
         </button>
       </div>
+
+      {(travadas.semEmail > 0 || travadas.semValor > 0) && (
+        <div className="rounded-lumos border border-amber-500/50 bg-amber-500/10 px-4 py-3 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-300 flex-shrink-0 mt-0.5" />
+          <p className="text-[12.5px] text-amber-800 dark:text-amber-200">
+            <b>Cobranças que não vão sair sozinhas:</b>{' '}
+            {[
+              travadas.semValor > 0 && `${travadas.semValor} sem valor (clique em "definir valor")`,
+              travadas.semEmail > 0 && `${travadas.semEmail} com fornecedor sem e-mail (cadastre em Fornecedores)`,
+            ].filter(Boolean).join(' · ')}.
+          </p>
+        </div>
+      )}
 
       {/* Filtros: etapa, projeto, fornecedor, busca */}
       <div className="card p-3 space-y-2.5">
@@ -394,6 +437,14 @@ export default function FinanceiroNotas() {
         </>
       )}
 
+      {recebendo && (
+        <RecebidaPorEmailModal
+          n={recebendo}
+          onClose={() => setRecebendo(null)}
+          onDone={() => { setRecebendo(null); load(true); }}
+        />
+      )}
+
       {novaCobranca && (
         <NovaCobrancaModal
           fornecedores={fornecedores}
@@ -489,6 +540,71 @@ function NovaCobrancaModal({ fornecedores, onClose, onCreated, profileId }: {
           <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
           <button onClick={salvar} disabled={saving} className="btn-primary flex-1 disabled:opacity-50">
             {saving ? 'Salvando…' : 'Agendar cobrança'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
+// ── Nota que chegou por e-mail (financeiro@) ──────────────────────────────
+// A maioria dos fornecedores responde mandando a nota por e-mail em vez de usar
+// o link. Aqui o time registra isso: a cobrança deixa de ficar "esperando" e o
+// arquivo, se quiser, fica guardado junto.
+function RecebidaPorEmailModal({ n, onClose, onDone }: { n: NotaRequest; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const salvar = async () => {
+    if (arquivo && arquivo.size > 15 * 1024 * 1024) { toast.error('O arquivo pode ter no máximo 15MB.'); return; }
+    setSaving(true);
+    try {
+      let nota_arquivo: { name: string; path: string } | undefined;
+      if (arquivo) {
+        // Sobe antes de mudar o status: a regra do bucket só aceita arquivo
+        // enquanto a cobrança está aberta.
+        const nomeLimpo = arquivo.name.replace(/[^\w.\-()\s]/g, '_');
+        const path = `${n.token}/${Date.now()}_${nomeLimpo}`;
+        const { error: upErr } = await supabase.storage.from('notas-fiscais').upload(path, arquivo, { upsert: false });
+        if (upErr) throw upErr;
+        nota_arquivo = { name: arquivo.name, path };
+      }
+      const { error } = await supabase.from('nota_requests').update({
+        status: 'nota_recebida',
+        nota_enviada_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...(nota_arquivo ? { nota_arquivo } : {}),
+      }).eq('id', n.id);
+      if (error) throw error;
+      toast.success('Nota registrada como recebida ✓');
+      onDone();
+    } catch (err: any) {
+      toast.error(`Não foi possível registrar: ${err.message || 'erro desconhecido'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Nota recebida por e-mail">
+      <div className="space-y-3">
+        <p className="text-sm text-lumos-text-secondary">
+          <b className="text-lumos-text-primary">{n.fornecedor ? formatName(n.fornecedor.nome) : 'O fornecedor'}</b> mandou a nota de
+          {' '}<b className="text-lumos-text-primary">{n.descricao}</b>? Registre aqui para encerrar a espera por ela.
+        </p>
+        <div className="space-y-1">
+          <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Arquivo da nota (opcional)</label>
+          <input type="file" accept=".pdf,.xml,.jpg,.jpeg,.png"
+            onChange={e => setArquivo(e.target.files?.[0] || null)}
+            className="input-lumos w-full text-xs" />
+          <p className="text-[11px] text-lumos-text-secondary">Anexe se quiser guardar a nota junto da cobrança (PDF, XML ou foto, até 15MB).</p>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+          <button onClick={salvar} disabled={saving} className="btn-primary flex-1 disabled:opacity-50">
+            {saving ? 'Salvando…' : 'Marcar como recebida'}
           </button>
         </div>
       </div>
