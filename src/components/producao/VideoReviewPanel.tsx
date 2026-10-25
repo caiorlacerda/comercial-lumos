@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { haQuanto, textoEnvio } from '@/lib/dataEnvio';
 import { createPortal } from 'react-dom';
 import { Ban, Lock, Film, ExternalLink, Check, AlertTriangle, RotateCcw, CircleCheckBig, Clock, Link2, Copy, Droplet, DownloadCloud, MessageSquare, FolderUp, RefreshCw, ChevronDown, Pencil, Layers, Scissors, Upload, Play, Trash2, Search, MoreHorizontal, Send, UserCheck, LayoutGrid, List, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -954,7 +955,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
             <p className="text-[13px] font-bold text-lumos-text-primary truncate" title={v.file_name}>{v.file_name}</p>
           )}
           <p className="text-[10.5px] text-lumos-text-secondary truncate mt-0.5">
-            {meta}{meta && (v.uploaded_by || v.uploaded_at) ? ' · ' : ''}{v.uploaded_by || ''}{v.uploaded_by ? ', ' : ''}{fmtDate(v.uploaded_at || v.created_at)}
+            {meta}{meta ? ' · ' : ''}<span title={`Enviado ${haQuanto(v.uploaded_at || v.created_at)}`}>{textoEnvio(v.uploaded_at, v.created_at, v.uploaded_by)}</span>
           </p>
 
           {/* Tarefa vinculada */}
