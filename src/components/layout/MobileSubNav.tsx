@@ -1,4 +1,5 @@
 import React from 'react';
+import { prefetchRota } from '@/lib/prefetchRotas';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useLayout } from '@/context/LayoutContext';
@@ -27,6 +28,8 @@ export default function MobileSubNav() {
             <React.Fragment key={item.path}>
             <button
               onClick={() => navigate(item.path)}
+              onPointerEnter={() => prefetchRota(item.path)}
+              onTouchStart={() => prefetchRota(item.path)}
               className={clsx(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 cursor-pointer',
                 isActive

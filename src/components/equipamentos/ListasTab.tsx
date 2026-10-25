@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { Plus, Trash2, Save, Download, FileStack, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -115,7 +116,7 @@ export default function ListasTab({ equipment, projects }: { equipment: Equip[];
             </div>
 
             {loading ? (
-              <div className="py-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow mx-auto" /></div>
+              <EsqueletoItens n={4} />
             ) : items.length === 0 ? (
               <p className="text-sm text-lumos-text-secondary/70 italic py-4 text-center">Lista vazia. Adicione equipamentos acima ou puxe um template.</p>
             ) : (

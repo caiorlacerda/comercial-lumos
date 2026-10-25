@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import type { InputHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -920,6 +922,7 @@ export default function OrdemDoDiaDetalhe() {
 
   const [od, setOd] = useState<OD | null>(null);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [erroCarga, setErroCarga] = useState(false);
   // A aba fica na URL (?tab=) pra sobreviver a reload e dar pra mandar link direto.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1143,7 +1146,7 @@ export default function OrdemDoDiaDetalhe() {
   // de "um apagando o outro".
   const editarLista = <T,>(campo: keyof OD, lista: T[]) => patch({ [campo]: lista } as any, true);
 
-  if (loading) return <div className="min-h-[50vh] grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>;
+  if (loading) return <EsqueletoPagina />;
   if (!od) return (
     <div className="text-center py-20">
       <p className="text-sm font-bold text-lumos-text-primary">

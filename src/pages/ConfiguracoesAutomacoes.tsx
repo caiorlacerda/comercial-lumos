@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
@@ -388,9 +389,7 @@ export default function ConfiguracoesAutomacoes() {
       )}
 
       {carregando ? (
-        <div className="card p-12 text-center">
-          <Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" />
-        </div>
+        <EsqueletoItens n={4} />
       ) : (
         <div className="space-y-3">
           {CATALOGO.map(a => (

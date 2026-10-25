@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useParams, Link } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -45,6 +47,7 @@ export default function CustosProjetoDetalhe() {
   const [appUsers, setAppUsers] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -746,9 +749,7 @@ export default function CustosProjetoDetalhe() {
 
   if (loading)
     return (
-      <div className="flex items-center justify-center min-h-screen bg-lumos-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-lumos-yellow"></div>
-      </div>
+      <EsqueletoPagina />
     );
   if (!project)
     return (

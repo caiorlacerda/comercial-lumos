@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import clsx from 'clsx';
 import { AlertTriangle, CalendarOff, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -171,7 +172,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose }: Props) {
           </div>
 
           {loadingSemana ? (
-            <div className="py-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>
+            <EsqueletoItens n={4} />
           ) : erroSemana ? (
             <div className="rounded-lumos border border-red-500/40 bg-red-500/[0.06] px-3.5 py-3 flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
@@ -246,7 +247,7 @@ export default function BloqueiosDeAgenda({ isOpen, onClose }: Props) {
         )}
 
         {loading ? (
-          <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow" /></div>
+          <EsqueletoItens n={4} />
         ) : erro ? (
           <div className="rounded-lumos border border-red-500/40 bg-red-500/[0.06] px-3.5 py-3 flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />

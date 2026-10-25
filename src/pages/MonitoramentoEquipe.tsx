@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import Modal from '@/components/common/Modal';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -64,6 +66,7 @@ export default function MonitoramentoEquipe() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [hr, setHr] = useState<HR[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   // Filtros + drill-down
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -202,7 +205,7 @@ export default function MonitoramentoEquipe() {
   );
 
   if (loading) {
-    return <div className="py-24 text-center"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow mx-auto" /></div>;
+    return <EsqueletoPagina />;
   }
 
   return (

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -49,6 +51,7 @@ export default function Templates() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('budgets');
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Budget Templates State
@@ -259,9 +262,7 @@ export default function Templates() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lumos-yellow"></div>
-      </div>
+      <EsqueletoPagina />
     );
   }
 

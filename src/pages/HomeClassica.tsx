@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -371,10 +372,7 @@ export default function Home() {
           </div>
 
           {loadingTasks ? (
-            <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-12 text-center flex flex-col items-center justify-center gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow"></div>
-              <p className="text-xs text-lumos-text-secondary font-bold uppercase tracking-wider">Carregando tarefas...</p>
-            </div>
+            <EsqueletoItens n={4} />
           ) : sortedTasks.length === 0 ? (
             <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-12 text-center flex flex-col items-center justify-center gap-4 shadow-sm">
               <div className="p-4 bg-green-500/10 rounded-full border border-green-500/20 text-green-500">

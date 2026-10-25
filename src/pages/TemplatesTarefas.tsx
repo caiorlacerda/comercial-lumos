@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { ClipboardList, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -26,6 +28,7 @@ export default function TemplatesTarefas() {
   const [seg, setSeg] = useState<Segmento>('digital');
   const [items, setItems] = useState<TemplateTask[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [newTitle, setNewTitle] = useState('');
   const [adding, setAdding] = useState(false);
 
@@ -101,7 +104,7 @@ export default function TemplatesTarefas() {
 
       <div className="card border border-lumos-border bg-lumos-surface p-6">
         {loading ? (
-          <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-lumos-yellow" /></div>
+          <EsqueletoItens n={4} />
         ) : (
           <div className="space-y-2">
             {items.length === 0 && (

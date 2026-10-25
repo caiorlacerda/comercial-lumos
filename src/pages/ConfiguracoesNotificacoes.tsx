@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +18,7 @@ export default function ConfiguracoesNotificacoes() {
   const navigate = useNavigate();
   const [preferences, setPreferences] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [cleaning, setCleaning] = useState(false);
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
 
@@ -223,9 +226,7 @@ export default function ConfiguracoesNotificacoes() {
       </div>
 
       {loading ? (
-        <div className="card p-12 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div>
-        </div>
+        <EsqueletoItens n={4} />
       ) : (
         <div className="space-y-6">
           {/* Settings Lists by Category */}

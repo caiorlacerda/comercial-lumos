@@ -1,4 +1,5 @@
 import React from 'react';
+import { prefetchRota } from '@/lib/prefetchRotas';
 import { clsx } from 'clsx';
 import { ChevronsLeft, Search } from 'lucide-react';
 
@@ -179,6 +180,9 @@ export default function LumosSideNav({
                     key={item.path}
                     type="button"
                     onClick={() => onNavigate(item.path)}
+                    onPointerEnter={() => prefetchRota(item.path)}
+                    onFocus={() => prefetchRota(item.path)}
+                    onTouchStart={() => prefetchRota(item.path)}
                     className={clsx(
                       'relative flex items-center gap-3 w-full px-3 py-2.5 rounded-lumos text-sm font-bold transition-colors text-left',
                       isItemActive(item)

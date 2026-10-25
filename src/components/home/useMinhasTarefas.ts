@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { gravarCache, lerCache } from '@/lib/cacheDeTela';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -9,14 +10,15 @@ export function useMinhasTarefas(): DadosHome {
   const { profile } = useAuth();
   const toast = useToast();
   const userId = profile?.id;
-  const [tarefas, setTarefas] = useState<TarefaHome[]>([]);
-  const [carregando, setCarregando] = useState(true);
+  const chaveCache = `home-tarefas:${userId ?? ''}`;
+  const [tarefas, setTarefas] = useState<TarefaHome[]>(() => lerCache<TarefaHome[]>(chaveCache) ?? []);
+  const [carregando, setCarregando] = useState(() => !lerCache(chaveCache));
 
   useEffect(() => {
     async function buscar() {
       if (!userId) return;
       try {
-        setCarregando(true);
+        if (!lerCache(chaveCache)) setCarregando(true);
         // Minhas tarefas = onde sou responsável OU colaborador.
         const { data: collabRows } = await supabase
           .from('task_collaborators').select('task_id').eq('user_id', userId);
@@ -53,6 +55,7 @@ export function useMinhasTarefas(): DadosHome {
 
         if (error) throw error;
         setTarefas((data as any) || []);
+        gravarCache(chaveCache, (data as any) || []);
       } catch (err: any) {
         console.error('Error fetching home tasks:', err);
         toast.error('Erro ao carregar suas tarefas pendentes.');

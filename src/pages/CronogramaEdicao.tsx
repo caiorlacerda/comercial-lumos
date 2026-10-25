@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -111,6 +113,7 @@ export default function CronogramaEdicao() {
   const [projects, setProjects] = useState<{ id: string; name: string; code: string | null }[]>([]);
   const [entregasTagId, setEntregasTagId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [backlogSearch, setBacklogSearch] = useState('');
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
 
@@ -237,7 +240,7 @@ export default function CronogramaEdicao() {
   };
 
   if (loading) {
-    return <div className="py-24 text-center"><Loader2 className="w-10 h-10 animate-spin text-lumos-yellow mx-auto" /></div>;
+    return <EsqueletoPagina />;
   }
 
   return (

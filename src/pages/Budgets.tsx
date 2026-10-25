@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { gravarCache, lerCache } from '@/lib/cacheDeTela';
 import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
@@ -76,8 +77,8 @@ export default function Budgets() {
   const navigate = useNavigate();
   const toast = useToast();
   const { saveOsToDrive } = useSaveOsToDrive();
-  const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [budgets, setBudgets] = useState<Budget[]>(() => lerCache<Budget[]>('orcamentos') ?? []);
+  const [loading, setLoading] = useState(() => !lerCache('orcamentos'));
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 15;
@@ -150,7 +151,7 @@ export default function Budgets() {
 
   async function fetchBudgets(silent = false) {
     try {
-      if (!silent) setLoading(true);
+      if (!silent && !lerCache('orcamentos')) setLoading(true);
       const { data, error } = await supabase
         .from('budgets')
         .select(`
@@ -197,6 +198,7 @@ export default function Budgets() {
       });
       
       setBudgets(processed);
+      gravarCache('orcamentos', processed);
     } catch (err) {
       console.error('Error fetching budgets:', err);
     } finally {

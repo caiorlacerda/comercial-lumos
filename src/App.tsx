@@ -14,6 +14,7 @@ import NewProjectCelebration from '@/components/common/NewProjectCelebration';
 import BarraDeCarregamento from '@/components/ui/BarraDeCarregamento';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { iniciarPrefetch } from '@/lib/prefetchRotas';
+import { limparCache } from '@/lib/cacheDeTela';
 
 // Páginas carregadas sob demanda (code-splitting por rota). Cada uma vira um
 // chunk separado, tirando libs pesadas (PDF, gráficos, Excel, editor) do
@@ -81,11 +82,16 @@ const PortalCliente = lazy(() => import('@/pages/PortalCliente'));
 const TIMEOUT_WARNING_MS = 5 * 60 * 1000; // warn 5 min before expiry
 
 // Fallback exibido enquanto o chunk da rota está sendo baixado.
-// Tela cheia de espera (entrada do app e páginas fora do menu): fundo limpo e a barra do topo,
-// em vez de um círculo girando no meio.
+// Tela cheia de espera (entrada do app, verificação da sessão e páginas fora do menu): a logo
+// respirando (a mesma tela de abertura do index.html) e a barra do topo, em vez de um círculo girando.
 function PageLoader() {
   useBarraDeCarregamento(true);
-  return <div className="min-h-screen bg-lumos-bg"><BarraDeCarregamento /></div>;
+  return (
+    <div className="splash-lumos">
+      <img className="splash-logo" src="/logo-lumos.svg" width={64} height={64} alt="" />
+      <BarraDeCarregamento />
+    </div>
+  );
 }
 
 function AuthWrapper({ children }: { children: React.ReactNode }) {
@@ -93,6 +99,8 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
   const lastActivityRef = useRef<number>(Date.now());
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
   const location = useLocation();
+  // Troca de usuário (ou saída): o que as telas guardaram do anterior não pode aparecer para o próximo.
+  useEffect(() => () => limparCache(), [user?.id]);
 
   // Anti-flash do "Acesso Pendente": só mostra a tela se o estado "logado sem
   // perfil" PERSISTIR alguns segundos. Num login normal o perfil chega logo e o

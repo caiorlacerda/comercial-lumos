@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { TipoPilula } from '@/components/producao/TipoDeTarefa';
 import { useTipoDasTarefas, type TipoTarefa } from '@/lib/tiposTarefa';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -209,6 +211,7 @@ export default function ProducaoBoard() {
   const tipoDe = useTipoDasTarefas(tasks.map(t => t.id));
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
 
   // Filtros (?projectId= permite chegar já filtrado, ex.: vindo da tab do projeto)
   const [searchTerm, setSearchTerm] = useState('');
@@ -436,9 +439,7 @@ export default function ProducaoBoard() {
 
       {/* Board */}
       {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" />
-        </div>
+        <EsqueletoPagina />
       ) : (
         <DndContext
           sensors={sensors}

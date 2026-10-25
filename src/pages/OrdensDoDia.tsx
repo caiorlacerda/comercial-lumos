@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Calendar, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -17,6 +19,7 @@ export default function OrdensDoDia() {
   const [ordens, setOrdens] = useState<OrdemDoDia[]>([]);
   const [novaAberta, setNovaAberta] = useState(false);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -98,9 +101,7 @@ export default function OrdensDoDia() {
 
       <div className="grid grid-cols-1 gap-4">
         {loading ? (
-          <div className="card p-12 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-lumos-yellow mx-auto"></div>
-          </div>
+          <EsqueletoItens n={4} />
         ) : filtered.length === 0 ? (
           <div className="card p-12 text-center text-lumos-text-secondary text-sm italic">
             Nenhuma ordem do dia criada ainda.

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChartGantt, ChevronDown, ChevronRight, ChevronLeft, X, Search,
@@ -83,6 +85,7 @@ export default function ProducaoSchedule() {
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
   const [teamUsers, setTeamUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
 
   const [zoom, setZoom] = useState<ZoomLevel>('mes');
   const [rangeStart, setRangeStart] = useState<Date>(() => defaultRangeStart('mes'));
@@ -403,9 +406,7 @@ export default function ProducaoSchedule() {
 
       {/* Gráfico */}
       {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-lumos-yellow" />
-        </div>
+        <EsqueletoPagina />
       ) : visibleProjects.length === 0 ? (
         <div className="text-center py-24 text-sm text-lumos-text-secondary italic border border-dashed border-lumos-border/50 rounded-lumos">
           Nenhum projeto ativo encontrado.

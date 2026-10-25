@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -375,7 +376,7 @@ export default function ProjectNotes({ projectId, canManage = true }: Props) {
       )}
 
       <div className="px-4 py-3 min-h-[120px] overflow-y-auto custom-scrollbar" onClick={onContainerClick}>
-        {loading ? <div className="py-6 text-center"><Loader2 className="w-5 h-5 animate-spin text-lumos-yellow mx-auto" /></div> : <EditorContent editor={editor} />}
+        {loading ? <EsqueletoItens n={4} /> : <EditorContent editor={editor} />}
       </div>
 
       {/* Atividades recentes das anotações (histórico + restaurar) */}

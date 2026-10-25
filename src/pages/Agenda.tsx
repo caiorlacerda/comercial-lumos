@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { gravarCache, lerCache } from '@/lib/cacheDeTela';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays, Clapperboard, ClipboardList, Layers,
@@ -55,9 +58,10 @@ const ROTULO_CURTO = (t: Tipo) => TIPOS[t].label.replace(/s$/, '').replace(' ao 
 export default function Agenda() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [itens, setItens] = useState<Item[]>([]);
-  const [minhasTarefas, setMinhasTarefas] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(() => !lerCache('agenda'));
+  useBarraDeCarregamento(loading);
+  const [itens, setItens] = useState<Item[]>(() => lerCache<{ itens: Item[] }>('agenda')?.itens ?? []);
+  const [minhasTarefas, setMinhasTarefas] = useState<Set<string>>(() => new Set(lerCache<{ minhas: string[] }>('agenda')?.minhas ?? []));
 
   // preferências de exibição (persistem por navegador)
   const [visao, setVisao] = useState<'calendario' | 'lista' | 'kanban'>(() => {
@@ -146,7 +150,9 @@ export default function Agenda() {
       });
     }
     setItens(lista);
-    setMinhasTarefas(new Set(((collabsQ.data as any[]) || []).map(c => c.task_id)));
+    const minhas = ((collabsQ.data as any[]) || []).map(c => c.task_id);
+    setMinhasTarefas(new Set(minhas));
+    gravarCache('agenda', { itens: lista, minhas });
     setLoading(false);
   }, [profile?.id]);
   useEffect(() => { load(); }, [load]);
@@ -205,7 +211,7 @@ export default function Agenda() {
   }, [filtrados, tipoPorId]);
   const porId = useMemo(() => new Map(filtrados.map(i => [i.id, i])), [filtrados]);
 
-  if (loading) return <div className="min-h-[50vh] grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow" /></div>;
+  if (loading) return <EsqueletoPagina />;
 
   const hoje = hojeIso();
   const diasVisiveis = diasDaJanela(cursor, gran);

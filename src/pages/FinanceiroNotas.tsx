@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import {
   Ban, CheckCircle2, Copy, FileText, Loader2, Plus, Receipt, RotateCcw, Search, Send,
 } from 'lucide-react';
@@ -103,6 +105,7 @@ export default function FinanceiroNotas() {
   const toast = useToast();
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
+  useBarraDeCarregamento(loading);
   const [notas, setNotas] = useState<NotaRequest[]>([]);
   const [indisponivel, setIndisponivel] = useState(false);
   const [enviandoId, setEnviandoId] = useState<string | null>(null);
@@ -298,7 +301,7 @@ export default function FinanceiroNotas() {
       </div>
 
       {loading ? (
-        <div className="card p-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-lumos-yellow mx-auto" /></div>
+        <EsqueletoItens n={4} />
       ) : indisponivel ? (
         <div className="card p-10 text-center space-y-2">
           <Receipt className="w-8 h-8 text-lumos-text-secondary mx-auto" />

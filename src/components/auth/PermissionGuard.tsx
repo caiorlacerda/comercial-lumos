@@ -1,4 +1,5 @@
 import React from 'react';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -53,9 +54,7 @@ export function PermissionGuard({ permission, children }: PermissionGuardProps) 
   
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-lumos-yellow"></div>
-      </div>
+      <EsqueletoPagina />
     );
   }
 
