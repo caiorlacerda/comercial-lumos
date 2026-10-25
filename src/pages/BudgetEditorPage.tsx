@@ -65,6 +65,10 @@ import { getPdfFileName } from '@/utils/pdfFileName';
 import { debounce } from 'lodash';
 import { clsx } from 'clsx';
 import { useAuth } from '@/hooks/useAuth';
+import { usePresencaDoDocumento } from '@/lib/colaboracao/presenca';
+import { alteradoLocalmente, camposAlterados, itensAlteradosLocalmente, mesclarItens, mesclarObjeto } from '@/lib/colaboracao/mesclar';
+import PresencaNoDocumento, { EtiquetaDeEdicao } from '@/components/colaboracao/PresencaNoDocumento';
+import type { Pessoa } from '@/lib/colaboracao/presenca';
 import DatePicker from '@/components/ui/DatePicker';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
@@ -102,13 +106,21 @@ interface Budget {
   template_category?: string;
 }
 
-function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly: boolean; children: (dragHandle: React.ReactNode) => React.ReactNode }) {
+function SortableItemRow({ id, isReadOnly, children, editando, destaque, aoFocar, aoDesfocar }: {
+  id: string; isReadOnly: boolean; children: (dragHandle: React.ReactNode) => React.ReactNode;
+  /** Outra pessoa está editando esta linha agora. */
+  editando?: Pessoa;
+  /** A linha acabou de ser alterada por outra pessoa. */
+  destaque?: boolean;
+  aoFocar?: () => void; aoDesfocar?: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
+    ...(editando ? { outline: `2px solid ${editando.cor}`, outlineOffset: '-2px' } : {}),
   };
   const dragHandle = !isReadOnly ? (
     <button
@@ -121,7 +133,9 @@ function SortableItemRow({ id, isReadOnly, children }: { id: string; isReadOnly:
     </button>
   ) : null;
   return (
-    <div ref={setNodeRef} style={style} className="group border-b border-lumos-border last:border-0 hover:bg-lumos-bg/30 transition-colors">
+    <div ref={setNodeRef} style={style} onFocusCapture={aoFocar} onBlurCapture={aoDesfocar}
+      className={`group relative border-b border-lumos-border last:border-0 hover:bg-lumos-bg/30 transition-colors ${destaque ? 'bg-lumos-yellow/15' : ''}`}>
+      {editando && <EtiquetaDeEdicao pessoa={editando} />}
       {children(dragHandle)}
     </div>
   );
@@ -185,6 +199,39 @@ export default function BudgetEditorPage() {
   // Ref to track dirty state and prevent save loops
   const isDirty = useRef(false);
   const lastLoadedData = useRef<string>('');
+
+  // ── Colaboração: o último estado do servidor que esta pessoa conhece (base da mesclagem) ──
+  const baseRef = useRef<{ budget: any; version: any; items: BudgetItem[] } | null>(null);
+  const budgetRef = useRef<Budget | null>(null);
+  const versionRef = useRef<BudgetVersion | null>(null);
+  const itemsRef = useRef<BudgetItem[]>([]);
+  budgetRef.current = budget; versionRef.current = version; itemsRef.current = items;
+  const salvamentosEmAndamento = useRef(0);   // salvamentos desta pessoa no ar: a sincronização espera
+  const marcaDeSalvamento = useRef(0);        // muda a cada salvamento: invalida uma busca que ficou velha no caminho
+  const sincronizarRef = useRef<() => void>(() => {});
+  const [itensDestacados, setItensDestacados] = useState<Set<string>>(new Set());
+  const CAMPOS_ITEM = ['item_group', 'name', 'unit_cost', 'quantity', 'unit_label', 'description', 'catalog_item_id'];
+  const itemIgual = (a: any, b: any) => CAMPOS_ITEM.every(k => JSON.stringify(a?.[k] ?? null) === JSON.stringify(b?.[k] ?? null));
+  const guardarNaBase = (parte: Partial<{ budget: any; version: any; items: BudgetItem[] }>) => {
+    baseRef.current = { budget: null, version: null, items: [], ...(baseRef.current || {}), ...parte };
+  };
+  // Quem mais está com este orçamento aberto e qual campo está editando (só em orçamento já salvo).
+  const { pessoas: pessoasAqui, definirCampo, quemEdita } = usePresencaDoDocumento(
+    !isDraft && budget?.id ? `orcamento:${budget.id}` : null,
+    profile?.id ? { id: profile.id, nome: profile.full_name || 'Alguém', avatar: (profile as any).avatar_url ?? null } : null,
+  );
+  const pessoasRef = useRef<Pessoa[]>([]);
+  pessoasRef.current = pessoasAqui;
+  const rotuloDoCampo = (campo: string): string | null => {
+    if (campo.startsWith('item:')) { const it = items.find(i => i.id === campo.slice(5)); return it ? `"${it.name || 'novo item'}"` : 'um item'; }
+    if (campo === 'briefing') return 'o briefing';
+    return null;
+  };
+  const guardarItemNaBase = (item: BudgetItem, idx: number) => {
+    const atual = baseRef.current?.items || [];
+    const novo = { ...item, sort_order: idx };
+    guardarNaBase({ items: atual.some(i => i.id === item.id) ? atual.map(i => i.id === item.id ? novo : i) : [...atual, novo] });
+  };
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const catalogSearchRef = useRef<HTMLInputElement>(null);
   const briefingPopoverRef = useRef<HTMLDivElement>(null);
@@ -432,6 +479,7 @@ export default function BudgetEditorPage() {
       setVersion(targetVersion);
       setItems(itemsData || []);
       setExpandedDescriptions(new Set((itemsData || []).filter((i: any) => i.description).map((i: any) => i.id)));
+      baseRef.current = { budget: budgetData, version: targetVersion, items: (itemsData as BudgetItem[]) || [] };
 
       // Load activity history (fails silently if table doesn't exist)
       supabase.from('budget_activity').select('*').eq('budget_id', budgetData.id).order('created_at', { ascending: false }).limit(30)
@@ -477,6 +525,7 @@ export default function BudgetEditorPage() {
     if (!budget || !version || !isDirty.current) return;
     
     if (showNotification) notifySaveStatus('saving');
+    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
     try {
       let currentBudgetId = budget.id;
       let currentVersionId = version.id;
@@ -554,7 +603,7 @@ export default function BudgetEditorPage() {
 
       } else {
         const [versaoRes, orcamentoRes] = await Promise.all([
-          supabase.from('budget_versions').update({
+          atualizarSeMudou('budget_versions', version.id, 'version', {
             contact_id: version.contact_id || null,
             margin_pct: version.margin_pct,
             nf_pct: version.nf_pct,
@@ -574,22 +623,21 @@ export default function BudgetEditorPage() {
             fee_mensal_mostrar_na_proposta: version.fee_mensal_mostrar_na_proposta || false,
             ...camposDeMoeda(version),
             ...camposDeIdioma(version)
-          }).eq('id', version.id),
-          supabase.from('budgets').update({
+          }),
+          atualizarSeMudou('budgets', budget.id, 'budget', {
             code: budget.code,
             project_name: budget.project_name,
             category: budget.category,
             status: budget.status,
             client_id: budget.client_id || null
-          }).eq('id', budget.id)
+          })
         ]);
         const saveError = versaoRes.error || orcamentoRes.error;
         if (saveError) throw saveError;
       }
 
       if (items.length > 0) {
-        await supabase.from('budget_items').upsert(
-          items.map((it, idx) => ({
+        const linhas = items.map((it, idx) => ({
             id: it.id,
             version_id: currentVersionId,
             item_group: it.item_group,
@@ -600,14 +648,17 @@ export default function BudgetEditorPage() {
             description: it.description,
             sort_order: idx,
             catalog_item_id: it.catalog_item_id
-          }))
-        );
+          }));
+        const base = baseRef.current?.items || [];
+        const mudadas = linhas.filter(l => { const b = base.find(x => x.id === l.id); return !b || !itemIgual(b, l) || b.sort_order !== l.sort_order; });
+        if (mudadas.length) { const { error: itensErro } = await supabase.from('budget_items').upsert(mudadas); if (itensErro) throw itensErro; }
       }
 
       if (budget.status === 'aprovado' && financials) {
         await syncBudgetApprovalFlow(currentBudgetId, financials.valorFinal);
       }
 
+      if (!isDraft) guardarNaBase({ budget: { ...budget }, version: { ...version }, items: items.map((it, idx) => ({ ...it, sort_order: idx })) });
       isDirty.current = false;
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
@@ -615,7 +666,18 @@ export default function BudgetEditorPage() {
     } catch (err) {
       console.error('Save error:', err);
       if (showNotification) notifySaveStatus('error');
+    } finally {
+      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
     }
+  };
+
+  // Grava só o que esta pessoa mudou (comparando com o que o servidor tinha), para não pisar nas
+  // alterações de outras pessoas nos campos que ela nem tocou.
+  const atualizarSeMudou = async (tabela: 'budget_versions' | 'budgets', id: string, tipo: 'budget' | 'version', campos: Record<string, any>) => {
+    const base = baseRef.current?.[tipo];
+    const mudou = base ? camposAlterados(base, campos, Object.keys(campos)) : campos;
+    if (Object.keys(mudou).length === 0) return { error: null };
+    return supabase.from(tabela).update(mudou).eq('id', id);
   };
 
 
@@ -624,9 +686,11 @@ export default function BudgetEditorPage() {
   const savePartialBudget = async (updates: Partial<Budget>) => {
     if (isDraft || !budget) return;
     notifySaveStatus('saving');
+    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
     try {
       const { error } = await supabase.from('budgets').update(updates).eq('id', budget.id);
       if (error) throw error;
+      guardarNaBase({ budget: { ...(baseRef.current?.budget || {}), ...updates } });
       
       // Sync to Receivables if approved
       if (updates.status === 'aprovado' && financials) {
@@ -642,15 +706,19 @@ export default function BudgetEditorPage() {
     } catch (err) {
       console.error('Partial budget save error:', err);
       notifySaveStatus('error');
+    } finally {
+      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
     }
   };
 
   const savePartialVersion = async (updates: Partial<BudgetVersion>) => {
     if (isDraft || !version) return;
     notifySaveStatus('saving');
+    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
     try {
       const { error } = await supabase.from('budget_versions').update(updates).eq('id', version.id);
       if (error) throw error;
+      guardarNaBase({ version: { ...(baseRef.current?.version || {}), ...updates } });
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       notifySaveStatus('saved');
@@ -669,6 +737,8 @@ export default function BudgetEditorPage() {
         if (data) setVersion(prev => prev ? { ...prev, ...data } : prev);
         toast.error('Não foi possível alterar a moeda/cotação. O orçamento pode estar aprovado: volte para "Em Negociação" e tente de novo.');
       }
+    } finally {
+      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
     }
   };
 
@@ -881,7 +951,13 @@ export default function BudgetEditorPage() {
   const syncItem = async (item: BudgetItem) => {
     if (isReadOnly || isDraft || !version) return;
     notifySaveStatus('saving');
+    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
     try {
+      // Posição na lista mais recente (a `items` deste fechamento pode estar velha, e o item recém-editado
+      // nunca está nela: dava -1). Item que ainda não entrou na lista (acabou de ser criado) vai para o fim.
+      const lista = itemsRef.current;
+      const achou = lista.findIndex(i => i.id === item.id);
+      const idx = achou >= 0 ? achou : lista.length;
       const { error } = await supabase
         .from('budget_items')
         .upsert({
@@ -893,15 +969,18 @@ export default function BudgetEditorPage() {
           quantity: item.quantity,
           unit_label: item.unit_label,
           description: item.description,
-          sort_order: items.indexOf(item),
+          sort_order: idx,
           catalog_item_id: item.catalog_item_id
         });
       
       if (error) throw error;
+      guardarItemNaBase(item, idx);
       notifySaveStatus('saved');
     } catch (err) {
       console.error('Error syncing item:', err);
       notifySaveStatus('error');
+    } finally {
+      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
     }
   };
 
@@ -940,14 +1019,103 @@ export default function BudgetEditorPage() {
     if (isReadOnly || isDraft) return;
     notifySaveStatus('saving');
     try {
+      salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
       const { error } = await supabase.from('budget_items').delete().eq('id', itemId);
+      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
       if (error) throw error;
+      guardarNaBase({ items: (baseRef.current?.items || []).filter(i => i.id !== itemId) });
       notifySaveStatus('saved');
     } catch (err) {
       console.error('Error deleting item:', err);
       notifySaveStatus('error');
     }
   };
+
+  // ── Atualização ao vivo: traz para a tela o que outras pessoas alteraram, sem pisar no que esta pessoa
+  // está editando (mesclagem de três vias: base, o que está na tela e o que está no servidor).
+  sincronizarRef.current = async () => {
+    const b0 = budgetRef.current, v0 = versionRef.current;
+    if (isDraft || !b0 || !v0) return;
+    const tentarDepois = () => window.setTimeout(() => sincronizarRef.current(), 800);
+    if (salvamentosEmAndamento.current > 0) { tentarDepois(); return; }
+    const marca = marcaDeSalvamento.current;
+    const [br, vr, ir] = await Promise.all([
+      supabase.from('budgets').select('*').eq('id', b0.id).single(),
+      supabase.from('budget_versions').select('*').eq('id', v0.id).single(),
+      supabase.from('budget_items')
+        .select('id, version_id, item_group, name, unit_cost, quantity, unit_label, description, sort_order, catalog_item_id')
+        .eq('version_id', v0.id).order('sort_order', { ascending: true }),
+    ]);
+    if (br.error || vr.error || ir.error || !br.data || !vr.data) return;
+    // Esta pessoa salvou algo enquanto a busca ia e voltava: o resultado ficou velho, busca de novo.
+    if (salvamentosEmAndamento.current > 0 || marca !== marcaDeSalvamento.current) { tentarDepois(); return; }
+    if (versionRef.current?.id !== vr.data.id) return; // trocou de versão no meio
+
+    const base = baseRef.current;
+    const lb = budgetRef.current!, lv = versionRef.current!, li = itemsRef.current;
+    const remotoItens = (ir.data as BudgetItem[]) || [];
+    const camposItem = [...CAMPOS_ITEM];
+    const pendente = !base
+      || alteradoLocalmente(base.budget, lb, Object.keys(br.data))
+      || alteradoLocalmente(base.version, lv, Object.keys(vr.data))
+      || itensAlteradosLocalmente(base.items, li, camposItem);
+
+    let novoBudget: any = lb, novoVersion: any = lv, novosItens: BudgetItem[] = li;
+    let alterados: string[] = [], conflitos: string[] = [], camposMudados = 0;
+    if (!pendente) {
+      // Nada pendente aqui: vale o servidor inteiro (inclusive a ordem dos itens).
+      const mb = mesclarObjeto(lb as any, lb as any, br.data), mv = mesclarObjeto(lv as any, lv as any, vr.data);
+      camposMudados = mb.aplicados.length + mv.aplicados.length;
+      novoBudget = mb.resultado; novoVersion = mv.resultado;
+      const mi = mesclarItens(li, li, remotoItens);
+      alterados = mi.alterados;
+      const mesmaOrdem = li.length === remotoItens.length && li.every((it, i) => it.id === remotoItens[i].id);
+      if (mi.alterados.length || !mesmaOrdem) novosItens = remotoItens;
+    } else {
+      const mb = mesclarObjeto(base?.budget ?? null, lb as any, br.data), mv = mesclarObjeto(base?.version ?? null, lv as any, vr.data);
+      camposMudados = mb.aplicados.length + mv.aplicados.length;
+      novoBudget = mb.resultado; novoVersion = mv.resultado;
+      const mi = mesclarItens(base?.items ?? [], li, remotoItens);
+      novosItens = mi.itens; alterados = [...mi.alterados]; conflitos = [...mi.conflitos, ...mb.conflitos, ...mv.conflitos];
+    }
+
+    guardarNaBase({ budget: { ...lb, ...br.data }, version: { ...lv, ...vr.data }, items: remotoItens });
+    const ordemOuItens = novosItens !== li && (!pendente || alterados.length > 0);
+    if (!camposMudados && !alterados.length && !conflitos.length && !ordemOuItens) return;
+    if (camposMudados) { setBudget(novoBudget); setVersion(novoVersion); }
+    if (ordemOuItens) setItems(novosItens);
+
+    // Aviso: quem mexeu (se só uma pessoa está no documento, é ela) e o que mudou.
+    const outras = pessoasRef.current;
+    const autor = outras.length === 1 ? outras[0].nome.split(' ')[0]
+      : outras.find(p => p.campo && alterados.some(id => p.campo === `item:${id}`))?.nome.split(' ')[0] || 'Outra pessoa';
+    const nomes = alterados.map(id => novosItens.find(i => i.id === id)?.name || remotoItens.find(i => i.id === id)?.name).filter(Boolean) as string[];
+    if (alterados.length) {
+      toast.info(`${autor} alterou ${nomes.length ? `"${nomes[0]}"` : 'itens'}${alterados.length > 1 ? ` e mais ${alterados.length - 1}` : ''}.`);
+      setItensDestacados(new Set(alterados));
+      window.setTimeout(() => setItensDestacados(new Set()), 2600);
+    } else if (camposMudados) {
+      toast.info(`${autor} atualizou os dados do orçamento.`);
+    }
+    if (conflitos.length) toast.warning('A mesma informação foi alterada por duas pessoas ao mesmo tempo. Mantive a sua; confira se está certa.');
+  };
+
+  useEffect(() => {
+    if (isDraft || !budget?.id || !version?.id) return;
+    const orcamentoId = budget.id, versaoId = version.id;
+    let timer: number | undefined;
+    const agendar = () => { window.clearTimeout(timer); timer = window.setTimeout(() => sincronizarRef.current(), 600); };
+    const canal = supabase.channel(`rt:orc:${orcamentoId}:${versaoId}:${Math.random().toString(36).slice(2, 8)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: `id=eq.${orcamentoId}` }, agendar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_versions', filter: `id=eq.${versaoId}` }, agendar)
+      // Itens: sem filtro porque o Supabase não filtra eventos de exclusão por coluna; a sincronização confere o que mudou de fato.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'budget_items' }, agendar)
+      .subscribe();
+    // Voltou para a aba depois de um tempo: confere o que perdeu.
+    const aoVoltar = () => { if (document.visibilityState === 'visible') agendar(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', aoVoltar); supabase.removeChannel(canal); };
+  }, [isDraft, budget?.id, version?.id]);
 
   const triggerSave = (type: 'budget' | 'version', updates: any) => {
     const key = `${type}-${Object.keys(updates).join('-')}`;
@@ -1073,7 +1241,9 @@ export default function BudgetEditorPage() {
         const key = `item-${id}`;
         if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
         saveTimers.current[key] = setTimeout(() => {
-          syncItem(updatedItem);
+          // Grava a linha como está NA HORA de salvar (não como estava ao digitar): se outra pessoa
+          // mexeu em outro campo nesses 5 s, a alteração dela já foi mesclada e não é desfeita.
+          syncItem(itemsRef.current.find(i => i.id === id) ?? updatedItem);
           delete saveTimers.current[key];
         }, 5000);
       } else {
@@ -1371,6 +1541,7 @@ export default function BudgetEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 max-lg:fixed max-lg:bottom-0 max-lg:left-0 max-lg:right-0 max-lg:bg-lumos-surface max-lg:border-t max-lg:p-4 max-lg:pb-[calc(1rem+env(safe-area-inset-bottom))] max-lg:z-30 max-lg:justify-end lg:static lg:p-0 lg:border-0">
+          <PresencaNoDocumento pessoas={pessoasAqui} rotuloCampo={rotuloDoCampo} className="mr-1" />
           <div className="hidden md:flex flex-col items-end mr-2">
             <SavingIndicator />
             {lastSavedTime && (
@@ -1542,15 +1713,19 @@ export default function BudgetEditorPage() {
                   <label className="text-[10px] font-bold text-lumos-text-secondary uppercase mb-2 block flex items-center gap-1">
                     <MessageSquare className="w-3 h-3" /> Proposta para o Cliente (PDF)
                   </label>
-                  <RichTextEditor
-                    editable={!isReadOnly}
-                    minHeight={360}
-                    value={version?.notes_client || ''}
-                    onChange={(html) => {
-                      setVersion(v => v ? { ...v, notes_client: html } : null);
-                      isDirty.current = true;
-                    }}
-                  />
+                  <div className="relative rounded-lumos" onFocusCapture={() => definirCampo('briefing')} onBlurCapture={() => definirCampo(null)}
+                    style={quemEdita('briefing') ? { outline: `2px solid ${quemEdita('briefing')!.cor}`, outlineOffset: '2px' } : undefined}>
+                    {quemEdita('briefing') && <EtiquetaDeEdicao pessoa={quemEdita('briefing')!} />}
+                    <RichTextEditor
+                      editable={!isReadOnly}
+                      minHeight={360}
+                      value={version?.notes_client || ''}
+                      onChange={(html) => {
+                        setVersion(v => v ? { ...v, notes_client: html } : null);
+                        isDirty.current = true;
+                      }}
+                    />
+                  </div>
                   
                   {/* Logistics Fields */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 animate-in fade-in duration-500">
@@ -1836,7 +2011,9 @@ export default function BudgetEditorPage() {
                     setExpandedDescriptions(newSet);
                   };
                   return (
-                  <SortableItemRow key={item.id} id={item.id} isReadOnly={isReadOnly}>
+                  <SortableItemRow key={item.id} id={item.id} isReadOnly={isReadOnly}
+                    editando={quemEdita(`item:${item.id}`)} destaque={itensDestacados.has(item.id)}
+                    aoFocar={() => definirCampo(`item:${item.id}`)} aoDesfocar={() => definirCampo(null)}>
                     {(dragHandle) => (
                       <>
                         <div className="flex items-center gap-2 px-4 py-3">
