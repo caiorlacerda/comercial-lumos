@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as Y from 'yjs';
-import { Editor } from '@tiptap/core';
+import type { Editor } from '@tiptap/core';
 import { useEditor } from '@tiptap/react';
 import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
 import CollaborationCaret from '@tiptap/extension-collaboration-caret';
 import { clsx } from 'clsx';
 import { EditorVisual, extensoesDoEditor, type MentionPage } from '@/components/common/RichTextEditor';
 import { ProvedorYjsSupabase } from '@/lib/colaboracao/yjsSupabase';
+import { useTextoColaborativo } from '@/lib/colaboracao/useTextoColaborativo';
 import { EsqueletoLinhas } from '@/components/ui/Esqueleto';
 
 /**
@@ -39,48 +40,12 @@ interface Props {
 
 export default function RichTextEditorColaborativo(props: Props) {
   const { chave, htmlInicial, usuario } = props;
-  const [pronto, setPronto] = useState<{ doc: Y.Doc; provedor: ProvedorYjsSupabase } | null>(null);
-  const [falhou, setFalhou] = useState(false);
-  // O HTML inicial só vale no momento de criar o estado: depois quem manda é o documento compartilhado.
-  const htmlInicialRef = useRef(htmlInicial);
-  htmlInicialRef.current = htmlInicial;
-  const usuarioRef = useRef(usuario);
-  usuarioRef.current = usuario;
+  const { estado, doc, provedor } = useTextoColaborativo({
+    chave, htmlInicial, ativo: true, usuario,
+    extensoesParaSemear: () => extensoesDoEditor(undefined, true),
+  });
 
-  useEffect(() => {
-    let vivo = true;
-    let provedor: ProvedorYjsSupabase | null = null;
-    setPronto(null); setFalhou(false);
-    (async () => {
-      try {
-        const doc = new Y.Doc();
-        provedor = new ProvedorYjsSupabase(chave, doc, usuarioRef.current);
-        let versao = await provedor.carregar();
-        if (!vivo) return;
-        if (!versao) {
-          // Primeira vez: monta o documento com o texto que já existia e guarda (só um dos clientes consegue).
-          const base = new Y.Doc();
-          const temp = new Editor({ extensions: [...extensoesDoEditor(undefined, true), Collaboration.configure({ document: base })] });
-          temp.commands.setContent(htmlInicialRef.current || '');
-          const inicial = Y.encodeStateAsUpdate(base);
-          temp.destroy(); base.destroy();
-          if (!vivo) return;
-          await ProvedorYjsSupabase.semear(chave, inicial);
-          versao = await provedor.carregar();
-          if (!vivo) return;
-          if (!versao) throw new Error('estado do texto não foi criado');
-        }
-        await provedor.conectar();
-        if (vivo) setPronto({ doc, provedor });
-      } catch (e) {
-        console.error('Texto colaborativo indisponível:', e);
-        if (vivo) setFalhou(true);
-      }
-    })();
-    return () => { vivo = false; if (provedor) void provedor.destruir(); };
-  }, [chave]);
-
-  if (falhou) {
+  if (estado === 'falhou') {
     if (props.alternativa) return <>{props.alternativa}</>;
     return (
       <div className={clsx('rounded-lumos border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-lumos-text-primary', props.className)}>
@@ -88,14 +53,14 @@ export default function RichTextEditorColaborativo(props: Props) {
       </div>
     );
   }
-  if (!pronto) {
+  if (estado !== 'pronto' || !doc || !provedor) {
     return (
       <div className={clsx('rounded-lumos border border-lumos-border bg-lumos-surface p-4', props.className)} style={{ minHeight: props.minHeight }}>
         <EsqueletoLinhas n={5} />
       </div>
     );
   }
-  return <CorpoColaborativo key={chave} {...props} doc={pronto.doc} provedor={pronto.provedor} />;
+  return <CorpoColaborativo key={chave} {...props} doc={doc} provedor={provedor} />;
 }
 
 function CorpoColaborativo({ doc, provedor, usuario, espelho, onChange, onChangeRemoto, onEditorPronto, editable = true, className, minHeight = 160, mentionPages }:
