@@ -13,7 +13,7 @@ import Select from '@/components/ui/Select';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
 import { sincronizarTarefa } from '@/lib/reviewTransition';
 import { captureVideoThumb, capaDoStream, valeCapturarCapa, capaJaFalhou, marcarCapaFalhou } from '@/lib/videoThumb';
-import { moverEtapa, mensagemDaEtapa, atualizacaoDeEtapa, garantirLinkDoCliente } from '@/lib/reviewTransition';
+import { moverEtapa, moverEtapaEmLote, mensagemDaEtapa, atualizacaoDeEtapa, garantirLinkDoCliente } from '@/lib/reviewTransition';
 
 const STREAM_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/review-stream`;
 
@@ -265,17 +265,8 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     if (!gs.length) return;
     setBusy('batch');
     try {
-      const versionIds = gs.map(g => g.current.id);
-      const { error } = await supabase.from('video_versions')
-        .update(atualizacaoDeEtapa(next)).in('id', versionIds);
-      if (error) throw error;
-      // Em lote também: quem vai pro cliente precisa do link, e a decisão da
-      // rodada anterior sai (ver reviewTransition).
-      if (next === 'EM_REVISAO_CLIENTE') await Promise.all(gs.map(g => garantirLinkDoCliente(g.current, profile?.id)));
-      // Uma tarefa pode ter vários formatos: cada uma recalcula pelo conjunto,
-      // em vez de todas receberem o status do lote.
-      const taskIds = [...new Set(gs.map(g => g.current.task_id).filter(Boolean) as string[])];
-      await Promise.all(taskIds.map(id => sincronizarTarefa(id, next)));
+      const r = await moverEtapaEmLote(gs.map(g => g.current), next, profile?.id);
+      if (!r.ok) throw new Error(r.erro);
       toast.success(`${gs.length} vídeo(s) em ${STATUS_UI[next].label} ✓`);
       setSelected(new Set());
       await fetchVersions();

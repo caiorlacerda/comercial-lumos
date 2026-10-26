@@ -5,6 +5,10 @@ import { EsqueletoPagina } from '@/components/ui/Esqueleto';
 import { CheckCircle2, Clock, Film, LayoutGrid, List, Loader2, MessageSquare, PenLine, Search, Timer } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/context/ToastContext';
+import { useConfirm } from '@/components/ui/useConfirm';
+import { moverEtapaEmLote } from '@/lib/reviewTransition';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { textoSobre } from '@/lib/cores';
 import { formatBudgetCode } from '@/utils/formatters';
@@ -99,6 +103,11 @@ const passaRapida = (v: Video, r: Rapida) => {
 const POR_PAGINA = 40;
 
 export default function RevisaoDeVideos() {
+  const { isAdmin, can, profile } = useAuth();
+  const toast = useToast();
+  const { confirm, dialog: dialogoConfirmar } = useConfirm();
+  // Mesma regra do painel de Entregas: quem pode mexer nos vídeos do projeto.
+  const podeMover = isAdmin || can('ordem_do_dia');
   const [rows, setRows] = useState<VV[]>(() => lerCache<{ rows: VV[] }>('revisao-videos')?.rows ?? []);
   const [abertosPorVersao, setAbertosPorVersao] = useState<Record<string, number>>(() => lerCache<{ abertos: Record<string, number> }>('revisao-videos')?.abertos ?? {});
   const [loading, setLoading] = useState(() => !lerCache('revisao-videos'));
@@ -116,6 +125,10 @@ export default function RevisaoDeVideos() {
   const [ordem, setOrdem] = useState<'recentes' | 'enviados' | 'parados' | 'projeto' | 'status'>('recentes');
   const [comEncerrados, setComEncerrados] = useState(false);
   const [limite, setLimite] = useState(POR_PAGINA);
+
+  /** Vídeos marcados na Lista (por group_id) e se há uma mudança de etapa em andamento. */
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [movendo, setMovendo] = useState(false);
 
   const [capas, setCapas] = useState<Record<string, string | null>>({});
   const [aberto, setAberto] = useState<Video | null>(null);
@@ -194,6 +207,35 @@ export default function RevisaoDeVideos() {
     if (ordem === 'status') ord.sort((a, b) => ORDEM_STATUS.indexOf(a.atual.status) - ORDEM_STATUS.indexOf(b.atual.status) || b.atual.updated_at.localeCompare(a.atual.updated_at));
     return ord;
   }, [noEscopo, rapida, statusSel, ordem]);
+
+  // Filtro novo = seleção nova: marcar, filtrar e mover sem ver o que está marcado
+  // mudaria vídeos escondidos. E só vale o que está na lista de agora.
+  useEffect(() => { setSelecionados(new Set()); }, [rapida, statusSel, projetoFiltro, clienteFiltro, busca, comEncerrados]);
+  const marcados = useMemo(() => lista.filter(v => selecionados.has(v.atual.group_id)), [lista, selecionados]);
+  const alternar = (id: string) => setSelecionados(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  const moverMarcados = async (proximo: Status) => {
+    const alvo = marcados.filter(v => v.atual.status !== proximo);
+    if (!alvo.length) { toast.info(`Os vídeos marcados já estão em ${STATUS[proximo].label}.`); return; }
+    if (proximo === 'APROVADO') {
+      const nomes = alvo.slice(0, 5).map(v => `• ${v.nome}`).join('\n') + (alvo.length > 5 ? `\n• e mais ${alvo.length - 5}` : '');
+      const ok = await confirm({
+        title: `Marcar ${pl(alvo.length, 'vídeo', 'vídeos')} como aprovado?`,
+        message: `${nomes}\n\nA etapa muda em todos de uma vez e as tarefas vinculadas acompanham.`,
+        confirmLabel: 'Marcar como aprovado',
+      });
+      if (!ok) return;
+    }
+    setMovendo(true);
+    try {
+      const r = await moverEtapaEmLote(alvo.map(v => v.atual), proximo, profile?.id);
+      if (!r.ok) throw new Error(r.erro);
+      toast.success(`${pl(alvo.length, 'vídeo', 'vídeos')} em ${STATUS[proximo].label} ✓`);
+      setSelecionados(new Set());
+      await carregar(true);
+    } catch { toast.error('Não foi possível mudar a etapa.'); }
+    finally { setMovendo(false); }
+  };
 
   const visiveis = visao === 'lista' ? lista.slice(0, limite) : lista.slice(0, 120);
   useEffect(() => { setLimite(POR_PAGINA); }, [rapida, statusSel, projetoFiltro, clienteFiltro, busca, comEncerrados, ordem]);
@@ -362,11 +404,49 @@ export default function RevisaoDeVideos() {
         </div>
       ) : visao === 'lista' ? (
         <>
-          <p className="text-[11px] text-lumos-text-secondary">{lista.length} {lista.length === 1 ? 'vídeo' : 'vídeos'}</p>
+          <div className="flex items-center gap-3 flex-wrap min-h-[32px]">
+            <p className="text-[11px] text-lumos-text-secondary">{lista.length} {lista.length === 1 ? 'vídeo' : 'vídeos'}</p>
+            {podeMover && (
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary cursor-pointer">
+                <input type="checkbox" className="accent-lumos-yellow cursor-pointer"
+                  checked={marcados.length > 0 && marcados.length === lista.length}
+                  onChange={e => setSelecionados(e.target.checked ? new Set(lista.map(v => v.atual.group_id)) : new Set())} />
+                Selecionar {temFiltro ? 'filtrados' : 'todos'}
+              </label>
+            )}
+            {podeMover && marcados.length > 0 && (
+              <>
+                <span className="text-[11px] font-black text-lumos-text-primary bg-lumos-yellow/20 rounded-full px-2.5 py-1">
+                  {pl(marcados.length, 'selecionado', 'selecionados')}
+                </span>
+                <div className="w-44 flex-shrink-0">
+                  <Select value="" onChange={v => void moverMarcados(v as Status)} placeholder={movendo ? 'Movendo…' : 'Mover etapa'} ariaLabel="Mover etapa dos vídeos selecionados"
+                    menuClassName="min-w-[200px]" disabled={movendo}
+                    className="w-full h-8 px-2.5 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-primary hover:border-lumos-yellow/50"
+                    options={[
+                      { value: 'EM_REVISAO_INTERNA', label: 'Revisão interna' },
+                      { value: 'EM_REVISAO_CLIENTE', label: 'Enviar ao cliente' },
+                      { value: 'APROVADO', label: 'Cliente aprovou' },
+                      { value: 'ALTERACOES_CLIENTE', label: 'Cliente pediu ajustes' },
+                      { value: 'ALTERACOES_INTERNAS', label: 'Alteração interna' },
+                    ]} />
+                </div>
+                <button type="button" onClick={() => setSelecionados(new Set())} className="text-[11px] font-bold text-lumos-yellow hover:underline">Limpar seleção</button>
+              </>
+            )}
+          </div>
           <div className="card !p-0 overflow-hidden divide-y divide-lumos-border/60">
             {visiveis.map(v => (
-              <button key={v.atual.group_id} type="button" onClick={() => abrir(v)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-lumos-text-primary/5 transition-colors">
+              <div key={v.atual.group_id}
+                className={clsx('flex items-center transition-colors', selecionados.has(v.atual.group_id) ? 'bg-lumos-yellow/[0.06]' : 'hover:bg-lumos-text-primary/5')}>
+                {podeMover && (
+                  <label className="pl-3 pr-1 self-stretch flex items-center cursor-pointer" title="Selecionar este vídeo">
+                    <input type="checkbox" className="accent-lumos-yellow cursor-pointer" checked={selecionados.has(v.atual.group_id)}
+                      onChange={() => alternar(v.atual.group_id)} aria-label={`Selecionar ${v.nome}`} />
+                  </label>
+                )}
+              <button type="button" onClick={() => abrir(v)}
+                className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left">
                 <Capa v={v} className="w-24 aspect-video rounded flex-shrink-0 max-md:w-20" />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2 min-w-0">
@@ -380,6 +460,7 @@ export default function RevisaoDeVideos() {
                 <span className="hidden md:flex flex-col items-start gap-1 w-44 flex-shrink-0"><Selo s={v.atual.status} /><Marcas v={v} /></span>
                 <span className="hidden md:block w-24 flex-shrink-0 text-right text-[11px] text-lumos-text-secondary">{quando(v.dias)}</span>
               </button>
+              </div>
             ))}
           </div>
           {lista.length > visiveis.length && (
@@ -419,6 +500,8 @@ export default function RevisaoDeVideos() {
           })}
         </div>
       )}
+
+      {dialogoConfirmar}
 
       {aberto && (
         <Modal isOpen onClose={() => setAberto(null)} title={aberto.atual.project!.name} maxWidth="max-w-6xl" padding="p-4" portal
