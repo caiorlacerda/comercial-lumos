@@ -618,7 +618,7 @@ function AppContent() {
             path="/financeiro/notas" 
             element={
               <AuthWrapper>
-                <PermissionGuard permission="financeiro_admin">
+                <PermissionGuard permission="notas_fornecedores">
                   <FinanceiroNotas />
                 </PermissionGuard>
               </AuthWrapper>
