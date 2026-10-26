@@ -49,6 +49,7 @@ const PERM_OPTIONS: { key: string; label: string }[] = [
   { key: 'custos_projeto', label: 'Custos de Projeto' },
   { key: 'equipamentos', label: 'Equipamentos (inventário, reservas, manutenção)' },
   { key: 'fechar_agenda', label: 'Fechar datas na agenda (vale para todos os clientes)' },
+  { key: 'notas_fornecedores', label: 'Notas fiscais dos fornecedores (Financeiro › Notas)' },
 ];
 type UserStatus = 'ativo' | 'inativo';
 

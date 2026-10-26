@@ -72,7 +72,7 @@ export const NAV_SECTIONS: Section[] = [
       // produção só Projetos (custos), o resto só Reembolso.
       { icon: BarChart3, label: 'Dashboard', path: '/financeiro', permission: 'financeiro_dashboard', end: true },
       { icon: ArrowUpCircle, label: 'Movimentações', path: '/financeiro/movimentacoes', permission: 'financeiro_admin' },
-      { icon: Receipt, label: 'Notas', path: '/financeiro/notas', permission: 'financeiro_admin' },
+      { icon: Receipt, label: 'Notas', path: '/financeiro/notas', permission: 'notas_fornecedores' },
       { icon: Landmark, label: 'Contas', path: '/financeiro/contas', permission: 'financeiro_admin' },
       { icon: TrendingUp, label: 'Metas', path: '/financeiro/metas', permission: 'financeiro_admin' },
       { icon: Briefcase, label: 'Projetos', path: '/financeiro/custos-projeto', permission: 'custos_projeto' },

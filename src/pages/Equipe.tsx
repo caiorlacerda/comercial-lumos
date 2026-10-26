@@ -60,6 +60,9 @@ const PERM_OPTIONS = [
   // Fechar dia vale pra produtora inteira, não só pra um projeto: a data some
   // do calendário de todos os clientes, em todos os portais.
   { key: 'fechar_agenda', label: 'Fechar datas na agenda (vale para todos os clientes)' },
+  // Cobrança de nota fiscal dos fornecedores: nasceu na página de Fornecedores
+  // (todo mundo via) e foi para o Financeiro, onde só o admin entrava.
+  { key: 'notas_fornecedores', label: 'Notas fiscais dos fornecedores (Financeiro › Notas)' },
 ];
 
 // Campos de RH (tabela team_members)
