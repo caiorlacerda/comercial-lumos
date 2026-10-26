@@ -10,6 +10,8 @@ export const NOTIFICATION_EVENTS = {
   CUSTO_PROJETO_ESTOUROU: { key: 'custo_projeto_estourou', category: 'financeiro', label: 'Custo de projeto ultrapassou 90% do orçado', defaultEnabled: true, priority: 'high' },
   PROJETO_FINANCEIRO_ENCERRADO: { key: 'projeto_financeiro_encerrado', category: 'financeiro', label: 'Projeto encerrado no financeiro (e o que falta receber)', defaultEnabled: true, priority: 'high' },
   NOTA_FISCAL_RECEBIDA: { key: 'nota_fiscal_recebida', category: 'financeiro', label: 'Fornecedor enviou nota fiscal', defaultEnabled: true, priority: 'high' },
+  NOTA_COBRANCA_TRAVADA: { key: 'nota_cobranca_travada', category: 'financeiro', label: 'Cobrança de nota que não vai sair (falta valor ou e-mail do fornecedor)', defaultEnabled: true, priority: 'high' },
+  NOTA_SEM_RESPOSTA: { key: 'nota_sem_resposta', category: 'financeiro', label: 'Nota que ainda não chegou e o pagamento está perto ou vencido', defaultEnabled: true, priority: 'high' },
 
   // PRODUÇÃO
   OS_ATRIBUIDA: { key: 'os_atribuida', category: 'producao', label: 'Nova OS atribuída a você', defaultEnabled: true },

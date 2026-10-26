@@ -15,6 +15,8 @@ const FROM = 'Produtora Lumos <nao-responda@mail.produtoralumos.com.br>';
 const LOGO_URL = `${APP_URL}/logo-lumos.png`;
 // Quem responder o e-mail de cobrança cai aqui (a nota costuma chegar por e-mail).
 const REPLY_TO = 'financeiro@produtoralumos.com.br';
+// Dias, desde o último e-mail, para cada lembrete automático (1º e 2º).
+const LEMBRETES_DIAS = [5, 7];
 // Dados de faturamento da Lumos (o tomador da nota).
 const LUMOS_CNPJ = '51.253.010/0001-70';
 const LUMOS_RAZAO = 'LUMOS PRODUTORA AUDIOVISUAL LTDA';
@@ -137,7 +139,7 @@ Deno.serve(async (req) => {
 
   const resultados: { id: string; ok: boolean; motivo?: string }[] = [];
 
-  for (const r of pendentes || []) {
+  const processar = async (r: any): Promise<boolean> => {
     const forn = r.fornecedor as unknown as { nome: string; email: string | null };
     const proj = r.projeto as unknown as { name: string } | null;
 
@@ -147,20 +149,20 @@ Deno.serve(async (req) => {
       if (custo?.status === 'pago') {
         await admin.from('nota_requests').update({ status: 'cancelada', updated_at: new Date().toISOString() }).eq('id', r.id);
         resultados.push({ id: r.id, ok: false, motivo: 'custo já pago, cobrança cancelada' });
-        continue;
+        return false;
       }
     }
 
     if (!forn?.email) {
       resultados.push({ id: r.id, ok: false, motivo: 'fornecedor sem e-mail' });
-      continue;
+      return false;
     }
 
     // Sem valor, o fornecedor emite a nota sem saber de quanto. Fica parada até
     // alguém definir o valor na tela Notas (que avisa "Falta valor").
     if (r.valor == null) {
       resultados.push({ id: r.id, ok: false, motivo: 'sem valor definido' });
-      continue;
+      return false;
     }
 
     const link = `${APP_URL}/nota/${r.token}`;
@@ -194,14 +196,56 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       }).eq('id', r.id);
       resultados.push({ id: r.id, ok: true });
+      return true;
     } else {
       const erro = await resp.text();
       console.error(`Resend falhou pra cobrança ${r.id}:`, erro);
       resultados.push({ id: r.id, ok: false, motivo: `resend: ${erro.slice(0, 200)}` });
+      return false;
+    }
+  };
+
+  for (const r of pendentes || []) await processar(r);
+
+  // ── Lembretes automáticos ─────────────────────────────────────────────────
+  // Só no cron diário (não no "Enviar agora"). Quem recebeu o e-mail e não
+  // mandou a nota ganha até 2 lembretes: o 1º com 5 dias do último e-mail, o
+  // 2º com 7. Depois disso quem cuida é o time, avisado pelo alerta da tela
+  // Notas. Vale a chave "nota_lembrete" de Configurações → Automações.
+  // Passo separado e com try/catch de propósito: se as colunas novas ainda não
+  // existirem (migration não rodada), as cobranças normais acima seguem saindo.
+  let lembretes = 0;
+  if (!body.id) {
+    try {
+      const { data: chave } = await admin.from('automacoes').select('ativa').eq('chave', 'nota_lembrete').maybeSingle();
+      if (chave?.ativa !== false) {
+        const { data: abertas, error: erroLembrete } = await admin
+          .from('nota_requests')
+          .select('id, descricao, valor, pagar_em, token, cost_id, status, email_enviado_at, lembretes_enviados, fornecedor:fornecedores(nome, email), projeto:projects(name)')
+          .eq('status', 'email_enviado')
+          .lt('lembretes_enviados', LEMBRETES_DIAS.length);
+        if (erroLembrete) throw erroLembrete;
+        const DIA = 24 * 3600 * 1000;
+        for (const r of abertas || []) {
+          if (!r.email_enviado_at) continue;
+          // Folga de 3h: o cron roda sempre no mesmo horário, e sem ela um e-mail
+          // que saiu alguns minutos mais tarde ontem só ganharia lembrete amanhã.
+          const espera = LEMBRETES_DIAS[(r as any).lembretes_enviados] * DIA - 3 * 3600 * 1000;
+          if (Date.now() - new Date(r.email_enviado_at).getTime() < espera) continue;
+          if (await processar(r)) {
+            lembretes++;
+            await admin.from('nota_requests')
+              .update({ lembretes_enviados: ((r as any).lembretes_enviados || 0) + 1 })
+              .eq('id', r.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('nota-cron: lembretes automáticos não rodaram', err);
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, processadas: resultados.length, resultados }), {
+  return new Response(JSON.stringify({ ok: true, processadas: resultados.length, lembretes, resultados }), {
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 });
