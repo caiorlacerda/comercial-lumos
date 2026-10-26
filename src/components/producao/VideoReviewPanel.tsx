@@ -488,28 +488,52 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     return () => { supabase.removeChannel(channel); };
   }, [projectId, fetchVersions]);
 
-  // Fecha os menus flutuantes com Esc, ao rolar a página ou redimensionar (são
-  // position:fixed, então descolariam do botão).
+  // Menus flutuantes (position:fixed): fecham com Esc ou quando o botão que os abriu
+  // sai da tela; rolar ou redimensionar a janela só os REPOSICIONA junto do botão.
+  //
+  // Antes, qualquer evento de rolagem fechava o menu. Numa lista longa o navegador
+  // rola sozinho o tempo todo (miniatura que carrega empurra o conteúdo, a rolagem
+  // por inércia do trackpad, a lista atualizando), então o menu fechava no mesmo
+  // instante em que abria e parecia que o "⋯" não respondia ao clique.
   useEffect(() => {
     if (!menuFor && !stackMenuFor) return;
     const close = () => { setMenuFor(null); setStackMenuFor(null); };
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-    // Rolagem de dentro do próprio menu não fecha nada. O ouvinte é de captura
+    // Mexe direto no elemento, sem estado: a lista tem dezenas de vídeos e
+    // renderizar tudo a cada passo de rolagem travaria a página.
+    const acompanhar = () => {
+      // O botão é procurado de novo a cada passo (data-menu-anchor): a linha do
+      // vídeo é remontada quando a lista atualiza, e um botão guardado em
+      // variável viraria um elemento que já não está na tela.
+      const id = menuFor || stackMenuFor;
+      const a = id ? document.querySelector<HTMLElement>(`[data-menu-anchor="${id}"]`) : null;
+      if (!a) { close(); return; }
+      const r = a.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) { close(); return; }
+      const el = menuElRef.current;
+      if (!el) return;
+      const h = el.getBoundingClientRect().height;
+      const abaixo = r.bottom + 4;
+      const acima = r.top - h - 4;
+      const top = abaixo + h > window.innerHeight - 8 && acima > 8 ? acima : abaixo;
+      el.style.top = `${Math.max(8, Math.min(top, window.innerHeight - 8 - h))}px`;
+      el.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+    };
+    // Rolagem de dentro do próprio menu não mexe em nada. O ouvinte é de captura
     // (pega a rolagem de qualquer elemento), então sem essa checagem a lista de
-    // "Empilhar como versão de" se fechava no primeiro deslize e ninguém
-    // conseguia alcançar um vídeo que estivesse mais embaixo.
+    // "Empilhar como versão de" ficaria se reposicionando enquanto se rola nela.
     const onScroll = (e: Event) => {
       const alvo = e.target as Node | null;
       if (alvo && menuElRef.current?.contains(alvo)) return;
-      close();
+      acompanhar();
     };
     document.addEventListener('keydown', onEsc);
     window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', close);
+    window.addEventListener('resize', acompanhar);
     return () => {
       document.removeEventListener('keydown', onEsc);
       window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', close);
+      window.removeEventListener('resize', acompanhar);
     };
   }, [menuFor, stackMenuFor]);
 
@@ -822,6 +846,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
                 });
                 setMenuFor(g.id);
               }}
+              data-menu-anchor={g.id}
               className={clsx(h, 'w-8 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/50 flex items-center justify-center')} title="Mais ações">
               <MoreHorizontal className="w-4 h-4" />
             </button>
