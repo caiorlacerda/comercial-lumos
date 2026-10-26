@@ -134,6 +134,40 @@ export async function moverEtapa(
   return { ok: true, criouLink };
 }
 
+/**
+ * MOVER VÁRIOS VÍDEOS DE ETAPA DE UMA VEZ — a mesma regra de moverEtapa.
+ *
+ * Existia uma cópia disso dentro do painel de Entregas. Agora o painel e a página
+ * Revisão de vídeos usam esta, pelo mesmo motivo da regra única acima: o vídeo
+ * muda, a tarefa vinculada acompanha (pelo conjunto dos formatos), quem vai pro
+ * cliente ganha o link, a decisão da rodada anterior sai e, se a equipe marcou na
+ * mão que o cliente decidiu, o time é avisado.
+ */
+export async function moverEtapaEmLote(
+  videos: { id: string; group_id: string | null; task_id: string | null; status?: string; project_id?: string | null; file_name?: string | null }[],
+  proximo: ReviewStatus,
+  quem?: string | null,
+): Promise<{ ok: boolean; erro?: string }> {
+  if (!videos.length) return { ok: true };
+  const { error } = await supabase.from('video_versions')
+    .update(atualizacaoDeEtapa(proximo))
+    .in('id', videos.map(v => v.id));
+  if (error) return { ok: false, erro: error.message };
+
+  if (proximo === 'EM_REVISAO_CLIENTE') await Promise.all(videos.map(v => garantirLinkDoCliente(v, quem)));
+
+  // Uma tarefa pode ter vários formatos: cada uma recalcula pelo conjunto, em vez
+  // de todas receberem a etapa do lote.
+  const taskIds = [...new Set(videos.map(v => v.task_id).filter(Boolean) as string[])];
+  await Promise.all(taskIds.map(id => sincronizarTarefa(id, proximo)));
+
+  if (proximo === 'APROVADO' || proximo === 'ALTERACOES_CLIENTE') {
+    videos.filter(v => v.status === 'EM_REVISAO_CLIENTE')
+      .forEach(v => { void avisarDecisaoMarcadaNaMao(v, proximo === 'APROVADO', quem); });
+  }
+  return { ok: true };
+}
+
 export const mensagemDaEtapa = (proximo: ReviewStatus, criouLink?: boolean) =>
   proximo === 'APROVADO'
     ? 'Aprovado! Gerando o vFINAL em 02_APROVADO…'
