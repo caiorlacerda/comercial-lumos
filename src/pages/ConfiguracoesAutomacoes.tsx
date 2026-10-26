@@ -82,6 +82,18 @@ const CATALOGO: { chave: string; titulo: string; faz: string; quem: Quem }[] = [
     faz: 'Todo dia às 9h, a equipe é avisada dos vídeos que passaram do prazo de revisão sem resposta do cliente (de novo a cada 3 dias enquanto continuar parado, no máximo 10 por dia). Desligada, ninguém é avisado; ao religar, os vencidos são avisados na rodada seguinte.',
     quem: null,
   },
+  {
+    chave: 'nota_lembrete',
+    titulo: 'Lembrete automático de nota fiscal ao fornecedor',
+    faz: 'Quem recebeu o e-mail de cobrança e não mandou a nota ganha até 2 lembretes por e-mail (5 e 7 dias depois do último e-mail). Desligada, nenhum lembrete sai sozinho; o botão "Enviar agora" da tela Notas continua funcionando.',
+    quem: null,
+  },
+  {
+    chave: 'nota_alertas',
+    titulo: 'Avisos de nota fiscal para o financeiro',
+    faz: 'Todo dia às 9h, os admins recebem no máximo dois resumos: cobranças que não vão sair (sem valor ou sem e-mail do fornecedor) e notas que ainda não chegaram com o pagamento próximo ou vencido. Cada cobrança entra no aviso uma vez só.',
+    quem: null,
+  },
 ];
 
 /** Erro de tabela ou função que ainda não existe no banco. */

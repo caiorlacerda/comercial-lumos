@@ -33,6 +33,7 @@ interface NotaRequest {
   nota_arquivo: { name: string; path: string } | null;
   dados_pagamento?: string | null;
   origem?: string | null;
+  lembretes_enviados?: number | null;
   fornecedor: { id: string; nome: string; email: string | null } | null;
   projeto: { name: string } | null;
   project_id?: string | null;
@@ -64,6 +65,10 @@ const problemaDaCobranca = (n: NotaRequest): 'Falta e-mail' | 'Falta valor' | nu
   return null;
 };
 
+const hojeIso = () => new Date().toLocaleDateString('en-CA');
+/** E-mail enviado, sem nota e com o pagamento previsto já vencido: o caso que pede ação do time. */
+const semNotaVencida = (n: NotaRequest) => n.status === 'email_enviado' && n.pagar_em < hojeIso();
+
 const ORIGEM_LABEL: Record<string, string> = {
   diaria: 'criada pelas diárias do projeto',
   custo: 'criada pelo custo do projeto',
@@ -82,6 +87,7 @@ const CHIPS_STATUS: { id: string; label: string }[] = [
   { id: '', label: 'Todas' },
   { id: 'agendada', label: 'Agendadas' },
   { id: 'email_enviado', label: 'E-mail enviado' },
+  { id: 'vencidas', label: 'Sem nota (vencidas)' },
   { id: 'nota_recebida', label: 'Nota recebida' },
   { id: 'paga', label: 'Pagas' },
   { id: 'cancelada', label: 'Canceladas' },
@@ -133,10 +139,14 @@ export default function FinanceiroNotas() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     const colsBase = 'id, descricao, valor, data_servico, enviar_em, pagar_em, token, status, nota_arquivo, project_id, fornecedor:fornecedores(id, nome, email), projeto:projects(name)';
+    // Cada tentativa tira colunas que podem não existir ainda (migration não rodada).
     let q: { data: unknown; error: { message: string } | null } = await supabase
       .from('nota_requests')
-      .select(`${colsBase}, dados_pagamento, origem`)
+      .select(`${colsBase}, dados_pagamento, origem, lembretes_enviados`)
       .order('enviar_em', { ascending: false });
+    if (q.error) {
+      q = await supabase.from('nota_requests').select(`${colsBase}, dados_pagamento, origem`).order('enviar_em', { ascending: false });
+    }
     if (q.error) {
       q = await supabase.from('nota_requests').select(colsBase).order('enviar_em', { ascending: false });
     }
@@ -161,7 +171,8 @@ export default function FinanceiroNotas() {
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return notas.filter(n => {
-      if (statusFiltro && n.status !== statusFiltro) return false;
+      if (statusFiltro === 'vencidas') { if (!semNotaVencida(n)) return false; }
+      else if (statusFiltro && n.status !== statusFiltro) return false;
       if (projetoFiltro && n.project_id !== projetoFiltro) return false;
       if (fornecedorFiltro && n.fornecedor?.id !== fornecedorFiltro) return false;
       if (q && !`${n.descricao} ${n.fornecedor?.nome || ''} ${n.projeto?.name || ''}`.toLowerCase().includes(q)) return false;
@@ -173,6 +184,7 @@ export default function FinanceiroNotas() {
   const travadas = useMemo(() => ({
     semEmail: notas.filter(n => problemaDaCobranca(n) === 'Falta e-mail').length,
     semValor: notas.filter(n => problemaDaCobranca(n) === 'Falta valor').length,
+    vencidas: notas.filter(semNotaVencida).length,
   }), [notas]);
 
   // ── Ações ────────────────────────────────────────────────────────────────
@@ -280,6 +292,16 @@ export default function FinanceiroNotas() {
         title = `${problema === 'Falta e-mail' ? 'O fornecedor não tem e-mail cadastrado' : 'O valor da cobrança não foi definido'}: o e-mail não sai até corrigir (previsto para ${brData(n.enviar_em)}).`;
       }
     }
+    if (n.status === 'email_enviado') {
+      const lembretes = n.lembretes_enviados ?? 0;
+      title = `${lembretes > 0 ? `${lembretes} lembrete(s) já enviado(s)` : 'Nenhum lembrete enviado'}${title ? ` · ${title}` : ''}`;
+      if (semNotaVencida(n)) {
+        const atraso = -diasAte(n.pagar_em);
+        label = `Sem nota · ${atraso} d`;
+        cls = 'bg-red-500/15 text-red-500 border-red-500/30';
+        title = `Pagamento previsto em ${brData(n.pagar_em)} (há ${atraso} dia(s)) e a nota não chegou. ${title}`;
+      }
+    }
     return <span title={title} className={clsx('text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap', cls)}>{label}</span>;
   };
 
@@ -300,14 +322,15 @@ export default function FinanceiroNotas() {
         </button>
       </div>
 
-      {(travadas.semEmail > 0 || travadas.semValor > 0) && (
+      {(travadas.semEmail > 0 || travadas.semValor > 0 || travadas.vencidas > 0) && (
         <div className="rounded-lumos border border-amber-500/50 bg-amber-500/10 px-4 py-3 flex items-start gap-2.5">
           <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-300 flex-shrink-0 mt-0.5" />
           <p className="text-[12.5px] text-amber-800 dark:text-amber-200">
-            <b>Cobranças que não vão sair sozinhas:</b>{' '}
+            <b>Atenção:</b>{' '}
             {[
-              travadas.semValor > 0 && `${travadas.semValor} sem valor (clique em "definir valor")`,
-              travadas.semEmail > 0 && `${travadas.semEmail} com fornecedor sem e-mail (cadastre em Fornecedores)`,
+              travadas.vencidas > 0 && `${travadas.vencidas} com pagamento previsto vencido e sem nota (se já chegou por e-mail, registre no envelope; filtro "Sem nota")`,
+              travadas.semValor > 0 && `${travadas.semValor} cobrança(s) sem valor, não saem sozinhas (clique em "definir valor")`,
+              travadas.semEmail > 0 && `${travadas.semEmail} com fornecedor sem e-mail, não saem sozinhas (cadastre em Fornecedores)`,
             ].filter(Boolean).join(' · ')}.
           </p>
         </div>
