@@ -13,6 +13,8 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const APP_URL = 'https://app.produtoralumos.com.br';
 const FROM = 'Produtora Lumos <nao-responda@mail.produtoralumos.com.br>';
 const LOGO_URL = `${APP_URL}/logo-lumos.png`;
+// Quem responder o e-mail de cobrança cai aqui (a nota costuma chegar por e-mail).
+const REPLY_TO = 'financeiro@produtoralumos.com.br';
 // Dados de faturamento da Lumos (o tomador da nota).
 const LUMOS_CNPJ = '51.253.010/0001-70';
 const LUMOS_RAZAO = 'LUMOS PRODUTORA AUDIOVISUAL LTDA';
@@ -62,8 +64,8 @@ function emailHtml(r: {
         </table>
       </div>
       <p style="font-size: 14px; line-height: 1.6;">
-        Depois é só enviar o arquivo pelo botão abaixo. Na mesma página, confirme também os seus
-        <strong>dados bancários e a sua chave PIX</strong>, para o pagamento cair certinho:
+        Você pode <strong>responder este e-mail com a nota em anexo</strong> ou enviar o arquivo pelo botão abaixo.
+        Na página do botão, confirme também os seus <strong>dados bancários e a sua chave PIX</strong>, para o pagamento cair certinho:
       </p>
       <p style="text-align: center; margin: 26px 0;">
         <a href="${r.link}" style="background: #EFC700; color: #111; font-weight: 800; font-size: 14px; text-decoration: none; padding: 13px 30px; border-radius: 8px; display: inline-block;">
@@ -154,6 +156,13 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // Sem valor, o fornecedor emite a nota sem saber de quanto. Fica parada até
+    // alguém definir o valor na tela Notas (que avisa "Falta valor").
+    if (r.valor == null) {
+      resultados.push({ id: r.id, ok: false, motivo: 'sem valor definido' });
+      continue;
+    }
+
     const link = `${APP_URL}/nota/${r.token}`;
     // Reenvio sai como "Lembrete:" (assunto novo = conversa nova no Gmail,
     // senão ele esconde o botão atrás dos três pontinhos de conteúdo repetido).
@@ -164,6 +173,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: FROM,
         to: [forn.email],
+        reply_to: REPLY_TO,
         subject: `${reenvio ? 'Lembrete: nota' : 'Nota'} fiscal do job ${r.descricao}`,
         html: emailHtml({
           fornecedor: forn.nome,
