@@ -188,6 +188,12 @@ html.barra-grande ::-webkit-scrollbar-thumb:active {
   @apply bg-lumos-yellow;
   background-clip: padding-box;
 }
+/* O fundo decorativo (FundoDeck) é uma camada fixa que cobre a tela toda e é pintada POR CIMA da
+   barra de rolagem do <main>: a barra existe, ocupa o espaço, mas fica escondida. Com a barra
+   grande ligada, o fundo recua da largura da barra para ela aparecer. */
+html.barra-grande main > .fundo-deck {
+  right: 22px;
+}
 /* Firefox não usa os seletores acima. */
 @supports (-moz-appearance: none) {
   html.barra-grande * { scrollbar-width: auto; }
