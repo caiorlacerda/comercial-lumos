@@ -1,399 +1,407 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
-import { EsqueletoPagina } from '@/components/ui/Esqueleto';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { addDays, addWeeks, isToday, subWeeks, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { clsx } from 'clsx';
+import { ArrowDown, ArrowUp, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useToast } from '@/context/ToastContext';
+import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
+import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
+import { gravarCache, lerCache } from '@/lib/cacheDeTela';
+import { EsqueletoPagina } from '@/components/ui/Esqueleto';
+import { useConfirm } from '@/components/ui/useConfirm';
 import Modal from '@/components/common/Modal';
 import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
-import { formatBudgetCode } from '@/utils/formatters';
-import { taskLabel, isDone } from '@/lib/taskStatus';
+import CelulaCronograma from '@/components/cronograma/CelulaCronograma';
 import {
-  Calendar, Plus, Inbox, ChevronLeft, ChevronRight, AlertTriangle, Search, Loader2, Tag,
-} from 'lucide-react';
-import { format, isPast, isToday, startOfWeek, addDays, addWeeks, subWeeks, parseISO, isSameDay } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { clsx } from 'clsx';
-import {
-  DndContext, DragOverlay, useSensor, useSensors, PointerSensor,
-  DragEndEvent, DragStartEvent, useDraggable, useDroppable,
-} from '@dnd-kit/core';
+  type Item, type Linha, type Semana, type TipoItem, type TipoLinha,
+  TIPOS, diasDaSemana, iso, nomeDaLinha, rotuloDaSemana, segundaDe, tipoPadraoDaLinha, dataDeIso,
+} from '@/lib/cronograma';
 
-// Tags que fazem uma tarefa entrar no cronograma de edição.
-const TRIGGER_TAGS = ['entregas', 'edição'];
+/**
+ * CRONOGRAMA DA EQUIPE — o que cada pessoa faz em cada dia da semana, no formato da planilha
+ * "LUMOS | Cronograma da equipe". Admin e Gestão de Produção editam (e o banco também exige isso);
+ * o resto do time só vê. As mudanças aparecem na hora para quem estiver com a tela aberta.
+ *
+ * (O antigo Cronograma de Edição, de prazos por tarefa, continua em /producao/cronograma-prazos.)
+ */
 
-interface Task {
-  id: string;
-  titulo: string;
-  status: string;
-  prioridade: string;
-  data_fim: string | null;
-  responsavel_id: string | null;
-  project_id: string;
-  project: { name: string; code: string | null; client: { name: string } | null } | null;
-}
-interface AppUser { id: string; full_name: string; avatar_url: string | null; role: string; }
+const GRADE = '176px repeat(5, minmax(172px, 1fr)) repeat(2, 76px)';
+const COLUNAS_FIXAS = 'sticky left-0 z-10';
 
-const prioBadge = (p: string) => p === 'alta' ? 'bg-red-500/15 text-red-500' : p === 'baixa' ? 'bg-lumos-text-secondary/15 text-lumos-text-secondary' : 'bg-amber-500/15 text-amber-500';
-
-// ---- Aparência do card (usada em lugar e no DragOverlay) ----
-function CardView({ task, dragging, overlay }: { task: Task; dragging?: boolean; overlay?: boolean }) {
-  const done = isDone(task.status);
-  const overdue = !done && !!task.data_fim && isPast(parseISO(task.data_fim)) && !isToday(parseISO(task.data_fim));
-  return (
-    <div
-      className={clsx(
-        'w-full p-2 rounded border select-none',
-        overlay ? 'shadow-xl rotate-1 cursor-grabbing' : 'hover:shadow-md',
-        dragging ? 'opacity-40' :
-          done ? 'bg-green-500/5 border-green-500/30' :
-          overdue ? 'bg-red-500/[0.04] border-red-500/40' :
-          'bg-lumos-surface border-lumos-border hover:border-lumos-yellow/40',
-        (dragging && !overlay) && 'bg-lumos-surface border-dashed border-lumos-yellow/40',
-        overlay && (done ? 'bg-green-500/10 border-green-500/40' : overdue ? 'bg-red-500/10 border-red-500/50' : 'bg-lumos-surface border-lumos-yellow/50'),
-      )}
-    >
-      <div className="flex items-start gap-1">
-        {overdue && <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0 mt-0.5" />}
-        <span className={clsx('text-[10px] font-black leading-tight break-words', done ? 'text-green-600 dark:text-green-400 line-through opacity-80' : 'text-lumos-text-primary')}>
-          {task.titulo}
-        </span>
-      </div>
-      {task.project && (
-        <div className="text-[9px] text-lumos-text-secondary mt-1 font-semibold truncate">
-          {task.project.code ? formatBudgetCode(task.project.code) + ' ' : ''}{task.project.name}
-        </div>
-      )}
-      <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-lumos-border/60 gap-1">
-        <span className={clsx('text-[8px] px-1 py-0.5 rounded font-black uppercase tracking-wide', prioBadge(task.prioridade))}>{task.prioridade}</span>
-        <span className="text-[8px] font-bold text-lumos-text-secondary truncate">{taskLabel(task.status)}</span>
-      </div>
-    </div>
-  );
-}
-
-// ---- Wrapper arrastável: NÃO aplica transform no card (isso deixava lerdo e
-// deformava). Quem segue o cursor é o DragOverlay; aqui só marcamos a origem. ----
-function TaskCard({ task, canManage, onOpen }: { task: Task; canManage: boolean; onOpen: (t: Task) => void }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !canManage });
-  return (
-    <div
-      ref={setNodeRef}
-      {...(canManage ? attributes : {})}
-      {...(canManage ? listeners : {})}
-      onClick={() => onOpen(task)}
-      className={clsx('text-left', canManage ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer')}
-    >
-      <CardView task={task} dragging={isDragging} />
-    </div>
-  );
-}
-
-// ---- Célula droppable ----
-function Cell({ id, className, children, canManage }: { id: string; className?: string; children: React.ReactNode; canManage: boolean }) {
-  const { isOver, setNodeRef } = useDroppable({ id, disabled: !canManage });
-  return (
-    <div ref={setNodeRef} className={clsx(className, isOver && 'bg-lumos-yellow/10 ring-2 ring-inset ring-lumos-yellow/50')}>
-      {children}
-    </div>
-  );
-}
+interface Dados { semana: Semana | null; linhas: Linha[]; itens: Item[]; anterior: string | null }
 
 export default function CronogramaEdicao() {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
-  const canManage = profile?.role === 'admin' || profile?.role === 'producao';
+  const { confirm, dialog: dialogoConfirmar } = useConfirm();
+  const podeEditar = isAdmin || profile?.role === 'producao';
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [projects, setProjects] = useState<{ id: string; name: string; code: string | null }[]>([]);
-  const [entregasTagId, setEntregasTagId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  useBarraDeCarregamento(loading);
-  const [backlogSearch, setBacklogSearch] = useState('');
-  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [inicio, setInicio] = useState<Date>(() => segundaDe(new Date()));
+  const chave = iso(inicio);
+  const [dados, setDados] = useState<Dados | null>(() => lerCache<Dados>(`cronograma:${iso(segundaDe(new Date()))}`) ?? null);
+  const [carregando, setCarregando] = useState(() => !lerCache(`cronograma:${iso(segundaDe(new Date()))}`));
+  useBarraDeCarregamento(carregando);
+  const [criando, setCriando] = useState(false);
+  const [levarItens, setLevarItens] = useState(true);
+  const [novaLinha, setNovaLinha] = useState(false);
 
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [novaOpen, setNovaOpen] = useState(false);
-  const [nova, setNova] = useState({ project_id: '', titulo: '', responsavel_id: '', data_fim: '', prioridade: 'media' });
-  const [saving, setSaving] = useState(false);
+  const dias = useMemo(() => diasDaSemana(inicio), [inicio]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const carregar = useCallback(async (silencioso = false) => {
+    const cacheKey = `cronograma:${chave}`;
+    if (!silencioso && !lerCache(cacheKey)) setCarregando(true);
+    const { data: s, error: es } = await supabase.from('cronograma_semanas')
+      .select('id, inicio, projetos_andamento, projetos_iniciar').eq('inicio', chave).maybeSingle();
+    if (es) { setDados(null); setCarregando(false); toast.error('Não foi possível carregar o cronograma. A migração já rodou?'); return; }
 
-  useEffect(() => { fetchData(); }, []);
-  // app_users fica de fora de propósito: o heartbeat grava last_seen a cada 30s por
-  // pessoa online, e cada gravação refazia as 4-5 consultas desta tela.
-  useRealtimeRefetch(['project_tasks', 'project_task_tags'], () => fetchData(true));
-
-  const fetchData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const { data: tagRows } = await supabase.from('task_tags').select('id, name').in('name', TRIGGER_TAGS);
-      const tagIds = (tagRows || []).map(t => t.id);
-      setEntregasTagId((tagRows || []).find(t => t.name === 'entregas')?.id || tagIds[0] || null);
-
-      let taskIds: string[] = [];
-      if (tagIds.length) {
-        const { data: ptt } = await supabase.from('project_task_tags').select('task_id').in('tag_id', tagIds);
-        taskIds = Array.from(new Set((ptt || []).map(r => r.task_id)));
-      }
-
-      let taskData: Task[] = [];
-      if (taskIds.length) {
-        const { data } = await supabase.from('project_tasks')
-          .select('id, titulo, status, prioridade, data_fim, responsavel_id, project_id, project:projects(name, code, client:clients(name))')
-          .is('deleted_at', null)
-          .in('id', taskIds);
-        taskData = (data as any as Task[]) || [];
-      }
-      setTasks(taskData);
-
-      const [{ data: usersData }, { data: projData }] = await Promise.all([
-        supabase.from('app_users').select('id, full_name, avatar_url, role, status').eq('status', 'ativo').order('full_name'),
-        supabase.from('projects').select('id, name, code').order('created_at', { ascending: false }),
-      ]);
-      setUsers((usersData as AppUser[]) || []);
-      setProjects((projData as any) || []);
-    } catch (err: any) {
-      toast.error('Não foi possível carregar o cronograma.');
-    } finally {
-      setLoading(false);
+    let novo: Dados;
+    if (!s) {
+      // Semana ainda não criada: descobre de qual semana existente dá pra copiar.
+      const { data: ant } = await supabase.from('cronograma_semanas').select('inicio')
+        .lt('inicio', chave).order('inicio', { ascending: false }).limit(1);
+      novo = { semana: null, linhas: [], itens: [], anterior: (ant && ant[0]?.inicio) || null };
+    } else {
+      const { data: ls } = await supabase.from('cronograma_linhas')
+        .select('id, semana_id, ordem, tipo, user_id, nome, user:app_users(id, full_name, avatar_url, job_title)')
+        .eq('semana_id', s.id).order('ordem').order('created_at');
+      const linhas = ((ls as unknown) as Linha[]) || [];
+      const ids = linhas.map(l => l.id);
+      const { data: its } = ids.length
+        ? await supabase.from('cronograma_itens').select('id, linha_id, dia, ordem, texto, tipo, task_id, project_id')
+            .in('linha_id', ids).order('ordem').order('created_at')
+        : { data: [] as Item[] };
+      novo = { semana: s as Semana, linhas, itens: (its as Item[]) || [], anterior: null };
     }
-  }, [toast]);
+    setDados(novo);
+    gravarCache(cacheKey, novo);
+    setCarregando(false);
+  }, [chave]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  useEffect(() => { carregar(); }, [carregar]);
+  useRealtimeRefetch(['cronograma_semanas', 'cronograma_linhas', 'cronograma_itens'], () => carregar(true));
 
-  // Só editores (cargo de edição), em ordem alfabética.
-  const editors = useMemo(() =>
-    users.filter(u => u.role === 'editor').sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR')),
-  [users]);
-
-  const backlog = useMemo(() => {
-    const q = backlogSearch.trim().toLowerCase();
-    return tasks.filter(t => !t.data_fim && (!q || t.titulo.toLowerCase().includes(q) || (t.project?.name || '').toLowerCase().includes(q)));
-  }, [tasks, backlogSearch]);
-
-  const cellTasks = (userId: string, day: Date) =>
-    tasks.filter(t => t.responsavel_id === userId && t.data_fim && isSameDay(parseISO(t.data_fim), day));
-
-  const handleDragStart = (event: DragStartEvent) => setActiveId(event.active.id as string);
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveId(null);
-    if (!canManage) return;
-    const { active, over } = event;
-    if (!over) return;
-    const taskId = active.id as string;
-    const overId = over.id as string;
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    let payload: Partial<Task> = {};
-    if (overId === 'backlog') {
-      if (!task.data_fim) return;
-      payload = { data_fim: null };
-    } else if (overId.startsWith('cell__')) {
-      const [, userId, dateStr] = overId.split('__');
-      if (task.responsavel_id === userId && task.data_fim === dateStr) return;
-      payload = { responsavel_id: userId, data_fim: dateStr };
-    } else return;
-
-    const prev = tasks;
-    setTasks(list => list.map(t => t.id === taskId ? { ...t, ...payload } : t));
-    const { error } = await supabase.from('project_tasks').update(payload).eq('id', taskId);
-    if (error) { toast.error('Erro ao mover. Revertendo.'); setTasks(prev); return; }
-    fetchData(true);
+  // ── Criar a semana ─────────────────────────────────────────────────────
+  const criarSemana = async (copiarDe: string | null) => {
+    setCriando(true);
+    const { error } = await supabase.rpc('cronograma_criar_semana', {
+      p_inicio: chave, p_copiar_de: copiarDe, p_com_itens: copiarDe ? levarItens : false,
+    });
+    setCriando(false);
+    if (error && !/semana_ja_existe/.test(error.message)) { toast.error('Não foi possível criar a semana.'); return; }
+    await carregar(true);
   };
 
-  const openTask = (t: Task) => navigate(`/producao/projetos?projectId=${t.project_id}`);
+  // ── Itens (otimista: a tela muda na hora e o banco acompanha) ──────────
+  const mutar = (fn: (d: Dados) => Dados) => setDados(prev => (prev ? fn(prev) : prev));
 
-  const criarEdicao = async () => {
-    if (!nova.project_id) { toast.error('Escolha o projeto.'); return; }
-    if (!nova.titulo.trim()) { toast.error('Dê um título.'); return; }
-    try {
-      setSaving(true);
-      const { data, error } = await supabase.from('project_tasks').insert([{
-        project_id: nova.project_id,
-        titulo: nova.titulo.trim(),
-        responsavel_id: nova.responsavel_id || null,
-        data_fim: nova.data_fim || null,
-        prioridade: nova.prioridade,
-      }]).select('id').single();
-      if (error) throw error;
-      // Marca com a tag 'entregas' pra entrar no cronograma.
-      if (entregasTagId && data?.id) {
-        await supabase.from('project_task_tags').insert([{ task_id: data.id, tag_id: entregasTagId }]);
-      }
-      setNovaOpen(false);
-      setNova({ project_id: '', titulo: '', responsavel_id: '', data_fim: '', prioridade: 'media' });
-      toast.success('Edição criada no cronograma!');
-      fetchData(true);
-    } catch (err: any) {
-      toast.error(err.message || 'Falha ao criar.');
-    } finally {
-      setSaving(false);
-    }
+  const adicionarItem = async (linha: Linha, dia: string, texto: string, tipo: TipoItem) => {
+    const doDia = (dados?.itens || []).filter(i => i.linha_id === linha.id && i.dia === dia);
+    const ordem = doDia.reduce((m, i) => Math.max(m, i.ordem), 0) + 1;
+    const { data, error } = await supabase.from('cronograma_itens')
+      .insert({ linha_id: linha.id, dia, texto, tipo, ordem, created_by: profile?.id ?? null })
+      .select('id, linha_id, dia, ordem, texto, tipo, task_id, project_id').single();
+    if (error || !data) { toast.error('Não foi possível salvar o item.'); return; }
+    mutar(d => ({ ...d, itens: d.itens.some(i => i.id === data.id) ? d.itens : [...d.itens, data as Item] }));
   };
 
-  if (loading) {
-    return <EsqueletoPagina />;
-  }
+  const atualizarItem = async (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => {
+    mutar(d => ({ ...d, itens: d.itens.map(i => (i.id === id ? { ...i, ...patch } : i)) }));
+    const { error } = await supabase.from('cronograma_itens').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) { toast.error('Não foi possível salvar a mudança.'); carregar(true); }
+  };
+
+  const removerItem = async (id: string) => {
+    mutar(d => ({ ...d, itens: d.itens.filter(i => i.id !== id) }));
+    const { error } = await supabase.from('cronograma_itens').delete().eq('id', id);
+    if (error) { toast.error('Não foi possível remover.'); carregar(true); }
+  };
+
+  // ── Linhas ─────────────────────────────────────────────────────────────
+  const adicionarLinha = async (nova: { tipo: TipoLinha; user_id?: string | null; nome?: string | null }) => {
+    if (!dados?.semana) return;
+    const pessoas = dados.linhas.filter(l => l.tipo === 'pessoa');
+    const ordem = nova.tipo === 'pessoa'
+      ? pessoas.reduce((m, l) => Math.max(m, l.ordem), 0) + 1
+      : dados.linhas.reduce((m, l) => Math.max(m, l.ordem), 0) + 1;
+    const { error } = await supabase.from('cronograma_linhas')
+      .insert({ semana_id: dados.semana.id, ordem, tipo: nova.tipo, user_id: nova.user_id ?? null, nome: nova.nome ?? null });
+    if (error) { toast.error('Não foi possível adicionar a linha.'); return; }
+    setNovaLinha(false);
+    carregar(true);
+  };
+
+  const renomearLinha = async (linha: Linha, nome: string) => {
+    const limpo = nome.trim();
+    if (!limpo || limpo === (linha.nome || '')) return;
+    mutar(d => ({ ...d, linhas: d.linhas.map(l => (l.id === linha.id ? { ...l, nome: limpo } : l)) }));
+    const { error } = await supabase.from('cronograma_linhas').update({ nome: limpo }).eq('id', linha.id);
+    if (error) { toast.error('Não foi possível renomear.'); carregar(true); }
+  };
+
+  const moverLinha = async (linha: Linha, dir: -1 | 1) => {
+    if (!dados) return;
+    const ordenadas = [...dados.linhas].sort((a, b) => a.ordem - b.ordem);
+    const i = ordenadas.findIndex(l => l.id === linha.id);
+    const j = i + dir;
+    if (j < 0 || j >= ordenadas.length) return;
+    [ordenadas[i], ordenadas[j]] = [ordenadas[j], ordenadas[i]];
+    // Renumera todas: com empates de "ordem" a troca simples não mexeria em nada.
+    const novas = ordenadas.map((l, idx) => ({ ...l, ordem: idx }));
+    mutar(d => ({ ...d, linhas: novas }));
+    const mudou = novas.filter(n => dados.linhas.find(l => l.id === n.id)?.ordem !== n.ordem);
+    const res = await Promise.all(mudou.map(n => supabase.from('cronograma_linhas').update({ ordem: n.ordem }).eq('id', n.id)));
+    if (res.some(r => r.error)) { toast.error('Não foi possível reordenar.'); carregar(true); }
+  };
+
+  const removerLinha = async (linha: Linha) => {
+    const n = (dados?.itens || []).filter(i => i.linha_id === linha.id).length;
+    const ok = await confirm({
+      title: 'Remover esta linha?',
+      message: `${nomeDaLinha(linha)}${n ? `\n\nOs ${n} itens dela nesta semana também saem.` : ''}`,
+      confirmLabel: 'Remover', danger: true,
+    });
+    if (!ok) return;
+    mutar(d => ({ ...d, linhas: d.linhas.filter(l => l.id !== linha.id), itens: d.itens.filter(i => i.linha_id !== linha.id) }));
+    const { error } = await supabase.from('cronograma_linhas').delete().eq('id', linha.id);
+    if (error) { toast.error('Não foi possível remover a linha.'); carregar(true); }
+  };
+
+  // ── Rodapé (projetos) ─────────────────────────────────────────────────
+  const salvarProjetos = async (campo: 'projetos_andamento' | 'projetos_iniciar', texto: string) => {
+    if (!dados?.semana || texto === dados.semana[campo]) return;
+    mutar(d => ({ ...d, semana: d.semana ? { ...d.semana, [campo]: texto } : d.semana }));
+    const { error } = await supabase.from('cronograma_semanas')
+      .update({ [campo]: texto, updated_at: new Date().toISOString() }).eq('id', dados.semana.id);
+    if (error) { toast.error('Não foi possível salvar.'); carregar(true); }
+  };
+
+  const itensDe = (linhaId: string, dia: string) =>
+    (dados?.itens || []).filter(i => i.linha_id === linhaId && i.dia === dia).sort((a, b) => a.ordem - b.ordem);
+  const linhasOrdenadas = useMemo(() => [...(dados?.linhas || [])].sort((a, b) => a.ordem - b.ordem), [dados?.linhas]);
+  const semana = dados?.semana ?? null;
+  const ehEstaSemana = chave === iso(segundaDe(new Date()));
 
   return (
-    <div className="space-y-6 font-work-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-4 font-work-sans">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-lumos-yellow" /> Cronograma de Edição
+            <CalendarRange className="w-6 h-6 text-lumos-yellow" /> Cronograma da equipe
           </h1>
-          <p className="text-lumos-text-secondary text-sm flex items-center gap-1.5 flex-wrap">
-            Tarefas de produção com tag
-            {TRIGGER_TAGS.map(t => <span key={t} className="inline-flex items-center gap-0.5 text-[10px] font-black uppercase bg-lumos-yellow/10 text-amber-600 dark:text-lumos-yellow px-1.5 py-0.5 rounded"><Tag className="w-2.5 h-2.5" />{t}</span>)}
-            , organizadas por pessoa e prazo.
-          </p>
+          <p className="text-lumos-text-secondary text-sm">O que cada pessoa faz em cada dia da semana.{!podeEditar && ' Só a gestão edita; você acompanha por aqui.'}</p>
         </div>
-        {canManage && (
-          <button onClick={() => setNovaOpen(true)} className="btn-primary h-10 px-5 flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Nova Edição
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setInicio(w => subWeeks(w, 1))} aria-label="Semana anterior"
+            className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow"><ChevronLeft className="w-4 h-4" /></button>
+          <button onClick={() => setInicio(segundaDe(new Date()))} disabled={ehEstaSemana}
+            className="h-8 px-3 text-[11px] font-bold rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow disabled:opacity-40">Hoje</button>
+          <span className="text-[11px] font-black uppercase text-amber-600 dark:text-lumos-yellow bg-lumos-yellow/10 px-2.5 py-1.5 rounded whitespace-nowrap min-w-[120px] text-center">
+            {rotuloDaSemana(inicio)}
+          </span>
+          <button onClick={() => setInicio(w => addWeeks(w, 1))} aria-label="Próxima semana"
+            className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow"><ChevronRight className="w-4 h-4" /></button>
+        </div>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
-        {/* Grade semanal por pessoa */}
-        <div className="bg-lumos-surface border border-lumos-border rounded-lumos overflow-hidden">
-          <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h2 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Grade semanal</h2>
-              <p className="text-[11px] text-lumos-text-secondary">Entregas por pessoa e dia (posição = prazo).</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setWeekStart(w => subWeeks(w, 1))} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))} className="h-8 px-3 text-[11px] font-bold rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow">Hoje</button>
-              <span className="text-[11px] font-black uppercase text-amber-600 dark:text-lumos-yellow bg-lumos-yellow/10 px-2 py-1 rounded whitespace-nowrap">
-                {format(weekStart, "dd MMM", { locale: ptBR })} – {format(addDays(weekStart, 6), "dd MMM yyyy", { locale: ptBR })}
-              </span>
-              <button onClick={() => setWeekStart(w => addWeeks(w, 1))} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow"><ChevronRight className="w-4 h-4" /></button>
-            </div>
+      {carregando || !dados ? (
+        <EsqueletoPagina />
+      ) : !semana ? (
+        <div className="card p-10 text-center space-y-4">
+          <Clapperboard className="w-8 h-8 text-lumos-text-secondary/40 mx-auto" />
+          <div>
+            <p className="text-sm font-bold text-lumos-text-primary">A semana de {rotuloDaSemana(inicio)} ainda não foi criada.</p>
+            <p className="text-xs text-lumos-text-secondary mt-1">
+              {podeEditar ? 'Comece de uma semana em branco ou copie a anterior.' : 'A gestão ainda não montou esta semana.'}
+            </p>
           </div>
+          {podeEditar && (
+            <div className="flex flex-col items-center gap-3">
+              {dados.anterior && (
+                <>
+                  <button disabled={criando} onClick={() => criarSemana(dados.anterior)}
+                    className="btn-primary h-10 px-5 text-xs font-black flex items-center gap-2 disabled:opacity-50">
+                    <Copy className="w-4 h-4" /> Copiar a semana de {rotuloDaSemana(dataDeIso(dados.anterior))}
+                  </button>
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-lumos-text-secondary cursor-pointer">
+                    <input type="checkbox" className="accent-lumos-yellow" checked={levarItens} onChange={e => setLevarItens(e.target.checked)} />
+                    Levar também os itens (se desmarcar, vão só as linhas)
+                  </label>
+                </>
+              )}
+              <button disabled={criando} onClick={() => criarSemana(null)}
+                className={clsx('h-10 px-5 text-xs font-black rounded-lumos border border-lumos-border text-lumos-text-primary hover:border-lumos-yellow/50 disabled:opacity-50')}>
+                Começar uma semana em branco
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="card !p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className="min-w-[1080px]">
+                {/* Cabeçalho: dias */}
+                <div className="grid bg-lumos-yellow/10 border-b border-lumos-border" style={{ gridTemplateColumns: GRADE }}>
+                  <div className={clsx(COLUNAS_FIXAS, 'bg-lumos-surface/95 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary')}>Pessoa</div>
+                  {dias.map(d => (
+                    <div key={d.iso} className={clsx('px-2 py-2 text-center border-l border-lumos-border/60', d.fimDeSemana && 'bg-lumos-text-secondary/[0.07]', isToday(d.data) && 'bg-lumos-yellow/20')}>
+                      <p className="text-[10px] font-black uppercase text-lumos-text-secondary">{format(d.data, d.fimDeSemana ? 'EEE' : 'EEEE', { locale: ptBR })}</p>
+                      <p className={clsx('text-[11px] font-bold', isToday(d.data) ? 'text-amber-600 dark:text-lumos-yellow' : 'text-lumos-text-primary')}>{format(d.data, 'dd/MM')}</p>
+                    </div>
+                  ))}
+                </div>
 
-          <div className="overflow-x-auto">
-            <div className="min-w-[900px]">
-              {/* Cabeçalho dos dias */}
-              <div className="grid border-b border-lumos-border" style={{ gridTemplateColumns: '180px repeat(7, minmax(0, 1fr))' }}>
-                <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Pessoa</div>
-                {days.map(d => (
-                  <div key={d.toISOString()} className={clsx('px-2 py-2 text-center border-l border-lumos-border', isToday(d) && 'bg-lumos-yellow/[0.06]')}>
-                    <p className="text-[10px] font-black uppercase text-lumos-text-secondary">{format(d, 'EEE', { locale: ptBR })}</p>
-                    <p className={clsx('text-[11px] font-bold', isToday(d) ? 'text-amber-600 dark:text-lumos-yellow' : 'text-lumos-text-primary')}>{format(d, 'dd/MM')}</p>
+                {/* Linhas */}
+                {linhasOrdenadas.length === 0 && (
+                  <p className="px-4 py-8 text-center text-sm text-lumos-text-secondary">Nenhuma linha ainda. {podeEditar ? 'Use “Adicionar linha”.' : ''}</p>
+                )}
+                {linhasOrdenadas.map((l, idx) => (
+                  <div key={l.id} className="group/linha grid border-b border-lumos-border/60 last:border-b-0" style={{ gridTemplateColumns: GRADE }}>
+                    <div className={clsx(COLUNAS_FIXAS, 'px-3 py-2 flex items-start gap-2 min-w-0 border-r border-lumos-border/60',
+                      l.tipo === 'entregas' ? 'bg-orange-500/20' : l.tipo === 'externas' ? 'bg-sky-500/15' : 'bg-lumos-surface/95')}>
+                      {l.tipo === 'pessoa' && l.user ? <UserAvatar user={l.user} size={26} /> : null}
+                      <div className="min-w-0 flex-1">
+                        {podeEditar && !l.user ? (
+                          <input defaultValue={nomeDaLinha(l)} key={`${l.id}-${l.nome}`}
+                            onBlur={e => renomearLinha(l, e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            className="w-full bg-transparent text-xs font-black text-lumos-text-primary outline-none border-b border-transparent focus:border-lumos-yellow" />
+                        ) : (
+                          <p className="text-xs font-black text-lumos-text-primary truncate" title={nomeDaLinha(l)}>{nomeDaLinha(l)}</p>
+                        )}
+                        {l.user?.job_title && <p className="text-[10px] text-lumos-text-secondary truncate">{l.user.job_title}</p>}
+                      </div>
+                      {podeEditar && (
+                        <div className="flex flex-col opacity-0 group-hover/linha:opacity-100 focus-within:opacity-100 transition-opacity flex-shrink-0">
+                          <div className="flex">
+                            <button onClick={() => moverLinha(l, -1)} disabled={idx === 0} title="Subir" className="p-0.5 text-lumos-text-secondary hover:text-lumos-yellow disabled:opacity-30"><ArrowUp className="w-3 h-3" /></button>
+                            <button onClick={() => moverLinha(l, 1)} disabled={idx === linhasOrdenadas.length - 1} title="Descer" className="p-0.5 text-lumos-text-secondary hover:text-lumos-yellow disabled:opacity-30"><ArrowDown className="w-3 h-3" /></button>
+                          </div>
+                          <button onClick={() => removerLinha(l)} title="Remover linha" className="p-0.5 text-lumos-text-secondary hover:text-red-500 self-start"><Trash2 className="w-3 h-3" /></button>
+                        </div>
+                      )}
+                    </div>
+                    {dias.map(d => (
+                      <div key={d.iso} className={clsx('border-l border-lumos-border/60', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
+                        <CelulaCronograma
+                          itens={itensDe(l.id, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
+                          onAdicionar={(texto, tipo) => adicionarItem(l, d.iso, texto, tipo)}
+                          onAtualizar={atualizarItem} onRemover={removerItem} />
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
+            </div>
+            {podeEditar && (
+              <div className="px-3 py-2 border-t border-lumos-border/60">
+                <button onClick={() => setNovaLinha(true)} className="text-[11px] font-black uppercase tracking-wide text-lumos-yellow hover:underline flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5" /> Adicionar linha
+                </button>
+              </div>
+            )}
+          </div>
 
-              {/* Linhas por editor */}
-              {editors.length === 0 && (
-                <div className="px-3 py-8 text-center text-sm text-lumos-text-secondary">Nenhum editor cadastrado. Defina o cargo “Editor” em Equipe.</div>
-              )}
-              {editors.map(u => (
-                <div key={u.id} className="grid border-b border-lumos-border/60 last:border-0" style={{ gridTemplateColumns: '180px repeat(7, minmax(0, 1fr))' }}>
-                  <div className="px-3 py-2 flex items-center gap-2 min-w-0">
-                    <UserAvatar user={u as any} size={28} showStatus />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-lumos-text-primary truncate">{u.full_name}</p>
-                    </div>
-                  </div>
-                  {days.map(d => {
-                    const items = cellTasks(u.id, d);
-                    return (
-                      <Cell key={d.toISOString()} id={`cell__${u.id}__${format(d, 'yyyy-MM-dd')}`} canManage={canManage}
-                        className={clsx('min-w-0 min-h-[68px] p-1.5 border-l border-lumos-border/60 space-y-1.5', isToday(d) && 'bg-lumos-yellow/[0.03]')}>
-                        {items.map(t => <TaskCard key={t.id} task={t} canManage={canManage} onOpen={openTask} />)}
-                      </Cell>
-                    );
-                  })}
-                </div>
+          {/* Rodapé: projetos + legenda */}
+          <div className="grid md:grid-cols-2 gap-3">
+            {([['projetos_andamento', 'Projetos em andamento'], ['projetos_iniciar', 'Projetos a iniciar']] as const).map(([campo, titulo]) => (
+              <div key={campo} className="card space-y-1.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary flex items-center gap-1.5"><Pencil className="w-3 h-3" /> {titulo}</p>
+                {podeEditar ? (
+                  <textarea key={`${semana.id}-${campo}-${semana[campo]}`} defaultValue={semana[campo]} rows={4}
+                    placeholder="Um projeto por linha…"
+                    onBlur={e => salvarProjetos(campo, e.target.value)}
+                    className="input-lumos w-full text-xs leading-snug resize-y" />
+                ) : (
+                  <p className="text-xs text-lumos-text-primary whitespace-pre-line min-h-[24px]">{semana[campo] || <span className="text-lumos-text-secondary/60">—</span>}</p>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 flex-wrap text-[11px] text-lumos-text-secondary">
+            <span className="font-black uppercase tracking-widest text-[10px]">Legenda</span>
+            {TIPOS.map(t => (
+              <span key={t.id} className="flex items-center gap-1.5 font-bold text-lumos-text-primary">
+                <span className={clsx('w-3 h-3 rounded border', t.caixa)} /> {t.label}
+              </span>
+            ))}
+            <span className="flex items-center gap-1.5 font-bold text-lumos-text-primary"><span className="w-3 h-3 rounded bg-lumos-text-secondary/20" /> Fim de semana</span>
+          </div>
+        </>
+      )}
+
+      {novaLinha && dados?.semana && (
+        <NovaLinhaModal
+          linhas={dados.linhas}
+          onClose={() => setNovaLinha(false)}
+          onAdicionar={adicionarLinha}
+        />
+      )}
+      {dialogoConfirmar}
+    </div>
+  );
+}
+
+// ── Adicionar linha: pessoa da plataforma, nome livre ou linha especial ──────
+function NovaLinhaModal({ linhas, onClose, onAdicionar }: {
+  linhas: Linha[];
+  onClose: () => void;
+  onAdicionar: (nova: { tipo: TipoLinha; user_id?: string | null; nome?: string | null }) => void;
+}) {
+  const [pessoas, setPessoas] = useState<{ id: string; full_name: string; job_title: string | null }[]>([]);
+  const [userId, setUserId] = useState('');
+  const [nome, setNome] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    supabase.from('app_users').select('id, full_name, job_title').eq('status', 'ativo').eq('hidden', false).order('full_name')
+      .then(({ data }) => setPessoas((data as any[]) || []));
+  }, []);
+
+  const jaTem = new Set(linhas.filter(l => l.user_id).map(l => l.user_id));
+  const faltam = (['criacao', 'externas', 'entregas'] as TipoLinha[]).filter(t => !linhas.some(l => l.tipo === t));
+  const ROTULOS: Record<string, string> = { criacao: 'Criação', externas: 'Externas', entregas: 'Entregas' };
+
+  const enviar = async (nova: Parameters<typeof onAdicionar>[0]) => { setSalvando(true); await onAdicionar(nova); setSalvando(false); };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Adicionar linha">
+      <div className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Pessoa da plataforma</label>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Select value={userId} onChange={setUserId} searchable placeholder="Escolha uma pessoa" className="input-lumos w-full"
+                options={pessoas.filter(p => !jaTem.has(p.id)).map(p => ({ value: p.id, label: p.full_name + (p.job_title ? ` · ${p.job_title}` : '') }))} />
+            </div>
+            <button disabled={!userId || salvando} onClick={() => enviar({ tipo: 'pessoa', user_id: userId })}
+              className="btn-primary h-10 px-4 text-xs font-black disabled:opacity-50">Adicionar</button>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Nome livre (freela sem login)</label>
+          <div className="flex gap-2">
+            <input className="input-lumos flex-1" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Freela 01"
+              onKeyDown={e => { if (e.key === 'Enter' && nome.trim()) enviar({ tipo: 'pessoa', nome: nome.trim() }); }} />
+            <button disabled={!nome.trim() || salvando} onClick={() => enviar({ tipo: 'pessoa', nome: nome.trim() })}
+              className="btn-primary h-10 px-4 text-xs font-black disabled:opacity-50">Adicionar</button>
+          </div>
+        </div>
+        {faltam.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Linha especial</label>
+            <div className="flex gap-2 flex-wrap">
+              {faltam.map(t => (
+                <button key={t} disabled={salvando} onClick={() => enviar({ tipo: t, nome: ROTULOS[t] })}
+                  className="h-9 px-4 text-xs font-black rounded-lumos border border-lumos-border text-lumos-text-primary hover:border-lumos-yellow/50 disabled:opacity-50">{ROTULOS[t]}</button>
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Backlog: tarefas com tag mas sem prazo */}
-        <Cell id="backlog" canManage={canManage} className="bg-lumos-surface border border-lumos-border rounded-lumos">
-          <div className="px-4 py-3 border-b border-lumos-border flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Inbox className="w-4 h-4 text-lumos-yellow" />
-              <h2 className="text-sm font-black uppercase tracking-tight text-lumos-text-primary">Sem prazo (backlog)</h2>
-              <span className="text-[11px] text-lumos-text-secondary">{backlog.length}</span>
-            </div>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary" />
-              <input value={backlogSearch} onChange={e => setBacklogSearch(e.target.value)} placeholder="Filtrar backlog…"
-                className="input-lumos pl-8 h-8 text-xs w-56" />
-            </div>
-          </div>
-          <div className="p-3">
-            {backlog.length === 0 ? (
-              <p className="text-center text-sm text-lumos-text-secondary py-6">
-                Nada pendente. Toda tarefa com tag de edição/entrega já tem prazo.
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                {backlog.map(t => <TaskCard key={t.id} task={t} canManage={canManage} onOpen={openTask} />)}
-              </div>
-            )}
-            {canManage && <p className="text-[10px] text-lumos-text-secondary/70 mt-3 text-center">Arraste um card para a célula de uma pessoa/dia para agendar (define responsável e prazo).</p>}
-          </div>
-        </Cell>
-
-        <DragOverlay dropAnimation={null}>
-          {activeId ? (() => {
-            const t = tasks.find(x => x.id === activeId);
-            return t ? <div className="w-44"><CardView task={t} overlay /></div> : null;
-          })() : null}
-        </DragOverlay>
-      </DndContext>
-
-      {/* Nova Edição = cria uma tarefa de projeto com a tag 'entregas' */}
-      <Modal isOpen={novaOpen} onClose={() => setNovaOpen(false)} title="Nova Edição">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Projeto *</label>
-            <Select value={nova.project_id} onChange={v => setNova(n => ({ ...n, project_id: v }))} className="input-lumos w-full"
-              options={[{ value: '', label: 'Selecione…' }, ...projects.map(p => ({ value: p.id, label: `${p.code ? formatBudgetCode(p.code) + ' ' : ''}${p.name}` }))]} />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Título *</label>
-            <input className="input-lumos w-full" value={nova.titulo} onChange={e => setNova(n => ({ ...n, titulo: e.target.value }))} placeholder="Ex.: Corte final — Reels 01" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Responsável</label>
-              <Select value={nova.responsavel_id} onChange={v => setNova(n => ({ ...n, responsavel_id: v }))} className="input-lumos w-full"
-                options={[{ value: '', label: 'Sem responsável' }, ...users.map(u => ({ value: u.id, label: u.full_name }))]} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Prioridade</label>
-              <Select value={nova.prioridade} onChange={v => setNova(n => ({ ...n, prioridade: v }))} className="input-lumos w-full"
-                options={[{ value: 'baixa', label: 'Baixa' }, { value: 'media', label: 'Média' }, { value: 'alta', label: 'Alta' }]} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Prazo (entrega)</label>
-            <input type="date" className="input-lumos w-full" value={nova.data_fim} onChange={e => setNova(n => ({ ...n, data_fim: e.target.value }))} />
-          </div>
-          <p className="text-[11px] text-lumos-text-secondary">A tarefa é criada no projeto com a tag <b>entregas</b>, então aparece aqui e na lista/board do projeto, tudo conectado.</p>
-          <div className="flex gap-3 pt-1">
-            <button onClick={() => setNovaOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-            <button onClick={criarEdicao} disabled={saving} className="btn-primary flex-1 h-10 flex items-center justify-center gap-2 disabled:opacity-50">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Criar
-            </button>
-          </div>
-        </div>
-      </Modal>
-    </div>
+        )}
+      </div>
+    </Modal>
   );
 }

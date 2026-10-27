@@ -67,6 +67,8 @@ const Projetos = lazy(() => import('@/pages/Projetos'));
 const TemplatesTarefas = lazy(() => import('@/pages/TemplatesTarefas'));
 const Acessos = lazy(() => import('@/pages/Acessos'));
 const CronogramaEdicao = lazy(() => import('@/pages/CronogramaEdicao'));
+// O antigo Cronograma de Edição (prazos por tarefa) saiu do lugar: o novo é o cronograma da equipe, igual à planilha.
+const CronogramaPrazos = lazy(() => import('@/pages/CronogramaPrazos'));
 const OrdensDoDia = lazy(() => import('@/pages/OrdensDoDia'));
 const OrdemDoDiaDetalhe = lazy(() => import('@/pages/OrdemDoDiaDetalhe'));
 const Fornecedores = lazy(() => import('@/pages/Fornecedores'));
@@ -726,6 +728,7 @@ function AppContent() {
             <Route path="/producao/board" element={<PermissionGuard permission="ordem_do_dia"><ProducaoBoard /></PermissionGuard>} />
             <Route path="/producao/schedule" element={<PermissionGuard permission="ordem_do_dia"><ProducaoSchedule /></PermissionGuard>} />
             <Route path="/producao/cronograma-edicao" element={<PermissionGuard permission="cronograma_edicao"><CronogramaEdicao /></PermissionGuard>} />
+            <Route path="/producao/cronograma-prazos" element={<PermissionGuard permission="cronograma_edicao"><CronogramaPrazos /></PermissionGuard>} />
             <Route path="/producao/agenda" element={<AgendaGuard />} />
             <Route path="/producao/revisao-de-videos" element={<RevisaoDeVideosGuard />} />
             {/* Gerenciador de Projetos agora vive DENTRO do layout: as pills de
