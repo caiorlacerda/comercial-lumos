@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, addWeeks, isToday, subWeeks, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
-import { ArrowDown, ArrowUp, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
@@ -141,15 +146,19 @@ export default function CronogramaEdicao() {
     if (error) { toast.error('Não foi possível renomear.'); carregar(true); }
   };
 
-  const moverLinha = async (linha: Linha, dir: -1 | 1) => {
-    if (!dados) return;
+  // Arrastar para reordenar: a linha solta vira a posição nova e as outras renumeram. Renumera
+  // todas (e não só troca duas) porque linhas com "ordem" repetida não mudariam de lugar.
+  const sensores = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const aoSoltarLinha = async (e: DragEndEvent) => {
+    if (!dados || !e.over || e.active.id === e.over.id) return;
     const ordenadas = [...dados.linhas].sort((a, b) => a.ordem - b.ordem);
-    const i = ordenadas.findIndex(l => l.id === linha.id);
-    const j = i + dir;
-    if (j < 0 || j >= ordenadas.length) return;
-    [ordenadas[i], ordenadas[j]] = [ordenadas[j], ordenadas[i]];
-    // Renumera todas: com empates de "ordem" a troca simples não mexeria em nada.
-    const novas = ordenadas.map((l, idx) => ({ ...l, ordem: idx }));
+    const de = ordenadas.findIndex(l => l.id === e.active.id);
+    const para = ordenadas.findIndex(l => l.id === e.over!.id);
+    if (de < 0 || para < 0) return;
+    const novas = arrayMove(ordenadas, de, para).map((l, idx) => ({ ...l, ordem: idx }));
     mutar(d => ({ ...d, linhas: novas }));
     const mudou = novas.filter(n => dados.linhas.find(l => l.id === n.id)?.ordem !== n.ordem);
     const res = await Promise.all(mudou.map(n => supabase.from('cronograma_linhas').update({ ordem: n.ordem }).eq('id', n.id)));
@@ -258,42 +267,15 @@ export default function CronogramaEdicao() {
                 {linhasOrdenadas.length === 0 && (
                   <p className="px-4 py-8 text-center text-sm text-lumos-text-secondary">Nenhuma linha ainda. {podeEditar ? 'Use “Adicionar linha”.' : ''}</p>
                 )}
-                {linhasOrdenadas.map((l, idx) => (
-                  <div key={l.id} className="group/linha grid border-b border-lumos-border/60 last:border-b-0" style={{ gridTemplateColumns: GRADE }}>
-                    <div className={clsx(COLUNAS_FIXAS, 'px-3 py-2 flex items-start gap-2 min-w-0 border-r border-lumos-border/60',
-                      l.tipo === 'entregas' ? 'bg-orange-500/20' : l.tipo === 'externas' ? 'bg-sky-500/15' : 'bg-lumos-surface/95')}>
-                      {l.tipo === 'pessoa' && l.user ? <UserAvatar user={l.user} size={26} /> : null}
-                      <div className="min-w-0 flex-1">
-                        {podeEditar && !l.user ? (
-                          <input defaultValue={nomeDaLinha(l)} key={`${l.id}-${l.nome}`}
-                            onBlur={e => renomearLinha(l, e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            className="w-full bg-transparent text-xs font-black text-lumos-text-primary outline-none border-b border-transparent focus:border-lumos-yellow" />
-                        ) : (
-                          <p className="text-xs font-black text-lumos-text-primary truncate" title={nomeDaLinha(l)}>{nomeDaLinha(l)}</p>
-                        )}
-                        {l.user?.job_title && <p className="text-[10px] text-lumos-text-secondary truncate">{l.user.job_title}</p>}
-                      </div>
-                      {podeEditar && (
-                        <div className="flex flex-col opacity-0 group-hover/linha:opacity-100 focus-within:opacity-100 transition-opacity flex-shrink-0">
-                          <div className="flex">
-                            <button onClick={() => moverLinha(l, -1)} disabled={idx === 0} title="Subir" className="p-0.5 text-lumos-text-secondary hover:text-lumos-yellow disabled:opacity-30"><ArrowUp className="w-3 h-3" /></button>
-                            <button onClick={() => moverLinha(l, 1)} disabled={idx === linhasOrdenadas.length - 1} title="Descer" className="p-0.5 text-lumos-text-secondary hover:text-lumos-yellow disabled:opacity-30"><ArrowDown className="w-3 h-3" /></button>
-                          </div>
-                          <button onClick={() => removerLinha(l)} title="Remover linha" className="p-0.5 text-lumos-text-secondary hover:text-red-500 self-start"><Trash2 className="w-3 h-3" /></button>
-                        </div>
-                      )}
-                    </div>
-                    {dias.map(d => (
-                      <div key={d.iso} className={clsx('border-l border-lumos-border/60', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
-                        <CelulaCronograma
-                          itens={itensDe(l.id, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
-                          onAdicionar={(texto, tipo) => adicionarItem(l, d.iso, texto, tipo)}
-                          onAtualizar={atualizarItem} onRemover={removerItem} />
-                      </div>
+                <DndContext sensors={sensores} collisionDetection={closestCenter} onDragEnd={aoSoltarLinha}>
+                  <SortableContext items={linhasOrdenadas.map(l => l.id)} strategy={verticalListSortingStrategy}>
+                    {linhasOrdenadas.map(l => (
+                      <LinhaDoCronograma key={l.id} linha={l} dias={dias} podeEditar={podeEditar}
+                        itensDe={itensDe} onAdicionar={adicionarItem} onAtualizar={atualizarItem} onRemover={removerItem}
+                        onRenomear={renomearLinha} onRemoverLinha={removerLinha} />
                     ))}
-                  </div>
-                ))}
+                  </SortableContext>
+                </DndContext>
               </div>
             </div>
             {podeEditar && (
@@ -341,6 +323,64 @@ export default function CronogramaEdicao() {
         />
       )}
       {dialogoConfirmar}
+    </div>
+  );
+}
+
+// ── Uma linha da grade (arrastável pela alça à esquerda) ─────────────────────
+// Fica FORA da página de propósito: declarada dentro, seria recriada a cada atualização de estado.
+function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, onAdicionar, onAtualizar, onRemover, onRenomear, onRemoverLinha }: {
+  linha: Linha;
+  dias: ReturnType<typeof diasDaSemana>;
+  podeEditar: boolean;
+  itensDe: (linhaId: string, dia: string) => Item[];
+  onAdicionar: (linha: Linha, dia: string, texto: string, tipo: TipoItem) => void;
+  onAtualizar: (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => void;
+  onRemover: (id: string) => void;
+  onRenomear: (linha: Linha, nome: string) => void;
+  onRemoverLinha: (linha: Linha) => void;
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: l.id, disabled: !podeEditar });
+
+  return (
+    <div ref={setNodeRef}
+      style={{ gridTemplateColumns: GRADE, transform: CSS.Transform.toString(transform), transition, position: 'relative', zIndex: isDragging ? 20 : undefined }}
+      className={clsx('group/linha grid border-b border-lumos-border/60 last:border-b-0', isDragging && 'bg-lumos-surface shadow-xl ring-1 ring-lumos-yellow/50 opacity-95')}>
+      <div className={clsx(COLUNAS_FIXAS, 'px-1.5 py-2 flex items-start gap-1 min-w-0 border-r border-lumos-border/60',
+        l.tipo === 'entregas' ? 'bg-orange-500/20' : l.tipo === 'externas' ? 'bg-sky-500/15' : 'bg-lumos-surface/95')}>
+        {podeEditar && (
+          <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" title="Arraste para mudar a ordem"
+            className="mt-0.5 p-0.5 rounded text-lumos-text-secondary/50 hover:text-lumos-yellow cursor-grab active:cursor-grabbing touch-none flex-shrink-0">
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
+        {l.tipo === 'pessoa' && l.user ? <UserAvatar user={l.user} size={26} /> : null}
+        <div className="min-w-0 flex-1 pl-0.5">
+          {podeEditar && !l.user ? (
+            <input defaultValue={nomeDaLinha(l)} key={`${l.id}-${l.nome}`}
+              onBlur={e => onRenomear(l, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              className="w-full bg-transparent text-xs font-black text-lumos-text-primary outline-none border-b border-transparent focus:border-lumos-yellow" />
+          ) : (
+            <p className="text-xs font-black text-lumos-text-primary truncate" title={nomeDaLinha(l)}>{nomeDaLinha(l)}</p>
+          )}
+          {l.user?.job_title && <p className="text-[10px] text-lumos-text-secondary truncate">{l.user.job_title}</p>}
+        </div>
+        {podeEditar && (
+          <button onClick={() => onRemoverLinha(l)} title="Remover linha"
+            className="opacity-0 group-hover/linha:opacity-100 focus:opacity-100 p-0.5 text-lumos-text-secondary hover:text-red-500 transition-opacity flex-shrink-0">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      {dias.map(d => (
+        <div key={d.iso} className={clsx('border-l border-lumos-border/60', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
+          <CelulaCronograma
+            itens={itensDe(l.id, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
+            onAdicionar={(texto, tipo) => onAdicionar(l, d.iso, texto, tipo)}
+            onAtualizar={onAtualizar} onRemover={onRemover} />
+        </div>
+      ))}
     </div>
   );
 }
