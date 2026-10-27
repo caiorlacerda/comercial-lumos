@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, addWeeks, isToday, subWeeks, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
-import { CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
@@ -20,6 +20,7 @@ import Modal from '@/components/common/Modal';
 import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
 import CelulaCronograma from '@/components/cronograma/CelulaCronograma';
+import AgendaDaSemana from '@/components/cronograma/AgendaDaSemana';
 import {
   type Item, type Linha, type Semana, type TipoItem, type TipoLinha,
   TIPOS, diasDaSemana, iso, nomeDaLinha, rotuloDaSemana, segundaDe, tipoPadraoDaLinha, dataDeIso,
@@ -52,6 +53,14 @@ export default function CronogramaEdicao() {
   const [criando, setCriando] = useState(false);
   const [levarItens, setLevarItens] = useState(true);
   const [novaLinha, setNovaLinha] = useState(false);
+  // Duas visões dos MESMOS itens: "Por pessoa" (a grade da planilha, onde se edita) e "Por dia"
+  // (agenda da semana, com filtro por pessoa). A escolha fica guardada neste navegador.
+  const [visao, setVisao] = useState<'pessoa' | 'dia'>(() => {
+    try { return localStorage.getItem('lumos_cronograma_visao') === 'dia' ? 'dia' : 'pessoa'; } catch { return 'pessoa'; }
+  });
+  const mudarVisao = (v: 'pessoa' | 'dia') => { setVisao(v); try { localStorage.setItem('lumos_cronograma_visao', v); } catch { /* sem armazenamento */ } };
+  const [filtroLinha, setFiltroLinha] = useState('');
+  useEffect(() => { setFiltroLinha(''); }, [chave]);
 
   const dias = useMemo(() => diasDaSemana(inicio), [inicio]);
 
@@ -202,7 +211,16 @@ export default function CronogramaEdicao() {
           </h1>
           <p className="text-lumos-text-secondary text-sm">O que cada pessoa faz em cada dia da semana.{!podeEditar && ' Só a gestão edita; você acompanha por aqui.'}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center border border-lumos-border rounded-lumos overflow-hidden">
+            {([['pessoa', 'Por pessoa', Users], ['dia', 'Por dia', CalendarDays]] as const).map(([k, rotulo, Icone]) => (
+              <button key={k} type="button" onClick={() => mudarVisao(k)} aria-pressed={visao === k}
+                className={clsx('h-8 px-3 text-[11px] font-black uppercase tracking-wide flex items-center gap-1.5 transition-colors',
+                  visao === k ? 'bg-lumos-yellow text-black' : 'text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                <Icone className="w-3.5 h-3.5" /> {rotulo}
+              </button>
+            ))}
+          </div>
           <button onClick={() => setInicio(w => subWeeks(w, 1))} aria-label="Semana anterior"
             className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow"><ChevronLeft className="w-4 h-4" /></button>
           <button onClick={() => setInicio(segundaDe(new Date()))} disabled={ehEstaSemana}
@@ -249,6 +267,9 @@ export default function CronogramaEdicao() {
         </div>
       ) : (
         <>
+          {visao === 'dia' ? (
+            <AgendaDaSemana linhas={linhasOrdenadas} itens={dados.itens} dias={dias} filtroLinha={filtroLinha} onFiltro={setFiltroLinha} />
+          ) : (
           <div className="card !p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <div className="min-w-[1080px]">
@@ -286,6 +307,7 @@ export default function CronogramaEdicao() {
               </div>
             )}
           </div>
+          )}
 
           {/* Rodapé: projetos + legenda */}
           <div className="grid md:grid-cols-2 gap-3">
