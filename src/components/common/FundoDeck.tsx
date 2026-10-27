@@ -16,7 +16,7 @@ export default function FundoDeck({ tema }: { tema?: 'dark' | 'light' } = {}) {
 
   if (theme === 'dark') {
     return (
-      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden>
+      <div className="fundo-deck pointer-events-none fixed inset-0 z-0" aria-hidden>
         <img
           src="/home/fundo-escuro-1920.jpg"
           srcSet="/home/fundo-escuro-1280.jpg 1280w, /home/fundo-escuro-1920.jpg 1920w"
@@ -31,7 +31,7 @@ export default function FundoDeck({ tema }: { tema?: 'dark' | 'light' } = {}) {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden style={{ background: 'linear-gradient(135deg, #e9e6e1 0%, #d9d5ce 100%)' }}>
+    <div className="fundo-deck pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden style={{ background: 'linear-gradient(135deg, #e9e6e1 0%, #d9d5ce 100%)' }}>
       {/* brilho quente largo */}
       <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 70% 60% at 28% 78%, rgba(239,199,0,0.28), rgba(239,199,0,0) 70%)' }} />
       {/* o feixe: fino na origem, abre e se dissipa */}

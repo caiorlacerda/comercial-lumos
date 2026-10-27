@@ -79,7 +79,10 @@ export default function UsersPage() {
     password: '',
     custom_permissions: {} as Record<string, boolean>,
     revisor_fixo: false,
+    barra_rolagem_grande: false,
   });
+  // Mesma ideia do revisor_fixo: a coluna chega por migração; antes dela o campo some.
+  const [barraGrandeOk, setBarraGrandeOk] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // A coluna revisor_fixo chegou na migração 2026093339. Enquanto ela não rodar,
   // o campo simplesmente não aparece e o salvar não manda a chave, assim a tela
@@ -102,6 +105,7 @@ export default function UsersPage() {
       if (error) throw error;
       setUsers(data || []);
       setRevisorFixoOk(!!data?.length && 'revisor_fixo' in data[0]);
+      setBarraGrandeOk(!!data?.length && 'barra_rolagem_grande' in data[0]);
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
     } finally {
@@ -181,6 +185,7 @@ export default function UsersPage() {
           hidden: formData.hidden,
           custom_permissions: formData.custom_permissions,
           ...(revisorFixoOk ? { revisor_fixo: formData.revisor_fixo } : {}),
+          ...(barraGrandeOk ? { barra_rolagem_grande: formData.barra_rolagem_grande } : {}),
         })
         .eq('id', selectedUser.id);
 
@@ -308,6 +313,7 @@ export default function UsersPage() {
       password: '',
       custom_permissions: { ...(user.custom_permissions || {}) },
       revisor_fixo: user.revisor_fixo ?? false,
+      barra_rolagem_grande: user.barra_rolagem_grande ?? false,
     });
     setIsEditModalOpen(true);
   };
@@ -332,6 +338,7 @@ export default function UsersPage() {
       password: '',
       custom_permissions: {},
       revisor_fixo: false,
+      barra_rolagem_grande: false,
     });
   };
 
@@ -767,6 +774,23 @@ export default function UsersPage() {
                 <span className="text-xs font-bold text-lumos-text-primary block">Revisor fixo</span>
                 <span className="text-[10px] text-lumos-text-secondary/80 leading-relaxed">
                   Acompanha automaticamente toda revisão interna: entra sozinho como colaborador da tarefa quando o vídeo chega, recebe o aviso, e sai quando a revisão termina.
+                </span>
+              </span>
+            </label>
+          )}
+
+          {barraGrandeOk && (
+            <label className="flex items-start gap-2.5 p-2.5 rounded-lumos border border-lumos-border/50 bg-lumos-bg/20 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.barra_rolagem_grande}
+                onChange={(e) => setFormData({ ...formData, barra_rolagem_grande: e.target.checked })}
+                className="mt-0.5 rounded border-lumos-border text-lumos-yellow focus:ring-lumos-yellow h-4 w-4 bg-lumos-bg cursor-pointer flex-shrink-0"
+              />
+              <span className="min-w-0">
+                <span className="text-xs font-bold text-lumos-text-primary block">Barra de rolagem maior</span>
+                <span className="text-[10px] text-lumos-text-secondary/80 leading-relaxed">
+                  Acessibilidade: deixa a barra do lado direito mais larga, para clicar e arrastar. A pessoa também liga e desliga em Configurações › Aparência. Aparece na próxima vez que ela abrir ou recarregar o app.
                 </span>
               </span>
             </label>

@@ -22,7 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { useVisualNovo, definirVisualNovo } from '@/lib/visualNovo';
 
 export default function Settings() {
-  const { user, profile, updateProfile, updateAvatar, isAdmin } = useAuth();
+  const { user, profile, updateProfile, updateAvatar, isAdmin, definirBarraRolagemGrande } = useAuth();
   const visualNovo = useVisualNovo();
   const { theme } = useTheme();
   const navigate = useNavigate();
@@ -320,6 +320,30 @@ export default function Settings() {
         </div>
 
         <ThemeToggle showDescription={true} />
+
+        {/* Acessibilidade: barra de rolagem maior, por usuário (vale em qualquer computador) */}
+        <div className="flex items-center justify-between gap-4 pt-6 border-t border-lumos-border">
+          <div>
+            <p className="text-sm font-bold text-lumos-text-primary">Barra de rolagem maior</p>
+            <p className="text-xs text-lumos-text-secondary">Deixa a barra do lado direito mais larga, para clicar e arrastar com mais facilidade. Vale só para a sua conta.</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!profile?.barra_rolagem_grande}
+            aria-label="Barra de rolagem maior"
+            onClick={async () => {
+              const ok = await definirBarraRolagemGrande(!profile?.barra_rolagem_grande);
+              if (!ok) setError('Não foi possível salvar essa opção agora. Tente de novo em instantes.');
+            }}
+            className={clsx(
+              'relative w-11 h-6 rounded-full transition-colors flex-shrink-0',
+              profile?.barra_rolagem_grande ? 'bg-lumos-yellow' : 'bg-lumos-text-secondary/30',
+            )}
+          >
+            <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform', profile?.barra_rolagem_grande && 'translate-x-5')} />
+          </button>
+        </div>
 
         {/* Interruptor do visual novo: só para admin e só neste aparelho (ver lib/visualNovo.ts) */}
         {isAdmin && (

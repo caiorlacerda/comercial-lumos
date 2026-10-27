@@ -56,6 +56,8 @@ export interface AppUserProfile {
   tour_seen?: boolean;
   /** Acompanha automaticamente toda revisão interna (coluna nova: pode não existir antes da migração). */
   revisor_fixo?: boolean;
+  /** Barra de rolagem maior, para quem tem dificuldade de pegar a fina (coluna nova: pode não existir antes da migração). */
+  barra_rolagem_grande?: boolean;
 }
 
 const AuthContext = createContext<{
@@ -71,6 +73,8 @@ const AuthContext = createContext<{
   updateAvatar: (url: string) => Promise<void>;
   updatePresenceStatus: (status: 'online' | 'busy' | 'away') => Promise<void>;
   markTourSeen: () => Promise<void>;
+  /** Liga/desliga a barra de rolagem maior da própria pessoa. Devolve true se gravou. */
+  definirBarraRolagemGrande: (ligada: boolean) => Promise<boolean>;
   can: (permission: string) => boolean;
 }>({
   user: null,
@@ -85,6 +89,7 @@ const AuthContext = createContext<{
   updateAvatar: async () => {},
   updatePresenceStatus: async () => {},
   markTourSeen: async () => {},
+  definirBarraRolagemGrande: async () => false,
   can: () => false,
 });
 
@@ -245,6 +250,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await supabase.from('app_users').update({ tour_seen: true }).eq('id', profile.id);
   };
 
+  // A classe no <html> é o que o CSS (index.css) usa para engrossar a barra. Sai junto
+  // com o logout (perfil nulo), então a opção de uma pessoa não passa para a próxima
+  // que usar o mesmo navegador.
+  useEffect(() => {
+    document.documentElement.classList.toggle('barra-grande', !!profile?.barra_rolagem_grande);
+  }, [profile?.barra_rolagem_grande]);
+
+  const definirBarraRolagemGrande = async (ligada: boolean): Promise<boolean> => {
+    if (!profile?.id) return false;
+    const antes = !!profile.barra_rolagem_grande;
+    setProfile(prev => (prev ? { ...prev, barra_rolagem_grande: ligada } : prev));
+    const { error } = await supabase.from('app_users').update({ barra_rolagem_grande: ligada }).eq('id', profile.id);
+    if (error) {
+      // Banco sem a coluna (migration não rodada) ou sem permissão: volta como estava.
+      setProfile(prev => (prev ? { ...prev, barra_rolagem_grande: antes } : prev));
+      return false;
+    }
+    return true;
+  };
+
   const can = (permission: string): boolean => {
     if (!profile) return false;
     if (profile.custom_permissions && permission in profile.custom_permissions) {
@@ -259,7 +284,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       user, profile, loading, profileChecked, error,
       isAdmin: profile?.role === 'admin',
       isProducao: profile?.role === 'producao',
-      signOut, updateProfile, updateAvatar, updatePresenceStatus, markTourSeen, can
+      signOut, updateProfile, updateAvatar, updatePresenceStatus, markTourSeen, definirBarraRolagemGrande, can
     }}>
       {children}
     </AuthContext.Provider>
