@@ -1,27 +1,43 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { Plus, X } from 'lucide-react';
+import { Link2, Plus, Unlink, X } from 'lucide-react';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { type Item, type TipoItem, TIPOS, tipoDoItem } from '@/lib/cronograma';
 
 /**
  * Uma célula do cronograma (linha × dia): a lista de itens, digitada no ritmo da planilha.
  *  · clique num item para editar; Enter grava; texto vazio apaga o item
  *  · "+" no fim da célula adiciona; Enter grava e abre o próximo; Esc ou vazio fecha
- *  · o ponto colorido troca o tipo (a cor da legenda)
+ *  · o ponto colorido troca o tipo (a cor da legenda) e vincula o item a um projeto/tarefa
+ *  · arraste um item para mudar a ordem, o dia ou a pessoa (o DndContext fica na página)
  * Sem permissão de edição a célula só mostra.
  */
 
 interface Props {
+  linhaId: string;
+  dia: string;
   itens: Item[];
   podeEditar: boolean;
   tipoPadrao: TipoItem;
   fimDeSemana?: boolean;
+  destaque?: boolean;          // é a célula onde o item arrastado vai cair
   onAdicionar: (texto: string, tipo: TipoItem) => void;
   onAtualizar: (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => void;
   onRemover: (id: string) => void;
+  onVincular: (item: Item) => void;
+  onDesvincular: (id: string) => void;
 }
 
-function MenuDeTipo({ atual, onEscolher, onFechar }: { atual: TipoItem; onEscolher: (t: TipoItem) => void; onFechar: () => void }) {
+function MenuDeTipo({ item, onEscolher, onVincular, onDesvincular, onFechar }: {
+  item: Item;
+  onEscolher: (t: TipoItem) => void;
+  onVincular: () => void;
+  onDesvincular: () => void;
+  onFechar: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const fora = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onFechar(); };
@@ -30,15 +46,27 @@ function MenuDeTipo({ atual, onEscolher, onFechar }: { atual: TipoItem; onEscolh
     document.addEventListener('keydown', esc);
     return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc); };
   }, [onFechar]);
+  const ligado = !!item.project_id;
   return (
-    <div ref={ref} className="absolute left-0 top-full mt-1 z-30 w-48 rounded-lumos border border-lumos-border bg-lumos-surface shadow-xl py-1">
+    <div ref={ref} className="absolute left-0 top-full mt-1 z-30 w-52 rounded-lumos border border-lumos-border bg-lumos-surface shadow-xl py-1">
       {TIPOS.map(t => (
         <button key={t.id} type="button" onClick={() => { onEscolher(t.id); onFechar(); }}
           className={clsx('w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] font-bold hover:bg-lumos-text-primary/5',
-            atual === t.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
+            item.tipo === t.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
           <span className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', t.ponto)} /> {t.label}
         </button>
       ))}
+      <div className="my-1 border-t border-lumos-border/60" />
+      <button type="button" onClick={() => { onVincular(); onFechar(); }}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5">
+        <Link2 className="w-3 h-3 flex-shrink-0" /> {ligado ? 'Trocar projeto/tarefa…' : 'Vincular a projeto/tarefa…'}
+      </button>
+      {ligado && (
+        <button type="button" onClick={() => { onDesvincular(); onFechar(); }}
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] font-bold text-lumos-text-secondary hover:bg-lumos-text-primary/5">
+          <Unlink className="w-3 h-3 flex-shrink-0" /> Remover vínculo
+        </button>
+      )}
     </div>
   );
 }
@@ -83,23 +111,61 @@ function CampoDeTexto({ inicial, placeholder, onGravar, onCancelar, onApagarVazi
   );
 }
 
-function LinhaDeItem({ item, podeEditar, onAtualizar, onRemover }: {
-  item: Item; podeEditar: boolean;
+/** Nome do projeto (e da tarefa) ao qual o item está ligado; clicar abre o projeto. */
+function Vinculo({ item }: { item: Item }) {
+  const navigate = useNavigate();
+  if (!item.project_id) return null;
+  const nome = item.project?.name || 'Projeto';
+  const rotulo = item.task?.titulo ? `${nome} · ${item.task.titulo}` : nome;
+  return (
+    <button type="button" onClick={() => navigate(`/producao/projetos?projectId=${item.project_id}`)} title={`Abrir o projeto: ${rotulo}`}
+      className="mt-0.5 flex items-center gap-1 max-w-full text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
+      <Link2 className="w-2.5 h-2.5 flex-shrink-0" /> <span className="truncate">{rotulo}</span>
+    </button>
+  );
+}
+
+/** O item "no ar", que acompanha o mouse enquanto se arrasta (usado no DragOverlay da página). */
+export function ItemFlutuante({ item }: { item: Item }) {
+  const t = tipoDoItem(item.tipo);
+  return (
+    <div className={clsx('flex items-start gap-1.5 rounded border px-1.5 py-1 shadow-2xl ring-1 ring-lumos-yellow/60 cursor-grabbing bg-lumos-surface', t.caixa)}>
+      <span className={clsx('mt-[3px] w-2.5 h-2.5 rounded-full flex-shrink-0', t.ponto)} />
+      <p className="min-w-0 flex-1 text-[12px] leading-snug text-lumos-text-primary whitespace-pre-wrap break-words">{item.texto}</p>
+    </div>
+  );
+}
+
+function LinhaDeItem({ item, linhaId, dia, podeEditar, onAtualizar, onRemover, onVincular, onDesvincular }: {
+  item: Item; linhaId: string; dia: string; podeEditar: boolean;
   onAtualizar: Props['onAtualizar']; onRemover: Props['onRemover'];
+  onVincular: Props['onVincular']; onDesvincular: Props['onDesvincular'];
 }) {
   const [editando, setEditando] = useState(false);
   const [menu, setMenu] = useState(false);
   const t = tipoDoItem(item.tipo);
+  // Enquanto o texto está sendo editado o item não arrasta (senão o mouse não selecionaria o texto).
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id, data: { tipo: 'item', linhaId, dia }, disabled: !podeEditar || editando,
+  });
 
   return (
-    <div className={clsx('group relative flex items-start gap-1.5 rounded border px-1.5 py-1', t.caixa)}>
+    <div ref={setNodeRef} {...(podeEditar && !editando ? { ...attributes, ...listeners } : {})}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={clsx('group relative flex items-start gap-1.5 rounded border px-1.5 py-1', t.caixa,
+        podeEditar && !editando && 'cursor-grab active:cursor-grabbing', isDragging && 'opacity-30',
+        // O vidro (backdrop-filter) do item cria um empilhamento próprio: sem isto o menu aberto ficaria atrás dos vizinhos.
+        menu && 'z-20')}>
       {podeEditar ? (
-        <button type="button" onClick={() => setMenu(m => !m)} title="Trocar o tipo"
+        <button type="button" onClick={() => setMenu(m => !m)} title="Trocar o tipo ou vincular a um projeto"
           className={clsx('mt-[3px] w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-black/10 hover:scale-125 transition-transform', t.ponto)} />
       ) : (
         <span className={clsx('mt-[3px] w-2 h-2 rounded-full flex-shrink-0', t.ponto)} />
       )}
-      {menu && <MenuDeTipo atual={item.tipo} onEscolher={tipo => onAtualizar(item.id, { tipo })} onFechar={() => setMenu(false)} />}
+      {menu && (
+        <MenuDeTipo item={item} onEscolher={tipo => onAtualizar(item.id, { tipo })}
+          onVincular={() => onVincular(item)} onDesvincular={() => onDesvincular(item.id)} onFechar={() => setMenu(false)} />
+      )}
 
       <div className="min-w-0 flex-1">
         {editando ? (
@@ -110,11 +176,12 @@ function LinhaDeItem({ item, podeEditar, onAtualizar, onRemover }: {
             onApagarVazio={() => { setEditando(false); onRemover(item.id); }}
           />
         ) : (
-          <p onClick={() => podeEditar && setEditando(true)}
-            className={clsx('text-[12px] leading-snug text-lumos-text-primary whitespace-pre-wrap break-words', podeEditar && 'cursor-text')}>
+          <p onClick={() => podeEditar && setEditando(true)} title={podeEditar ? 'Clique para editar · arraste para mover' : undefined}
+            className="text-[12px] leading-snug text-lumos-text-primary whitespace-pre-wrap break-words">
             {item.texto}
           </p>
         )}
+        {!editando && <Vinculo item={item} />}
       </div>
 
       {podeEditar && !editando && (
@@ -127,16 +194,23 @@ function LinhaDeItem({ item, podeEditar, onAtualizar, onRemover }: {
   );
 }
 
-export default function CelulaCronograma({ itens, podeEditar, tipoPadrao, fimDeSemana, onAdicionar, onAtualizar, onRemover }: Props) {
+export default function CelulaCronograma({ linhaId, dia, itens, podeEditar, tipoPadrao, fimDeSemana, destaque, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular }: Props) {
   const [novo, setNovo] = useState(false);
   // Depois de gravar com Enter o campo é remontado limpo, pronto para o próximo item.
   const [chave, setChave] = useState(0);
+  // A célula inteira é um alvo para soltar um item (mesmo vazia).
+  const { setNodeRef } = useDroppable({ id: `cel|${linhaId}|${dia}`, data: { tipo: 'celula', linhaId, dia }, disabled: !podeEditar });
 
   return (
-    <div className={clsx('min-h-[64px] p-1.5 space-y-1', fimDeSemana && 'bg-lumos-text-secondary/[0.07]')}>
-      {itens.map(i => (
-        <LinhaDeItem key={i.id} item={i} podeEditar={podeEditar} onAtualizar={onAtualizar} onRemover={onRemover} />
-      ))}
+    <div ref={setNodeRef}
+      className={clsx('min-h-[64px] p-1.5 space-y-1 transition-colors', fimDeSemana && 'bg-lumos-text-secondary/[0.07]',
+        destaque && 'bg-lumos-yellow/15 ring-2 ring-inset ring-lumos-yellow/60')}>
+      <SortableContext items={itens.map(i => i.id)} strategy={verticalListSortingStrategy}>
+        {itens.map(i => (
+          <LinhaDeItem key={i.id} item={i} linhaId={linhaId} dia={dia} podeEditar={podeEditar}
+            onAtualizar={onAtualizar} onRemover={onRemover} onVincular={onVincular} onDesvincular={onDesvincular} />
+        ))}
+      </SortableContext>
 
       {podeEditar && novo && (
         <div className={clsx('rounded border border-dashed border-lumos-yellow/60 px-1.5 py-1', tipoDoItem(tipoPadrao).caixa)}>

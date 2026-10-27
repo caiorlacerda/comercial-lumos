@@ -36,7 +36,13 @@ export interface Item {
   tipo: TipoItem;
   task_id: string | null;
   project_id: string | null;
+  /** Vínculo opcional com um projeto/tarefa da plataforma (vem junto na consulta). */
+  project?: { id: string; name: string } | null;
+  task?: { id: string; titulo: string } | null;
 }
+
+/** Colunas lidas de cada item, com o nome do projeto e da tarefa vinculados. */
+export const SELECT_ITEM = 'id, linha_id, dia, ordem, texto, tipo, task_id, project_id, project:projects(id, name), task:project_tasks(id, titulo)';
 
 /** As cores da legenda da planilha: sem cor, verde, azul e laranja. */
 export const TIPOS: { id: TipoItem; label: string; caixa: string; ponto: string }[] = [
