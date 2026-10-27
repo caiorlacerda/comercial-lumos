@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { haQuanto, textoEnvio } from '@/lib/dataEnvio';
 import { createPortal } from 'react-dom';
@@ -785,6 +785,9 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   };
 
   // ── Ações de um vídeo: 2 botões visíveis + menu ⋯ (compartilhado grade/lista) ──
+  // Chamada como função ({RowActions({ g })}), nunca como <RowActions/>: declarado aqui dentro,
+  // o React o trataria como componente novo a cada atualização e recriaria o botão ⋯ (e o clique
+  // dele se perderia). Mesma razão de VideoCard e VideoRow lá embaixo. Não pode ter hooks.
   const RowActions = ({ g, compact }: { g: Group; compact?: boolean }) => {
     const v = g.current;
     const link = linksByGroup[g.id];
@@ -1008,7 +1011,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
 
           {/* Ações: 2 visíveis + menu */}
           <div className="mt-3">
-            <RowActions g={g} />
+            {RowActions({ g })}
           </div>
 
           {/* Versões (expandido) */}
@@ -1116,7 +1119,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
           )}
         </div>
 
-        <RowActions g={g} compact />
+        {RowActions({ g, compact: true })}
       </div>
 
       {/* Versões (expandido) */}
@@ -1388,11 +1391,16 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
         <p className="text-center py-8 text-xs text-lumos-text-secondary italic">Nenhum vídeo com essa busca/filtro.</p>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {shownGroups.map(g => <VideoCard key={g.id} g={g} />)}
+          {/* Chamadas como função, não como <VideoCard/>: VideoCard e VideoRow são declarados
+              DENTRO deste componente, então a cada atualização de estado (abrir um menu, uma capa
+              que chega) o React os via como componentes novos e RECRIAVA todas as linhas. Com dezenas
+              de vídeos isso engolia o clique no ⋯ (o botão era trocado entre o botão do mouse descer
+              e subir) e a rolagem da página pulava. Como função, a linha só se atualiza no lugar. */}
+          {shownGroups.map(g => <Fragment key={g.id}>{VideoCard({ g })}</Fragment>)}
         </div>
       ) : (
         <div className="border border-lumos-border rounded-lumos overflow-hidden">
-          {shownGroups.map(g => <VideoRow key={g.id} g={g} />)}
+          {shownGroups.map(g => <Fragment key={g.id}>{VideoRow({ g })}</Fragment>)}
         </div>
       )}
     </div>
