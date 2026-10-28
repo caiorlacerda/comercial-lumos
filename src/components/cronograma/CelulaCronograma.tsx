@@ -6,6 +6,8 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { type Item, type TipoItem, TIPOS, tipoDoItem } from '@/lib/cronograma';
+import type { ItemAutomatico } from '@/lib/cronogramaAutomatico';
+import ItemAutomaticoView from '@/components/cronograma/ItemAutomaticoView';
 
 /**
  * Uma célula do cronograma (linha × dia): a lista de itens, digitada no ritmo da planilha.
@@ -24,6 +26,7 @@ interface Props {
   tipoPadrao: TipoItem;
   fimDeSemana?: boolean;
   destaque?: boolean;          // é a célula onde o item arrastado vai cair
+  automaticos?: ItemAutomatico[];   // diárias/entregas que vêm sozinhas (só leitura)
   onAdicionar: (texto: string, tipo: TipoItem) => void;
   onAtualizar: (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => void;
   onRemover: (id: string) => void;
@@ -194,7 +197,7 @@ function LinhaDeItem({ item, linhaId, dia, podeEditar, onAtualizar, onRemover, o
   );
 }
 
-export default function CelulaCronograma({ linhaId, dia, itens, podeEditar, tipoPadrao, fimDeSemana, destaque, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular }: Props) {
+export default function CelulaCronograma({ linhaId, dia, itens, automaticos = [], podeEditar, tipoPadrao, fimDeSemana, destaque, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular }: Props) {
   const [novo, setNovo] = useState(false);
   // Depois de gravar com Enter o campo é remontado limpo, pronto para o próximo item.
   const [chave, setChave] = useState(0);
@@ -212,6 +215,8 @@ export default function CelulaCronograma({ linhaId, dia, itens, podeEditar, tipo
         ))}
       </SortableContext>
 
+      {automaticos.map(a => <ItemAutomaticoView key={a.id} item={a} />)}
+
       {podeEditar && novo && (
         <div className={clsx('rounded border border-dashed border-lumos-yellow/60 px-1.5 py-1', tipoDoItem(tipoPadrao).caixa)}>
           <CampoDeTexto
@@ -225,7 +230,7 @@ export default function CelulaCronograma({ linhaId, dia, itens, podeEditar, tipo
       {podeEditar && !novo && (
         <button type="button" onClick={() => setNovo(true)} aria-label="Adicionar item"
           className={clsx('w-full flex items-center justify-center rounded text-lumos-text-secondary/60 hover:text-lumos-yellow hover:bg-lumos-yellow/10 transition-colors',
-            itens.length === 0 ? 'h-10' : 'h-5 opacity-0 hover:opacity-100 focus:opacity-100')}>
+            itens.length + automaticos.length === 0 ? 'h-10' : 'h-5 opacity-0 hover:opacity-100 focus:opacity-100')}>
           <Plus className="w-3.5 h-3.5" />
         </button>
       )}
