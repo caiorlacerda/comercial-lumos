@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Link2, Plus, Unlink, X } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { type Item, type TipoItem, TIPOS, tipoDoItem } from '@/lib/cronograma';
+import { type Item, type TipoItem, CORES_LIVRES, TIPOS, tipoDoItem } from '@/lib/cronograma';
 import type { ItemAutomatico } from '@/lib/cronogramaAutomatico';
 import ItemAutomaticoView from '@/components/cronograma/ItemAutomaticoView';
 
@@ -34,24 +35,42 @@ interface Props {
   onDesvincular: (id: string) => void;
 }
 
-function MenuDeTipo({ item, onEscolher, onVincular, onDesvincular, onFechar }: {
+function MenuDeTipo({ item, ancora, onEscolher, onVincular, onDesvincular, onFechar }: {
   item: Item;
+  ancora: RefObject<HTMLElement | null>;
   onEscolher: (t: TipoItem) => void;
   onVincular: () => void;
   onDesvincular: () => void;
   onFechar: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
+  // O menu sai da grade (que rola e corta o que passa da borda): fica solto na tela, junto da bolinha,
+  // e abre para cima quando não cabe embaixo.
+  useLayoutEffect(() => {
+    const a = ancora.current?.getBoundingClientRect();
+    const h = ref.current?.offsetHeight ?? 0;
+    if (!a) return;
+    const left = Math.max(8, Math.min(a.left, window.innerWidth - 216));
+    setPos(a.bottom + 4 + h > window.innerHeight - 8 ? { left, bottom: window.innerHeight - a.top + 4 } : { left, top: a.bottom + 4 });
+  }, [ancora]);
   useEffect(() => {
     const fora = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onFechar(); };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar(); };
+    const fecha = () => onFechar();
     document.addEventListener('mousedown', fora);
     document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc); };
+    window.addEventListener('scroll', fecha, true);
+    window.addEventListener('resize', fecha);
+    return () => {
+      document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc);
+      window.removeEventListener('scroll', fecha, true); window.removeEventListener('resize', fecha);
+    };
   }, [onFechar]);
   const ligado = !!item.project_id;
-  return (
-    <div ref={ref} className="absolute left-0 top-full mt-1 z-30 w-52 rounded-lumos border border-lumos-border bg-lumos-surface shadow-xl py-1">
+  return createPortal(
+    <div ref={ref} style={{ position: 'fixed', ...(pos ?? { top: -9999, left: 0 }) }}
+      className="z-[60] w-52 rounded-lumos border border-lumos-border bg-lumos-surface shadow-xl py-1">
       {TIPOS.map(t => (
         <button key={t.id} type="button" onClick={() => { onEscolher(t.id); onFechar(); }}
           className={clsx('w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] font-bold hover:bg-lumos-text-primary/5',
@@ -59,6 +78,17 @@ function MenuDeTipo({ item, onEscolher, onVincular, onDesvincular, onFechar }: {
           <span className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', t.ponto)} /> {t.label}
         </button>
       ))}
+      <div className="px-3 pt-1.5 pb-1">
+        <p className="text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary mb-1.5">Mais cores</p>
+        <div className="flex items-center gap-1.5">
+          {CORES_LIVRES.map(c => (
+            <button key={c.id} type="button" title={c.label} aria-label={c.label}
+              onClick={() => { onEscolher(c.id); onFechar(); }}
+              className={clsx('w-5 h-5 rounded-full border-2 transition-transform hover:scale-110', c.ponto,
+                item.tipo === c.id ? 'border-lumos-text-primary' : 'border-transparent')} />
+          ))}
+        </div>
+      </div>
       <div className="my-1 border-t border-lumos-border/60" />
       <button type="button" onClick={() => { onVincular(); onFechar(); }}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] font-bold text-lumos-text-primary hover:bg-lumos-text-primary/5">
@@ -70,7 +100,8 @@ function MenuDeTipo({ item, onEscolher, onVincular, onDesvincular, onFechar }: {
           <Unlink className="w-3 h-3 flex-shrink-0" /> Remover vínculo
         </button>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -146,6 +177,7 @@ function LinhaDeItem({ item, linhaId, dia, podeEditar, onAtualizar, onRemover, o
 }) {
   const [editando, setEditando] = useState(false);
   const [menu, setMenu] = useState(false);
+  const bolinha = useRef<HTMLButtonElement>(null);
   const t = tipoDoItem(item.tipo);
   // Enquanto o texto está sendo editado o item não arrasta (senão o mouse não selecionaria o texto).
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -160,13 +192,13 @@ function LinhaDeItem({ item, linhaId, dia, podeEditar, onAtualizar, onRemover, o
         // O vidro (backdrop-filter) do item cria um empilhamento próprio: sem isto o menu aberto ficaria atrás dos vizinhos.
         menu && 'z-20')}>
       {podeEditar ? (
-        <button type="button" onClick={() => setMenu(m => !m)} title="Trocar o tipo ou vincular a um projeto"
+        <button ref={bolinha} type="button" onClick={() => setMenu(m => !m)} title="Trocar o tipo ou vincular a um projeto"
           className={clsx('mt-[3px] w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-black/10 hover:scale-125 transition-transform', t.ponto)} />
       ) : (
         <span className={clsx('mt-[3px] w-2 h-2 rounded-full flex-shrink-0', t.ponto)} />
       )}
       {menu && (
-        <MenuDeTipo item={item} onEscolher={tipo => onAtualizar(item.id, { tipo })}
+        <MenuDeTipo item={item} ancora={bolinha} onEscolher={tipo => onAtualizar(item.id, { tipo })}
           onVincular={() => onVincular(item)} onDesvincular={() => onDesvincular(item.id)} onFechar={() => setMenu(false)} />
       )}
 
