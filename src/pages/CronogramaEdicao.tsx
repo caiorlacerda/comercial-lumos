@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, addWeeks, isToday, subWeeks, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, RefreshCw, Trash2, UserCog, Users } from 'lucide-react';
 import {
   DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors,
   type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent,
@@ -22,6 +22,7 @@ import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
 import CelulaCronograma, { ItemFlutuante } from '@/components/cronograma/CelulaCronograma';
 import VincularItemModal, { type Vinculo } from '@/components/cronograma/VincularItemModal';
+import QuemEditaModal, { PERMISSAO_CRONOGRAMA } from '@/components/cronograma/QuemEditaModal';
 import { type ItemAutomatico, automaticosDaCelula, buscarAutomaticos } from '@/lib/cronogramaAutomatico';
 import AgendaDaSemana from '@/components/cronograma/AgendaDaSemana';
 import {
@@ -43,10 +44,12 @@ const COLUNAS_FIXAS = 'sticky left-0 z-10';
 interface Dados { semana: Semana | null; linhas: Linha[]; itens: Item[]; anterior: string | null }
 
 export default function CronogramaEdicao() {
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdmin, can } = useAuth();
   const toast = useToast();
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
-  const podeEditar = isAdmin || profile?.role === 'producao';
+  // Quem edita é escolhido pelo admin (botão "Quem edita"); o banco confere a mesma regra.
+  const podeEditar = can(PERMISSAO_CRONOGRAMA);
+  const [quemEdita, setQuemEdita] = useState(false);
 
   const [inicio, setInicio] = useState<Date>(() => segundaDe(new Date()));
   const chave = iso(inicio);
@@ -327,9 +330,15 @@ export default function CronogramaEdicao() {
           <h1 className="text-2xl font-bold text-lumos-text-primary tracking-tight flex items-center gap-2">
             <CalendarRange className="w-6 h-6 text-lumos-yellow" /> Cronograma da equipe
           </h1>
-          <p className="text-lumos-text-secondary text-sm">O que cada pessoa faz em cada dia da semana.{!podeEditar && ' Só a gestão edita; você acompanha por aqui.'}</p>
+          <p className="text-lumos-text-secondary text-sm">O que cada pessoa faz em cada dia da semana.{!podeEditar && ' Só quem a gestão liberou edita; você acompanha por aqui.'}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <button onClick={() => setQuemEdita(true)} title="Escolher quem pode editar o cronograma"
+              className="h-8 px-3 text-[11px] font-black uppercase tracking-wide rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/50 flex items-center gap-1.5">
+              <UserCog className="w-3.5 h-3.5" /> Quem edita
+            </button>
+          )}
           <div className="flex items-center border border-lumos-border rounded-lumos overflow-hidden">
             {([['pessoa', 'Por pessoa', Users], ['dia', 'Por dia', CalendarDays]] as const).map(([k, rotulo, Icone]) => (
               <button key={k} type="button" onClick={() => mudarVisao(k)} aria-pressed={visao === k}
@@ -477,6 +486,7 @@ export default function CronogramaEdicao() {
           onAdicionar={adicionarLinha}
         />
       )}
+      {quemEdita && <QuemEditaModal onClose={() => setQuemEdita(false)} />}
       {vinculando && (
         <VincularItemModal item={vinculando} onClose={() => setVinculando(null)}
           onSalvar={async v => { await vincularItem(vinculando.id, v); setVinculando(null); }} />

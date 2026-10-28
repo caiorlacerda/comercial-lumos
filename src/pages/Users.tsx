@@ -50,6 +50,7 @@ const PERM_OPTIONS: { key: string; label: string }[] = [
   { key: 'equipamentos', label: 'Equipamentos (inventário, reservas, manutenção)' },
   { key: 'fechar_agenda', label: 'Fechar datas na agenda (vale para todos os clientes)' },
   { key: 'notas_fornecedores', label: 'Notas fiscais dos fornecedores (Financeiro › Notas)' },
+  { key: 'cronograma_editar', label: 'Editar o Cronograma da equipe' },
 ];
 type UserStatus = 'ativo' | 'inativo';
 
