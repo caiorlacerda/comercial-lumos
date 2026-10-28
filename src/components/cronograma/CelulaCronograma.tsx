@@ -203,7 +203,7 @@ export default function CelulaCronograma({ linhaId, dia, itens, podeEditar, tipo
 
   return (
     <div ref={setNodeRef}
-      className={clsx('min-h-[64px] p-1.5 space-y-1 transition-colors', fimDeSemana && 'bg-lumos-text-secondary/[0.07]',
+      className={clsx('flex-1 min-h-[64px] p-1.5 space-y-1 transition-colors', fimDeSemana && 'bg-lumos-text-secondary/[0.07]',
         destaque && 'bg-lumos-yellow/15 ring-2 ring-inset ring-lumos-yellow/60')}>
       <SortableContext items={itens.map(i => i.id)} strategy={verticalListSortingStrategy}>
         {itens.map(i => (
