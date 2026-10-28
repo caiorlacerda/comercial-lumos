@@ -537,7 +537,7 @@ function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, automaticosDe,
         )}
       </div>
       {dias.map(d => (
-        <div key={d.iso} className={clsx('border-l border-lumos-border/60', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
+        <div key={d.iso} className={clsx('border-l border-lumos-border/60 flex flex-col', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
           <CelulaCronograma
             linhaId={l.id} dia={d.iso} destaque={celulaAlvo === `${l.id}|${d.iso}`}
             itens={itensDe(l.id, d.iso)} automaticos={automaticosDe(l, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
