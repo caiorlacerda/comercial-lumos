@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, addWeeks, isToday, subWeeks, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
 import {
   DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors,
   type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent,
@@ -22,6 +22,7 @@ import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
 import CelulaCronograma, { ItemFlutuante } from '@/components/cronograma/CelulaCronograma';
 import VincularItemModal, { type Vinculo } from '@/components/cronograma/VincularItemModal';
+import { type ItemAutomatico, automaticosDaCelula, buscarAutomaticos } from '@/lib/cronogramaAutomatico';
 import AgendaDaSemana from '@/components/cronograma/AgendaDaSemana';
 import {
   type Item, type Linha, type Semana, type TipoItem, type TipoLinha,
@@ -102,6 +103,16 @@ export default function CronogramaEdicao() {
 
   useEffect(() => { carregar(); }, [carregar]);
   useRealtimeRefetch(['cronograma_semanas', 'cronograma_linhas', 'cronograma_itens'], () => carregar(true));
+
+  // Diárias e entregas da semana, que aparecem sozinhas nas linhas Externas e Entregas (nada é gravado).
+  const [automaticos, setAutomaticos] = useState<ItemAutomatico[]>([]);
+  const temSemana = !!dados?.semana;
+  const carregarAutomaticos = useCallback(async () => {
+    if (!temSemana) { setAutomaticos([]); return; }
+    try { setAutomaticos(await buscarAutomaticos(chave)); } catch { setAutomaticos([]); }
+  }, [chave, temSemana]);
+  useEffect(() => { carregarAutomaticos(); }, [carregarAutomaticos]);
+  useRealtimeRefetch(['project_diarias', 'project_tasks'], carregarAutomaticos);
 
   // ── Criar a semana ─────────────────────────────────────────────────────
   const criarSemana = async (copiarDe: string | null) => {
@@ -282,6 +293,29 @@ export default function CronogramaEdicao() {
 
   const itensDe = (linhaId: string, dia: string) =>
     (dados?.itens || []).filter(i => i.linha_id === linhaId && i.dia === dia).sort((a, b) => a.ordem - b.ordem);
+  const automaticosDe = (linha: Linha, dia: string): ItemAutomatico[] =>
+    linha.tipo === 'externas' || linha.tipo === 'entregas'
+      ? automaticosDaCelula(automaticos, linha.tipo, dia, itensDe(linha.id, dia).map(i => i.texto))
+      : [];
+
+  // Preenche "Projetos em andamento" com os projetos ativos da plataforma (o texto segue livre depois).
+  const preencherProjetosAtivos = async () => {
+    if (!dados?.semana) return;
+    const { data, error } = await supabase.from('projects').select('name').eq('status', 'ativo').order('name');
+    if (error) { toast.error('Não foi possível buscar os projetos.'); return; }
+    const nomes = ((data as { name: string }[]) || []).map(p => (p.name || '').trim()).filter(Boolean);
+    if (!nomes.length) { toast.info('Não há projetos ativos.'); return; }
+    const atual = dados.semana.projetos_andamento.trim();
+    if (atual) {
+      const ok = await confirm({
+        title: 'Trocar a lista pelos projetos ativos?',
+        message: `Hoje ${nomes.length === 1 ? 'há 1 projeto ativo' : `são ${nomes.length} projetos ativos`}. A lista desta semana será substituída por ${nomes.length === 1 ? 'ele' : 'eles'}, e você pode ajustar o texto depois.`,
+        confirmLabel: 'Trocar',
+      });
+      if (!ok) return;
+    }
+    await salvarProjetos('projetos_andamento', nomes.join('\n'));
+  };
   const linhasOrdenadas = useMemo(() => [...(dados?.linhas || [])].sort((a, b) => a.ordem - b.ordem), [dados?.linhas]);
   const semana = dados?.semana ?? null;
   const ehEstaSemana = chave === iso(segundaDe(new Date()));
@@ -352,7 +386,7 @@ export default function CronogramaEdicao() {
       ) : (
         <>
           {visao === 'dia' ? (
-            <AgendaDaSemana linhas={linhasOrdenadas} itens={dados.itens} dias={dias} filtroLinha={filtroLinha} onFiltro={setFiltroLinha} />
+            <AgendaDaSemana linhas={linhasOrdenadas} itens={dados.itens} dias={dias} automaticosDe={automaticosDe} filtroLinha={filtroLinha} onFiltro={setFiltroLinha} />
           ) : (
           <div className="card !p-0 overflow-hidden">
             <div className="overflow-x-auto">
@@ -377,7 +411,7 @@ export default function CronogramaEdicao() {
                   <SortableContext items={linhasOrdenadas.map(l => l.id)} strategy={verticalListSortingStrategy}>
                     {linhasOrdenadas.map(l => (
                       <LinhaDoCronograma key={l.id} linha={l} dias={dias} podeEditar={podeEditar}
-                        itensDe={itensDe} celulaAlvo={celulaAlvo} onAdicionar={adicionarItem} onAtualizar={atualizarItem} onRemover={removerItem}
+                        itensDe={itensDe} automaticosDe={automaticosDe} celulaAlvo={celulaAlvo} onAdicionar={adicionarItem} onAtualizar={atualizarItem} onRemover={removerItem}
                         onVincular={setVinculando} onDesvincular={id => vincularItem(id, null)} onRenomear={renomearLinha} onRemoverLinha={removerLinha} />
                     ))}
                   </SortableContext>
@@ -404,7 +438,15 @@ export default function CronogramaEdicao() {
           <div className="grid md:grid-cols-2 gap-3">
             {([['projetos_andamento', 'Projetos em andamento'], ['projetos_iniciar', 'Projetos a iniciar']] as const).map(([campo, titulo]) => (
               <div key={campo} className="card space-y-1.5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary flex items-center gap-1.5"><Pencil className="w-3 h-3" /> {titulo}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary flex items-center gap-1.5"><Pencil className="w-3 h-3" /> {titulo}</p>
+                  {podeEditar && campo === 'projetos_andamento' && (
+                    <button type="button" onClick={preencherProjetosAtivos}
+                      className="text-[10px] font-black uppercase tracking-wide text-lumos-yellow hover:underline flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3" /> Atualizar com projetos ativos
+                    </button>
+                  )}
+                </div>
                 {podeEditar ? (
                   <textarea key={`${semana.id}-${campo}-${semana[campo]}`} defaultValue={semana[campo]} rows={4}
                     placeholder="Um projeto por linha…"
@@ -446,11 +488,12 @@ export default function CronogramaEdicao() {
 
 // ── Uma linha da grade (arrastável pela alça à esquerda) ─────────────────────
 // Fica FORA da página de propósito: declarada dentro, seria recriada a cada atualização de estado.
-function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, celulaAlvo, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular, onRenomear, onRemoverLinha }: {
+function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, automaticosDe, celulaAlvo, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular, onRenomear, onRemoverLinha }: {
   linha: Linha;
   dias: ReturnType<typeof diasDaSemana>;
   podeEditar: boolean;
   itensDe: (linhaId: string, dia: string) => Item[];
+  automaticosDe: (linha: Linha, dia: string) => ItemAutomatico[];
   celulaAlvo: string | null;
   onAdicionar: (linha: Linha, dia: string, texto: string, tipo: TipoItem) => void;
   onAtualizar: (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => void;
@@ -497,7 +540,7 @@ function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, celulaAlvo, on
         <div key={d.iso} className={clsx('border-l border-lumos-border/60 flex flex-col', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
           <CelulaCronograma
             linhaId={l.id} dia={d.iso} destaque={celulaAlvo === `${l.id}|${d.iso}`}
-            itens={itensDe(l.id, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
+            itens={itensDe(l.id, d.iso)} automaticos={automaticosDe(l, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
             onAdicionar={(texto, tipo) => onAdicionar(l, d.iso, texto, tipo)}
             onAtualizar={onAtualizar} onRemover={onRemover} onVincular={onVincular} onDesvincular={onDesvincular} />
         </div>
