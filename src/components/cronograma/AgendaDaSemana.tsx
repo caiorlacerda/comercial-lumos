@@ -1,6 +1,7 @@
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
+import { Link2 } from 'lucide-react';
 import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
 import { type Item, type Linha, diasDaSemana, nomeDaLinha, tipoDoItem } from '@/lib/cronograma';
@@ -70,7 +71,14 @@ export default function AgendaDaSemana({ linhas, itens, dias, filtroLinha, onFil
                         return (
                           <div key={i.id} className={clsx('flex items-start gap-1.5 rounded border px-1.5 py-1', t.caixa)}>
                             <span className={clsx('mt-[5px] w-2 h-2 rounded-full flex-shrink-0', t.ponto)} />
-                            <p className="text-[12px] leading-snug text-lumos-text-primary whitespace-pre-wrap break-words min-w-0">{i.texto}</p>
+                            <div className="min-w-0">
+                              <p className="text-[12px] leading-snug text-lumos-text-primary whitespace-pre-wrap break-words">{i.texto}</p>
+                              {i.project_id && (
+                                <p className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-lumos-text-secondary">
+                                  <Link2 className="w-2.5 h-2.5 flex-shrink-0" /> <span className="truncate">{i.project?.name || 'Projeto'}{i.task?.titulo ? ` · ${i.task.titulo}` : ''}</span>
+                                </p>
+                              )}
+                            </div>
                           </div>
                         );
                       })}

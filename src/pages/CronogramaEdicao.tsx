@@ -4,7 +4,8 @@ import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
+  DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors,
+  type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -19,11 +20,12 @@ import { useConfirm } from '@/components/ui/useConfirm';
 import Modal from '@/components/common/Modal';
 import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
-import CelulaCronograma from '@/components/cronograma/CelulaCronograma';
+import CelulaCronograma, { ItemFlutuante } from '@/components/cronograma/CelulaCronograma';
+import VincularItemModal, { type Vinculo } from '@/components/cronograma/VincularItemModal';
 import AgendaDaSemana from '@/components/cronograma/AgendaDaSemana';
 import {
   type Item, type Linha, type Semana, type TipoItem, type TipoLinha,
-  TIPOS, diasDaSemana, iso, nomeDaLinha, rotuloDaSemana, segundaDe, tipoPadraoDaLinha, dataDeIso,
+  SELECT_ITEM, TIPOS, diasDaSemana, iso, nomeDaLinha, rotuloDaSemana, segundaDe, tipoPadraoDaLinha, dataDeIso,
 } from '@/lib/cronograma';
 
 /**
@@ -53,6 +55,10 @@ export default function CronogramaEdicao() {
   const [criando, setCriando] = useState(false);
   const [levarItens, setLevarItens] = useState(true);
   const [novaLinha, setNovaLinha] = useState(false);
+  const [vinculando, setVinculando] = useState<Item | null>(null);
+  // O que está sendo arrastado (um item ou uma linha) e a célula onde o item cairia.
+  const [arrastando, setArrastando] = useState<{ tipo: 'item' | 'linha'; id: string; largura: number } | null>(null);
+  const [celulaAlvo, setCelulaAlvo] = useState<string | null>(null);
   // Duas visões dos MESMOS itens: "Por pessoa" (a grade da planilha, onde se edita) e "Por dia"
   // (agenda da semana, com filtro por pessoa). A escolha fica guardada neste navegador.
   const [visao, setVisao] = useState<'pessoa' | 'dia'>(() => {
@@ -84,7 +90,7 @@ export default function CronogramaEdicao() {
       const linhas = ((ls as unknown) as Linha[]) || [];
       const ids = linhas.map(l => l.id);
       const { data: its } = ids.length
-        ? await supabase.from('cronograma_itens').select('id, linha_id, dia, ordem, texto, tipo, task_id, project_id')
+        ? await supabase.from('cronograma_itens').select(SELECT_ITEM)
             .in('linha_id', ids).order('ordem').order('created_at')
         : { data: [] as Item[] };
       novo = { semana: s as Semana, linhas, itens: (its as Item[]) || [], anterior: null };
@@ -116,9 +122,9 @@ export default function CronogramaEdicao() {
     const ordem = doDia.reduce((m, i) => Math.max(m, i.ordem), 0) + 1;
     const { data, error } = await supabase.from('cronograma_itens')
       .insert({ linha_id: linha.id, dia, texto, tipo, ordem, created_by: profile?.id ?? null })
-      .select('id, linha_id, dia, ordem, texto, tipo, task_id, project_id').single();
+      .select(SELECT_ITEM).single();
     if (error || !data) { toast.error('Não foi possível salvar o item.'); return; }
-    mutar(d => ({ ...d, itens: d.itens.some(i => i.id === data.id) ? d.itens : [...d.itens, data as Item] }));
+    mutar(d => ({ ...d, itens: d.itens.some(i => i.id === data.id) ? d.itens : [...d.itens, data as unknown as Item] }));
   };
 
   const atualizarItem = async (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => {
@@ -131,6 +137,15 @@ export default function CronogramaEdicao() {
     mutar(d => ({ ...d, itens: d.itens.filter(i => i.id !== id) }));
     const { error } = await supabase.from('cronograma_itens').delete().eq('id', id);
     if (error) { toast.error('Não foi possível remover.'); carregar(true); }
+  };
+
+  const vincularItem = async (id: string, v: Vinculo | null) => {
+    mutar(d => ({ ...d, itens: d.itens.map(i => (i.id === id
+      ? { ...i, project_id: v?.project.id ?? null, task_id: v?.task?.id ?? null, project: v?.project ?? null, task: v?.task ?? null }
+      : i)) }));
+    const { error } = await supabase.from('cronograma_itens')
+      .update({ project_id: v?.project.id ?? null, task_id: v?.task?.id ?? null, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) { toast.error('Não foi possível salvar o vínculo.'); carregar(true); }
   };
 
   // ── Linhas ─────────────────────────────────────────────────────────────
@@ -155,12 +170,81 @@ export default function CronogramaEdicao() {
     if (error) { toast.error('Não foi possível renomear.'); carregar(true); }
   };
 
-  // Arrastar para reordenar: a linha solta vira a posição nova e as outras renumeram. Renumera
-  // todas (e não só troca duas) porque linhas com "ordem" repetida não mudariam de lugar.
+  // Arrastar: as linhas (pela alça) e cada item (pelo próprio item) usam o mesmo DndContext.
+  // Mouse com 6px de folga (para o clique ainda editar o texto) e, no toque, segurar um instante.
   const sensores = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  // Linha só enxerga linhas; item só enxerga itens e células (e prefere o item sob o mouse).
+  const colisao: CollisionDetection = useCallback(args => {
+    const ehLinha = args.active.data.current?.tipo === 'linha';
+    const alvos = args.droppableContainers.filter(c => (c.data.current?.tipo === 'linha') === ehLinha);
+    if (ehLinha) return closestCenter({ ...args, droppableContainers: alvos });
+    const sob = pointerWithin({ ...args, droppableContainers: alvos });
+    const sobItem = sob.filter(c => alvos.find(a => a.id === c.id)?.data.current?.tipo === 'item');
+    return sobItem.length ? sobItem : sob;
+  }, []);
+
+  const celulaDe = (over: DragOverEvent['over']) => {
+    const d = over?.data.current;
+    return d && (d.tipo === 'item' || d.tipo === 'celula') ? `${d.linhaId}|${d.dia}` : null;
+  };
+  const aoComecarArrasto = (e: DragStartEvent) => {
+    const tipo = e.active.data.current?.tipo === 'linha' ? 'linha' : 'item';
+    setArrastando({ tipo, id: String(e.active.id), largura: e.active.rect.current.initial?.width ?? 160 });
+  };
+  const aoArrastarSobre = (e: DragOverEvent) => setCelulaAlvo(arrastando?.tipo === 'item' ? celulaDe(e.over) : null);
+  const aoTerminarArrasto = (e: DragEndEvent) => {
+    const tipo = arrastando?.tipo;
+    setArrastando(null); setCelulaAlvo(null);
+    if (tipo === 'linha') aoSoltarLinha(e); else aoSoltarItem(e);
+  };
+
+  // Soltar um item: ele vai para a posição sobre a qual caiu (ou para o fim da célula vazia/solta),
+  // no mesmo dia, em outro dia ou na linha de outra pessoa. Renumera a célula de destino inteira.
+  const aoSoltarItem = async (e: DragEndEvent) => {
+    if (!dados || !e.over) return;
+    const ativo = dados.itens.find(i => i.id === e.active.id);
+    const alvo = e.over.data.current;
+    if (!ativo || !alvo || (alvo.tipo !== 'item' && alvo.tipo !== 'celula')) return;
+    const linhaId: string = alvo.linhaId, dia: string = alvo.dia;
+    const mesmaCelula = ativo.linha_id === linhaId && ativo.dia === dia;
+
+    const celula = itensDe(linhaId, dia);
+    let novaOrdem: Item[];
+    if (alvo.tipo === 'celula') {
+      novaOrdem = [...celula.filter(i => i.id !== ativo.id), ativo];
+    } else if (mesmaCelula) {
+      const de = celula.findIndex(i => i.id === ativo.id), para = celula.findIndex(i => i.id === e.over!.id);
+      if (de < 0 || para < 0) return;
+      novaOrdem = arrayMove(celula, de, para);
+    } else {
+      // Em outra célula: entra antes ou depois do item sobre o qual caiu, conforme a metade em que o mouse está.
+      const resto = celula.filter(i => i.id !== ativo.id);
+      const pos = resto.findIndex(i => i.id === e.over!.id);
+      const topo = e.active.rect.current.translated;
+      const abaixo = !!topo && topo.top + topo.height / 2 > e.over.rect.top + e.over.rect.height / 2;
+      const idx = pos < 0 ? resto.length : pos + (abaixo ? 1 : 0);
+      novaOrdem = [...resto.slice(0, idx), ativo, ...resto.slice(idx)];
+    }
+
+    const novos = novaOrdem.map((i, ordem) => ({ ...i, linha_id: linhaId, dia, ordem }));
+    const mudou = novos.filter(n => {
+      const antes = dados.itens.find(i => i.id === n.id);
+      return !antes || antes.linha_id !== n.linha_id || antes.dia !== n.dia || antes.ordem !== n.ordem;
+    });
+    if (!mudou.length) return;
+    mutar(d => ({ ...d, itens: d.itens.map(i => novos.find(n => n.id === i.id) ?? i) }));
+    const agora = new Date().toISOString();
+    const res = await Promise.all(mudou.map(n =>
+      supabase.from('cronograma_itens').update({ linha_id: n.linha_id, dia: n.dia, ordem: n.ordem, updated_at: agora }).eq('id', n.id)));
+    if (res.some(r => r.error)) { toast.error('Não foi possível mover o item.'); carregar(true); }
+  };
+
+  // Arrastar uma linha para reordenar: a linha solta vira a posição nova e as outras renumeram.
+  // Renumera todas (e não só troca duas) porque linhas com "ordem" repetida não mudariam de lugar.
   const aoSoltarLinha = async (e: DragEndEvent) => {
     if (!dados || !e.over || e.active.id === e.over.id) return;
     const ordenadas = [...dados.linhas].sort((a, b) => a.ordem - b.ordem);
@@ -288,14 +372,21 @@ export default function CronogramaEdicao() {
                 {linhasOrdenadas.length === 0 && (
                   <p className="px-4 py-8 text-center text-sm text-lumos-text-secondary">Nenhuma linha ainda. {podeEditar ? 'Use “Adicionar linha”.' : ''}</p>
                 )}
-                <DndContext sensors={sensores} collisionDetection={closestCenter} onDragEnd={aoSoltarLinha}>
+                <DndContext sensors={sensores} collisionDetection={colisao} onDragStart={aoComecarArrasto} onDragOver={aoArrastarSobre}
+                  onDragEnd={aoTerminarArrasto} onDragCancel={() => { setArrastando(null); setCelulaAlvo(null); }}>
                   <SortableContext items={linhasOrdenadas.map(l => l.id)} strategy={verticalListSortingStrategy}>
                     {linhasOrdenadas.map(l => (
                       <LinhaDoCronograma key={l.id} linha={l} dias={dias} podeEditar={podeEditar}
-                        itensDe={itensDe} onAdicionar={adicionarItem} onAtualizar={atualizarItem} onRemover={removerItem}
-                        onRenomear={renomearLinha} onRemoverLinha={removerLinha} />
+                        itensDe={itensDe} celulaAlvo={celulaAlvo} onAdicionar={adicionarItem} onAtualizar={atualizarItem} onRemover={removerItem}
+                        onVincular={setVinculando} onDesvincular={id => vincularItem(id, null)} onRenomear={renomearLinha} onRemoverLinha={removerLinha} />
                     ))}
                   </SortableContext>
+                  <DragOverlay dropAnimation={null}>
+                    {arrastando?.tipo === 'item' && (() => {
+                      const it = dados.itens.find(i => i.id === arrastando.id);
+                      return it ? <div style={{ width: arrastando.largura }}><ItemFlutuante item={it} /></div> : null;
+                    })()}
+                  </DragOverlay>
                 </DndContext>
               </div>
             </div>
@@ -344,6 +435,10 @@ export default function CronogramaEdicao() {
           onAdicionar={adicionarLinha}
         />
       )}
+      {vinculando && (
+        <VincularItemModal item={vinculando} onClose={() => setVinculando(null)}
+          onSalvar={async v => { await vincularItem(vinculando.id, v); setVinculando(null); }} />
+      )}
       {dialogoConfirmar}
     </div>
   );
@@ -351,18 +446,21 @@ export default function CronogramaEdicao() {
 
 // ── Uma linha da grade (arrastável pela alça à esquerda) ─────────────────────
 // Fica FORA da página de propósito: declarada dentro, seria recriada a cada atualização de estado.
-function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, onAdicionar, onAtualizar, onRemover, onRenomear, onRemoverLinha }: {
+function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, celulaAlvo, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular, onRenomear, onRemoverLinha }: {
   linha: Linha;
   dias: ReturnType<typeof diasDaSemana>;
   podeEditar: boolean;
   itensDe: (linhaId: string, dia: string) => Item[];
+  celulaAlvo: string | null;
   onAdicionar: (linha: Linha, dia: string, texto: string, tipo: TipoItem) => void;
   onAtualizar: (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => void;
   onRemover: (id: string) => void;
+  onVincular: (item: Item) => void;
+  onDesvincular: (id: string) => void;
   onRenomear: (linha: Linha, nome: string) => void;
   onRemoverLinha: (linha: Linha) => void;
 }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: l.id, disabled: !podeEditar });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: l.id, data: { tipo: 'linha' }, disabled: !podeEditar });
 
   return (
     <div ref={setNodeRef}
@@ -396,11 +494,12 @@ function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, onAdicionar, o
         )}
       </div>
       {dias.map(d => (
-        <div key={d.iso} className={clsx('border-l border-lumos-border/60', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
+        <div key={d.iso} className={clsx('border-l border-lumos-border/60 flex flex-col', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
           <CelulaCronograma
+            linhaId={l.id} dia={d.iso} destaque={celulaAlvo === `${l.id}|${d.iso}`}
             itens={itensDe(l.id, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
             onAdicionar={(texto, tipo) => onAdicionar(l, d.iso, texto, tipo)}
-            onAtualizar={onAtualizar} onRemover={onRemover} />
+            onAtualizar={onAtualizar} onRemover={onRemover} onVincular={onVincular} onDesvincular={onDesvincular} />
         </div>
       ))}
     </div>
