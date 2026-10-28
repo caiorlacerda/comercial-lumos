@@ -143,6 +143,21 @@ export function calcFinancials(items: BudgetItem[], version: BudgetVersion): Ver
   };
 }
 
+/**
+ * Valor final (em reais) de um orçamento do jeito que o editor mostra, a partir da VERSÃO ATIVA.
+ * Serve às telas que só listam/somam orçamentos (ficha do cliente, lista de clientes) e não devem
+ * refazer a conta à mão: elas só escolhem a versão e passam pelo calcFinancials.
+ * Se o orçamento não tiver versão ativa carregada, cai na primeira versão da lista.
+ */
+export function valorFinalDoOrcamento(budget: {
+  active_version?: any;
+  versions?: any[] | null;
+}): number {
+  const version = budget?.active_version || budget?.versions?.[0];
+  if (!version) return 0;
+  return calcFinancials(version.items || [], version).valorFinal;
+}
+
 export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',

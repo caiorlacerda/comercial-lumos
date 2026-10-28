@@ -20,7 +20,7 @@ import {
   ExternalLink,
   Calendar
 } from 'lucide-react';
-import { formatCurrency } from '@/utils/financials';
+import { formatCurrency, valorFinalDoOrcamento } from '@/utils/financials';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
@@ -98,32 +98,28 @@ export default function ClientProfile() {
         .from('budgets')
         .select(`
           *,
+          active_version:budget_versions!budgets_active_version_fkey(
+            id,
+            margin_pct,
+            nf_pct,
+            discount_value,
+            imposto_reajusta_preco,
+            items:budget_items!version_id(unit_cost, quantity, item_group)
+          ),
           versions:budget_versions!budget_id(
             id,
             margin_pct,
             nf_pct,
             discount_value,
+            imposto_reajusta_preco,
             items:budget_items!version_id(unit_cost, quantity, item_group)
           )
         `)
         .eq('client_id', id)
         .order('created_at', { ascending: false });
 
-      const processedBudgets = (budgetsData || []).map(b => {
-        const version = b.versions?.[0];
-        let total = 0;
-        if (version) {
-          const sum = (group: string) =>
-            (version.items || [])
-              .filter((i: any) => i?.item_group === group)
-              .reduce((acc: number, i: any) => acc + (Number(i?.unit_cost || 0) * Number(i?.quantity || 0)), 0);
-
-          const totalCusto = sum('equipe') + sum('equipamentos') + sum('edicao') + sum('producao');
-          const subtotal = totalCusto + (totalCusto * version.margin_pct);
-          total = subtotal + (subtotal * version.nf_pct) - version.discount_value;
-        }
-        return { ...b, total };
-      });
+      // Mesmo valor que o editor mostra: calcFinancials, na versão ativa do orçamento.
+      const processedBudgets = (budgetsData || []).map(b => ({ ...b, total: valorFinalDoOrcamento(b) }));
 
       setBudgets(processedBudgets);
     } catch (err) {
