@@ -63,6 +63,7 @@ const PERM_OPTIONS = [
   // Cobrança de nota fiscal dos fornecedores: nasceu na página de Fornecedores
   // (todo mundo via) e foi para o Financeiro, onde só o admin entrava.
   { key: 'notas_fornecedores', label: 'Notas fiscais dos fornecedores (Financeiro › Notas)' },
+  { key: 'cronograma_editar', label: 'Editar o Cronograma da equipe' },
 ];
 
 // Campos de RH (tabela team_members)
