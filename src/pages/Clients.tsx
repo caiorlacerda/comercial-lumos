@@ -24,7 +24,7 @@ import {
   Trash,
   ArrowRight
 } from 'lucide-react';
-import { formatCurrency } from '@/utils/financials';
+import { formatCurrency, valorFinalDoOrcamento } from '@/utils/financials';
 import { clsx } from 'clsx';
 import { MobileCardList, MobileCard } from '@/components/ui/MobileCards';
 import ClientModal from '@/components/clients/ClientModal';
@@ -77,11 +77,20 @@ export default function Clients() {
           budgets:budgets!client_id(
             id,
             status,
+            active_version:budget_versions!budgets_active_version_fkey(
+              id,
+              margin_pct,
+              nf_pct,
+              discount_value,
+              imposto_reajusta_preco,
+              items:budget_items!version_id(unit_cost, quantity, item_group)
+            ),
             versions:budget_versions!budget_id(
               id,
               margin_pct,
               nf_pct,
               discount_value,
+              imposto_reajusta_preco,
               items:budget_items!version_id(unit_cost, quantity, item_group)
             )
           )
@@ -95,21 +104,8 @@ export default function Clients() {
         const budgetCount = (client.budgets || []).length;
         const contactCount = client.contacts?.[0]?.count || 0;
 
-        let totalApproved = 0;
-        approvedBudgets.forEach((budget: any) => {
-          const version = budget.versions?.[0];
-          if (version) {
-            const sum = (group: string) =>
-              (version.items || [])
-                .filter((i: any) => i?.item_group === group)
-                .reduce((acc: number, i: any) => acc + (Number(i?.unit_cost || 0) * Number(i?.quantity || 0)), 0);
-
-            const totalCusto = sum('equipe') + sum('equipamentos') + sum('edicao') + sum('producao');
-            const subtotal = totalCusto + (totalCusto * version.margin_pct);
-            const total = subtotal + (subtotal * version.nf_pct) - version.discount_value;
-            totalApproved += total;
-          }
-        });
+        // Mesmo valor que o editor mostra: calcFinancials, na versão ativa de cada orçamento aprovado.
+        const totalApproved = approvedBudgets.reduce((soma: number, budget: any) => soma + valorFinalDoOrcamento(budget), 0);
 
         return {
           ...client,
