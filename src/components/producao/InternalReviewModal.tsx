@@ -16,6 +16,7 @@ import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/prod
 import ColarComentarios from '@/components/producao/ColarComentarios';
 import FundoDeck from '@/components/common/FundoDeck';
 import { carregarFontesDeck } from '@/lib/fontesDeck';
+import { useAlturaVisivel } from '@/hooks/useAlturaVisivel';
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 
@@ -43,6 +44,7 @@ interface Props {
 
 export default function InternalReviewModal({ versionId, token, fileName, versao, projectName, status, podeDecidir, onDecidir, onClose }: Props) {
   const { profile } = useAuth();
+  const areaVisivel = useAlturaVisivel();
   const toast = useToast();
   useEffect(() => { carregarFontesDeck(); }, []);
   const authorName = profile?.full_name || 'Equipe';
@@ -181,6 +183,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     return s >= 300 && s <= 720 ? s : 360;
   });
   const [tool, setTool] = useState<'draw' | 'arrow' | 'rect' | null>(null);
+  const [mostrarFerramentas, setMostrarFerramentas] = useState(false);   // celular: recolhidas até pedir
+  const ferramentasVisiveis = mostrarFerramentas || !!tool;
   const [color, setColor] = useState(COLORS[0]);
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [viewingShapes, setViewingShapes] = useState<Shape[]>([]);
@@ -411,7 +415,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   const onCanvasUp = () => { const s = drawingRef.current; if (s) { if (s.points.length > 1) setShapes(prev => [...prev, s]); drawingRef.current = null; } };
 
   const ensureComposing = () => { if (composing) return; videoRef.current?.pause(); setPlaying(false); setViewingShapes([]); setShapes([]); setComposing(true); };
-  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); };
+  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); setMostrarFerramentas(false); };
 
   // Redimensiona o painel de comentários (arrasta a borda esquerda no desktop)
   const startResize = (e: React.PointerEvent) => {
@@ -511,7 +515,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   // No celular o vídeo fica acima da lista: sem isto, tocar num comentário pulava o vídeo fora da vista.
   const trazerVideoParaVista = () => {
-    if (window.matchMedia?.('(min-width: 1024px)').matches) return;
+    // No computador os dois lados cabem; em pé o player já fica preso no topo e sempre à vista.
+    if (window.matchMedia?.('(min-width: 1024px)').matches || window.matchMedia?.('(orientation: portrait)').matches) return;
     wrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   const viewComment = (c: TeamComment) => {
@@ -608,7 +613,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
    * bug no dia em que o seletor de versões foi parar nesse canto.
    */
   return createPortal(
-    <div className={clsx('fixed inset-0 z-[200] isolate text-lumos-text-primary flex flex-col font-work-sans', rtheme === 'dark' ? 'dark' : 'theme-light')}>
+    <div style={areaVisivel ? ({ ['--vvh']: `${areaVisivel.altura}px`, ['--vvt']: `${areaVisivel.topo}px` } as React.CSSProperties) : undefined}
+      className={clsx('fixed inset-0 z-[200] isolate text-lumos-text-primary flex flex-col font-work-sans retrato:h-[var(--vvh)] retrato:top-[var(--vvt)]', rtheme === 'dark' ? 'dark' : 'theme-light')}>
       <div className="absolute inset-0 -z-10" aria-hidden><FundoDeck tema={rtheme === 'dark' ? 'dark' : 'light'} /></div>
       {/* Sem isto o confirm() nunca aparecia e a promessa ficava pendurada:
           excluir comentário simplesmente não acontecia, em silêncio. */}
@@ -694,10 +700,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row paisagem-curta:flex-row min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row paisagem-curta:flex-row min-h-0 retrato:overflow-y-auto retrato:overscroll-contain">
         {/* Player */}
         {/* No celular o player vai de ponta a ponta (sem a moldura de cartão), para o vídeo ficar o maior possível. */}
-        <div className="flex-shrink-0 lg:flex-1 paisagem-curta:flex-1 paisagem-curta:min-h-0 flex flex-col min-w-0 m-0 lg:m-4 lg:mr-2 p-0 lg:p-3 gap-2 lg:rounded-[18px] lg:border border-lumos-border lg:bg-lumos-surface/40 lg:backdrop-blur-xl">
+        <div className="retrato:sticky retrato:top-0 retrato:z-20 retrato:bg-lumos-bg/95 retrato:backdrop-blur-xl flex-shrink-0 lg:flex-1 paisagem-curta:flex-1 paisagem-curta:min-h-0 flex flex-col min-w-0 m-0 lg:m-4 lg:mr-2 p-0 lg:p-3 gap-2 lg:rounded-[18px] lg:border border-lumos-border lg:bg-lumos-surface/40 lg:backdrop-blur-xl">
           <div ref={wrapRef} className="relative w-full aspect-video max-h-[60dvh] paisagem-curta:max-h-[calc(100dvh-12rem)] lg:max-h-none bg-black rounded-none lg:rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10 overflow-hidden select-none"
             onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
             onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
@@ -761,7 +767,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           </div>
 
           {/* Controles */}
-          <div className="flex items-center gap-2 flex-wrap px-3 pb-2 lg:px-0 lg:pb-0">
+          <div className={clsx('flex items-center gap-2 flex-wrap px-3 pb-2 lg:px-0 lg:pb-0', composing && 'retrato:hidden')}>
             <button onClick={togglePlay} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}</button>
             <div className="hidden sm:flex paisagem-curta:hidden items-center gap-1.5">
               <button onClick={toggleMute} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}</button>
@@ -1165,7 +1171,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           </div>
 
           {/* Compositor */}
-          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2">
+          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2 scroll-mt-64">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1"><Clock className="w-3 h-3" /> em {timecode(currentMs, fps)}</span>
               {composing && (
@@ -1176,7 +1182,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             </div>
 
             {/* Ferramentas de anotação — sempre visíveis */}
-            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-xl">
+            {/* No celular as ferramentas ficam recolhidas atrás deste botão: com elas abertas o campo de comentário não cabe na tela com o teclado. */}
+            {!(ferramentasVisiveis || shapes.length > 0) && (
+              <button type="button" onClick={() => setMostrarFerramentas(true)}
+                className="lg:hidden w-full h-11 rounded-xl border border-dashed border-lumos-border text-[12px] font-bold text-lumos-text-secondary flex items-center justify-center gap-2">
+                <Pencil className="w-4 h-4" /> Desenhar no vídeo
+              </button>
+            )}
+            <div className={clsx('flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-xl', !(ferramentasVisiveis || shapes.length > 0) && 'max-lg:hidden')}>
               {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
                 <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
                   title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}
@@ -1253,7 +1266,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">
+            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5 max-lg:hidden">
               <span className="[@media(pointer:coarse)]:hidden">Enter envia · Shift+Enter quebra linha</span>
               <span className="hidden [@media(pointer:coarse)]:inline">Toque no botão para enviar</span>
             </p>

@@ -2,6 +2,8 @@
 
 /* Celular deitado (pouca altura, largura de celular): reorganiza telas em duas colunas sem tocar no computador. */
 @custom-variant paisagem-curta (@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px));
+/* Celular (ou tablet) em pé: tudo empilhado, com o player preso no topo. */
+@custom-variant retrato (@media (max-width: 1023px) and (orientation: portrait));
 
 @theme {
   --color-lumos-bg: #F5F5F3;
