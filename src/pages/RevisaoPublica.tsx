@@ -426,6 +426,8 @@ export default function RevisaoPublica() {
   };
   const onCanvasDown = (e: React.PointerEvent) => {
     if (!composing || !tool) return;
+    // Captura o dedo/mouse neste desenho: o traço continua mesmo se sair da área, e o iOS não o troca por rolagem.
+    try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* noop */ }
     drawingRef.current = { type: tool, color, points: [canvasPoint(e)] };
   };
   const onCanvasMove = (e: React.PointerEvent) => {
@@ -439,7 +441,8 @@ export default function RevisaoPublica() {
     // Captura o shape ANTES de zerar o ref — o updater do setState roda depois,
     // então usar drawingRef.current lá dentro inseriria null (e drawShape quebra).
     const shape = drawingRef.current;
-    if (shape) { setShapes(prev => [...prev, shape]); drawingRef.current = null; }
+    // Um toque sem arrastar não é desenho: não vira anotação invisível.
+    if (shape) { if (shape.points.length > 1) setShapes(prev => [...prev, shape]); drawingRef.current = null; }
   };
 
   // Entra em modo de composição (pausa e limpa anotações de leitura)
@@ -538,8 +541,14 @@ export default function RevisaoPublica() {
     setMenuVisual(false);
   };
 
+  // No celular o vídeo fica acima da lista: sem isto, tocar num comentário pulava o vídeo fora da vista.
+  const trazerVideoParaVista = () => {
+    if (window.matchMedia?.('(min-width: 1024px)').matches) return;
+    wrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
   const viewComment = (c: Comment) => {
     seekTo(c.timecode_ms);
+    trazerVideoParaVista();
     setComposing(false);
     const shs: Shape[] = c.annotations.map(a => ({ type: (a.type as any) || 'draw', color: a.data?.color || COLORS[0], points: a.data?.points || [] }));
     setViewingShapes(shs);
@@ -653,7 +662,7 @@ export default function RevisaoPublica() {
   // altura travada e o vídeo ocupa só a altura que sobra. No mobile segue o fluxo
   // normal, empilhado e rolável.
   return (
-    <div className={clsx('relative isolate min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col text-lumos-text-primary font-work-sans', themeClass)}>
+    <div className={clsx('relative isolate min-h-dvh lg:h-dvh lg:overflow-hidden paisagem-curta:h-dvh paisagem-curta:overflow-hidden flex flex-col text-lumos-text-primary font-work-sans', themeClass)}>
       <div className="fixed inset-0 -z-10" aria-hidden><FundoDeck tema={rtheme === 'dark' ? 'dark' : 'light'} /></div>
       {dialogoConfirmar}
       {colando && (
@@ -685,7 +694,7 @@ export default function RevisaoPublica() {
       )}
 
       {/* Header (sem logo) */}
-      <header className="h-16 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl relative z-30">
+      <header className="h-16 paisagem-curta:h-12 flex-shrink-0 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl relative z-30">
         <div className="flex items-center gap-3 min-w-0">
           {volta && (
             <a href={volta.url} title={volta.rotulo}
@@ -798,19 +807,19 @@ export default function RevisaoPublica() {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0" onClick={() => showInfo && setShowInfo(false)}>
+      <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 paisagem-curta:flex-row paisagem-curta:flex-1 paisagem-curta:min-h-0" onClick={() => showInfo && setShowInfo(false)}>
         {/* Player */}
-        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0 lg:min-h-0', isFs ? 'bg-black' : 'm-4 lg:mr-2 p-3 gap-2 rounded-[18px] border border-lumos-border bg-lumos-surface/40 backdrop-blur-xl')}>
+        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0 lg:min-h-0 paisagem-curta:min-h-0', isFs ? 'bg-black' : 'm-4 paisagem-curta:m-2 lg:mr-2 p-3 paisagem-curta:p-2 gap-2 rounded-[18px] border border-lumos-border bg-lumos-surface/40 backdrop-blur-xl')}>
           {/* Área do vídeo: no desktop ocupa a altura que sobra (depois do header e dos
               controles) e o box 16:9 é limitado por max-h-full, então nunca empurra os
               controles para fora da tela. No mobile segue o fluxo normal (sem esticar). */}
-          <div className="lg:flex-1 lg:min-h-0 flex items-center justify-center">
+          <div className="lg:flex-1 lg:min-h-0 paisagem-curta:flex-1 paisagem-curta:min-h-0 flex items-center justify-center">
           <div ref={wrapRef} className={clsx('relative bg-black overflow-hidden select-none', isFs ? 'flex-1 min-h-0 w-full flex items-center justify-center' : 'w-full aspect-video max-h-full rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10')}
             onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
             onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
             onPointerUp={() => { arrastando.current = null; }}
             onPointerLeave={() => { arrastando.current = null; }}
-            style={{ cursor: zoom > 1 && !(composing && tool) ? 'grab' : undefined }}>
+            style={{ cursor: zoom > 1 && !(composing && tool) ? 'grab' : undefined, touchAction: zoom > 1 || (composing && tool) ? 'none' : undefined }}>
             {/* Vídeo e canvas escalam JUNTOS: as coordenadas do desenho são
                 normalizadas sobre o retângulo, que a transformação também
                 escala, então a anotação continua caindo no mesmo ponto da
@@ -834,8 +843,8 @@ export default function RevisaoPublica() {
             {/* Canvas de anotações */}
             <canvas
               ref={canvasRef}
-              className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
-              onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp}
+              className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair touch-none' : 'pointer-events-none')}
+              onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp} onPointerCancel={onCanvasUp}
             />
             {/* A guia mora DENTRO da transformação, junto do vídeo: com zoom,
                 moldura parada sobre imagem ampliada mostraria um corte que não
@@ -889,18 +898,21 @@ export default function RevisaoPublica() {
 
           {/* Barra de progresso com marcadores de comentário */}
           <div className={clsx('flex-shrink-0 pt-1', isFs ? 'px-4' : 'px-1')}>
-            <div ref={barRef} onPointerDown={onBarDown} className="relative h-5 flex items-center cursor-pointer group">
+            <div ref={barRef} onPointerDown={onBarDown} className="relative h-9 lg:h-5 flex items-center cursor-pointer group touch-none">
               <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
               <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
               {/* marcadores */}
               {durationMs > 0 && comentarios.map(c => (
                 <button key={c.id} onClick={e => { e.stopPropagation(); viewComment(c); }}
                   title={`${c.author_name} · ${timecode(c.timecode_ms, fps)}${c.body ? ` — ${c.body}` : ''}`}
-                  className="absolute -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg hover:scale-150 transition-transform z-10"
-                  style={{ left: `${(c.timecode_ms / durationMs) * 100}%` }} />
+                  aria-label="Abrir comentário"
+                  className="group/marcador absolute -translate-x-1/2 w-7 h-7 lg:w-2.5 lg:h-2.5 flex items-center justify-center z-10"
+                  style={{ left: `${(c.timecode_ms / durationMs) * 100}%` }}>
+                  <span className="block w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg group-hover/marcador:scale-150 transition-transform" />
+                </button>
               ))}
               {/* cabeça do scrubber */}
-              <div className="absolute -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-lumos-text-primary shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+              <div className="absolute -translate-x-1/2 w-5 h-5 lg:w-3.5 lg:h-3.5 rounded-full bg-lumos-text-primary shadow opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity pointer-events-none"
                 style={{ left: `${pct}%` }} />
             </div>
           </div>
@@ -911,7 +923,7 @@ export default function RevisaoPublica() {
               {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
             {/* Volume (no celular some: o aparelho tem os botões de volume) */}
-            <div className="hidden sm:flex items-center gap-1.5">
+            <div className="hidden sm:flex paisagem-curta:hidden items-center gap-1.5">
               <button onClick={toggleMute} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
                 {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
@@ -1015,7 +1027,7 @@ export default function RevisaoPublica() {
         </div>
 
         {/* Comentários */}
-        <aside className={clsx('w-full lg:w-[380px] flex-shrink-0 border-t lg:border border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex flex-col lg:my-4 lg:mr-4 lg:rounded-[14px] lg:overflow-hidden lg:min-h-0', isFs && 'hidden')}>
+        <aside className={clsx('w-full lg:w-[380px] paisagem-curta:w-[320px] paisagem-curta:border-t-0 paisagem-curta:border-l paisagem-curta:overflow-y-auto paisagem-curta:min-h-0 flex-shrink-0 border-t lg:border border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex flex-col lg:my-4 lg:mr-4 lg:rounded-[14px] lg:overflow-hidden lg:min-h-0', isFs && 'hidden')}>
 
           {/* Versão antiga é só leitura. Comentar num corte que já foi
               substituído (ou aprovar ele) é pedido que nasce perdido: a equipe
