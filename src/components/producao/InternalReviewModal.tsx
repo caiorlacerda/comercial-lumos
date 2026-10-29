@@ -400,9 +400,15 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   useEffect(() => { const onR = () => redraw(); window.addEventListener('resize', onR); return () => window.removeEventListener('resize', onR); }, [redraw]);
 
   const canvasPoint = (e: React.PointerEvent): Point => { const r = canvasRef.current!.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; };
-  const onCanvasDown = (e: React.PointerEvent) => { if (!composing || !tool) return; drawingRef.current = { type: tool, color, points: [canvasPoint(e)] }; };
+  const onCanvasDown = (e: React.PointerEvent) => {
+    if (!composing || !tool) return;
+    // Captura o dedo/mouse neste desenho: o traço continua mesmo se sair da área, e o iOS não o troca por rolagem.
+    try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch { /* noop */ }
+    drawingRef.current = { type: tool, color, points: [canvasPoint(e)] };
+  };
   const onCanvasMove = (e: React.PointerEvent) => { if (!drawingRef.current) return; const p = canvasPoint(e); if (tool === 'draw') drawingRef.current.points.push(p); else drawingRef.current.points[1] = p; redraw(); };
-  const onCanvasUp = () => { const s = drawingRef.current; if (s) { setShapes(prev => [...prev, s]); drawingRef.current = null; } };
+  // Um toque sem arrastar não é desenho: não vira anotação invisível.
+  const onCanvasUp = () => { const s = drawingRef.current; if (s) { if (s.points.length > 1) setShapes(prev => [...prev, s]); drawingRef.current = null; } };
 
   const ensureComposing = () => { if (composing) return; videoRef.current?.pause(); setPlaying(false); setViewingShapes([]); setShapes([]); setComposing(true); };
   const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); };
@@ -503,8 +509,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
     await load();
   };
 
+  // No celular o vídeo fica acima da lista: sem isto, tocar num comentário pulava o vídeo fora da vista.
+  const trazerVideoParaVista = () => {
+    if (window.matchMedia?.('(min-width: 1024px)').matches) return;
+    wrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
   const viewComment = (c: TeamComment) => {
     seekTo(c.timecode_ms); setComposing(false);
+    trazerVideoParaVista();
     setViewingShapes(c.annotations.map(a => ({ type: (a.type as any) || 'draw', color: a.data?.color || COLORS[0], points: a.data?.points || [] })));
   };
 
@@ -605,7 +617,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         <ColarComentarios fps={fps} duracaoMs={durationMs}
           onConfirmar={criarColados} onClose={() => setColando(false)} />
       )}
-      <header className="h-16 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex-shrink-0">
+      <header className="h-16 paisagem-curta:h-12 px-4 flex items-center justify-between border-b border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex-shrink-0">
         {/* O truncate vale só pro NOME DO ARQUIVO. Quando ele estava aqui no
             contêiner, o overflow:hidden cortava o menu de versões, que abre pra
             fora da caixa: o botão clicava e nada aparecia. */}
@@ -682,16 +694,16 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row paisagem-curta:flex-row min-h-0">
         {/* Player */}
         {/* No celular o player vai de ponta a ponta (sem a moldura de cartão), para o vídeo ficar o maior possível. */}
-        <div className="flex-shrink-0 lg:flex-1 flex flex-col min-w-0 m-0 lg:m-4 lg:mr-2 p-0 lg:p-3 gap-2 lg:rounded-[18px] lg:border border-lumos-border lg:bg-lumos-surface/40 lg:backdrop-blur-xl">
-          <div ref={wrapRef} className="relative w-full aspect-video max-h-[60dvh] lg:max-h-none bg-black rounded-none lg:rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10 overflow-hidden select-none"
+        <div className="flex-shrink-0 lg:flex-1 paisagem-curta:flex-1 paisagem-curta:min-h-0 flex flex-col min-w-0 m-0 lg:m-4 lg:mr-2 p-0 lg:p-3 gap-2 lg:rounded-[18px] lg:border border-lumos-border lg:bg-lumos-surface/40 lg:backdrop-blur-xl">
+          <div ref={wrapRef} className="relative w-full aspect-video max-h-[60dvh] paisagem-curta:max-h-[calc(100dvh-12rem)] lg:max-h-none bg-black rounded-none lg:rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10 overflow-hidden select-none"
             onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
             onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
             onPointerUp={() => { arrastando.current = null; }}
             onPointerLeave={() => { arrastando.current = null; }}
-            style={{ cursor: zoom > 1 && !(composing && tool) ? 'grab' : undefined }}>
+            style={{ cursor: zoom > 1 && !(composing && tool) ? 'grab' : undefined, touchAction: zoom > 1 || (composing && tool) ? 'none' : undefined }}>
           <div className="absolute inset-0 origin-center transition-transform duration-100"
             style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
             <video ref={videoRef} poster={poster || undefined} preload="metadata" className="w-full h-full object-contain block"
@@ -703,8 +715,8 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               onCanPlay={e => { setReady(true); if (e.currentTarget.videoWidth === 0) setVideoUnsupported(true); }}
               onError={() => { setReady(true); setVideoUnsupported(true); }}
               onPlay={e => { setPlaying(true); if (!fpsMedido.current) { fpsMedido.current = true; estimarFps(e.currentTarget, setFps); } }} onPause={() => setPlaying(false)} onClick={togglePlay} playsInline />
-            <canvas ref={canvasRef} className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair' : 'pointer-events-none')}
-              onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp} />
+            <canvas ref={canvasRef} className={clsx('absolute inset-0 w-full h-full', composing && tool ? 'cursor-crosshair touch-none' : 'pointer-events-none')}
+              onPointerDown={onCanvasDown} onPointerMove={onCanvasMove} onPointerUp={onCanvasUp} onPointerLeave={onCanvasUp} onPointerCancel={onCanvasUp} />
             {/* Dentro da transformação, junto do vídeo: com zoom, moldura parada
                 sobre imagem ampliada apontaria um corte que não existe. */}
             <GuiasDeEnquadramento guia={guia} mascara={mascara} larguraVideo={dimVideo.w} alturaVideo={dimVideo.h} />
@@ -733,22 +745,25 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
           {/* Barra de progresso com marcadores */}
           <div className="px-4 lg:px-1 pt-1">
-            <div ref={barRef} onPointerDown={onBarDown} className="relative h-5 flex items-center cursor-pointer group">
+            <div ref={barRef} onPointerDown={onBarDown} className="relative h-9 lg:h-5 flex items-center cursor-pointer group touch-none">
               <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
               <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
               {durationMs > 0 && comments.map(c => (
                 <button key={c.id} onClick={e => { e.stopPropagation(); viewComment(c); }} title={`${c.author_name} · ${timecode(c.timecode_ms, fps)}`}
-                  className="absolute -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg hover:scale-150 transition-transform z-10"
-                  style={{ left: `${(c.timecode_ms / durationMs) * 100}%` }} />
+                  aria-label="Abrir comentário"
+                  className="group/marcador absolute -translate-x-1/2 w-7 h-7 lg:w-2.5 lg:h-2.5 flex items-center justify-center z-10"
+                  style={{ left: `${(c.timecode_ms / durationMs) * 100}%` }}>
+                  <span className="block w-2.5 h-2.5 rounded-full bg-lumos-yellow ring-2 ring-lumos-bg group-hover/marcador:scale-150 transition-transform" />
+                </button>
               ))}
-              <div className="absolute -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-lumos-text-primary shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ left: `${pct}%` }} />
+              <div className="absolute -translate-x-1/2 w-5 h-5 lg:w-3.5 lg:h-3.5 rounded-full bg-lumos-text-primary shadow opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity pointer-events-none" style={{ left: `${pct}%` }} />
             </div>
           </div>
 
           {/* Controles */}
           <div className="flex items-center gap-2 flex-wrap px-3 pb-2 lg:px-0 lg:pb-0">
             <button onClick={togglePlay} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}</button>
-            <div className="hidden sm:flex items-center gap-1.5">
+            <div className="hidden sm:flex paisagem-curta:hidden items-center gap-1.5">
               <button onClick={toggleMute} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}</button>
               <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={e => setVol(Number(e.target.value))} className="hidden sm:block w-16 accent-lumos-yellow cursor-pointer" />
             </div>
@@ -854,7 +869,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         {/* Comentários do time — painel redimensionável (largura lembrada) */}
         <aside
           style={{ ['--rpw' as any]: `${panelWidth}px` }}
-          className="relative w-full lg:w-[var(--rpw)] flex-shrink-0 border-t lg:border border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex flex-col min-h-0 lg:my-4 lg:mr-4 lg:rounded-[14px] lg:overflow-hidden"
+          className="relative w-full lg:w-[var(--rpw)] paisagem-curta:w-[320px] paisagem-curta:border-t-0 paisagem-curta:border-l paisagem-curta:overflow-y-auto flex-shrink-0 border-t lg:border border-lumos-border bg-lumos-surface/55 backdrop-blur-xl flex flex-col min-h-0 lg:my-4 lg:mr-4 lg:rounded-[14px] lg:overflow-hidden"
         >
           {/* Handle de redimensionamento (só desktop) */}
           <div
