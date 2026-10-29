@@ -294,7 +294,35 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
   const changeSpeed = () => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(next); if (videoRef.current) videoRef.current.playbackRate = next; };
-  const fullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.(); else wrapRef.current?.requestFullscreen?.(); };
+  // Tela cheia. No celular o iPhone não deixa pôr um <div> em tela cheia (só o próprio <video>, pelo
+  // webkitEnterFullscreen), então o botão não fazia nada. No toque o vídeo vai sozinho para a tela
+  // cheia do aparelho, com os controles nativos ligados só enquanto durar; no computador segue como era.
+  const fullscreen = () => {
+    const doc = document as any;
+    if (document.fullscreenElement || doc.webkitFullscreenElement) { (document.exitFullscreen || doc.webkitExitFullscreen)?.call(document); return; }
+    const v = videoRef.current as any;
+    if (v && window.matchMedia?.('(pointer: coarse)').matches) {
+      try {
+        if (v.webkitEnterFullscreen) { v.controls = true; v.webkitEnterFullscreen(); return; }
+        if (v.requestFullscreen) {
+          v.controls = true;
+          v.requestFullscreen().catch(() => { v.controls = false; });
+          // Aparelho que ignora o pedido sem avisar: não deixa os controles nativos presos no player pequeno.
+          window.setTimeout(() => { if (!document.fullscreenElement) v.controls = false; }, 1500);
+          return;
+        }
+      } catch { v.controls = false; }
+    }
+    wrapRef.current?.requestFullscreen?.();
+  };
+  // Saiu da tela cheia: desliga os controles nativos (a tela tem os próprios).
+  useEffect(() => {
+    const v = videoRef.current as any;
+    const sair = () => { const el = videoRef.current; if (el && !document.fullscreenElement && !(document as any).webkitFullscreenElement) el.controls = false; };
+    document.addEventListener('fullscreenchange', sair);
+    v?.addEventListener('webkitendfullscreen', sair);
+    return () => { document.removeEventListener('fullscreenchange', sair); v?.removeEventListener('webkitendfullscreen', sair); };
+  }, []);
   const seekTo = (ms: number) => { const v = videoRef.current; if (v) { v.currentTime = ms / 1000; setCurrentMs(ms); v.pause(); setPlaying(false); } };
   const toggleMute = () => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); };
   const setVol = (val: number) => { const v = videoRef.current; if (v) { v.volume = val; v.muted = val === 0; } setVolume(val); setMuted(val === 0); };
@@ -651,8 +679,9 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         {/* Player */}
-        <div className="flex-1 flex flex-col min-w-0 m-4 lg:mr-2 p-3 gap-2 rounded-[18px] border border-lumos-border bg-lumos-surface/40 backdrop-blur-xl">
-          <div ref={wrapRef} className="relative w-full aspect-video bg-black rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10 overflow-hidden select-none"
+        {/* No celular o player vai de ponta a ponta (sem a moldura de cartão), para o vídeo ficar o maior possível. */}
+        <div className="flex-shrink-0 lg:flex-1 flex flex-col min-w-0 m-0 lg:m-4 lg:mr-2 p-0 lg:p-3 gap-2 lg:rounded-[18px] lg:border border-lumos-border lg:bg-lumos-surface/40 lg:backdrop-blur-xl">
+          <div ref={wrapRef} className="relative w-full aspect-video max-h-[60dvh] lg:max-h-none bg-black rounded-none lg:rounded-[18px] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10 overflow-hidden select-none"
             onPointerDown={e => { if (zoom === 1 || (composing && tool)) return; arrastando.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; }}
             onPointerMove={e => { if (!arrastando.current) return; setPan({ x: e.clientX - arrastando.current.x, y: e.clientY - arrastando.current.y }); }}
             onPointerUp={() => { arrastando.current = null; }}
@@ -698,7 +727,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           </div>
 
           {/* Barra de progresso com marcadores */}
-          <div className="px-1 pt-1">
+          <div className="px-4 lg:px-1 pt-1">
             <div ref={barRef} onPointerDown={onBarDown} className="relative h-5 flex items-center cursor-pointer group">
               <div className="absolute left-0 right-0 h-1.5 rounded-full bg-lumos-text-secondary/20" />
               <div className="absolute left-0 h-1.5 rounded-full bg-lumos-yellow" style={{ width: `${pct}%` }} />
@@ -712,11 +741,11 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
           </div>
 
           {/* Controles */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap px-3 pb-2 lg:px-0 lg:pb-0">
             <button onClick={togglePlay} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}</button>
             <div className="flex items-center gap-1.5">
               <button onClick={toggleMute} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}</button>
-              <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={e => setVol(Number(e.target.value))} className="w-16 accent-lumos-yellow cursor-pointer" />
+              <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={e => setVol(Number(e.target.value))} className="hidden sm:block w-16 accent-lumos-yellow cursor-pointer" />
             </div>
             <span className="text-xs font-mono font-bold text-lumos-text-secondary tabular-nums">{timecode(currentMs, fps)} <span className="opacity-50">/ {durationMs ? timecode(durationMs, fps) : '—'}</span></span>
             <div className="flex-1" />
@@ -813,7 +842,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               )}
             </div>
 
-            <button onClick={fullscreen} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
+            <button onClick={fullscreen} title="Tela cheia" aria-label="Tela cheia" className="p-2.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-5 h-5 lg:w-4 lg:h-4" /></button>
           </div>
         </div>
 
