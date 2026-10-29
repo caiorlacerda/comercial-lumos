@@ -7,7 +7,10 @@ import { ptBR } from 'date-fns/locale';
  * (ou nome livre) e linhas especiais, e em cada célula (linha × dia) uma lista de itens com tipo.
  */
 
-export type TipoItem = 'edicao' | 'gravacao' | 'externa' | 'entrega';
+export type TipoItemFixo = 'edicao' | 'gravacao' | 'externa' | 'entrega';
+/** Cores livres: só marcam o item, não significam nada (nem entram em automação). */
+export type CorLivre = 'roxo' | 'rosa' | 'vermelho' | 'amarelo' | 'turquesa' | 'cinza';
+export type TipoItem = TipoItemFixo | CorLivre;
 export type TipoLinha = 'pessoa' | 'criacao' | 'externas' | 'entregas';
 
 export interface Semana {
@@ -45,13 +48,23 @@ export interface Item {
 export const SELECT_ITEM = 'id, linha_id, dia, ordem, texto, tipo, task_id, project_id, project:projects(id, name), task:project_tasks(id, titulo)';
 
 /** As cores da legenda da planilha: sem cor, verde, azul e laranja. */
-export const TIPOS: { id: TipoItem; label: string; caixa: string; ponto: string }[] = [
+export const TIPOS: { id: TipoItemFixo; label: string; caixa: string; ponto: string }[] = [
   { id: 'edicao', label: 'Edição', caixa: 'bg-lumos-surface border-lumos-border', ponto: 'bg-lumos-text-secondary/40' },
   { id: 'gravacao', label: 'Gravação ou Meeting', caixa: 'bg-green-500/15 border-green-500/35', ponto: 'bg-green-500' },
   { id: 'externa', label: 'Externa', caixa: 'bg-sky-500/15 border-sky-500/35', ponto: 'bg-sky-500' },
   { id: 'entrega', label: 'Entrega', caixa: 'bg-orange-500/15 border-orange-500/35', ponto: 'bg-orange-500' },
 ];
-export const tipoDoItem = (t: TipoItem) => TIPOS.find(x => x.id === t) ?? TIPOS[0];
+
+/** Mais cores para marcar itens à vontade (além das 4 da legenda). As classes ficam escritas por extenso para o Tailwind enxergá-las. */
+export const CORES_LIVRES: { id: CorLivre; label: string; caixa: string; ponto: string }[] = [
+  { id: 'roxo', label: 'Roxo', caixa: 'bg-purple-500/15 border-purple-500/35', ponto: 'bg-purple-500' },
+  { id: 'rosa', label: 'Rosa', caixa: 'bg-pink-500/15 border-pink-500/35', ponto: 'bg-pink-500' },
+  { id: 'vermelho', label: 'Vermelho', caixa: 'bg-red-500/15 border-red-500/35', ponto: 'bg-red-500' },
+  { id: 'amarelo', label: 'Amarelo', caixa: 'bg-yellow-400/20 border-yellow-500/40', ponto: 'bg-yellow-400' },
+  { id: 'turquesa', label: 'Turquesa', caixa: 'bg-teal-500/15 border-teal-500/35', ponto: 'bg-teal-500' },
+  { id: 'cinza', label: 'Cinza', caixa: 'bg-slate-500/20 border-slate-500/40', ponto: 'bg-slate-500' },
+];
+export const tipoDoItem = (t: TipoItem) => TIPOS.find(x => x.id === t) ?? CORES_LIVRES.find(x => x.id === t) ?? TIPOS[0];
 
 /** Item novo numa linha especial já nasce com o tipo dela (Externas → azul, Entregas → laranja). */
 export const tipoPadraoDaLinha = (l: Pick<Linha, 'tipo'>): TipoItem =>

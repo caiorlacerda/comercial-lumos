@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, addWeeks, isToday, subWeeks, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, RefreshCw, Trash2, UserCog, Users } from 'lucide-react';
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clapperboard, Copy, GripVertical, Pencil, Plus, RefreshCw, Trash2, UserCheck, UserCog, Users } from 'lucide-react';
 import {
   DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors,
   type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent,
@@ -23,6 +23,7 @@ import UserAvatar from '@/components/common/UserAvatar';
 import CelulaCronograma, { ItemFlutuante } from '@/components/cronograma/CelulaCronograma';
 import VincularItemModal, { type Vinculo } from '@/components/cronograma/VincularItemModal';
 import QuemEditaModal, { PERMISSAO_CRONOGRAMA } from '@/components/cronograma/QuemEditaModal';
+import VincularNomesModal from '@/components/cronograma/VincularNomesModal';
 import { type ItemAutomatico, automaticosDaCelula, buscarAutomaticos } from '@/lib/cronogramaAutomatico';
 import AgendaDaSemana from '@/components/cronograma/AgendaDaSemana';
 import {
@@ -50,6 +51,7 @@ export default function CronogramaEdicao() {
   // Quem edita é escolhido pelo admin (botão "Quem edita"); o banco confere a mesma regra.
   const podeEditar = can(PERMISSAO_CRONOGRAMA);
   const [quemEdita, setQuemEdita] = useState(false);
+  const [vinculandoNomes, setVinculandoNomes] = useState(false);
 
   const [inicio, setInicio] = useState<Date>(() => segundaDe(new Date()));
   const chave = iso(inicio);
@@ -333,6 +335,12 @@ export default function CronogramaEdicao() {
           <p className="text-lumos-text-secondary text-sm">O que cada pessoa faz em cada dia da semana.{!podeEditar && ' Só quem a gestão liberou edita; você acompanha por aqui.'}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {podeEditar && (
+            <button onClick={() => setVinculandoNomes(true)} title="Trocar nomes livres por pessoas cadastradas no app"
+              className="h-8 px-3 text-[11px] font-black uppercase tracking-wide rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/50 flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5" /> Vincular nomes
+            </button>
+          )}
           {isAdmin && (
             <button onClick={() => setQuemEdita(true)} title="Escolher quem pode editar o cronograma"
               className="h-8 px-3 text-[11px] font-black uppercase tracking-wide rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/50 flex items-center gap-1.5">
@@ -487,6 +495,7 @@ export default function CronogramaEdicao() {
         />
       )}
       {quemEdita && <QuemEditaModal onClose={() => setQuemEdita(false)} />}
+      {vinculandoNomes && <VincularNomesModal onClose={() => setVinculandoNomes(false)} onConcluido={() => carregar(true)} />}
       {vinculando && (
         <VincularItemModal item={vinculando} onClose={() => setVinculando(null)}
           onSalvar={async v => { await vincularItem(vinculando.id, v); setVinculando(null); }} />
