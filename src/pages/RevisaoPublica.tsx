@@ -12,6 +12,7 @@ import { useVideoFonte } from '@/hooks/useVideoFonte';
 import { useConfirm } from '@/components/ui/useConfirm';
 import GuiasDeEnquadramento, { PROPORCOES, type GuiaId } from '@/components/producao/GuiasDeEnquadramento';
 import ColarComentarios from '@/components/producao/ColarComentarios';
+import MenuDoComentario from '@/components/producao/MenuDoComentario';
 import FundoDeck from '@/components/common/FundoDeck';
 import PaginaPublica, { MONO, SERIF, ROTULO_PUBLICO, CAMPO_PUBLICO, BOTAO_AMARELO, CARTAO_VIDRO } from '@/components/publico/PaginaPublica';
 
@@ -452,6 +453,8 @@ export default function RevisaoPublica() {
   // Enter envia o comentário; Shift/Cmd/Ctrl+Enter quebra linha
   const onCommentKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== 'Enter') return;
+    // No celular o Enter do teclado quebra linha (não dá para apertar Shift+Enter); o envio é só pelo botão.
+    if (window.matchMedia?.('(pointer: coarse)').matches) return;
     if (e.shiftKey || e.metaKey || e.ctrlKey) {
       e.preventDefault();
       const ta = e.currentTarget; const s = ta.selectionStart, en = ta.selectionEnd;
@@ -546,6 +549,7 @@ export default function RevisaoPublica() {
   // Dono = viewer_id do comentário igual ao meu. A checagem real acontece no
   // banco (RPCs SECURITY DEFINER), aqui é só a interface.
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const menuAncora = useRef<HTMLElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -607,7 +611,7 @@ export default function RevisaoPublica() {
           <input
             autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && identify()}
-            placeholder="Como você se chama?" className={`${CAMPO_PUBLICO} h-12 mb-5`}
+            placeholder="Como você se chama?" className={`${CAMPO_PUBLICO} h-12 mb-5 !text-[16px]`}
           />
           <button onClick={() => identify()} disabled={!nameInput.trim()} className={`${BOTAO_AMARELO} h-12 w-full text-[15px] uppercase tracking-[2px]`}>
             Entrar
@@ -635,6 +639,15 @@ export default function RevisaoPublica() {
   // que já está no player. Sai da MESMA lista do seletor — duas fontes contando
   // a mesma história é como nasce divergência.
   const outrasVersoes = versoes.filter(v => v.id !== atual?.id && v.comments.length > 0);
+
+  // Trocar o nome com que se comenta (o nome também vai na marca d'água). Usado no cabeçalho (tela grande) e no "Info" (celular).
+  const trocarDeNome = async () => {
+    if (!await confirm({ title: 'Trocar de nome', message: `Você está comentando como "${viewerName}". Quer entrar com outro nome?`, confirmLabel: 'Trocar' })) return;
+    localStorage.removeItem(NOME_SALVO);
+    localStorage.removeItem(`rev_viewer_${token}`);
+    localStorage.removeItem(`rev_name_${token}`);
+    setViewerId(null); setViewerName(''); setNameInput('');
+  };
 
   // No desktop a tela inteira cabe na viewport (sem rolar para achar os controles):
   // altura travada e o vídeo ocupa só a altura que sobra. No mobile segue o fluxo
@@ -693,7 +706,7 @@ export default function RevisaoPublica() {
                     verdade. A lista fica pra quando já se sabe qual versão. */}
                 <button type="button" onClick={() => irPara(indice + 1)} disabled={!temAnterior}
                   title="Versão anterior"
-                  className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                  className="p-3 lg:p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button type="button" onClick={() => setMenuVersao(o => !o)} title="Trocar de versão"
@@ -722,7 +735,7 @@ export default function RevisaoPublica() {
                 )}
                 <button type="button" onClick={() => irPara(indice - 1)} disabled={!temProxima}
                   title="Versão mais nova"
-                  className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                  className="p-3 lg:p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <span className="text-[10px] font-bold text-lumos-text-secondary/70 ml-0.5 hidden sm:inline">
@@ -740,13 +753,7 @@ export default function RevisaoPublica() {
               precisa ser óbvio em nome de quem o comentário vai sair. */}
           {viewerName && (
             <button type="button"
-              onClick={async () => {
-                if (!await confirm({ title: 'Trocar de nome', message: `Você está comentando como "${viewerName}". Quer entrar com outro nome?`, confirmLabel: 'Trocar' })) return;
-                localStorage.removeItem(NOME_SALVO);
-                localStorage.removeItem(`rev_viewer_${token}`);
-                localStorage.removeItem(`rev_name_${token}`);
-                setViewerId(null); setViewerName(''); setNameInput('');
-              }}
+              onClick={trocarDeNome}
               title="Trocar de nome"
               className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary transition-colors max-w-[180px]">
               <span className="truncate">{viewerName}</span>
@@ -756,9 +763,9 @@ export default function RevisaoPublica() {
 
           {/* Info (nome, resolução, tamanho, versão… tudo num lugar só) */}
           <div className="relative">
-            <button onClick={() => setShowInfo(s => !s)}
-              className={clsx('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lumos text-[11px] font-bold border transition-colors', showInfo ? 'border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-              <Info className="w-3.5 h-3.5" /> Info
+            <button onClick={() => setShowInfo(s => !s)} aria-label="Informações do vídeo"
+              className={clsx('flex items-center justify-center gap-1.5 w-11 sm:w-auto sm:px-3 h-11 lg:h-auto lg:px-2.5 lg:py-1.5 rounded-lumos text-[11px] font-bold border transition-colors', showInfo ? 'border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+              <Info className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Info</span>
             </button>
             {showInfo && (
               <div className="absolute right-0 top-12 w-64 p-4 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl grid grid-cols-2 gap-x-4 gap-y-2.5 z-40">
@@ -768,12 +775,23 @@ export default function RevisaoPublica() {
                     <span className="text-[11px] font-bold text-lumos-text-primary break-words">{v}</span>
                   </div>
                 ))}
+                {/* No celular o nome não cabe no cabeçalho: fica aqui, com o jeito de trocar. */}
+                {viewerName && (
+                  <div className="col-span-2 sm:hidden border-t border-lumos-border pt-2.5 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="block text-[8px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Você comenta como</span>
+                      <span className="block text-[12px] font-bold text-lumos-text-primary truncate">{viewerName}</span>
+                    </div>
+                    <button type="button" onClick={trocarDeNome}
+                      className="h-11 px-4 rounded-lumos border border-lumos-border text-[12px] font-bold text-lumos-text-primary flex-shrink-0">Trocar</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
           {/* Tema claro/escuro */}
           <button onClick={toggleTheme} title="Tema claro/escuro"
-            className="p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors">
+            className="w-11 h-11 lg:w-auto lg:h-auto lg:p-2 flex items-center justify-center rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors">
             {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
           </button>
           <span className="text-[10px] text-lumos-text-secondary ml-1 hidden sm:inline">Você: <b className="text-lumos-text-primary">{viewerName}</b></span>
@@ -889,12 +907,12 @@ export default function RevisaoPublica() {
 
           {/* Controles (estilo Frame.io) */}
           <div className={clsx('flex-shrink-0 flex items-center gap-2 flex-wrap', isFs && 'px-4 pb-3')}>
-            <button onClick={togglePlay} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
+            <button onClick={togglePlay} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
               {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
-            {/* Volume */}
-            <div className="flex items-center gap-1.5">
-              <button onClick={toggleMute} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
+            {/* Volume (no celular some: o aparelho tem os botões de volume) */}
+            <div className="hidden sm:flex items-center gap-1.5">
+              <button onClick={toggleMute} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
                 {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
               <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume}
@@ -904,12 +922,12 @@ export default function RevisaoPublica() {
               {timecode(currentMs, fps)} <span className="opacity-50">/ {durationMs ? timecode(durationMs, fps) : '—'}</span>
             </span>
             <div className="flex-1" />
-            <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
+            <button onClick={changeSpeed} className="min-w-11 lg:min-w-0 px-3 py-3.5 lg:px-2.5 lg:py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
 
             {viaCdn && qualidades.length > 1 && (
               <div className="relative">
                 <button type="button" onClick={() => setMenuQualidade(o => !o)}
-                  className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors text-lumos-text-primary">
+                  className="min-w-11 lg:min-w-0 px-3 py-3.5 lg:px-2.5 lg:py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors text-lumos-text-primary">
                   {qualidadeAtual === -1 ? 'AUTO' : (qualidades.find(q => q.id === qualidadeAtual)?.rotulo || 'AUTO')}
                 </button>
                 {menuQualidade && (
@@ -917,13 +935,13 @@ export default function RevisaoPublica() {
                     <div className="fixed inset-0 z-[300]" onClick={() => setMenuQualidade(false)} />
                     <div className="absolute bottom-full right-0 mb-2 z-[301] w-28 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
                       <button type="button" onClick={() => { trocarQualidade(-1); setMenuQualidade(false); }}
-                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                        className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                           qualidadeAtual === -1 ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
                         Automática
                       </button>
                       {qualidades.map(q => (
                         <button key={q.id} type="button" onClick={() => { trocarQualidade(q.id); setMenuQualidade(false); }}
-                          className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                          className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                             qualidadeAtual === q.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
                           {q.rotulo}
                         </button>
@@ -937,7 +955,7 @@ export default function RevisaoPublica() {
                 não a cada play, e a barra já tem o que se usa sempre. */}
             <div className="relative">
               <button onClick={() => setMenuVisual(o => !o)} title="Guias, zoom e frame"
-                className={clsx('p-2 rounded-lumos transition-colors',
+                className={clsx('p-3.5 lg:p-2 rounded-lumos transition-colors',
                   guia || zoom > 1 ? 'text-lumos-yellow' : 'hover:bg-lumos-text-secondary/10')}>
                 <Frame className="w-4 h-4" />
               </button>
@@ -947,15 +965,15 @@ export default function RevisaoPublica() {
                   <div className="absolute bottom-full right-0 mb-2 z-[301] w-52 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
                     <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Guias de enquadramento</p>
                     <button type="button" onClick={() => setGuia(null)}
-                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                      className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                         !guia ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>Nenhuma</button>
                     {PROPORCOES.map(pr => (
                       <button key={pr.id} type="button" onClick={() => setGuia(pr.id)}
-                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                        className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                           guia === pr.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{pr.label}</button>
                     ))}
                     <button type="button" onClick={() => setMascara(m => !m)} disabled={!guia}
-                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10 disabled:opacity-40',
+                      className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10 disabled:opacity-40',
                         mascara ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
                       {mascara ? '✓ ' : ''}Escurecer o que fica de fora
                     </button>
@@ -980,7 +998,7 @@ export default function RevisaoPublica() {
                       <>
                         <div className="h-px bg-lumos-border my-1" />
                         <button type="button" onClick={baixarFrame}
-                          className="w-full text-left px-2 py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
+                          className="w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
                           Baixar este frame
                         </button>
                       </>
@@ -990,9 +1008,9 @@ export default function RevisaoPublica() {
               )}
             </div>
             {data.link.allow_download && (
-              <a href={`${streamUrl}&download=1`} download className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar arquivo"><Download className="w-4 h-4" /></a>
+              <a href={`${streamUrl}&download=1`} download className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar arquivo"><Download className="w-4 h-4" /></a>
             )}
-            <button onClick={fullscreen} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
+            <button onClick={fullscreen} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
           </div>
         </div>
 
@@ -1007,7 +1025,7 @@ export default function RevisaoPublica() {
               <div className="rounded-lumos border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[12px] font-bold text-amber-500">
                 <p>Você está vendo a v{String(atual.versao).padStart(2, '0')}, uma versão anterior. Aqui é só pra comparar.</p>
                 <button onClick={() => irPara(0)}
-                  className="mt-1 text-[11px] font-bold underline underline-offset-2 hover:text-lumos-text-primary">
+                  className="mt-1 py-3.5 lg:py-0 text-[11px] font-bold underline underline-offset-2 hover:text-lumos-text-primary">
                   Voltar pra versão atual (v{String(versoes[0]?.versao ?? data.video.versao).padStart(2, '0')})
                 </button>
               </div>
@@ -1034,7 +1052,7 @@ export default function RevisaoPublica() {
                   <div className="min-w-0">
                     <p>Ajustes solicitados{decididoPor ? ` por ${decididoPor}` : ''}.</p>
                     <button onClick={() => decide('aprovado')} disabled={deciding}
-                      className="mt-1 text-[11px] font-bold underline underline-offset-2 hover:text-green-500 disabled:opacity-60">
+                      className="mt-1 py-3.5 lg:py-0 text-[11px] font-bold underline underline-offset-2 hover:text-green-500 disabled:opacity-60">
                       Mudou de ideia? Aprovar assim mesmo
                     </button>
                   </div>
@@ -1045,9 +1063,9 @@ export default function RevisaoPublica() {
                   <p className="text-[11px] text-lumos-text-secondary mt-0.5">A equipe recebe seus comentários junto com o pedido.</p>
                   <div className="flex gap-2 mt-2.5">
                     <button onClick={() => setAskChanges(false)}
-                      className="flex-1 h-8 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
+                      className="flex-1 h-11 lg:h-8 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary">Cancelar</button>
                     <button onClick={() => decide('ajustes')} disabled={deciding}
-                      className="flex-1 h-8 rounded-lumos bg-amber-500 text-black text-[11px] font-black hover:brightness-95 disabled:opacity-60">
+                      className="flex-1 h-11 lg:h-8 rounded-lumos bg-amber-500 text-black text-[11px] font-black hover:brightness-95 disabled:opacity-60">
                       {deciding ? 'Enviando…' : 'Confirmar ajustes'}
                     </button>
                   </div>
@@ -1055,11 +1073,11 @@ export default function RevisaoPublica() {
               ) : (
                 <div className="flex gap-2">
                   <button onClick={() => decide('aprovado')} disabled={deciding}
-                    className="flex-1 h-10 rounded-full bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
+                    className="flex-1 h-12 lg:h-10 rounded-full bg-green-500 text-white text-[12.5px] font-black flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
                     <Check className="w-4 h-4" /> {deciding ? 'Enviando…' : 'Aprovar vídeo'}
                   </button>
                   <button onClick={() => setAskChanges(true)} disabled={deciding}
-                    className="flex-1 h-10 rounded-full border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
+                    className="flex-1 h-12 lg:h-10 rounded-full border border-lumos-border text-lumos-text-primary text-[12.5px] font-black flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
                     <RotateCcw className="w-4 h-4" /> Pedir ajustes
                   </button>
                 </div>
@@ -1083,10 +1101,10 @@ export default function RevisaoPublica() {
                   <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-lumos-text-secondary/60 pointer-events-none" />
                   <input value={busca} onChange={e => setBusca(e.target.value)}
                     placeholder="Buscar no texto ou por quem escreveu…"
-                    className="input-lumos w-full h-8 text-[11px] pl-7 pr-6" />
+                    className="input-lumos w-full h-11 lg:h-8 text-base lg:text-[11px] pl-7 pr-10 lg:pr-6" />
                   {busca && (
                     <button type="button" onClick={() => setBusca('')} title="Limpar"
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary">
+                      className="absolute right-0 lg:right-1.5 top-1/2 -translate-y-1/2 p-3 lg:p-0 text-lumos-text-secondary hover:text-lumos-text-primary">
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -1097,14 +1115,14 @@ export default function RevisaoPublica() {
                 {!vendoAntiga && (
                   <button type="button" onClick={() => setColando(true)}
                     title="Colar uma lista de pedidos (e-mail, WhatsApp)"
-                    className="h-8 w-8 flex-shrink-0 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center">
+                    className="h-11 w-11 lg:h-8 lg:w-8 flex-shrink-0 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center">
                     <ClipboardPaste className="w-3.5 h-3.5" />
                   </button>
                 )}
 
                 <div className="relative flex-shrink-0">
                   <button type="button" onClick={() => setPainelFiltro(o => !o)} title="Ordenar e filtrar"
-                    className={clsx('h-8 w-8 rounded-lumos border flex items-center justify-center transition-colors',
+                    className={clsx('h-11 w-11 lg:h-8 lg:w-8 rounded-lumos border flex items-center justify-center transition-colors',
                       filtro !== 'todos' || ordem !== 'timecode'
                         ? 'border-lumos-yellow text-lumos-yellow'
                         : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
@@ -1117,14 +1135,14 @@ export default function RevisaoPublica() {
                         <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Ordenar por</p>
                         {([['timecode','Tempo no vídeo'],['novos','Mais recentes'],['antigos','Mais antigos'],['autor','Quem escreveu']] as const).map(([v, l]) => (
                           <button key={v} type="button" onClick={() => setOrdem(v)}
-                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                            className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                               ordem === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
                         ))}
                         <div className="h-px bg-lumos-border my-1" />
                         <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Mostrar</p>
                         {([['todos','Todos'],['pendentes','Só pendentes'],['resolvidos','Só resolvidos'],['anotados','Com desenho'],['meus','Só os meus']] as const).map(([v, l]) => (
                           <button key={v} type="button" onClick={() => setFiltro(v)}
-                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                            className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                               filtro === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
                         ))}
                       </div>
@@ -1168,31 +1186,15 @@ export default function RevisaoPublica() {
                       {isMine(c) && editingId !== c.id && (
                         <div className="relative">
                           <button
-                            onClick={e => { e.stopPropagation(); setMenuFor(m => (m === c.id ? null : c.id)); }}
-                            title="Opções"
-                            className="p-0.5 rounded text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
+                            onClick={e => { e.stopPropagation(); menuAncora.current = e.currentTarget; setMenuFor(m => (m === c.id ? null : c.id)); }}
+                            title="Opções" aria-label="Opções do comentário"
+                            className="p-3 -m-2 lg:p-0.5 lg:m-0 rounded text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
                           >
-                            <MoreVertical className="w-3.5 h-3.5" />
+                            <MoreVertical className="w-5 h-5 lg:w-3.5 lg:h-3.5" />
                           </button>
                           {menuFor === c.id && (
-                            <>
-                              {/* clique fora fecha */}
-                              <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuFor(null); }} />
-                              <div className="absolute right-0 top-6 z-50 w-32 py-1 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl">
-                                <button
-                                  onClick={e => { e.stopPropagation(); startEdit(c); }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10"
-                                >
-                                  <Pencil className="w-3 h-3" /> Editar
-                                </button>
-                                <button
-                                  onClick={e => { e.stopPropagation(); removeComment(c); }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-500/10"
-                                >
-                                  <Trash2 className="w-3 h-3" /> Excluir
-                                </button>
-                              </div>
-                            </>
+                            <MenuDoComentario ancora={menuAncora} tema={themeClass}
+                              onEditar={() => startEdit(c)} onExcluir={() => removeComment(c)} onFechar={() => setMenuFor(null)} />
                           )}
                         </div>
                       )}
@@ -1206,19 +1208,19 @@ export default function RevisaoPublica() {
                         onChange={e => setEditText(e.target.value)}
                         rows={2}
                         autoFocus
-                        className="input-lumos w-full text-[11px] resize-none min-h-[44px] max-h-28 py-1.5 leading-snug"
+                        className="input-lumos w-full text-base lg:text-[11px] resize-none min-h-[44px] max-h-28 py-1.5 leading-snug"
                       />
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => saveEdit(c)}
                           disabled={savingEdit || !editText.trim()}
-                          className="btn-primary h-7 px-3 text-[10px] font-black uppercase tracking-widest rounded-lumos disabled:opacity-40"
+                          className="btn-primary h-11 lg:h-7 px-4 lg:px-3 text-[10px] font-black uppercase tracking-widest rounded-lumos disabled:opacity-40"
                         >
                           {savingEdit ? 'Salvando…' : 'Salvar'}
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="h-7 px-3 rounded-lumos border border-lumos-border text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary"
+                          className="h-11 lg:h-7 px-4 lg:px-3 rounded-lumos border border-lumos-border text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary"
                         >
                           Cancelar
                         </button>
@@ -1310,7 +1312,7 @@ export default function RevisaoPublica() {
                 <Clock className="w-3 h-3" /> em {timecode(currentMs, fps)}
               </span>
               {composing && (
-                <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors">
+                <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors py-3 -my-3 px-1 lg:py-0 lg:my-0 lg:px-0">
                   <X className="w-3 h-3" /> Cancelar
                 </button>
               )}
@@ -1321,17 +1323,18 @@ export default function RevisaoPublica() {
               {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
                 <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
                   title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}
-                  className={clsx('p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                  <Icon className="w-3.5 h-3.5" />
+                  className={clsx('p-3 lg:p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                  <Icon className="w-5 h-5 lg:w-3.5 lg:h-3.5" />
                 </button>
               ))}
               <div className="flex items-center gap-1 ml-1">
                 {COLORS.map(c => (
-                  <button key={c} onClick={() => setColor(c)} style={{ background: c }} title="Cor"
-                    className={clsx('w-4 h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />
+                  <button key={c} onClick={() => setColor(c)} title="Cor" aria-label="Cor" className="w-11 h-11 lg:w-4 lg:h-4 flex items-center justify-center">
+                    <span style={{ background: c }} className={clsx('block w-6 h-6 lg:w-4 lg:h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />
+                  </button>
                 ))}
               </div>
-              <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setShapes([])} className="p-3 lg:p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-5 h-5 lg:w-3.5 lg:h-3.5" /></button>
             </div>
 
             <div className="flex items-end gap-2">
@@ -1339,14 +1342,17 @@ export default function RevisaoPublica() {
                 value={commentText} onFocus={ensureComposing} onChange={e => setCommentText(e.target.value)}
                 onKeyDown={onCommentKey}
                 rows={2} placeholder={`Comentar em ${timecode(currentMs, fps)}…`}
-                className="input-lumos flex-1 text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug"
+                className="input-lumos flex-1 text-base lg:text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug"
               />
               <button onClick={submitComment} disabled={sending || (!commentText.trim() && shapes.length === 0)}
                 className="btn-primary h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-lumos disabled:opacity-40">
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">Enter envia · Shift+Enter quebra linha</p>
+            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">
+              <span className="[@media(pointer:coarse)]:hidden">Enter envia · Shift+Enter quebra linha</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">Toque no botão para enviar</span>
+            </p>
           </div>
           )}
         </aside>

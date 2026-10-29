@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import UserAvatar from '@/components/common/UserAvatar';
+import MenuDoComentario from '@/components/producao/MenuDoComentario';
 import { COLORS, SPEEDS, STREAM_BASE, timecode, estimarFps, drawShape, type Shape, type Point } from '@/lib/reviewCanvas';
 import { STATUS_UI, type ReviewStatus } from '@/lib/reviewStatus';
 import { captureVideoThumb, capaDoStream, valeCapturarCapa, capaJaFalhou, marcarCapaFalhou } from '@/lib/videoThumb';
@@ -372,6 +373,9 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   // Enter envia o comentário; Shift/Cmd/Ctrl+Enter quebra linha
   const onCommentKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== 'Enter') return;
+    // No celular o Enter do teclado quebra linha (não dá para apertar Shift+Enter); o envio é só pelo botão.
+    // Com a lista de menções aberta o Enter segue o fluxo de antes.
+    if (window.matchMedia?.('(pointer: coarse)').matches) return;
     if (e.shiftKey || e.metaKey || e.ctrlKey) {
       e.preventDefault();
       const ta = e.currentTarget; const s = ta.selectionStart, en = ta.selectionEnd;
@@ -508,6 +512,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
   // Dono = author_user_id igual ao meu perfil. O RLS no banco também só permite
   // UPDATE/DELETE dos próprios, então a interface e o banco concordam.
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const menuAncora = useRef<HTMLElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -626,7 +631,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   ali pra quando se sabe qual versão se quer. */}
               <button type="button" onClick={() => irPara(indice + 1)} disabled={!temAnterior}
                 title="Versão anterior"
-                className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                className="p-3 lg:p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button type="button" onClick={() => setMenuVersao(o => !o)}
@@ -655,7 +660,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               )}
               <button type="button" onClick={() => irPara(indice - 1)} disabled={!temProxima}
                 title="Versão mais nova"
-                className="p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+                className="p-3 lg:p-1 rounded-lumos text-lumos-text-secondary hover:text-lumos-text-primary disabled:opacity-30 disabled:cursor-not-allowed">
                 <ChevronRight className="w-4 h-4" />
               </button>
               <span className="text-[10px] font-bold text-lumos-text-secondary/70 normal-case tracking-normal ml-0.5">
@@ -670,10 +675,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
         </span>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setRtheme(t => t === 'dark' ? 'light' : 'dark')} title="Tema claro/escuro"
-            className="p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
+            className="p-3.5 lg:p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
             {rtheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
-          <button onClick={onClose} className="p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-3.5 lg:p-2 rounded-full border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary transition-colors"><X className="w-4 h-4" /></button>
         </div>
       </header>
 
@@ -742,21 +747,21 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
           {/* Controles */}
           <div className="flex items-center gap-2 flex-wrap px-3 pb-2 lg:px-0 lg:pb-0">
-            <button onClick={togglePlay} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}</button>
-            <div className="flex items-center gap-1.5">
-              <button onClick={toggleMute} className="p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}</button>
+            <button onClick={togglePlay} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}</button>
+            <div className="hidden sm:flex items-center gap-1.5">
+              <button onClick={toggleMute} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">{muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}</button>
               <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={e => setVol(Number(e.target.value))} className="hidden sm:block w-16 accent-lumos-yellow cursor-pointer" />
             </div>
             <span className="text-xs font-mono font-bold text-lumos-text-secondary tabular-nums">{timecode(currentMs, fps)} <span className="opacity-50">/ {durationMs ? timecode(durationMs, fps) : '—'}</span></span>
             <div className="flex-1" />
-            <button onClick={changeSpeed} className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
+            <button onClick={changeSpeed} className="min-w-11 lg:min-w-0 px-3 py-3.5 lg:px-2.5 lg:py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors">{speed}x</button>
 
             {/* Qualidade: só aparece quando o vídeo vem da CDN, que é quem tem
                 mais de uma. No arquivo direto não existe o que escolher. */}
             {viaCdn && qualidades.length > 1 && (
               <div className="relative">
                 <button type="button" onClick={() => setMenuQualidade(o => !o)}
-                  className="px-2.5 py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors text-lumos-text-primary">
+                  className="min-w-11 lg:min-w-0 px-3 py-3.5 lg:px-2.5 lg:py-1.5 rounded-lumos hover:bg-lumos-text-secondary/10 text-[11px] font-black transition-colors text-lumos-text-primary">
                   {qualidadeAtual === -1
                     ? 'AUTO'
                     : (qualidades.find(q => q.id === qualidadeAtual)?.rotulo || 'AUTO')}
@@ -767,14 +772,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                     <div className="absolute bottom-full right-0 mb-2 z-[301] w-28 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1">
                       <button type="button"
                         onClick={() => { trocarQualidade(-1); setMenuQualidade(false); }}
-                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                        className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                           qualidadeAtual === -1 ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
                         Automática
                       </button>
                       {qualidades.map(q => (
                         <button key={q.id} type="button"
                           onClick={() => { trocarQualidade(q.id); setMenuQualidade(false); }}
-                          className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                          className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                             qualidadeAtual === q.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
                           {q.rotulo}
                         </button>
@@ -789,7 +794,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 cada play. */}
             <div className="relative">
               <button onClick={() => setMenuVisual(o => !o)} title="Guias, máscara e frame"
-                className={clsx('p-2 rounded-lumos transition-colors',
+                className={clsx('p-3.5 lg:p-2 rounded-lumos transition-colors',
                   guia ? 'text-lumos-yellow' : 'hover:bg-lumos-text-secondary/10')}>
                 <Frame className="w-4 h-4" />
               </button>
@@ -799,15 +804,15 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   <div className="absolute bottom-full right-0 mb-2 z-[301] w-52 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl p-1">
                     <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Guias de enquadramento</p>
                     <button type="button" onClick={() => setGuia(null)}
-                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                      className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                         !guia ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>Nenhuma</button>
                     {PROPORCOES.map(p => (
                       <button key={p.id} type="button" onClick={() => setGuia(p.id)}
-                        className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                        className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                           guia === p.id ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{p.label}</button>
                     ))}
                     <button type="button" onClick={() => setMascara(m => !m)} disabled={!guia}
-                      className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10 disabled:opacity-40',
+                      className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10 disabled:opacity-40',
                         mascara ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>
                       {mascara ? '✓ ' : ''}Escurecer o que fica de fora
                     </button>
@@ -830,11 +835,11 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                     )}
                     <div className="h-px bg-lumos-border my-1" />
                     <button type="button" onClick={baixarFrame}
-                      className="w-full text-left px-2 py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
+                      className="w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
                       Baixar este frame
                     </button>
                     <button type="button" onClick={definirCapa}
-                      className="w-full text-left px-2 py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
+                      className="w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded text-lumos-text-primary hover:bg-lumos-text-secondary/10">
                       Usar como capa do vídeo
                     </button>
                   </div>
@@ -842,7 +847,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               )}
             </div>
 
-            <button onClick={fullscreen} title="Tela cheia" aria-label="Tela cheia" className="p-2.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-5 h-5 lg:w-4 lg:h-4" /></button>
+            <button onClick={fullscreen} title="Tela cheia" aria-label="Tela cheia" className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-5 h-5 lg:w-4 lg:h-4" /></button>
           </div>
         </div>
 
@@ -871,10 +876,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-lumos-text-secondary/60 pointer-events-none" />
                   <input value={busca} onChange={e => setBusca(e.target.value)}
                     placeholder="Buscar no texto ou por quem escreveu…"
-                    className="input-lumos w-full h-8 text-[11px] pl-7 pr-6" />
+                    className="input-lumos w-full h-11 lg:h-8 text-base lg:text-[11px] pl-7 pr-10 lg:pr-6" />
                   {busca && (
                     <button type="button" onClick={() => setBusca('')} title="Limpar"
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-lumos-text-secondary hover:text-lumos-text-primary">
+                      className="absolute right-0 lg:right-1.5 top-1/2 -translate-y-1/2 p-3 lg:p-0 text-lumos-text-secondary hover:text-lumos-text-primary">
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -882,14 +887,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
 
                 <button type="button" onClick={() => setColando(true)} disabled={vendoAntiga}
                   title="Colar retorno do cliente (e-mail, WhatsApp)"
-                  className="h-8 w-8 flex-shrink-0 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center disabled:opacity-40">
+                  className="h-11 w-11 lg:h-8 lg:w-8 flex-shrink-0 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary flex items-center justify-center disabled:opacity-40">
                   <ClipboardPaste className="w-3.5 h-3.5" />
                 </button>
 
                 <div className="relative flex-shrink-0">
                   <button type="button" onClick={() => setPainelFiltro(o => !o)}
                     title="Ordenar e filtrar"
-                    className={clsx('h-8 w-8 rounded-lumos border flex items-center justify-center transition-colors',
+                    className={clsx('h-11 w-11 lg:h-8 lg:w-8 rounded-lumos border flex items-center justify-center transition-colors',
                       filtro !== 'todos' || ordem !== 'timecode'
                         ? 'border-lumos-yellow text-lumos-yellow'
                         : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
@@ -902,14 +907,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                         <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Ordenar por</p>
                         {([['timecode','Tempo no vídeo'],['novos','Mais recentes'],['antigos','Mais antigos'],['autor','Quem escreveu']] as const).map(([v, l]) => (
                           <button key={v} type="button" onClick={() => setOrdem(v)}
-                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                            className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                               ordem === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
                         ))}
                         <div className="h-px bg-lumos-border my-1" />
                         <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary/60">Mostrar</p>
                         {([['todos','Todos'],['pendentes','Só pendentes'],['resolvidos','Só resolvidos'],['anotados','Com desenho'],['meus','Onde me citaram']] as const).map(([v, l]) => (
                           <button key={v} type="button" onClick={() => setFiltro(v)}
-                            className={clsx('w-full text-left px-2 py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
+                            className={clsx('w-full text-left px-2 py-2.5 lg:py-1.5 text-[11px] font-bold rounded hover:bg-lumos-text-secondary/10',
                               filtro === v ? 'text-lumos-yellow' : 'text-lumos-text-primary')}>{l}</button>
                         ))}
                       </div>
@@ -945,7 +950,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                     })) return;
                     await decidir('ALTERACOES_INTERNAS');
                   }}
-                  className="mt-2 h-8 px-3 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-primary hover:border-amber-500/60 disabled:opacity-60">
+                  className="mt-2 h-11 lg:h-8 px-3 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-primary hover:border-amber-500/60 disabled:opacity-60">
                   Trazer de volta pra revisão interna
                 </button>
               )}
@@ -960,12 +965,12 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   <p className="text-[11px] text-lumos-text-secondary mt-0.5">O editor recebe seus comentários junto com o pedido.</p>
                   <div className="flex gap-2 mt-2.5">
                     <button onClick={() => setPedindoAlteracao(false)} disabled={decidindo}
-                      className="flex-1 h-8 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary">
+                      className="flex-1 h-11 lg:h-8 rounded-lumos border border-lumos-border text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary">
                       Cancelar
                     </button>
                     <button disabled={decidindo}
                       onClick={() => decidir('ALTERACOES_INTERNAS')}
-                      className="flex-1 h-8 rounded-lumos bg-amber-500 text-black text-[11px] font-black hover:brightness-95 disabled:opacity-60">
+                      className="flex-1 h-11 lg:h-8 rounded-lumos bg-amber-500 text-black text-[11px] font-black hover:brightness-95 disabled:opacity-60">
                       {decidindo ? 'Enviando…' : 'Confirmar alteração'}
                     </button>
                   </div>
@@ -974,11 +979,11 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 <div className="flex gap-2">
                   <button disabled={decidindo}
                     onClick={() => decidir('EM_REVISAO_CLIENTE')}
-                    className="flex-1 min-h-10 py-1.5 px-3 rounded-full bg-green-500 text-white text-[12.5px] font-black leading-tight text-center flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
+                    className="flex-1 min-h-12 lg:min-h-10 py-1.5 px-3 rounded-full bg-green-500 text-white text-[12.5px] font-black leading-tight text-center flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-60">
                     <Check className="w-4 h-4 flex-shrink-0" /> <span>{decidindo ? 'Enviando…' : 'Aprovar e liberar pro cliente'}</span>
                   </button>
                   <button onClick={() => setPedindoAlteracao(true)} disabled={decidindo}
-                    className="flex-1 min-h-10 py-1.5 px-3 rounded-full border border-lumos-border text-lumos-text-primary text-[12.5px] font-black leading-tight text-center flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
+                    className="flex-1 min-h-12 lg:min-h-10 py-1.5 px-3 rounded-full border border-lumos-border text-lumos-text-primary text-[12.5px] font-black leading-tight text-center flex items-center justify-center gap-2 hover:border-amber-500/60 disabled:opacity-60">
                     <RotateCcw className="w-4 h-4 flex-shrink-0" /> <span>Pedir alteração</span>
                   </button>
                 </div>
@@ -1024,11 +1029,14 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                             e comentário de cliente não tem autor interno. */}
                         <button type="button" title={c.resolved ? 'Marcar como pendente' : 'Marcar como resolvido'}
                           onClick={e => { e.stopPropagation(); alternarResolvido(c); }}
-                          className={clsx('w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0',
+                          aria-label={c.resolved ? 'Marcar como pendente' : 'Marcar como resolvido'}
+                          className="w-11 h-11 lg:w-4 lg:h-4 flex items-center justify-center flex-shrink-0">
+                          <span className={clsx('w-6 h-6 lg:w-4 lg:h-4 rounded border flex items-center justify-center transition-colors',
                             c.resolved
                               ? 'bg-green-500 border-green-500 text-white'
                               : 'border-lumos-border text-transparent hover:border-green-500/60')}>
-                          <Check className="w-3 h-3" />
+                            <Check className="w-4 h-4 lg:w-3 lg:h-3" />
+                          </span>
                         </button>
                         <span className="text-[10px] font-mono font-bold text-lumos-yellow">{timecode(c.timecode_ms, fps)}</span>
 
@@ -1036,30 +1044,15 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                         {isMine(c) && editingId !== c.id && (
                           <div className="relative">
                             <button
-                              onClick={e => { e.stopPropagation(); setMenuFor(m => (m === c.id ? null : c.id)); }}
-                              title="Opções"
-                              className="p-0.5 rounded text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
+                              onClick={e => { e.stopPropagation(); menuAncora.current = e.currentTarget; setMenuFor(m => (m === c.id ? null : c.id)); }}
+                              title="Opções" aria-label="Opções do comentário"
+                              className="p-3 lg:p-0.5 rounded text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10 transition-colors"
                             >
-                              <MoreVertical className="w-3.5 h-3.5" />
+                              <MoreVertical className="w-5 h-5 lg:w-3.5 lg:h-3.5" />
                             </button>
                             {menuFor === c.id && (
-                              <>
-                                <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setMenuFor(null); }} />
-                                <div className="absolute right-0 top-6 z-50 w-32 py-1 rounded-lumos bg-lumos-surface border border-lumos-border shadow-2xl">
-                                  <button
-                                    onClick={e => { e.stopPropagation(); startEdit(c); }}
-                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-text-secondary/10"
-                                  >
-                                    <Pencil className="w-3 h-3" /> Editar
-                                  </button>
-                                  <button
-                                    onClick={e => { e.stopPropagation(); removeComment(c); }}
-                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-500/10"
-                                  >
-                                    <Trash2 className="w-3 h-3" /> Excluir
-                                  </button>
-                                </div>
-                              </>
+                              <MenuDoComentario ancora={menuAncora} tema={rtheme === 'dark' ? 'dark' : 'theme-light'}
+                                onEditar={() => startEdit(c)} onExcluir={() => removeComment(c)} onFechar={() => setMenuFor(null)} />
                             )}
                           </div>
                         )}
@@ -1073,19 +1066,19 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                           onChange={e => setEditText(e.target.value)}
                           rows={2}
                           autoFocus
-                          className="input-lumos w-full text-[11px] resize-none min-h-[44px] max-h-28 py-1.5 leading-snug"
+                          className="input-lumos w-full text-base lg:text-[11px] resize-none min-h-[44px] max-h-28 py-1.5 leading-snug"
                         />
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => saveEdit(c)}
                             disabled={savingEdit || !editText.trim()}
-                            className="btn-primary h-7 px-3 text-[10px] font-black uppercase tracking-widest rounded-lumos disabled:opacity-40"
+                            className="btn-primary h-11 lg:h-7 px-4 lg:px-3 text-[10px] font-black uppercase tracking-widest rounded-lumos disabled:opacity-40"
                           >
                             {savingEdit ? 'Salvando…' : 'Salvar'}
                           </button>
                           <button
                             onClick={cancelEdit}
-                            className="h-7 px-3 rounded-lumos border border-lumos-border text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary"
+                            className="h-11 lg:h-7 px-4 lg:px-3 rounded-lumos border border-lumos-border text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-text-primary"
                           >
                             Cancelar
                           </button>
@@ -1161,7 +1154,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1"><Clock className="w-3 h-3" /> em {timecode(currentMs, fps)}</span>
               {composing && (
-                <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors">
+                <button onClick={resetComposer} title="Cancelar anotação" className="text-[10px] font-bold flex items-center gap-1 text-lumos-text-secondary hover:text-red-400 transition-colors py-3 -my-3 px-1 lg:py-0 lg:my-0 lg:px-0">
                   <X className="w-3 h-3" /> Cancelar
                 </button>
               )}
@@ -1172,14 +1165,18 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
               {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
                 <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
                   title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}
-                  className={clsx('p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
-                  <Icon className="w-3.5 h-3.5" />
+                  className={clsx('p-3 lg:p-1.5 rounded-lumos border transition-colors', tool === t ? 'bg-lumos-yellow/15 border-lumos-yellow text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}>
+                  <Icon className="w-5 h-5 lg:w-3.5 lg:h-3.5" />
                 </button>
               ))}
               <div className="flex items-center gap-1 ml-1">
-                {COLORS.map(c => <button key={c} onClick={() => setColor(c)} style={{ background: c }} title="Cor" className={clsx('w-4 h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />)}
+                {COLORS.map(c => (
+                  <button key={c} onClick={() => setColor(c)} title="Cor" aria-label="Cor" className="w-11 h-11 lg:w-4 lg:h-4 flex items-center justify-center">
+                    <span style={{ background: c }} className={clsx('block w-6 h-6 lg:w-4 lg:h-4 rounded-full border-2', color === c ? 'border-lumos-text-primary' : 'border-transparent')} />
+                  </button>
+                ))}
               </div>
-              <button onClick={() => setShapes([])} className="p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setShapes([])} className="p-3 lg:p-1.5 rounded-lumos border border-lumos-border text-lumos-text-secondary hover:text-red-400 ml-auto" title="Limpar desenhos"><Eraser className="w-5 h-5 lg:w-3.5 lg:h-3.5" /></button>
             </div>
 
             {vendoAntiga && (
@@ -1191,7 +1188,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   Dá pra assistir e ler o que foi pedido nela. Pra comentar ou aprovar, volte para a versão atual.
                 </p>
                 <button type="button" onClick={() => { setVersaoAtiva(maisNova); setViewingShapes([]); resetComposer(); }}
-                  className="mt-1.5 text-[11px] font-black text-amber-600 dark:text-amber-400 underline underline-offset-2">
+                  className="mt-1.5 py-2.5 lg:py-0 text-[11px] font-black text-amber-600 dark:text-amber-400 underline underline-offset-2">
                   Voltar para a versão atual
                 </button>
               </div>
@@ -1202,7 +1199,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                   onChange={e => aoDigitar(e.target.value, e.target.selectionStart ?? e.target.value.length)}
                   onKeyDown={onCommentKey}
                   rows={2} placeholder={`Comentar em ${timecode(currentMs, fps)}… use @ para chamar alguém`}
-                  className="input-lumos w-full text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug" />
+                  className="input-lumos w-full text-base lg:text-xs resize-none min-h-[44px] max-h-28 py-2 leading-snug" />
 
                 {/* Lista de quem chamar. Só gente ativa do app — a menção existe
                     pra virar notificação, então nome solto não serve. */}
@@ -1227,7 +1224,7 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                       </p>
                       {achados.map(u => (
                         <button key={u.id} type="button" onClick={() => escolherMencao(u)}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-lumos-text-secondary/10">
+                          className="w-full flex items-center gap-2 px-2 py-3 lg:py-1.5 rounded text-left hover:bg-lumos-text-secondary/10">
                           <UserAvatar user={u} size={20} />
                           <span className="text-[11.5px] font-bold text-lumos-text-primary truncate">{u.full_name}</span>
                         </button>
@@ -1241,7 +1238,10 @@ export default function InternalReviewModal({ versionId, token, fileName, versao
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">Enter envia · Shift+Enter quebra linha</p>
+            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">
+              <span className="[@media(pointer:coarse)]:hidden">Enter envia · Shift+Enter quebra linha</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">Toque no botão para enviar</span>
+            </p>
           </div>
         </aside>
       </div>
