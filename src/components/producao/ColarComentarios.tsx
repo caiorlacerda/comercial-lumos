@@ -45,7 +45,7 @@ export default function ColarComentarios({ fps, duracaoMs, onConfirmar, onClose 
 
         <textarea autoFocus value={texto} onChange={e => setTexto(e.target.value)}
           rows={7} placeholder={'00:15 trocar o texto da abertura\n1:20 - cortar essa parte\n2:03 o logo está torto'}
-          className="input-lumos w-full text-xs resize-none py-2 leading-relaxed font-mono" />
+          className="input-lumos w-full text-base lg:text-xs resize-none py-2 leading-relaxed font-mono" />
 
         {texto.trim() && (
           <div className="rounded-lumos border border-lumos-border overflow-hidden">
