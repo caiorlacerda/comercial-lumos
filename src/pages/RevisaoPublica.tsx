@@ -330,9 +330,22 @@ export default function RevisaoPublica() {
     const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
     setSpeed(next); if (videoRef.current) videoRef.current.playbackRate = next;
   };
+  // No iPhone o Safari não põe um <div> em tela cheia (só o próprio <video>, pelo webkitEnterFullscreen), então
+  // o botão não fazia nada. Onde o <div> não vai, o vídeo segue sozinho para a tela cheia do aparelho, com os
+  // controles nativos ligados só enquanto durar. Nos demais aparelhos continua como era.
   const fullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen?.();
-    else playerRef.current?.requestFullscreen?.();
+    const doc = document as any;
+    if (document.fullscreenElement || doc.webkitFullscreenElement) { (document.exitFullscreen || doc.webkitExitFullscreen)?.call(document); return; }
+    const el = playerRef.current;
+    if (el?.requestFullscreen) { el.requestFullscreen(); return; }
+    const v = videoRef.current as any;
+    if (v?.webkitEnterFullscreen) {
+      try {
+        v.controls = true;
+        v.addEventListener('webkitendfullscreen', () => { v.controls = false; }, { once: true });
+        v.webkitEnterFullscreen();
+      } catch { v.controls = false; }
+    }
   };
   useEffect(() => {
     const onFs = () => { setIsFs(!!document.fullscreenElement); setTimeout(() => redraw(), 60); };
