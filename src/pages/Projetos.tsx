@@ -3304,8 +3304,8 @@ export default function Projetos() {
                                     className={clsx('border border-transparent rounded px-1.5 py-1 text-[10px] font-black uppercase tracking-wider', getPriorityTheme(task.prioridade))}
                                   />
                                 </div>
-                                <div className="flex items-center justify-between gap-3 mt-2 pl-[30px]">
-                                  <div className="flex items-center gap-1.5 min-w-0">
+                                <div className="flex items-center justify-between gap-3 max-sm:flex-wrap max-sm:gap-y-2 mt-2 pl-[30px]">
+                                  <div className="flex items-center gap-1.5 min-w-0 max-sm:basis-full">
                                     <AssigneePicker
                                       value={assigneeOf(task)}
                                       disabled={!canManage}
@@ -3406,7 +3406,7 @@ export default function Projetos() {
 
                       {/* Quick Add Row */}
                       {canManage && (
-                        <form onSubmit={handleQuickAddTask} className="flex items-center gap-3 pt-3 border-t border-lumos-border/40 mt-2">
+                        <form onSubmit={handleQuickAddTask} className="flex items-center gap-3 max-sm:flex-wrap max-sm:gap-y-2 pt-3 border-t border-lumos-border/40 mt-2">
                           <TipoSeletor valor={novoTipo} tipos={tiposTarefa} onChange={setNovoTipo} />
                           <input
                             ref={quickAddInputRef}
@@ -3414,12 +3414,12 @@ export default function Projetos() {
                             placeholder={tiposTarefa.length ? 'Nome da tarefa... (escolha o Tipo ao lado e pressione Enter)' : 'Digitar nova tarefa... (Pressione Enter para adicionar)'}
                             value={newTaskTitle}
                             onChange={e => setNewTaskTitle(e.target.value)}
-                            className="input-lumos flex-grow h-10 text-xs font-semibold"
+                            className="input-lumos flex-grow min-w-0 h-10 text-xs font-semibold max-sm:order-first max-sm:basis-full"
                           />
                           <button
                             type="submit"
                             disabled={!newTaskTitle.trim()}
-                            className="btn-primary h-10 px-4 flex items-center gap-1.5 text-xs shadow-md disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed"
+                            className="btn-primary h-10 px-4 flex items-center gap-1.5 text-xs shadow-md max-sm:ml-auto disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed"
                           >
                             <PlusCircle className="w-4 h-4" />
                             Adicionar
@@ -3729,7 +3729,7 @@ export default function Projetos() {
                   </div>
 
                   {/* Prazo */}
-                  <div className="space-y-1">
+                  <div className="space-y-1 col-span-2 sm:col-span-1">
                     <span className="text-[9px] font-black uppercase text-lumos-text-secondary tracking-wider block">Prazo</span>
                     <div className="flex items-center gap-1.5">
                       <input

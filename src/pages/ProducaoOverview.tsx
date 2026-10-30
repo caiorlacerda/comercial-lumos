@@ -535,14 +535,14 @@ export default function ProducaoOverview() {
               <div className="space-y-1.5">
                 {overdue.slice(0, 8).map(t => (
                   <button key={t.id} onClick={() => openTaskInManager(t.project_id, t.id)}
-                    className="w-full flex items-center gap-3 p-2.5 rounded-lumos border border-red-500/20 hover:border-red-500/50 hover:bg-red-500/[0.04] transition-all text-left group">
+                    className="w-full flex items-center gap-3 max-sm:flex-wrap max-sm:gap-x-2 max-sm:gap-y-1.5 p-2.5 rounded-lumos border border-red-500/20 hover:border-red-500/50 hover:bg-red-500/[0.04] transition-all text-left group">
                     <span className="text-[10px] font-black px-2 py-1 rounded bg-red-500/10 text-red-500 whitespace-nowrap">{fmtDay(t.data_fim!)}</span>
                     <span className={stageChipCls(t.status)}>{getStatusDetails(t.status).label}</span>
-                    <span className="flex-1 min-w-0">
+                    <span className="flex-1 min-w-0 max-sm:order-last max-sm:basis-full">
                       <span className="block text-xs font-bold text-lumos-text-primary truncate">{t.titulo}</span>
                       <span className="block text-[10px] text-lumos-text-secondary truncate">{t.project?.client?.name ? `${t.project.client.name} · ` : ''}{t.project?.name}</span>
                     </span>
-                    <span className="text-[9px] font-black text-red-400 whitespace-nowrap">{daysLate(t.data_fim!)}</span>
+                    <span className="text-[9px] font-black text-red-400 whitespace-nowrap max-sm:ml-auto">{daysLate(t.data_fim!)}</span>
                     <ChevronRight className="w-4 h-4 text-lumos-text-secondary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                   </button>
                 ))}
@@ -575,9 +575,9 @@ export default function ProducaoOverview() {
                         const u = teamUsers.find(x => x.id === t.responsavel_id);
                         return (
                           <button key={t.id} onClick={() => openTaskInManager(t.project_id, t.id)}
-                            className="w-full flex items-center gap-2.5 p-2 rounded-lumos border border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] transition-all text-left group">
+                            className="w-full flex items-center gap-2.5 max-sm:flex-wrap max-sm:gap-y-1.5 p-2 rounded-lumos border border-lumos-border/50 hover:border-lumos-yellow/40 hover:bg-lumos-text-secondary/[0.03] transition-all text-left group">
                             <span className={stageChipCls(t.status)}>{getStatusDetails(t.status).label}</span>
-                            <span className="text-xs font-bold text-lumos-text-primary truncate">{t.titulo}</span>
+                            <span className="text-xs font-bold text-lumos-text-primary truncate max-sm:order-last max-sm:basis-full">{t.titulo}</span>
                             {t.prioridade === 'alta' && (
                               <span className="text-[9px] font-black uppercase text-red-400 border border-red-500/35 bg-red-500/[0.07] rounded-full px-1.5 py-0.5 flex-shrink-0">Alta</span>
                             )}
