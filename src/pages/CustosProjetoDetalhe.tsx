@@ -868,7 +868,7 @@ export default function CustosProjetoDetalhe() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 max-lg:flex-wrap">
           <button
             onClick={openEditProjectModal}
             className="btn-secondary flex items-center gap-2 h-10 px-4 text-xs"
@@ -897,7 +897,7 @@ export default function CustosProjetoDetalhe() {
           )}
           <button
             onClick={() => { resetForm(); setIsModalOpen(true); }}
-            className="btn-primary h-10 px-6 flex items-center gap-2"
+            className="btn-primary h-10 px-6 flex items-center gap-2 max-sm:w-full max-sm:justify-center"
           >
             <Plus className="w-4 h-4" /> Registrar Custo
           </button>
@@ -1426,7 +1426,7 @@ export default function CustosProjetoDetalhe() {
         {profile?.role === 'admin' && projectFinanceiro && (
           <div className="space-y-6">
             <div className="card p-6 space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between max-sm:flex-wrap max-sm:gap-2">
                 <h3 className="text-sm font-bold text-lumos-text-primary uppercase tracking-wider flex items-center gap-2">
                   <Target className="w-4 h-4 text-lumos-yellow" /> Dados Financeiros
                 </h3>
@@ -1616,7 +1616,7 @@ export default function CustosProjetoDetalhe() {
                     {/* Passo 1: Orçamento Bruto */}
                     <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
                       <span className="text-lumos-text-secondary">1. Faturamento Bruto (Orçamento)</span>
-                      <span className="font-bold text-lumos-text-primary">
+                      <span className="font-bold text-lumos-text-primary max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamentoBruto)}
                       </span>
                     </div>
@@ -1627,7 +1627,7 @@ export default function CustosProjetoDetalhe() {
                         <span>2. Imposto NF</span>
                         <span className="text-[10px] text-lumos-text-secondary/60">Alíquota: {(nfPct * 100).toFixed(1)}%</span>
                       </span>
-                      <span className="font-bold text-red-400">
+                      <span className="font-bold text-red-400 max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right">
                         - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(impostoNF)}
                       </span>
                     </div>
@@ -1635,7 +1635,7 @@ export default function CustosProjetoDetalhe() {
                     {/* Passo 3: Faturamento Líquido */}
                     <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2 bg-lumos-yellow/[0.02] px-2 py-1 rounded">
                       <span className="text-lumos-text-primary font-bold">3. Faturamento Líquido</span>
-                      <span className="font-extrabold text-lumos-text-primary">
+                      <span className="font-extrabold text-lumos-text-primary max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamentoLiquido)}
                       </span>
                     </div>
@@ -1646,7 +1646,7 @@ export default function CustosProjetoDetalhe() {
                         <span>4. Margem Orçada (Comercial)</span>
                         <span className="text-[10px] text-lumos-text-secondary/60">Teto de Custo Estimado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tetoCustos)}</span>
                       </span>
-                      <span className="font-bold text-lumos-text-secondary">
+                      <span className="font-bold text-lumos-text-secondary max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right">
                         {(marginPct * 100).toFixed(1)}%
                       </span>
                     </div>
@@ -1663,7 +1663,7 @@ export default function CustosProjetoDetalhe() {
                           </span>
                         </span>
                       </span>
-                      <span className="font-bold text-red-400">
+                      <span className="font-bold text-red-400 max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right">
                         - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCosts)}
                       </span>
                     </div>
@@ -1677,7 +1677,7 @@ export default function CustosProjetoDetalhe() {
                         <span className="font-bold">6. Lucro Líquido Real (com NF)</span>
                         <span className="text-[9px] text-lumos-text-secondary/60">Dedução: Faturamento Líquido − Custo Real</span>
                       </span>
-                      <span className={clsx("font-black text-sm", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
+                      <span className={clsx("font-black text-sm max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right", lucroLiquidoReal >= 0 ? "text-green-500" : "text-red-500")}>
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lucroLiquidoReal)}
                       </span>
                     </div>
@@ -1690,7 +1690,7 @@ export default function CustosProjetoDetalhe() {
                         <span className="font-bold">7. Lucro Operacional (sem NF)</span>
                         <span className="text-[9px] text-lumos-text-secondary/60">Dedução: Faturamento Bruto − Custo Real</span>
                       </span>
-                      <span className={clsx("font-black text-sm", lucroOperacionalReal >= 0 ? "text-green-500" : "text-red-500")}>
+                      <span className={clsx("font-black text-sm max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right", lucroOperacionalReal >= 0 ? "text-green-500" : "text-red-500")}>
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lucroOperacionalReal)}
                       </span>
                     </div>
