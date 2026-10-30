@@ -147,6 +147,8 @@ export default function RevisaoPublica() {
   const [composing, setComposing] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [tool, setTool] = useState<'draw' | 'arrow' | 'rect' | null>(null);
+  const [mostrarFerramentas, setMostrarFerramentas] = useState(false);   // celular: recolhidas até pedir
+  const ferramentasVisiveis = mostrarFerramentas || !!tool;
   const [color, setColor] = useState(COLORS[0]);
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [viewingShapes, setViewingShapes] = useState<Shape[]>([]);
@@ -451,7 +453,7 @@ export default function RevisaoPublica() {
     if (videoRef.current) { videoRef.current.pause(); setPlaying(false); }
     setViewingShapes([]); setShapes([]); setComposing(true);
   };
-  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); };
+  const resetComposer = () => { setComposing(false); setShapes([]); setTool(null); setCommentText(''); setMostrarFerramentas(false); };
 
   // Enter envia o comentário; Shift/Cmd/Ctrl+Enter quebra linha
   const onCommentKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -543,7 +545,8 @@ export default function RevisaoPublica() {
 
   // No celular o vídeo fica acima da lista: sem isto, tocar num comentário pulava o vídeo fora da vista.
   const trazerVideoParaVista = () => {
-    if (window.matchMedia?.('(min-width: 1024px)').matches) return;
+    // No computador os dois lados cabem; em pé o player já fica preso no topo e sempre à vista.
+    if (window.matchMedia?.('(min-width: 1024px)').matches || window.matchMedia?.('(orientation: portrait)').matches) return;
     wrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   const viewComment = (c: Comment) => {
@@ -809,7 +812,7 @@ export default function RevisaoPublica() {
 
       <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 paisagem-curta:flex-row paisagem-curta:flex-1 paisagem-curta:min-h-0" onClick={() => showInfo && setShowInfo(false)}>
         {/* Player */}
-        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0 lg:min-h-0 paisagem-curta:min-h-0', isFs ? 'bg-black' : 'm-4 paisagem-curta:m-2 lg:mr-2 p-3 paisagem-curta:p-2 gap-2 rounded-[18px] border border-lumos-border bg-lumos-surface/40 backdrop-blur-xl')}>
+        <div ref={playerRef} className={clsx('flex-1 flex flex-col min-w-0 lg:min-h-0 paisagem-curta:min-h-0', isFs ? 'bg-black' : 'm-4 paisagem-curta:m-2 lg:mr-2 p-3 paisagem-curta:p-2 gap-2 rounded-[18px] border border-lumos-border bg-lumos-surface/40 backdrop-blur-xl retrato:sticky retrato:top-0 retrato:z-20 retrato:m-0 retrato:p-2 retrato:rounded-none retrato:border-0 retrato:border-b retrato:bg-lumos-bg/95')}>
           {/* Área do vídeo: no desktop ocupa a altura que sobra (depois do header e dos
               controles) e o box 16:9 é limitado por max-h-full, então nunca empurra os
               controles para fora da tela. No mobile segue o fluxo normal (sem esticar). */}
@@ -918,7 +921,7 @@ export default function RevisaoPublica() {
           </div>
 
           {/* Controles (estilo Frame.io) */}
-          <div className={clsx('flex-shrink-0 flex items-center gap-2 flex-wrap', isFs && 'px-4 pb-3')}>
+          <div className={clsx('flex-shrink-0 flex items-center gap-2 flex-wrap', isFs && 'px-4 pb-3', composing && 'retrato:hidden')}>
             <button onClick={togglePlay} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors">
               {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
@@ -1318,7 +1321,7 @@ export default function RevisaoPublica() {
               Não aparece em versão antiga: o comentário nasceria preso a um corte
               que a equipe já substituiu. */}
           {!vendoAntiga && (
-          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2">
+          <div className="border-t border-lumos-border p-3 bg-lumos-surface/50 flex-shrink-0 space-y-2 scroll-mt-64">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-widest text-lumos-yellow flex items-center gap-1">
                 <Clock className="w-3 h-3" /> em {timecode(currentMs, fps)}
@@ -1331,7 +1334,14 @@ export default function RevisaoPublica() {
             </div>
 
             {/* Ferramentas de anotação — sempre visíveis */}
-            <div className="flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-xl">
+            {/* No celular as ferramentas ficam recolhidas atrás deste botão: com elas abertas o campo de comentário não cabe na tela com o teclado. */}
+            {!(ferramentasVisiveis || shapes.length > 0) && (
+              <button type="button" onClick={() => setMostrarFerramentas(true)}
+                className="lg:hidden w-full h-11 rounded-xl border border-dashed border-lumos-border text-[12px] font-bold text-lumos-text-secondary flex items-center justify-center gap-2">
+                <Pencil className="w-4 h-4" /> Desenhar no vídeo
+              </button>
+            )}
+            <div className={clsx('flex items-center gap-1.5 flex-wrap p-2 bg-lumos-bg/40 rounded-xl', !(ferramentasVisiveis || shapes.length > 0) && 'max-lg:hidden')}>
               {([['draw', Pencil], ['arrow', MoveUpRight], ['rect', Square]] as const).map(([t, Icon]) => (
                 <button key={t} onClick={() => { ensureComposing(); setTool(tool === t ? null : t); }}
                   title={t === 'draw' ? 'Desenho livre' : t === 'arrow' ? 'Seta' : 'Retângulo'}
@@ -1361,7 +1371,7 @@ export default function RevisaoPublica() {
                 {sending ? <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5">
+            <p className="text-[9px] text-lumos-text-secondary/50 px-0.5 max-lg:hidden">
               <span className="[@media(pointer:coarse)]:hidden">Enter envia · Shift+Enter quebra linha</span>
               <span className="hidden [@media(pointer:coarse)]:inline">Toque no botão para enviar</span>
             </p>
