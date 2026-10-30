@@ -697,12 +697,12 @@ export default function FinanceiroDashboard() {
           <p className="text-lumos-text-secondary font-medium mt-1">Visão geral da saúde econômica da Lumos.</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 min-w-0">
           {/* Botão de Modo de Edição (escondido se já estiver editando) */}
           {!isEditing && (
             <button
               onClick={startEditing}
-              className="flex items-center gap-2 px-4 py-2 border border-lumos-border hover:border-lumos-yellow/40 rounded-full text-xs font-black uppercase tracking-wider text-lumos-text-secondary hover:text-lumos-yellow transition-all"
+              className="flex items-center gap-2 px-4 py-2 border border-lumos-border hover:border-lumos-yellow/40 rounded-full text-xs font-black uppercase tracking-wider text-lumos-text-secondary hover:text-lumos-yellow transition-all whitespace-nowrap"
               title="Personalizar layout de blocos"
             >
               <Settings className="w-4 h-4" /> Personalizar Painel
@@ -710,13 +710,13 @@ export default function FinanceiroDashboard() {
           )}
 
           {/* Seletor de Período Global */}
-          <div className="segmentado-lumos flex bg-lumos-surface/40 p-1 border border-lumos-border/50 rounded-full w-fit">
+          <div className="segmentado-lumos flex bg-lumos-surface/40 p-1 border border-lumos-border/50 rounded-full w-fit max-w-full overflow-x-auto no-scrollbar">
             {(['semana', 'mes', 'trimestre', 'semestre', 'ano'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
                 aria-pressed={period === p}
-                className={`segmento-lumos px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                className={`segmento-lumos px-2.5 sm:px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex-shrink-0 ${
                   period === p
                     ? 'bg-lumos-yellow text-lumos-bg shadow-md scale-105'
                     : 'text-lumos-text-secondary hover:text-lumos-text-primary'
@@ -784,7 +784,7 @@ export default function FinanceiroDashboard() {
                           <Landmark className="w-5 h-5" />
                         </div>
                         <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Saldo Geral em Conta</p>
-                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                        <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {saldoExtrato ? formatBRL(saldoExtrato.valor) : '—'}
                         </p>
                         <p className="text-[10px] text-lumos-text-secondary mt-1">
@@ -802,7 +802,7 @@ export default function FinanceiroDashboard() {
                         <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">
                           Faturamento {period === 'semana' ? 'da Semana' : period === 'mes' ? 'do Mês' : period === 'trimestre' ? 'do Trimestre' : period === 'semestre' ? 'do Semestre' : 'do Ano'}
                         </p>
-                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                        <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {formatBRL(dashboardData.totals.faturamento)}
                         </p>
                       </div>
@@ -815,7 +815,7 @@ export default function FinanceiroDashboard() {
                           <DollarSign className="w-5 h-5" />
                         </div>
                         <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Lucro Líquido Real</p>
-                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                        <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {formatBRL(dashboardData.totals.lucro)}
                         </p>
                       </div>
@@ -828,7 +828,7 @@ export default function FinanceiroDashboard() {
                           <Activity className="w-5 h-5" />
                         </div>
                         <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Margem Real Média</p>
-                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                        <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {dashboardData.totals.margem.toFixed(1)}%
                         </p>
                       </div>
@@ -918,7 +918,7 @@ export default function FinanceiroDashboard() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-lumos text-center flex flex-col justify-center">
                               <p className="text-[9px] font-bold text-lumos-text-secondary uppercase tracking-wider">Total em Atraso no Período</p>
-                              <p className="text-2xl font-black text-red-500 mt-1">{formatBRL(dashboardData.totalOverdue)}</p>
+                              <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-red-500 mt-1">{formatBRL(dashboardData.totalOverdue)}</p>
                             </div>
 
                             <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-2 pr-1">
@@ -946,7 +946,7 @@ export default function FinanceiroDashboard() {
                           <FileText className="w-5 h-5" />
                         </div>
                         <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Provisão de Impostos (18%)</p>
-                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                        <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {formatBRL(dashboardData.totals.nfTotal)}
                         </p>
                       </div>
@@ -959,7 +959,7 @@ export default function FinanceiroDashboard() {
                           <TrendingUp className="w-5 h-5" />
                         </div>
                         <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Receita Líquida</p>
-                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                        <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {formatBRL(dashboardData.totals.receitaLiquida)}
                         </p>
                       </div>
@@ -972,7 +972,7 @@ export default function FinanceiroDashboard() {
                           <TrendingDown className="w-5 h-5" />
                         </div>
                         <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Custos de Projetos</p>
-                        <p className="text-2xl font-black text-lumos-text-primary mt-1 tracking-tight">
+                        <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {formatBRL(dashboardData.totals.custos)}
                         </p>
                       </div>
@@ -1421,9 +1421,9 @@ function SortableBlockWrapper({ block, size, isEditing, onHide, onChangeSize, ch
       case 'small':
         return 'col-span-1 md:col-span-1 lg:col-span-1';
       case 'medium':
-        return 'col-span-1 md:col-span-2 lg:col-span-2';
+        return 'col-span-2 sm:col-span-1 md:col-span-2 lg:col-span-2';
       case 'full':
-        return 'col-span-1 md:col-span-2 lg:col-span-4';
+        return 'col-span-2 sm:col-span-1 md:col-span-2 lg:col-span-4';
       default:
         return 'col-span-1';
     }
@@ -1433,7 +1433,7 @@ function SortableBlockWrapper({ block, size, isEditing, onHide, onChangeSize, ch
     <div
       ref={setNodeRef}
       style={style}
-      className={`card p-6 shadow-lg transition-all relative group flex flex-col justify-between ${colSpanClass} ${
+      className={`card p-4 sm:p-6 shadow-lg transition-all relative group flex flex-col justify-between ${colSpanClass} ${
         isEditing
           ? 'border border-dashed border-lumos-yellow/40 bg-lumos-surface/50 hover:border-lumos-yellow transition-colors'
           : 'border border-lumos-border/40'
@@ -1490,7 +1490,7 @@ function SortableBlockWrapper({ block, size, isEditing, onHide, onChangeSize, ch
       )}
 
       {/* Conteúdo interno do bloco */}
-      <div className="w-full flex-1 flex flex-col justify-center">
+      <div className="@container w-full flex-1 flex flex-col justify-center">
         {children}
       </div>
     </div>

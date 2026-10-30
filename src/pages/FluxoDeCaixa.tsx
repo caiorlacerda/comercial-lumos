@@ -463,35 +463,35 @@ export default function FluxoDeCaixa() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-5 border-t-4 border-lumos-yellow shadow-lg">
+        <div className="card @container p-4 sm:p-5 border-t-4 border-lumos-yellow shadow-lg">
           <div className="p-2 bg-lumos-yellow/10 rounded-lumos text-lumos-yellow w-fit mb-3">
             <Wallet className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Saldo Acumulado</p>
-          <p className={clsx('text-2xl font-black mt-1 tracking-tight', kpis.saldoAcumulado >= 0 ? 'text-lumos-text-primary' : 'text-red-500')}>
+          <p className={clsx('text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black mt-1 tracking-tight', kpis.saldoAcumulado >= 0 ? 'text-lumos-text-primary' : 'text-red-500')}>
             {formatBRL(kpis.saldoAcumulado)}
           </p>
         </div>
-        <div className="card p-5 border-t-4 border-green-500 shadow-lg">
+        <div className="card @container p-4 sm:p-5 border-t-4 border-green-500 shadow-lg">
           <div className="p-2 bg-green-500/10 rounded-lumos text-green-500 w-fit mb-3">
             <TrendingUp className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Entradas no Ano</p>
-          <p className="text-2xl font-black text-green-500 mt-1 tracking-tight">{formatBRL(kpis.totalEntradas)}</p>
+          <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-green-500 mt-1 tracking-tight">{formatBRL(kpis.totalEntradas)}</p>
         </div>
-        <div className="card p-5 border-t-4 border-red-500 shadow-lg">
+        <div className="card @container p-4 sm:p-5 border-t-4 border-red-500 shadow-lg">
           <div className="p-2 bg-red-500/10 rounded-lumos text-red-500 w-fit mb-3">
             <TrendingDown className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Saídas no Ano</p>
-          <p className="text-2xl font-black text-red-500 mt-1 tracking-tight">{formatBRL(kpis.totalSaidas)}</p>
+          <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-red-500 mt-1 tracking-tight">{formatBRL(kpis.totalSaidas)}</p>
         </div>
-        <div className={clsx('card p-5 border-t-4 shadow-lg', kpis.resultado >= 0 ? 'border-green-500' : 'border-red-500')}>
+        <div className={clsx('card @container p-4 sm:p-5 border-t-4 shadow-lg', kpis.resultado >= 0 ? 'border-green-500' : 'border-red-500')}>
           <div className={clsx('p-2 rounded-lumos w-fit mb-3', kpis.resultado >= 0 ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500')}>
             <Activity className="w-5 h-5" />
           </div>
           <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Resultado do Ano</p>
-          <p className={clsx('text-2xl font-black mt-1 tracking-tight', kpis.resultado >= 0 ? 'text-green-500' : 'text-red-500')}>
+          <p className={clsx('text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black mt-1 tracking-tight', kpis.resultado >= 0 ? 'text-green-500' : 'text-red-500')}>
             {formatBRL(kpis.resultado)}
           </p>
         </div>
@@ -534,8 +534,8 @@ export default function FluxoDeCaixa() {
       {/* Monthly table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left lumos-sticky-2">
-            <thead>
+          <table className="w-full text-left lumos-sticky-2 max-md:block">
+            <thead className="max-md:hidden">
               <tr className="bg-lumos-text-primary/5 border-b border-lumos-border text-[10px] font-bold text-lumos-text-secondary uppercase">
                 <th className="px-6 py-4 w-8" />
                 <th className="px-6 py-4">Mês</th>
@@ -545,7 +545,7 @@ export default function FluxoDeCaixa() {
                 <th className="px-6 py-4 text-right">Saldo Acumulado</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="max-md:block">
               {monthlyData.map(month => {
                 const isCurrentMonth = selectedYear === currentYear && month.monthIndex === currentMonth;
                 const isExpanded = expandedRows.has(month.monthIndex);
@@ -557,22 +557,25 @@ export default function FluxoDeCaixa() {
                   <React.Fragment key={month.monthIndex}>
                     <tr
                       className={clsx(
-                        'border-b border-lumos-border/50 transition-colors',
+                        'border-b border-lumos-border/50 transition-colors max-md:grid max-md:grid-cols-2 max-md:gap-x-4 max-md:gap-y-2 max-md:px-4 max-md:py-3',
                         hasData && 'cursor-pointer hover:bg-lumos-text-primary/5',
                         isCurrentMonth && 'bg-lumos-yellow/[0.04]',
                         isFuture && !month.isProjected && 'opacity-40'
                       )}
                       onClick={() => hasData && toggleRow(month.monthIndex)}
                     >
-                      <td className="px-6 py-4 w-8">
+                      <td className="px-6 py-4 w-8 max-md:hidden">
                         {hasData && (
                           isExpanded
                             ? <ChevronDown className="w-4 h-4 text-lumos-text-secondary" />
                             : <ChevronRight className="w-4 h-4 text-lumos-text-secondary" />
                         )}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                      <td className="px-6 py-4 max-md:p-0 max-md:col-span-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {hasData && (isExpanded
+                            ? <ChevronDown className="w-4 h-4 text-lumos-text-secondary md:hidden" />
+                            : <ChevronRight className="w-4 h-4 text-lumos-text-secondary md:hidden" />)}
                           <span className={clsx(
                             'text-sm font-bold',
                             isCurrentMonth ? 'text-lumos-yellow' : 'text-lumos-text-primary'
@@ -591,22 +594,24 @@ export default function FluxoDeCaixa() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right text-sm font-bold text-green-500">
+                      <td data-label="Entradas" className="px-6 py-4 text-right text-sm font-bold text-green-500 max-md:p-0 max-md:text-left max-md:before:block max-md:before:text-[9px] max-md:before:font-bold max-md:before:uppercase max-md:before:tracking-wider max-md:before:text-lumos-text-secondary max-md:before:content-[attr(data-label)]">
                         {month.entradas > 0 ? formatBRL(month.entradas) : <span className="text-lumos-text-secondary/40">—</span>}
                       </td>
-                      <td className="px-6 py-4 text-right text-sm font-bold text-red-400">
+                      <td data-label="Saídas" className="px-6 py-4 text-right text-sm font-bold text-red-400 max-md:p-0 max-md:text-left max-md:before:block max-md:before:text-[9px] max-md:before:font-bold max-md:before:uppercase max-md:before:tracking-wider max-md:before:text-lumos-text-secondary max-md:before:content-[attr(data-label)]">
                         {month.saidas > 0 ? formatBRL(month.saidas) : <span className="text-lumos-text-secondary/40">—</span>}
                       </td>
-                      <td className={clsx(
+                      <td data-label="Resultado" className={clsx(
                         'px-6 py-4 text-right text-sm font-black',
+                        'max-md:p-0 max-md:text-left max-md:before:block max-md:before:text-[9px] max-md:before:font-bold max-md:before:uppercase max-md:before:tracking-wider max-md:before:text-lumos-text-secondary max-md:before:content-[attr(data-label)]',
                         month.resultado > 0 ? 'text-green-500' : month.resultado < 0 ? 'text-red-500' : 'text-lumos-text-secondary/40'
                       )}>
                         {month.entradas === 0 && month.saidas === 0
                           ? '—'
                           : formatBRL(month.resultado)}
                       </td>
-                      <td className={clsx(
+                      <td data-label="Saldo acumulado" className={clsx(
                         'px-6 py-4 text-right text-sm font-black',
+                        'max-md:p-0 max-md:text-left max-md:before:block max-md:before:text-[9px] max-md:before:font-bold max-md:before:uppercase max-md:before:tracking-wider max-md:before:text-lumos-text-secondary max-md:before:content-[attr(data-label)]',
                         month.saldoAcumulado > 0 ? 'text-lumos-text-primary' : month.saldoAcumulado < 0 ? 'text-red-500' : 'text-lumos-text-secondary/40'
                       )}>
                         {formatBRL(month.saldoAcumulado)}
@@ -615,8 +620,8 @@ export default function FluxoDeCaixa() {
 
                     {/* Expanded transactions */}
                     {isExpanded && (
-                      <tr className="border-b border-lumos-border/50">
-                        <td colSpan={6} className="px-6 py-0">
+                      <tr className="border-b border-lumos-border/50 max-md:block">
+                        <td colSpan={6} className="px-6 py-0 max-md:block max-md:px-3">
                           <div className="py-4 animate-in fade-in slide-in-from-top-2 duration-200">
                             {month.isProjected ? (
                               <div className="flex items-center gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lumos">
