@@ -2058,9 +2058,9 @@ export default function BudgetEditorPage() {
                     aoFocar={() => definirCampo(`item:${item.id}`)} aoDesfocar={() => definirCampo(null)}>
                     {(dragHandle) => (
                       <>
-                        <div className="flex items-center gap-2 px-4 py-3">
+                        <div className="flex items-center gap-2 px-4 py-3 max-md:flex-wrap">
                           {dragHandle}
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 max-md:order-1">
                             <input
                               disabled={isReadOnly}
                               className="bg-transparent border-none w-full p-0 font-medium text-lumos-text-primary focus:ring-0 placeholder:text-lumos-text-secondary/30 disabled:opacity-70"
@@ -2069,7 +2069,9 @@ export default function BudgetEditorPage() {
                               placeholder="Nome do item..."
                             />
                           </div>
-                          <div className="w-32 flex-shrink-0">
+                          {/* Celular: quebra de linha entre "nome + ações" e "valor, quantidade, unidade" */}
+                          <div aria-hidden className="hidden max-md:block max-md:order-3 basis-full h-0" />
+                          <div className="w-32 flex-shrink-0 max-md:order-4 max-md:flex-1 max-md:w-auto max-md:min-w-0">
                             <div className="flex items-center gap-1 border-b border-transparent hover:border-lumos-border transition-colors">
                               <span className="text-xs text-lumos-text-secondary">R$</span>
                               <input
@@ -2081,7 +2083,7 @@ export default function BudgetEditorPage() {
                               />
                             </div>
                           </div>
-                          <div className="w-16 flex-shrink-0">
+                          <div className="w-16 flex-shrink-0 max-md:order-5 max-md:w-14">
                             <input
                               disabled={isReadOnly}
                               type="number"
@@ -2090,7 +2092,7 @@ export default function BudgetEditorPage() {
                               onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
                             />
                           </div>
-                          <div className="w-24 flex-shrink-0">
+                          <div className="w-24 flex-shrink-0 max-md:order-6">
                             <Select
                               disabled={isReadOnly}
                               className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary disabled:opacity-70"
@@ -2099,10 +2101,10 @@ export default function BudgetEditorPage() {
                               options={[{ value: 'diaria', label: 'diária' }, { value: 'hora', label: 'hora' }, { value: 'video', label: 'vídeo' }, { value: 'unidade', label: 'unidade' }, { value: 'pacote', label: 'pacote' }]}
                             />
                           </div>
-                          <div className="w-32 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary">
+                          <div className="w-32 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary max-md:order-7 max-md:basis-full max-md:w-auto">
                             {formatCurrency(item.unit_cost * item.quantity)}
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 max-md:order-2">
                             <button
                               onClick={toggleDescription}
                               className={clsx(
