@@ -133,9 +133,7 @@ export default function AprovacaoPublica() {
         return;
       }
       const d = data as any;
-      const { data: existing } = await supabase
-        .from('budget_approvals').select('id').eq('version_id', d.id).maybeSingle();
-      if (existing) { setStatus('already_responded'); return; }
+      if (d.ja_respondido) { setStatus('already_responded'); return; }
       setBudget(d.budgets);
       setVersion(d as unknown as BudgetVersion);
       setItems((d.items || []) as BudgetItem[]);
