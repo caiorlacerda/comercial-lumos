@@ -45,7 +45,7 @@ SET file_size_limit = 15 * 1024 * 1024,
 WHERE id = 'notas-fiscais';
 
 -- Só a equipe envia: teto de 25 MB, sem restrição de tipo.
-UPDATE storage.buckets SET file_size_limit = 25 * 1024 * 1024 WHERE id IN ('reembolsos', 'mural', 'equipamentos');
+UPDATE storage.buckets SET file_size_limit = 25 * 1024 * 1024 WHERE id IN ('reembolsos', 'mural', 'equipamentos', 'avatars');
 
 -- CONFERÊNCIA 1: nenhuma view deve ser legível pelo visitante (linhas = 0).
 SELECT c.relname AS view_ainda_aberta_ao_visitante
@@ -58,4 +58,4 @@ SELECT id, public, file_size_limit, allowed_mime_types FROM storage.buckets ORDE
 -- PLANO DE VOLTA (só se algo do time parar de funcionar):
 --   views:   GRANT SELECT ON public.vw_rentabilidade TO anon;   (e as outras, se precisar)
 --   pastas:  UPDATE storage.buckets SET allowed_mime_types = NULL, file_size_limit = NULL
---            WHERE id IN ('notas-fiscais', 'reembolsos', 'mural', 'equipamentos');
+--            WHERE id IN ('notas-fiscais', 'reembolsos', 'mural', 'equipamentos', 'avatars');
