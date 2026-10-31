@@ -68,7 +68,7 @@ export default function MobileHeader() {
 
   return (
     <>
-      <header className="lumos-shell md:hidden sticky top-0 z-40 w-full bg-lumos-surface/80 backdrop-blur-md border-b border-lumos-border pt-[env(safe-area-inset-top)] transition-colors duration-300">
+      <header className="lumos-shell md:hidden sticky top-0 z-40 w-full bg-lumos-surface border-b border-lumos-border pt-[env(safe-area-inset-top)] transition-colors duration-300">
         <div className="h-12 px-4 flex items-center justify-between">
           {/* Left Actions: Back Button or Page Title */}
           <div className="flex items-center gap-2">
