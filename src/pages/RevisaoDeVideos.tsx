@@ -108,6 +108,8 @@ export default function RevisaoDeVideos() {
   const { confirm, dialog: dialogoConfirmar } = useConfirm();
   // Mesma regra do painel de Entregas: quem pode mexer nos vídeos do projeto.
   const podeMover = isAdmin || can('ordem_do_dia');
+  // Mandar ao cliente é o aval interno: mesma régua do menu de cada vídeo.
+  const podeAvalInterno = isAdmin || can('revisao_interna');
   const [rows, setRows] = useState<VV[]>(() => lerCache<{ rows: VV[] }>('revisao-videos')?.rows ?? []);
   const [abertosPorVersao, setAbertosPorVersao] = useState<Record<string, number>>(() => lerCache<{ abertos: Record<string, number> }>('revisao-videos')?.abertos ?? {});
   const [loading, setLoading] = useState(() => !lerCache('revisao-videos'));
@@ -425,7 +427,7 @@ export default function RevisaoDeVideos() {
                     className="w-full h-8 px-2.5 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-primary hover:border-lumos-yellow/50"
                     options={[
                       { value: 'EM_REVISAO_INTERNA', label: 'Revisão interna' },
-                      { value: 'EM_REVISAO_CLIENTE', label: 'Enviar ao cliente' },
+                      ...(podeAvalInterno ? [{ value: 'EM_REVISAO_CLIENTE', label: 'Enviar ao cliente' }] : []),
                       { value: 'APROVADO', label: 'Cliente aprovou' },
                       { value: 'ALTERACOES_CLIENTE', label: 'Cliente pediu ajustes' },
                       { value: 'ALTERACOES_INTERNAS', label: 'Alteração interna' },

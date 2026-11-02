@@ -1330,7 +1330,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
                   className="w-full h-8 px-2.5 rounded-lumos border border-lumos-border bg-lumos-surface text-[11px] font-bold text-lumos-text-primary hover:border-lumos-yellow/50"
                   options={[
                     { value: 'EM_REVISAO_INTERNA', label: 'Revisão interna' },
-                    { value: 'EM_REVISAO_CLIENTE', label: 'Enviar ao cliente' },
+                    ...(podeAvalInterno ? [{ value: 'EM_REVISAO_CLIENTE', label: 'Enviar ao cliente' }] : []),
                     { value: 'APROVADO', label: 'Cliente aprovou' },
                     { value: 'ALTERACOES_CLIENTE', label: 'Cliente pediu ajustes' },
                     { value: 'ALTERACOES_INTERNAS', label: 'Alteração interna' },
