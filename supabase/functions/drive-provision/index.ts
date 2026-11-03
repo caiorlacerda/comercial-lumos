@@ -1,10 +1,12 @@
 // Integração App Lumos × Google Drive — Fase 1 (pastas automáticas)
 //
 // Disparada por Database Webhook em INSERT na tabela projects.
-// 1. Garante a pasta do CLIENTE em Clientes/ (criada no 1º projeto aprovado,
-//    espelhando o modelo _TEMPLATES/_ASSETS; fallback: _ASSETS padrão).
+// 1. Garante a pasta do CLIENTE em Clientes/ (criada no 1º projeto aprovado). Cliente novo ganha
+//    MARCA (materiais fixos: BRAND-BOOK, FONTES, GRAFICOS, IMAGENS, LOGOS, GUIDELINES; espelha
+//    _TEMPLATES/MARCA ou _TEMPLATES/_ASSETS) e PROJETOS. Cliente que já tem `_ASSETS` NÃO é
+//    renomeado aqui: o código aceita MARCA ou _ASSETS.
 // 2. Cria a pasta do PROJETO. Dois layouts (ver layout.ts):
-//    · v2 (projetos novos, exceto live): Cliente › [Marca] › AAAA-MM › NNN_NOME, com as
+//    · v2 (projetos novos, exceto live): Cliente › PROJETOS › [Sub-marca] › AAAA-MM › NNN_NOME, com as
 //      subpastas 00_DOCUMENTOS, 01_BRUTO, 02_ARTES/01_TRILHAS, 03_EXPORT/01_REVISAO e
 //      03_EXPORT/02_FINAL criadas POR CÓDIGO (sem template). Os IDs vão para projects.drive_pastas.
 //      Cliente com marcas (clients.marcas) só ganha a pasta depois que o projeto escolhe uma.
@@ -22,7 +24,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { ARVORE_V2, NOMES_V2, aguardandoMarca, layoutDoProjeto, mesDoProjeto, nomeDeContainer, type PastasV2 } from "./layout.ts"
+import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, nomeDeContainer, type PastasV2 } from "./layout.ts"
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined
 
@@ -287,18 +289,20 @@ async function ensureClientFolder(client: { id: string; name: string; drive_fold
   const folderName = client.name.trim() || 'CLIENTE'
   const folderId = await ensureFolder(CLIENTES_FOLDER_ID, folderName)
 
-  // Estrutura interna: espelha _TEMPLATES/_ASSETS dentro de um _ASSETS do
-  // cliente (o template tem BRAND-BOOK/FONTES/GRAFICOS/IMAGENS/LOGOS na raiz).
-  // Fallback: cria o _ASSETS padrão se o template não existir.
-  const clienteTemplateId = await findChildFolder(TEMPLATES_FOLDER_ID, '_ASSETS')
-  const clientAssetsId = await ensureFolder(folderId, '_ASSETS')
-  if (clienteTemplateId) {
-    await mirrorTemplate(clienteTemplateId, clientAssetsId)
-  } else {
-    for (const sub of ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS']) {
-      await ensureFolder(clientAssetsId, sub)
-    }
+  // Materiais fixos do cliente. Pasta MARCA (nova) ou _ASSETS (clientes antigos, que NÃO são renomeados
+  // aqui): se uma das duas já existe, fica como está; se nenhuma existe, cria MARCA e a preenche
+  // espelhando _TEMPLATES/MARCA (ou _TEMPLATES/_ASSETS), com fallback nas subpastas padrão.
+  const marcaExistente = (await findChildFolder(folderId, PASTA_MARCA)) ?? (await findChildFolder(folderId, PASTA_MARCA_ANTIGA))
+  if (!marcaExistente) {
+    const marcaId = await createFolder(folderId, PASTA_MARCA)
+    const templateMarcaId = (await findChildFolder(TEMPLATES_FOLDER_ID, PASTA_MARCA)) ?? (await findChildFolder(TEMPLATES_FOLDER_ID, PASTA_MARCA_ANTIGA))
+    if (templateMarcaId) await mirrorTemplate(templateMarcaId, marcaId, true)
+    // As subpastas padrão que o template não trouxer (a GUIDELINES nunca vem dele: o portal de boas-vindas precisa dela).
+    const jaTem = new Set((await listChildren(marcaId)).map(c => c.name))
+    for (const sub of SUBPASTAS_MARCA) if (!jaTem.has(sub)) await createFolder(marcaId, sub)
   }
+  // Onde os projetos novos vão morar.
+  await ensureContainer(folderId, PASTA_PROJETOS)
 
   await db.from('clients').update({ drive_folder_id: folderId }).eq('id', client.id)
   await log('client', client.id, 'create_folder', `Pasta do cliente "${folderName}" criada/vinculada (${folderId})`)
@@ -326,12 +330,14 @@ async function logUmaVez(projectId: string, action: string, detail: string): Pro
   } catch (_) { /* log nunca derruba o fluxo */ }
 }
 
-// Onde a pasta v2 DEVE estar: Cliente › [Marca] › AAAA-MM. Só procura, nunca cria.
+// Onde a pasta v2 DEVE estar: Cliente › PROJETOS › [Sub-marca] › AAAA-MM. Só procura, nunca cria.
 async function paiEsperadoV2(project: any, clientFolderId: string): Promise<string | null> {
   let pai: string | null = clientFolderId
-  if (project.marca) pai = await findChildFolder(pai, nomeDeContainer(project.marca))
-  if (!pai) return null
-  return await findChildFolder(pai, mesDoProjeto(project.data_inicio, project.created_at))
+  for (const nome of caminhoDoMes(project.marca, mesDoProjeto(project.data_inicio, project.created_at))) {
+    pai = await findChildFolder(pai, nome)
+    if (!pai) return null
+  }
+  return pai
 }
 
 // A pasta do projeto já existe pelo ID. Não cria outra. Renomeia só se o nome/código mudou E ela
@@ -391,10 +397,10 @@ async function criarProjetoV2(project: any, clientFolderId: string, folderName: 
     return
   }
 
-  let paiId = clientFolderId
-  if (project.marca) paiId = await ensureContainer(paiId, nomeDeContainer(project.marca))
+  // Cliente › PROJETOS › [Sub-marca] › AAAA-MM (contêineres: achados pelo nome, criados se faltarem).
   const mes = mesDoProjeto(project.data_inicio, project.created_at)
-  paiId = await ensureContainer(paiId, mes)
+  let paiId = clientFolderId
+  for (const nome of caminhoDoMes(project.marca, mes)) paiId = await ensureContainer(paiId, nome)
 
   // Reusa pasta homônima já existente (execução anterior que caiu no meio).
   const existente = await findChildFolder(paiId, folderName)
@@ -404,7 +410,7 @@ async function criarProjetoV2(project: any, clientFolderId: string, folderName: 
   await db.from('projects')
     .update({ drive_folder_id: projectFolderId, drive_upload_folder_id: pastas.revisao, drive_layout: 'v2', drive_pastas: pastas })
     .eq('id', project.id)
-  const caminho = [project.client.name.trim(), project.marca ? nomeDeContainer(project.marca) : null, mes, folderName].filter(Boolean).join(' › ')
+  const caminho = [project.client.name.trim(), ...caminhoDoMes(project.marca, mes), folderName].join(' › ')
   await log('project', project.id, 'create_folder', `Pasta v2 criada: ${caminho} (${projectFolderId})`)
 }
 

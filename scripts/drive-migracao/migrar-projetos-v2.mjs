@@ -6,9 +6,10 @@
 //          --drive-id <ID do Drive compartilhado> --cliente "Nome do cliente"
 //
 //   EXECUTAR (só com o OK do Caio; pede para digitar o nome do cliente):
-//     ... --cliente "Nome do cliente" --executar [--projeto <id ou código>] [--mover-para-mes]
+//     ... --cliente "Nome do cliente" --executar [--projeto <id ou código>] [--mover-para-mes] [--renomear-assets]
 //
-// Só MOVE pastas (o ID não muda). Não copia, não apaga e só renomeia 02_APROVADO → 02_FINAL.
+// Só MOVE pastas (o ID não muda). Não copia, não apaga e só renomeia 02_APROVADO → 02_FINAL
+// (e, só com --renomear-assets, a pasta de materiais fixos do cliente: _ASSETS → MARCA, mesmo ID).
 // Não escreve no banco: gera um arquivo .sql para o Caio rodar no SQL Editor logo depois.
 // Lives e projetos que já são v2 são pulados.
 
@@ -16,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline/promises';
-import { NOMES, mesDoProjeto, planejarProjeto, sqlDeAtualizacao } from './plano.mjs';
+import { NOMES, caminhoDoMes, mesDoProjeto, planejarMarcaDoCliente, planejarProjeto, sqlDeAtualizacao } from './plano.mjs';
 
 // ---------- argumentos ----------
 const args = process.argv.slice(2);
@@ -30,6 +31,7 @@ const CLIENTE = val('cliente');
 const SO_PROJETO = val('projeto');
 const EXECUTAR = flag('executar');
 const MOVER_PARA_MES = flag('mover-para-mes');
+const RENOMEAR_ASSETS = flag('renomear-assets');
 const SAIDA = val('saida') || path.join(process.cwd(), 'saida-drive');
 
 function parar(msg) { console.error(`\nERRO: ${msg}\n`); process.exit(1); }
@@ -97,6 +99,9 @@ async function mover(id, novoPaiId, novoNome) {
   return { paisAntigos: atual.parents || [], nomeAntigo: atual.name };
 }
 
+/** Só renomeia (o ID não muda). */
+const renomear = (id, novoNome) => api(`files/${id}?fields=id`, { method: 'PATCH', body: JSON.stringify({ name: novoNome }) });
+
 // ---------- seleção dos projetos ----------
 const todos = JSON.parse(fs.readFileSync(ARQ_PROJETOS, 'utf8'));
 const norm = s => String(s ?? '').trim().toLowerCase();
@@ -157,13 +162,18 @@ async function aplicar(p, plano) {
 
 async function moverParaMes(p, plano, executar) {
   const mes = mesDoProjeto(p.data_inicio, p.created_at);
-  if ((p.client_marcas || []).length) return { aviso: `cliente tem marcas e o projeto não tem marca: não movo para ${mes} (decida a marca antes)` };
+  if ((p.client_marcas || []).length && !String(p.marca ?? '').trim()) return { aviso: `cliente tem marcas e o projeto não tem marca: não movo para ${mes} (decida a marca antes)` };
   if (!p.client_drive_folder_id) return { aviso: 'cliente sem pasta registrada: não movo para a pasta do mês' };
-  if (!executar) return { texto: `- MOVE         a pasta do projeto → ${p.client_name}/${mes}/  (opção --mover-para-mes)` };
-  const existentes = (await listar(p.client_drive_folder_id)).filter(f => f.isFolder && f.name === mes);
-  const mesId = existentes.length ? existentes[0].id : await criarPasta(p.client_drive_folder_id, mes);
-  const r = await mover(p.drive_folder_id, mesId);
-  return { feito: { op: 'movida', id: p.drive_folder_id, nomeAntigo: r.nomeAntigo, nomeNovo: r.nomeAntigo, paisAntigos: r.paisAntigos, paiNovo: mesId } };
+  const caminho = caminhoDoMes(p.marca, mes);
+  if (!executar) return { texto: `- MOVE         a pasta do projeto → ${p.client_name}/${caminho.join('/')}/  (opção --mover-para-mes)` };
+  // Cliente › PROJETOS › [sub-marca] › AAAA-MM: contêineres achados pelo nome e criados se faltarem.
+  let paiId = p.client_drive_folder_id;
+  for (const nome of caminho) {
+    const achada = (await listar(paiId)).find(f => f.isFolder && f.name === nome);
+    paiId = achada ? achada.id : await criarPasta(paiId, nome);
+  }
+  const r = await mover(p.drive_folder_id, paiId);
+  return { feito: { op: 'movida', id: p.drive_folder_id, nomeAntigo: r.nomeAntigo, nomeNovo: r.nomeAntigo, paisAntigos: r.paisAntigos, paiNovo: paiId } };
 }
 
 // ---------- principal ----------
@@ -172,6 +182,23 @@ const slug = norm(CLIENTE).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 fs.mkdirSync(SAIDA, { recursive: true });
 
 const relatorio = [`# ${EXECUTAR ? 'EXECUÇÃO' : 'SIMULAÇÃO (nada foi alterado)'} — ${CLIENTE} — ${new Date().toLocaleString('pt-BR')}`, ''];
+// Pasta de materiais fixos do cliente (_ASSETS → MARCA): só com --renomear-assets, e sempre à parte dos projetos.
+let planoMarca = null;
+if (RENOMEAR_ASSETS) {
+  const clienteDriveId = alvos.find(p => p.client_drive_folder_id)?.client_drive_folder_id;
+  if (!clienteDriveId) relatorio.push('### Pasta de materiais fixos → pulada: cliente sem pasta registrada', '');
+  else {
+    planoMarca = planejarMarcaDoCliente(await listar(clienteDriveId));
+    const linha = {
+      renomear: `- RENOMEIA     _ASSETS  [${planoMarca.id}]  → MARCA   (mesma pasta, mesmo ID)`,
+      conflito: `- CONFLITO     ${planoMarca.motivo}`,
+      'ja-esta': '- já está como MARCA; nada a fazer',
+      nada: `- ${planoMarca.motivo}`,
+    }[planoMarca.acao];
+    relatorio.push('### Pasta de materiais fixos do cliente (--renomear-assets)', linha, '');
+  }
+}
+
 const planos = [];
 for (const p of alvos) {
   const motivo = pular(p);
@@ -204,11 +231,18 @@ if (!EXECUTAR) {
 }
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const resp = await rl.question(`\nIsto vai MOVER pastas no Drive de ${planos.length} projeto(s) de "${CLIENTE}". Digite o nome do cliente para confirmar: `);
+const resp = await rl.question(`\nIsto vai MOVER pastas no Drive de ${planos.length} projeto(s) de "${CLIENTE}"${planoMarca?.acao === 'renomear' ? ' e RENOMEAR a _ASSETS para MARCA' : ''}. Digite o nome do cliente para confirmar: `);
 rl.close();
 if (norm(resp) !== norm(CLIENTE)) parar('nome diferente: nada foi executado.');
 
 const logFeito = []; const sqls = []; const vazias = [];
+if (planoMarca?.acao === 'renomear') {
+  try {
+    await renomear(planoMarca.id, planoMarca.para);
+    logFeito.push({ cliente: CLIENTE, feito: [{ op: 'renomeada', id: planoMarca.id, nomeAntigo: planoMarca.de, nomeNovo: planoMarca.para }] });
+    console.log(`\nPasta de materiais fixos: _ASSETS → MARCA (ok, mesmo ID ${planoMarca.id})`);
+  } catch (e) { parar(`não consegui renomear _ASSETS: ${e.message}. Nada foi feito nos projetos.`); }
+}
 for (const { p, plano } of planos) {
   process.stdout.write(`\n${p.code ?? ''} ${p.name}: `);
   try {

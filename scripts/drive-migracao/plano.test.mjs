@@ -1,5 +1,5 @@
 // Rodar:  node scripts/drive-migracao/plano.test.mjs
-import { NOMES, destinoDaPastaAntiga, mesDoProjeto, planejarProjeto, sqlDeAtualizacao } from './plano.mjs';
+import { NOMES, caminhoDoMes, destinoDaPastaAntiga, mesDoProjeto, planejarMarcaDoCliente, planejarProjeto, sqlDeAtualizacao } from './plano.mjs';
 
 let falhas = 0;
 const ok = (nome, cond) => { console.log((cond ? 'OK     ' : 'FALHA  ') + nome); if (!cond) falhas++; };
@@ -59,6 +59,20 @@ ok('estrutura nova já existente: tudo reaproveitado, nada criado', parcial.pass
 // ---- pasta 06_ diferente
 const outra = planejarProjeto({ filhos: [pasta('x', '06_OUTRA')], filhosEntrega: null });
 ok('06_ que não é ENTREGA fica (ignorada com motivo)', outra.ignorados.some(i => i.id === 'x'));
+
+
+// ---- caminho até o mês: Cliente › PROJETOS › [sub-marca] › AAAA-MM
+ok('caminho sem marca: PROJETOS/AAAA-MM', caminhoDoMes(null, '2026-10').join('/') === 'PROJETOS/2026-10' && caminhoDoMes('  ', '2026-10').join('/') === 'PROJETOS/2026-10');
+ok('caminho com sub-marca DENTRO de PROJETOS', caminhoDoMes('Uniasselvi', '2026-10').join('/') === 'PROJETOS/Uniasselvi/2026-10');
+ok('caminho: barra na marca não cria nível extra', caminhoDoMes('A/B', '2026-10').join('/') === 'PROJETOS/A-B/2026-10');
+
+// ---- pasta de materiais fixos do cliente (_ASSETS → MARCA)
+ok('_ASSETS sozinha → renomear (mesmo ID)', JSON.stringify(planejarMarcaDoCliente([pasta('as', '_ASSETS'), pasta('x', '2026-10')])) === JSON.stringify({ acao: 'renomear', id: 'as', de: '_ASSETS', para: 'MARCA' }));
+ok('MARCA e _ASSETS juntas → conflito (não renomeia)', planejarMarcaDoCliente([pasta('as', '_ASSETS'), pasta('m', 'MARCA')]).acao === 'conflito');
+ok('duas _ASSETS → conflito', planejarMarcaDoCliente([pasta('a1', '_ASSETS'), pasta('a2', '_ASSETS')]).acao === 'conflito');
+ok('já é MARCA → nada a fazer', planejarMarcaDoCliente([pasta('m', 'MARCA')]).acao === 'ja-esta');
+ok('sem nenhuma das duas → nada', planejarMarcaDoCliente([pasta('x', 'PROJETOS')]).acao === 'nada');
+ok('arquivo chamado _ASSETS não conta como pasta', planejarMarcaDoCliente([arq('f', '_ASSETS')]).acao === 'nada');
 
 // ---- mês
 ok('mês: data_inicio pura', mesDoProjeto('2026-11-01', '2026-10-01T12:00:00Z') === '2026-11');

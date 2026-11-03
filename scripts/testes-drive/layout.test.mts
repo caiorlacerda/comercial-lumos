@@ -1,5 +1,5 @@
 // Rodar:  node --experimental-strip-types scripts/testes-drive/layout.test.mts
-import { ARVORE_V2, NOMES_V2, aguardandoMarca, layoutDoProjeto, mesDoProjeto, nomeDeContainer, pastasV2Completas } from '../../supabase/functions/drive-provision/layout.ts'
+import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, nomeDeContainer, pastasV2Completas } from '../../supabase/functions/drive-provision/layout.ts'
 
 let falhas = 0
 const ok = (nome: string, cond: boolean) => { console.log((cond ? 'OK     ' : 'FALHA  ') + nome); if (!cond) falhas++ }
@@ -29,6 +29,14 @@ ok('cliente com marcas e marca em branco → espera', aguardandoMarca(['A'], '  
 ok('cliente com marcas e projeto com marca → segue', aguardandoMarca(['A'], 'A') === false)
 ok('cliente sem marcas → segue sempre', aguardandoMarca([], null) === false && aguardandoMarca(null, null) === false)
 ok('nome de marca: barra e espaços', nomeDeContainer('  Uni/asselvi   Ead ') === 'Uni-asselvi Ead')
+
+
+// caminho até o mês: PROJETOS › [sub-marca] › AAAA-MM
+ok('caminho sem marca: PROJETOS/AAAA-MM', caminhoDoMes(null, '2026-10').join('/') === 'PROJETOS/2026-10' && caminhoDoMes('  ', '2026-10').join('/') === 'PROJETOS/2026-10')
+ok('caminho com sub-marca: PROJETOS/Marca/AAAA-MM (a marca fica dentro de PROJETOS)', caminhoDoMes('Uniasselvi', '2026-10').join('/') === 'PROJETOS/Uniasselvi/2026-10')
+ok('caminho: barra na marca não cria nível extra', caminhoDoMes('A/B', '2026-10').join('/') === 'PROJETOS/A-B/2026-10')
+ok('nomes da pasta do cliente', PASTA_MARCA === 'MARCA' && PASTA_MARCA_ANTIGA === '_ASSETS' && PASTA_PROJETOS === 'PROJETOS')
+ok('MARCA nova: as 5 subpastas de antes + GUIDELINES', ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES'].every(n => SUBPASTAS_MARCA.includes(n)) && SUBPASTAS_MARCA.length === 6)
 
 // árvore
 const vistos = new Set<string>()

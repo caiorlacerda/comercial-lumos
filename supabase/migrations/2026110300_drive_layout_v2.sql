@@ -1,10 +1,12 @@
 -- DRIVE: ESTRUTURA NOVA DE PASTAS (layout v2) NOS PROJETOS NOVOS
 --
--- Hierarquia do projeto novo:  Cliente › [Marca] › AAAA-MM › NNN_NOME › subpastas
+-- Hierarquia do projeto novo:  Cliente › PROJETOS › [Sub-marca] › AAAA-MM › NNN_NOME › subpastas
+--   (ao lado de PROJETOS, o cliente novo tem MARCA: brandbook, logos, fontes, guidelines; o cliente
+--   antigo continua com a _ASSETS, que o código aceita no lugar da MARCA e não renomeia sozinho)
 -- Subpastas: 00_DOCUMENTOS, 01_BRUTO, 02_ARTES/01_TRILHAS, 03_EXPORT/01_REVISAO, 03_EXPORT/02_FINAL.
 --
 -- O que esta migration faz (só estrutura; nenhum dado existente muda):
---   · projects.marca          marca do projeto (opcional; vem da lista fechada do cliente)
+--   · projects.marca          sub-marca do projeto (opcional; vem da lista fechada do cliente; fica DENTRO de PROJETOS)
 --   · projects.drive_layout   'v1' = estrutura antiga (default, todos os projetos de hoje)
 --                             'v2' = estrutura nova (marcada pela drive-provision ao criar a pasta)
 --   · projects.drive_pastas   IDs das subpastas do projeto v2:

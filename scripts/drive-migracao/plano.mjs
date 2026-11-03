@@ -21,6 +21,33 @@ export const NOMES = {
 
 const ALVOS_RAIZ = ['documentos', 'bruto', 'artes', 'export'];
 
+/** Pastas do nível do cliente (ver supabase/functions/drive-provision/layout.ts). */
+export const PASTA_MARCA = 'MARCA';            // materiais fixos (brandbook, logos, fontes, guidelines)
+export const PASTA_MARCA_ANTIGA = '_ASSETS';   // como os clientes antigos chamam a pasta acima
+export const PASTA_PROJETOS = 'PROJETOS';      // onde moram os projetos da estrutura nova
+
+/** Caminho a partir da pasta do cliente até a pasta do mês: PROJETOS › [sub-marca] › AAAA-MM. */
+export function caminhoDoMes(marca, mes) {
+  const m = String(marca ?? '').replace(/[\\/]/g, '-').replace(/\s+/g, ' ').trim();
+  return m ? [PASTA_PROJETOS, m, mes] : [PASTA_PROJETOS, mes];
+}
+
+/**
+ * Plano para a pasta de materiais fixos do cliente (opção --renomear-assets): `_ASSETS` → `MARCA`,
+ * renomeando a MESMA pasta (o ID não muda). Nunca cria, move nem apaga nada.
+ * @param {{id:string,name:string,isFolder:boolean}[]} filhosDoCliente
+ */
+export function planejarMarcaDoCliente(filhosDoCliente) {
+  const pastas = filhosDoCliente.filter(f => f.isFolder);
+  const assets = pastas.filter(f => f.name === PASTA_MARCA_ANTIGA);
+  const marca = pastas.filter(f => f.name === PASTA_MARCA);
+  if (assets.length > 1) return { acao: 'conflito', motivo: `há ${assets.length} pastas _ASSETS no cliente; decida qual fica antes de renomear` };
+  if (assets.length === 1 && marca.length) return { acao: 'conflito', id: assets[0].id, motivo: 'o cliente já tem MARCA e _ASSETS ao mesmo tempo; nada será renomeado' };
+  if (assets.length === 1) return { acao: 'renomear', id: assets[0].id, de: PASTA_MARCA_ANTIGA, para: PASTA_MARCA };
+  if (marca.length) return { acao: 'ja-esta', id: marca[0].id };
+  return { acao: 'nada', motivo: 'o cliente não tem _ASSETS nem MARCA' };
+}
+
 /** Para onde vai uma pasta da raiz do projeto, pelo nome. null = não mexe. */
 export function destinoDaPastaAntiga(nome) {
   if (nome === 'OS') return 'documentos';

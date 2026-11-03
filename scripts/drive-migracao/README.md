@@ -4,6 +4,7 @@ Reorganiza **por dentro** a pasta de cada projeto antigo (layout v1) para a estr
 
 - Só **move** pastas. O ID não muda, então vídeos, links e o banco continuam apontando para os mesmos arquivos.
 - **Não copia, não apaga** e a única renomeação é `02_APROVADO` → `02_FINAL`. `06_ENTREGA` não é renomeada nem apagada.
+- A pasta de materiais fixos do cliente (`_ASSETS`) **não é renomeada** a menos que você peça com `--renomear-assets` (ver abaixo).
 - Lives e projetos que já são v2 são pulados.
 - Não escreve no banco: gera um `.sql` para o Caio rodar no SQL Editor logo depois.
 
@@ -34,13 +35,16 @@ As pastas antigas entram **inteiras** dentro das novas (ex.: `00_DOCUMENTOS/00_G
 5. **Rodar o SQL.** Logo depois, rode no SQL Editor o arquivo `saida-drive/atualizar-banco-*.sql`. Ele marca os projetos como `v2` e grava os IDs das subpastas. Entre o fim do passo 4 e este passo, **evite aprovar vídeos desses projetos** (a janela é de segundos).
 6. **Conferir.** Abra um projeto migrado no app: "Abrir pasta no Drive", aba Entregas (os vídeos antigos aparecem) e um upload novo na revisão.
 
-`--mover-para-mes` (desligado por padrão) também move a pasta do projeto para `Cliente/AAAA-MM/`. Cliente com marcas e projeto sem marca é pulado nessa etapa.
+## Opções extras (ambas desligadas por padrão)
+
+- **`--mover-para-mes`** também move a pasta do projeto para a hierarquia nova: `Cliente › PROJETOS › [sub-marca] › AAAA-MM`. As pastas `PROJETOS`, da sub-marca e do mês são achadas pelo nome e criadas se faltarem. Cliente com marcas e projeto sem marca é pulado nessa etapa (decida a marca antes).
+- **`--renomear-assets`** renomeia, no cliente, a pasta `_ASSETS` para `MARCA` (a **mesma** pasta, com o mesmo ID e o mesmo conteúdo). O app aceita as duas, então isto é só para padronizar. Se o cliente já tem `MARCA` e `_ASSETS` ao mesmo tempo, ou duas `_ASSETS`, é marcado **CONFLITO** e nada é renomeado. Na simulação aparece como `RENOMEIA`.
 
 ## Pastas antigas que ficam vazias
 Ao fim da execução o script lista as `06_ENTREGA` que ficaram vazias. Elas **não** são apagadas: você decide depois.
 
 ## Desfazer
-Cada execução salva `saida-drive/feito-*.json` com, para cada pasta movida, o nome e o pai antigos. Como só houve movimentos, dá para voltar à mão (ou pedir um script de reversão). O SQL do banco, se já rodado, volta com:
+Cada execução salva `saida-drive/feito-*.json` com, para cada pasta movida ou renomeada, o nome e o pai antigos. Como só houve movimentos, dá para voltar à mão (ou pedir um script de reversão). O SQL do banco, se já rodado, volta com:
 
 ```sql
 update public.projects set drive_layout = 'v1', drive_pastas = null where id = '<id do projeto>';

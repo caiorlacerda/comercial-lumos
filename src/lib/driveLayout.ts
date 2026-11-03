@@ -1,7 +1,7 @@
 // Estrutura de pastas do Drive no app (espelha supabase/functions/drive-provision/layout.ts).
 //
 // v1 = projetos antigos e lives: subpastas achadas pelo nome.
-// v2 = projetos novos: Cliente › [Marca] › AAAA-MM › NNN_NOME, com as subpastas 00_DOCUMENTOS, 01_BRUTO,
+// v2 = projetos novos: Cliente › PROJETOS › [Sub-marca] › AAAA-MM › NNN_NOME, com as subpastas 00_DOCUMENTOS, 01_BRUTO,
 //      02_ARTES/01_TRILHAS e 03_EXPORT/01_REVISAO + 02_FINAL. O app usa os IDs salvos em projects.drive_pastas
 //      e nunca procura nem cria pasta por nome nesse layout.
 

@@ -1,12 +1,17 @@
 // Regras puras da estrutura de pastas do Drive (sem Deno, sem rede, sem banco).
 // Ficam num arquivo à parte para poderem ser testadas sem subir a função.
 //
-// Estrutura v2 (projetos novos, exceto live):
-//   Cliente › [Marca] › AAAA-MM › NNN_NOME-DO-PROJETO
-//     00_DOCUMENTOS
-//     01_BRUTO
-//     02_ARTES › 01_TRILHAS
-//     03_EXPORT › 01_REVISAO, 02_FINAL
+// Estrutura da pasta do cliente:
+//   Cliente
+//     MARCA                      materiais fixos (brandbook, logos, fontes, guidelines). Cliente antigo tem _ASSETS.
+//     PROJETOS
+//       [Sub-marca]              só para cliente com marcas (ex.: Vitru › Uniasselvi)
+//         AAAA-MM
+//           NNN_NOME-DO-PROJETO  (projeto v2, exceto live)
+//             00_DOCUMENTOS
+//             01_BRUTO
+//             02_ARTES › 01_TRILHAS
+//             03_EXPORT › 01_REVISAO, 02_FINAL
 
 export const NOMES_V2 = {
   documentos: '00_DOCUMENTOS',
@@ -17,6 +22,20 @@ export const NOMES_V2 = {
   revisao: '01_REVISAO',
   final: '02_FINAL',
 } as const
+
+/** Pasta do cliente com os materiais fixos. Clientes antigos têm `_ASSETS` (não é renomeada sozinha). */
+export const PASTA_MARCA = 'MARCA'
+export const PASTA_MARCA_ANTIGA = '_ASSETS'
+/** Pasta do cliente que guarda todos os projetos novos. */
+export const PASTA_PROJETOS = 'PROJETOS'
+/** Subpastas de MARCA nos clientes novos (as da `_ASSETS` + a GUIDELINES do portal de boas-vindas). */
+export const SUBPASTAS_MARCA = ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES']
+
+/** Caminho a partir da pasta do cliente até a pasta do mês: PROJETOS › [sub-marca] › AAAA-MM. */
+export function caminhoDoMes(marca: string | null | undefined, mes: string): string[] {
+  const m = (marca ?? '').trim()
+  return m ? [PASTA_PROJETOS, nomeDeContainer(m), mes] : [PASTA_PROJETOS, mes]
+}
 
 export type ChavePasta = keyof typeof NOMES_V2
 export type PastasV2 = Record<ChavePasta, string>

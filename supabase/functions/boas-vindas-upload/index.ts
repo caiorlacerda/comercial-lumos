@@ -198,10 +198,11 @@ async function mirrorTemplate(templateFolderId: string, targetFolderId: string, 
   }))
 }
 
-// Garante a pasta do cliente e devolve o id da subpasta _ASSETS dentro dela.
+// Garante a pasta do cliente e devolve o id da pasta de materiais fixos dentro dela: MARCA (clientes
+// novos) ou _ASSETS (clientes antigos, que não são renomeados sozinhos). Se nenhuma existe, cria MARCA.
 // Reusa clients.drive_folder_id se ainda existir (auto-cura se foi apagada,
 // igual a drive-provision faz).
-async function ensureClientAssetsFolder(client: { id: string; name: string; drive_folder_id: string | null }): Promise<string> {
+export async function ensureClientAssetsFolder(client: { id: string; name: string; drive_folder_id: string | null }): Promise<string> {
   let clientFolderId = client.drive_folder_id
   let recemCriada = false
   if (!(await folderAlive(clientFolderId))) {
@@ -215,31 +216,35 @@ async function ensureClientAssetsFolder(client: { id: string; name: string; driv
     }])
   }
 
-  const clientAssetsId = await ensureFolder(clientFolderId!, '_ASSETS')
+  let marcaId = (await findChildFolder(clientFolderId!, 'MARCA')) ?? (await findChildFolder(clientFolderId!, '_ASSETS'))
+  const criouAgora = !marcaId
+  if (!marcaId) marcaId = await ensureFolder(clientFolderId!, 'MARCA')
 
   // Pasta nova: monta a estrutura padrão do jeito que a drive-provision monta
-  // (espelha _TEMPLATES/_ASSETS; sem template, cria as 5 subpastas na mão).
+  // (espelha _TEMPLATES/MARCA ou _TEMPLATES/_ASSETS; sem template, cria as 5 subpastas na mão).
   // Sem isto, um cliente cujo primeiro contato com o Drive foi um upload de
   // boas-vindas nunca ganharia a estrutura — o folderAlive() curto-circuita
   // todas as vezes seguintes.
-  if (recemCriada) {
+  if (criouAgora) {
     const clienteTemplateId = TEMPLATES_FOLDER_ID
-      ? await findChildFolder(TEMPLATES_FOLDER_ID, '_ASSETS')
+      ? ((await findChildFolder(TEMPLATES_FOLDER_ID, 'MARCA')) ?? (await findChildFolder(TEMPLATES_FOLDER_ID, '_ASSETS')))
       : null
     if (clienteTemplateId) {
-      await mirrorTemplate(clienteTemplateId, clientAssetsId)
+      await mirrorTemplate(clienteTemplateId, marcaId)
     } else {
       for (const sub of ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS']) {
-        await ensureFolder(clientAssetsId, sub)
+        await ensureFolder(marcaId, sub)
       }
     }
   }
+  // Cliente novo também ganha a pasta onde os projetos vão morar.
+  if (recemCriada) await ensureFolder(clientFolderId!, 'PROJETOS')
 
   // GUIDELINES não vem do template da organização, mas o checklist precisa
   // dela — garantida sempre, pasta nova ou antiga.
-  await ensureFolder(clientAssetsId, 'GUIDELINES')
+  await ensureFolder(marcaId, 'GUIDELINES')
 
-  return clientAssetsId
+  return marcaId
 }
 
 async function uploadFile(parentId: string, name: string, mimeType: string, bytes: Uint8Array): Promise<string> {

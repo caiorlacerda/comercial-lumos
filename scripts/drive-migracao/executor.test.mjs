@@ -15,11 +15,12 @@ const ok = (n, c) => { console.log((c ? 'OK     ' : 'FALHA  ') + n); if (!c) fal
 // ---------- Drive falso ----------
 const FOLDER = 'application/vnd.google-apps.folder';
 let arvore, chamadas, seq;
+const add = (id, name, parent, folder = true) => arvore.set(id, { id, name, parents: parent ? [parent] : [], mimeType: folder ? FOLDER : 'text/plain' });
 function novo() {
   arvore = new Map(); chamadas = []; seq = 0;
-  const add = (id, name, parent, folder = true) => arvore.set(id, { id, name, parents: parent ? [parent] : [], mimeType: folder ? FOLDER : 'text/plain' });
   add('drive', 'DRIVE', null);
   add('cli', 'Cliente Teste', 'drive');
+  add('assets', '_ASSETS', 'cli'); add('logos', 'LOGOS', 'assets');
   // P1: projeto antigo típico
   add('p1', '227_FILME', 'cli');
   for (const [id, n] of [['g0', '00_GERAL'], ['g1', '01_ROTEIRO'], ['g2', '02_PRODUCAO'], ['g3', '03_CAPTACAO'], ['g4', '04_EDICAO'], ['g5', '05_ARTES'], ['ent', '06_ENTREGA'], ['os', 'OS'], ['dup', '99_DUPLICADOS']]) add(id, n, 'p1');
@@ -122,21 +123,54 @@ ok('SQL gerado para o projeto migrado, com a revisão = ID antigo de 01_REVISAO'
 ok('SQL não inclui live nem v2', !/uuid-p2|uuid-p3/.test(sql));
 ok('registro do que foi feito foi salvo (para desfazer à mão)', fs.readdirSync(path.join(tmp, 'saida')).some(f => f.startsWith('feito-')));
 
-// ---------- 4) --mover-para-mes ----------
+// ---------- 4) --mover-para-mes: Cliente › PROJETOS › AAAA-MM ----------
 novo();
 r = await rodar(['--executar', '--mover-para-mes'], 'Cliente Teste\n');
-const mes = filhos('cli').find(f => f.name === '2026-10')?.id;
-ok('--mover-para-mes: pasta do projeto vai para Cliente/2026-10 com o mesmo ID', mes && pai('p1') === mes && nome('p1') === '227_FILME');
+const projetos = filhos('cli').find(f => f.name === 'PROJETOS')?.id;
+const mes = filhos(projetos ?? 'x').find(f => f.name === '2026-10')?.id;
+ok('--mover-para-mes: cria Cliente/PROJETOS/2026-10', !!projetos && !!mes);
+ok('--mover-para-mes: a pasta do projeto vai para lá com o mesmo ID e o mesmo nome', pai('p1') === mes && nome('p1') === '227_FILME');
+ok('--mover-para-mes: a _ASSETS do cliente não é tocada', pai('assets') === 'cli' && nome('assets') === '_ASSETS');
 novo();
 r = await rodar(['--executar'], 'Cliente Teste\n');
-ok('sem --mover-para-mes: a pasta do projeto fica onde estava', pai('p1') === 'cli');
+ok('sem --mover-para-mes: a pasta do projeto fica onde estava e PROJETOS não é criada', pai('p1') === 'cli' && !filhos('cli').some(f => f.name === 'PROJETOS'));
+
+// ---------- 4b) projeto com sub-marca: Cliente › PROJETOS › Marca › AAAA-MM ----------
+novo();
+let lista = JSON.parse(fs.readFileSync(path.join(tmp, 'projetos.json'), 'utf8'));
+lista[0].client_marcas = ['Uniasselvi', 'Vitru']; lista[0].marca = 'Uniasselvi';
+fs.writeFileSync(path.join(tmp, 'projetos.json'), JSON.stringify(lista));
+r = await rodar(['--executar', '--mover-para-mes'], 'Cliente Teste\n');
+const pj = filhos('cli').find(f => f.name === 'PROJETOS')?.id;
+const mr = filhos(pj ?? 'x').find(f => f.name === 'Uniasselvi')?.id;
+const mm = filhos(mr ?? 'x').find(f => f.name === '2026-10')?.id;
+ok('com sub-marca: Cliente/PROJETOS/Uniasselvi/2026-10 (a marca fica DENTRO de PROJETOS)', !!mm && pai('p1') === mm);
 
 // ---------- 5) cliente com marcas e projeto sem marca: não move para o mês ----------
 novo();
-const lista = JSON.parse(fs.readFileSync(path.join(tmp, 'projetos.json'), 'utf8')); lista[0].client_marcas = ['A', 'B'];
+lista[0].marca = null;
 fs.writeFileSync(path.join(tmp, 'projetos.json'), JSON.stringify(lista));
 r = await rodar(['--executar', '--mover-para-mes'], 'Cliente Teste\n');
-ok('cliente com marcas: reorganiza por dentro mas NÃO move a pasta para o mês', pai('p1') === 'cli' && /marca/i.test(r.out));
+ok('cliente com marcas e projeto sem marca: reorganiza por dentro mas NÃO move a pasta', pai('p1') === 'cli' && /marca/i.test(r.out) && !filhos('cli').some(f => f.name === 'PROJETOS'));
+lista[0].client_marcas = []; fs.writeFileSync(path.join(tmp, 'projetos.json'), JSON.stringify(lista));
+
+// ---------- 6) --renomear-assets ----------
+novo();
+r = await rodar(['--renomear-assets']);
+ok('simulação com --renomear-assets: mostra o plano e NÃO escreve nada', /RENOMEIA\s+_ASSETS/.test(r.out) && chamadas.every(c => c.startsWith('GET ')) && nome('assets') === '_ASSETS');
+novo();
+r = await rodar(['--executar'], 'Cliente Teste\n');
+ok('sem --renomear-assets: _ASSETS continua _ASSETS (nunca é renomeada sozinha)', nome('assets') === '_ASSETS');
+novo();
+r = await rodar(['--executar', '--renomear-assets'], 'Cliente Teste\n');
+ok('com --renomear-assets: a MESMA pasta vira MARCA (ID e conteúdo intactos)', nome('assets') === 'MARCA' && pai('assets') === 'cli' && pai('logos') === 'assets');
+ok('com --renomear-assets: os projetos também foram migrados', pai('rev') !== 'ent' && nome('apr') === '02_FINAL');
+ok('com --renomear-assets: nenhuma pasta nova MARCA/_ASSETS foi criada', filhos('cli').filter(f => f.name === 'MARCA' || f.name === '_ASSETS').length === 1);
+const feitos = fs.readdirSync(path.join(tmp, 'saida')).filter(f => f.startsWith('feito-')).map(f => JSON.parse(fs.readFileSync(path.join(tmp, 'saida', f), 'utf8'))).flat();
+ok('registro do que foi feito inclui a renomeação (nome antigo e novo, para desfazer)', feitos.some(x => x.feito?.some(y => y.op === 'renomeada' && y.nomeAntigo === '_ASSETS' && y.nomeNovo === 'MARCA' && y.id === 'assets')));
+novo(); add('marca-ja', 'MARCA', 'cli');
+r = await rodar(['--executar', '--renomear-assets'], 'Cliente Teste\n');
+ok('MARCA e _ASSETS já coexistem: conflito, nada renomeado, projetos seguem', nome('assets') === '_ASSETS' && /CONFLITO/.test(r.out) && nome('apr') === '02_FINAL');
 
 servidor.close();
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo');

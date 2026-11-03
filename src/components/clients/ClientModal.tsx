@@ -252,7 +252,7 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
           <div className="flex flex-col gap-2">
             <label className="text-[15px] font-medium text-lumos-text-secondary uppercase tracking-widest mb-2">Marcas (Opcional)</label>
             <p className="text-sm text-lumos-text-secondary -mt-1">
-              Só para clientes com sub-marcas (ex.: Vitru → Uniasselvi, Continuada, Vitru). Cada projeto escolhe uma marca e a pasta do Drive nasce dentro dela; sem escolher, o projeto fica sem pasta. Deixe vazio se o cliente não tem marcas.
+              Só para clientes com sub-marcas (ex.: Vitru → Uniasselvi, Continuada, Vitru). Cada projeto escolhe uma marca e a pasta do projeto no Drive fica em PROJETOS › marca; sem escolher, o projeto fica sem pasta. Deixe vazio se o cliente não tem marcas.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {marcas.map(m => (
