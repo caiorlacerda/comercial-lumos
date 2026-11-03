@@ -8,6 +8,8 @@ export interface ProjetoArvore {
   category: string | null;
   status?: string;
   oculto_na_barra?: boolean | null;
+  data_inicio?: string | null;
+  created_at?: string | null;
 }
 
 export interface ClienteBasico {

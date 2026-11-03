@@ -9,6 +9,9 @@ import { formatBudgetCode } from '@/utils/formatters';
 import { montarArvore } from '@/lib/arvoreProjetos';
 import type { ProjetoArvore, ClienteBasico, ClienteNaArvore } from '@/lib/arvoreProjetos';
 import Select from '@/components/ui/Select';
+import SeletorMes from '@/components/common/SeletorMes';
+import { useMesLembrado } from '@/hooks/useMesLembrado';
+import { chaveMes } from '@/lib/filtroMes';
 import Modal from '@/components/common/Modal';
 import PortalModal from '@/components/producao/PortalModal';
 import EncerrarProjetoConfirmModal from '@/components/layout/EncerrarProjetoConfirmModal';
@@ -39,6 +42,9 @@ const autoColorFor = (name: string) => {
   return AUTO_COLORS[sum % AUTO_COLORS.length];
 };
 
+// Mês do projeto: início do trabalho, ou a criação do registro quando não há data de início.
+const mesDoProjeto = (p: ProjetoArvore) => chaveMes(p.data_inicio || p.created_at);
+
 // Item "Projetos" da sidebar de Produção: um dropdown (como no Momentum) que
 // expande para "Todos os Projetos" (Visão Geral) + árvore de clientes →
 // projetos ativos. Botão direito num cliente abre o seletor de cor.
@@ -53,6 +59,8 @@ export default function SidebarProjectTree() {
   const podeEncerrar = isAdmin || can('ordem_do_dia');
 
   const [open, setOpen] = useState(true);
+  // Filtro por mês da árvore (lembrado no navegador). '' = todos os meses.
+  const [mes, setMes] = useMesLembrado('lumos_filtro_mes_projetos');
   // Todos os projetos carregados; a árvore é derivada daqui (ocultar, editar,
   // excluir, encerrar e reabrir só mexem nesta lista).
   const [todos, setTodos] = useState<ProjetoArvore[]>([]);
@@ -81,7 +89,7 @@ export default function SidebarProjectTree() {
     let cancelled = false;
     (async () => {
       try {
-        const COLUNAS = 'id, name, client_id, code, category, status';
+        const COLUNAS = 'id, name, client_id, code, category, status, data_inicio, created_at';
         const buscar = (comOculto: boolean) =>
           supabase.from('projects')
             .select(comOculto ? `${COLUNAS}, oculto_na_barra` : COLUNAS)
@@ -127,8 +135,11 @@ export default function SidebarProjectTree() {
     return () => window.removeEventListener('keydown', onKey);
   }, [colorMenu]);
 
+  const mesesDosProjetos = useMemo(() => todos.map(mesDoProjeto), [todos]);
+  const doMes = useMemo(() => (mes ? todos.filter(p => mesDoProjeto(p) === mes) : todos), [todos, mes]);
+
   const { clientes: clients, semCliente: noClientProjects, ocultos: hidden, encerrados: concluded } =
-    useMemo(() => montarArvore(todos, clientesLista), [todos, clientesLista]);
+    useMemo(() => montarArvore(doMes, clientesLista), [doMes, clientesLista]);
 
   const dotClassFor = (client: ClienteNaArvore) =>
     colors[client.id] ? classForColorKey(colors[client.id]) : autoColorFor(client.name);
@@ -290,6 +301,12 @@ export default function SidebarProjectTree() {
             Todos os Projetos
           </button>
 
+          {!loading && todos.length > 0 && (
+            <div className="px-1 py-1">
+              <SeletorMes value={mes} onChange={setMes} chaves={mesesDosProjetos} className="input-lumos h-8 w-full text-[11px]" ariaLabel="Filtrar projetos por mês" />
+            </div>
+          )}
+
           {loading ? (
             <div className="px-2.5 py-2 space-y-1.5 animate-pulse">
               {[0, 1, 2].map(i => <div key={i} className="h-3.5 bg-lumos-border/30 rounded" />)}
@@ -419,7 +436,7 @@ export default function SidebarProjectTree() {
               )}
 
               {clients.length === 0 && noClientProjects.length === 0 && hidden.length === 0 && (
-                <p className="px-2.5 py-2 text-[10px] text-lumos-text-secondary/50 italic">Nenhum projeto ativo.</p>
+                <p className="px-2.5 py-2 text-[10px] text-lumos-text-secondary/50 italic">{mes ? 'Nenhum projeto neste mês.' : 'Nenhum projeto ativo.'}</p>
               )}
 
               {/* Encerrados (arquivo) — projetos concluídos, sempre acessíveis aqui */}
