@@ -125,15 +125,19 @@ serve(async (req) => {
       }
     } catch (_) { /* sem nome: cai no Google de quem subiu */ }
 
-    // Resolve a pasta 06_ENTREGA/01_REVISAO do projeto
-    const { data: proj } = await db.from('projects').select('drive_folder_id, drive_upload_folder_id').eq('id', projectId).single()
-    let folderId = proj?.drive_upload_folder_id as string | null
-    if (!folderId && proj?.drive_folder_id) {
+    // Resolve a pasta de revisão do projeto.
+    //  · v2: o ID salvo (drive_pastas.revisao = 03_EXPORT/01_REVISAO); nunca procura por nome.
+    //  · v1: o ID salvo e, na falta dele, 06_ENTREGA/01_REVISAO pelo nome (como sempre foi).
+    // Banco sem as colunas v2 (migration pendente): cai no select antigo.
+    let proj: any = (await db.from('projects').select('drive_folder_id, drive_upload_folder_id, drive_layout, drive_pastas').eq('id', projectId).single()).data
+    if (!proj) proj = (await db.from('projects').select('drive_folder_id, drive_upload_folder_id').eq('id', projectId).single()).data
+    let folderId = (proj?.drive_layout === 'v2' ? (proj?.drive_pastas?.revisao ?? proj?.drive_upload_folder_id) : proj?.drive_upload_folder_id) as string | null
+    if (!folderId && proj?.drive_layout !== 'v2' && proj?.drive_folder_id) {
       const entrega = await findChildFolder(proj.drive_folder_id, '06_ENTREGA', token)
       folderId = entrega ? await findChildFolder(entrega, '01_REVISAO', token) : null
       if (folderId) await db.from('projects').update({ drive_upload_folder_id: folderId }).eq('id', projectId)
     }
-    if (!folderId) return json({ error: 'Projeto sem pasta 01_REVISAO' }, 400)
+    if (!folderId) return json({ error: 'Projeto sem pasta de revisão (01_REVISAO)' }, 400)
 
     // 1) Abre a sessão resumável
     const initRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {

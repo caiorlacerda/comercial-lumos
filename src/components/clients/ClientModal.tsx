@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Users, Plus, Trash, Building2 } from 'lucide-react';
+import { Users, Plus, Trash, Building2, X } from 'lucide-react';
 import Modal from '@/components/common/Modal';
 import { useToast } from '@/context/ToastContext';
 import { logAudit } from '@/hooks/useAuditLog';
@@ -10,6 +10,7 @@ interface Client {
   id: string;
   name: string;
   agency_name?: string;
+  marcas?: string[] | null;
 }
 
 interface ContactFormData {
@@ -27,6 +28,8 @@ interface ClientModalProps {
   client?: Client | null;
 }
 
+const marcasAntesRemovidas = (antes: string[], agora: string[]) => antes.some(m => !agora.includes(m));
+
 export default function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalProps) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
@@ -37,6 +40,9 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
   const [contacts, setContacts] = useState<ContactFormData[]>([
     { name: '', email: '', phone: '', role: '' }
   ]);
+  // Marcas do cliente (lista fechada; cada projeto escolhe uma e a pasta do Drive nasce dentro dela).
+  const [marcas, setMarcas] = useState<string[]>([]);
+  const [novaMarca, setNovaMarca] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -45,8 +51,12 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
           name: client.name,
           agency_name: client.agency_name || '',
         });
+        setMarcas(client.marcas ?? []);
+        setNovaMarca('');
         fetchContacts(client.id);
       } else {
+        setMarcas([]);
+        setNovaMarca('');
         setFormData({ name: '', agency_name: '' });
         setContacts([{ name: '', email: '', phone: '', role: '' }]);
       }
@@ -66,6 +76,14 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
       setContacts([{ name: '', email: '', phone: '', role: '' }]);
     }
   }
+
+  const adicionarMarca = () => {
+    const nome = novaMarca.replace(/[\\/]/g, '-').replace(/\s+/g, ' ').trim();
+    if (!nome) return;
+    if (marcas.some(m => m.toLowerCase() === nome.toLowerCase())) { toast.info('Essa marca já está na lista.'); return; }
+    setMarcas([...marcas, nome]);
+    setNovaMarca('');
+  };
 
   const addContactRow = () => {
     setContacts([...contacts, { name: '', email: '', phone: '', role: '' }]);
@@ -87,12 +105,18 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
     try {
       let clientId = client?.id;
 
+      // A coluna `marcas` chega por migration: só vai no payload quando a lista mudou, para o
+      // cadastro de clientes seguir funcionando em quem não mexe nas marcas.
+      const marcasAntes = client?.marcas ?? [];
+      const marcasMudaram = marcas.length !== marcasAntes.length || marcas.some((m, i) => m !== marcasAntes[i]);
+      const payload = marcasMudaram ? { ...formData, marcas } : formData;
+
       // 1. Save/Update Client
       if (client) {
-        const { error } = await supabase.from('clients').update(formData).eq('id', clientId);
+        const { error } = await supabase.from('clients').update(payload).eq('id', clientId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.from('clients').insert(formData).select().single();
+        const { data, error } = await supabase.from('clients').insert(payload).select().single();
         if (error) throw error;
         clientId = data.id;
         logAudit('client_created', `Cliente "${formData.name}" criado`, { client_id: clientId });
@@ -223,6 +247,36 @@ export default function ClientModal({ isOpen, onClose, onSuccess, client }: Clie
                 onChange={(e) => setFormData({...formData, agency_name: e.target.value})}
               />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-[15px] font-medium text-lumos-text-secondary uppercase tracking-widest mb-2">Marcas (Opcional)</label>
+            <p className="text-sm text-lumos-text-secondary -mt-1">
+              Só para clientes com sub-marcas (ex.: Vitru → Uniasselvi, Continuada, Vitru). Cada projeto escolhe uma marca e a pasta do projeto no Drive fica em PROJETOS › marca; sem escolher, o projeto fica sem pasta. Deixe vazio se o cliente não tem marcas.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {marcas.map(m => (
+                <span key={m} className="inline-flex items-center gap-1.5 rounded-full border border-lumos-border bg-lumos-bg px-3 py-1.5 text-sm font-bold text-lumos-text-primary">
+                  {m}
+                  <button type="button" onClick={() => setMarcas(marcas.filter(x => x !== m))} aria-label={`Remover a marca ${m}`} className="text-lumos-text-secondary hover:text-red-500">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                className="input-lumos h-12 px-4 text-base flex-1 max-w-sm"
+                placeholder="Nome da marca"
+                value={novaMarca}
+                onChange={(e) => setNovaMarca(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); adicionarMarca(); } }}
+              />
+              <button type="button" onClick={adicionarMarca} disabled={!novaMarca.trim()} className="btn-secondary h-12 px-5 text-sm">Adicionar</button>
+            </div>
+            {client && marcasAntesRemovidas(client.marcas ?? [], marcas) && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">Remover uma marca não move nem apaga pastas que já existem no Drive.</p>
+            )}
           </div>
 
           <div className="space-y-6 pt-4">
