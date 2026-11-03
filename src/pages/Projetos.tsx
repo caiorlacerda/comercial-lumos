@@ -2479,6 +2479,27 @@ export default function Projetos() {
                       )}
 
                     <div className="flex items-center gap-2 flex-wrap ml-auto">
+                    {/* Pasta do projeto no Drive: para toda a equipe, inclusive no celular. */}
+                    {selectedProject.drive_folder_id ? (
+                      <a
+                        href={`https://drive.google.com/drive/folders/${selectedProject.drive_folder_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-primary py-2 px-3 flex items-center gap-2 text-xs font-bold"
+                        title="Abre a pasta deste projeto no Google Drive"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" /> Abrir pasta no Drive
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
+                        title="A pasta é criada sozinha logo depois que o projeto nasce. Se demorar, recarregue a página."
+                      >
+                        <FolderClosed className="w-3.5 h-3.5" /> Pasta ainda não criada
+                      </button>
+                    )}
                     {selectedProject.budget_id && (
                       <button
                         onClick={() => handleDownloadOS(selectedProject.id, selectedProject.budget_id!)}
