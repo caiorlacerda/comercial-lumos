@@ -8,7 +8,8 @@
 //   · 06_ENTREGA/01_REVISAO → 03_EXPORT/01_REVISAO e 06_ENTREGA/02_APROVADO → 03_EXPORT/02_FINAL (renomeada);
 //   · 06_ENTREGA/03_REDES e 04_THUMB: o CONTEÚDO vai para 03_EXPORT/02_FINAL e a pasta, se ficar vazia, vai para a lixeira;
 //   · 05_POS_PRODUCAO: vazia → lixeira; com conteúdo → NÃO é apagada, vai inteira para 01_BRUTO;
-//   · 03_*/BRUTO é redundante: o conteúdo dela vai direto para 01_BRUTO; 04_*/TRILHA(S) é mesclada em 02_ARTES/01_TRILHAS;
+//   · 03_*/BRUTO é redundante: a 03_* se dissolve (o conteúdo da BRUTO e o resto dela sobem para 01_BRUTO; vazias, vão para a lixeira);
+//     04_*/TRILHA(S) é mesclada em 02_ARTES/01_TRILHAS;
 //   · arquivo de backup de câmera (CAM_1A_BKP_…) achado nas pastas de entrega vai para 01_BRUTO;
 //   · segurança: pasta só vai para a lixeira se estiver vazia depois das movimentações (conferido de novo na hora de
 //     aplicar); conflito de nome nunca sobrescreve: o item fica onde está e aparece como CONFLITO.
@@ -198,14 +199,21 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
     if (!para) { ignorados.push({ id: f.id, nome: f.name, motivo: 'nome fora do mapa; fica onde está' }); continue; }
 
     if (para === 'bruto') {
-      // 03_*/BRUTO é redundante: o que há nela sobe direto para 01_BRUTO
+      // 03_*/BRUTO é redundante (a 03_* já é o "bruto"): a 03_* se dissolve em 01_BRUTO. O conteúdo da BRUTO e tudo o
+      // mais que houver na 03_* sobem direto para 01_BRUTO, e as duas pastas, vazias, vão para a lixeira. Assim não
+      // sobra um invólucro com nome antigo (01_BRUTO/03_CAPTACAO/...) em volta de uma ou duas pastas. Sem BRUTO dentro,
+      // a 03_* entra inteira em 01_BRUTO, como as demais pastas antigas. O que não puder subir (conflito de nome) fica,
+      // e então a 03_* não é apagada: segue inteira para 01_BRUTO.
       const filhos = await ls(f.id);
       const interna = filhos.find(x => x.isFolder && norm(x.name) === 'bruto');
       if (!interna) { levar(f, 'bruto', 'raiz'); continue; }
-      const internaVazia = await esvaziar(interna, 'bruto', `${f.name}/${interna.name}`);
-      if (internaVazia) lixeira(interna, f.name, 'ficará vazia depois de subir o conteúdo para 01_BRUTO');
-      const outros = filhos.filter(x => x.id !== interna.id);
-      if (internaVazia && !outros.length) lixeira(f, 'raiz', 'ficará vazia: só tinha a BRUTO, que subiu para 01_BRUTO');
+      let tudoSubiu = await esvaziar(interna, 'bruto', `${f.name}/${interna.name}`);
+      if (tudoSubiu) lixeira(interna, f.name, 'ficará vazia depois de subir o conteúdo para 01_BRUTO');
+      for (const outro of filhos) {
+        if (outro.id === interna.id || saem.has(outro.id)) continue;
+        if (!levar(outro, 'bruto', f.name)) tudoSubiu = false;
+      }
+      if (tudoSubiu) lixeira(f, 'raiz', 'ficará vazia: a BRUTO e o resto dela subiram para 01_BRUTO');
       else levar(f, 'bruto', 'raiz');
       continue;
     }

@@ -167,10 +167,15 @@ ok('backup de câmera: padrão CAM_<id>_BKP_…', ehBackupDeCamera('CAM_1A_BKP_2
   ok('03_CAPTACAO só com BRUTO: o conteúdo da BRUTO vai direto para 01_BRUTO', moveu(t, 'd1', 'bruto') && moveu(t, 'f1', 'bruto'));
   ok('...BRUTO e 03_CAPTACAO, esvaziadas, vão para a lixeira (BRUTO antes), e 03_CAPTACAO não é movida', op(t, 'lixeira', { id: 'b' }).length === 1 && op(t, 'lixeira', { id: 'c' }).length === 1 && op(t, 'mover', { id: 'c' }).length === 0 && t.passos.findIndex(p => p.id === 'b' && p.op === 'lixeira') < t.passos.findIndex(p => p.id === 'c' && p.op === 'lixeira'));
   ok('...segurança', seguro(d, t));
-  d.pasta('x', 'ANOTACOES', 'c');
+  d.pasta('x', 'AUDIO', 'c').arq('x1', 'leia-me.txt', 'c');
   const t2 = await plano(d);
-  ok('03_CAPTACAO com outras coisas além da BRUTO: o conteúdo da BRUTO sobe, e a 03_CAPTACAO (com o resto) vai inteira para 01_BRUTO', moveu(t2, 'f1', 'bruto') && moveu(t2, 'c', 'bruto') && op(t2, 'lixeira', { id: 'b' }).length === 1 && op(t2, 'lixeira', { id: 'c' }).length === 0);
+  ok('03_CAPTACAO com BRUTO e mais coisas (AUDIO, arquivo): tudo sobe para 01_BRUTO, sem invólucro com nome antigo', moveu(t2, 'f1', 'bruto') && moveu(t2, 'x', 'bruto') && moveu(t2, 'x1', 'bruto') && op(t2, 'mover', { id: 'c' }).length === 0);
+  ok('...BRUTO e depois 03_CAPTACAO, vazias, vão para a lixeira', op(t2, 'lixeira', { id: 'b' }).length === 1 && op(t2, 'lixeira', { id: 'c' }).length === 1 && t2.passos.findIndex(p => p.id === 'b' && p.op === 'lixeira') < t2.passos.findIndex(p => p.id === 'c' && p.op === 'lixeira'));
   ok('...segurança', seguro(d, t2));
+  const dc = drive().pasta('P', 'proj', null).pasta('bb', '01_BRUTO', 'P').pasta('au0', 'AUDIO', 'bb').pasta('c', '03_CAPTACAO', 'P').pasta('b', 'BRUTO', 'c').arq('f1', 'cena.mov', 'b').pasta('au', 'AUDIO', 'c');
+  const tc = await plano(dc);
+  ok('irmã da BRUTO com nome que já existe em 01_BRUTO: conflito, 03_CAPTACAO NÃO vai para a lixeira e entra inteira em 01_BRUTO', op(tc, 'conflito', { id: 'au' }).length === 1 && moveu(tc, 'f1', 'bruto') && op(tc, 'lixeira', { id: 'c' }).length === 0 && moveu(tc, 'c', 'bruto') && op(tc, 'lixeira', { id: 'b' }).length === 1);
+  ok('...segurança', seguro(dc, tc));
   const d3 = drive().pasta('P', 'proj', null).pasta('bb', '01_BRUTO', 'P').arq('ja', 'cena.mov', 'bb').pasta('c', '03_CAPTACAO', 'P').pasta('b', 'bruto', 'c').arq('f1', 'cena.mov', 'b').arq('f2', 'outra.mov', 'b');
   const t3 = await plano(d3);
   ok('nome repetido ao subir a BRUTO: conflito (não sobrescreve), a BRUTO NÃO vai para a lixeira e 03_CAPTACAO segue inteira', op(t3, 'conflito', { id: 'f1' }).length === 1 && moveu(t3, 'f2', 'bruto') && op(t3, 'lixeira').length === 0 && moveu(t3, 'c', 'bruto'));

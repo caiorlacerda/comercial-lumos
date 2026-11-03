@@ -41,7 +41,7 @@ Corpo (JSON):
 |---|---|
 | `00_*`, `01_*`, `02_*` e `OS` | dentro de `00_DOCUMENTOS` |
 | `03_*` (ex.: `03_CAPTACAO`) | dentro de `01_BRUTO` |
-| `03_*/BRUTO` (redundante) | o **conteúdo** sobe direto para `01_BRUTO`; `BRUTO` vai para a lixeira. Se a `03_*` ficar vazia (só tinha a `BRUTO`), ela também vai para a lixeira; se tiver outras coisas, entra inteira em `01_BRUTO` |
+| `03_*` que tem uma `BRUTO` dentro (redundante) | a `03_*` se **dissolve**: o conteúdo da `BRUTO` e tudo o mais que houver na `03_*` sobem direto para `01_BRUTO`, e as duas pastas, vazias, vão para a lixeira (evita `01_BRUTO/03_CAPTACAO/...` em volta de uma pasta só). Se algo não puder subir (conflito de nome), a `03_*` não é apagada e entra inteira em `01_BRUTO` |
 | `04_*` | dentro de `02_ARTES` |
 | `04_*/TRILHA` (ou `TRILHAS`) | o conteúdo é **mesclado** em `02_ARTES/01_TRILHAS`; a `TRILHA` vazia vai para a lixeira |
 | `05_POS_PRODUCAO` | **vazia** → lixeira. **Com conteúdo** → não é apagada: vai inteira para `01_BRUTO` (o plano lista o que há dentro) |
