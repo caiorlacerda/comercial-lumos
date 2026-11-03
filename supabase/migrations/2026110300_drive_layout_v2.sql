@@ -13,7 +13,8 @@
 --                             {documentos, bruto, artes, trilhas, export, revisao, final}
 --   · clients.marcas          lista fechada de marcas do cliente (ex.: Vitru → Uniasselvi, Continuada, Vitru)
 --   · trigger de UPDATE       também dispara quando a marca muda (é assim que a pasta de um cliente com
---                             marcas nasce depois que a produção escolhe a marca)
+--                             marcas nasce depois que a produção escolhe a marca); mantém a condição de
+--                             categoria que já existe em produção
 --
 -- ORDEM: rodar esta migration ANTES de subir as edge functions e o front desta mudança.
 -- Seguro rodar mais de uma vez. Reusa notify_drive_provision() (não a redefine, para preservar o segredo).
@@ -41,14 +42,24 @@ COMMENT ON COLUMN public.projects.drive_pastas IS
 COMMENT ON COLUMN public.clients.marcas IS
   'Marcas do cliente (lista fechada). Cliente com marcas só ganha a pasta do projeto depois que o projeto escolhe uma.';
 
-DROP TRIGGER IF EXISTS drive_provision_on_project_update ON public.projects;
-CREATE TRIGGER drive_provision_on_project_update
-  AFTER UPDATE ON public.projects
-  FOR EACH ROW
-  WHEN (
-    OLD.name IS DISTINCT FROM NEW.name
-    OR OLD.code IS DISTINCT FROM NEW.code
-    OR OLD.marca IS DISTINCT FROM NEW.marca
-    OR NEW.drive_folder_id IS NULL
-  )
-  EXECUTE FUNCTION public.notify_drive_provision();
+-- Trigger de UPDATE: dispara quando nome, código ou marca mudam, ou enquanto o projeto não tem pasta.
+-- Em produção ele TAMBÉM dispara quando a categoria muda (projects.category foi criada à mão, fora das
+-- migrations do repositório). Essa condição é preservada quando a coluna existe; sem a coluna (banco
+-- recriado do zero) ela é omitida, como nas migrations anteriores. Num bloco só: o trigger nunca fica
+-- sem existir no meio do caminho.
+DO $$
+DECLARE
+  condicao text := 'OLD.name IS DISTINCT FROM NEW.name OR OLD.code IS DISTINCT FROM NEW.code '
+                || 'OR OLD.marca IS DISTINCT FROM NEW.marca OR NEW.drive_folder_id IS NULL';
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'projects' AND column_name = 'category'
+  ) THEN
+    condicao := condicao || ' OR OLD.category IS DISTINCT FROM NEW.category';
+  END IF;
+
+  EXECUTE 'DROP TRIGGER IF EXISTS drive_provision_on_project_update ON public.projects';
+  EXECUTE 'CREATE TRIGGER drive_provision_on_project_update AFTER UPDATE ON public.projects '
+       || 'FOR EACH ROW WHEN (' || condicao || ') EXECUTE FUNCTION public.notify_drive_provision()';
+END $$;
