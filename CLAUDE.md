@@ -28,7 +28,7 @@ Sempre rode `npm run build` (ou ao menos `npx tsc --noEmit`) antes de considerar
 
 1. **Não altere nada que não foi explicitamente pedido.** Nada de refactor de oportunidade ou renomeação "de passagem". Anote observações fora de escopo em vez de corrigir por conta própria.
 2. **O desktop (`lg:` / ≥1024px) funciona bem — não regride.** Mudanças de UX são mobile-first, escondidas atrás de breakpoints.
-3. **SQL é executado manualmente pelo usuário (Caio) no Supabase.** A IA **nunca** roda SQL nem expõe a `service_role` key. Entregue SQL como bloco pronto para copiar. Migrations versionadas ficam em `supabase/migrations/`.
+3. **SQL em produção.** A IA **pode** rodar SQL em produção (CLI do Supabase logado) para tarefas que o Caio autorizou, e **nunca** expõe a `service_role` key. **Qualquer coisa que mexa muito no banco precisa ser perguntada ao Caio antes:** alterar ou apagar muitos registros, migração de dados reais em massa, mudanças estruturais grandes. **Na dúvida, pergunte.** Ao rodar: (a) confira o estado com consultas de leitura antes; (b) aplique **só o arquivo** combinado com `supabase db query --linked --project-ref <ref> -f <arquivo>` (a pasta de trabalho de um worktree não está linkada, então passe o `--project-ref`); **nunca `supabase db push`**, que aplicaria todas as migrations pendentes; (c) confirme o resultado com consultas depois. Quando não for rodar, entregue o SQL como bloco pronto para copiar. Migrations versionadas ficam em `supabase/migrations/`.
 4. **Antes de começar, garanta que está no `main` atualizado.** O histórico deste repo já teve descompasso entre branches — confira `git log` e sincronize.
 
 ## Arquitetura
