@@ -10,7 +10,6 @@ import { montarArvore } from '@/lib/arvoreProjetos';
 import type { ProjetoArvore, ClienteBasico, ClienteNaArvore } from '@/lib/arvoreProjetos';
 import Select from '@/components/ui/Select';
 import SeletorMes from '@/components/common/SeletorMes';
-import { useMesLembrado } from '@/hooks/useMesLembrado';
 import { chaveMes } from '@/lib/filtroMes';
 import Modal from '@/components/common/Modal';
 import PortalModal from '@/components/producao/PortalModal';
@@ -59,8 +58,9 @@ export default function SidebarProjectTree() {
   const podeEncerrar = isAdmin || can('ordem_do_dia');
 
   const [open, setOpen] = useState(true);
-  // Filtro por mês da árvore (lembrado no navegador). '' = todos os meses.
-  const [mes, setMes] = useMesLembrado('lumos_filtro_mes_projetos');
+  // Filtro por mês da árvore. Não é lembrado: a lateral sempre abre em "Todos os meses",
+  // para ninguém filtrar um mês, voltar no dia seguinte e achar que os projetos sumiram.
+  const [mes, setMes] = useState('');
   // Todos os projetos carregados; a árvore é derivada daqui (ocultar, editar,
   // excluir, encerrar e reabrir só mexem nesta lista).
   const [todos, setTodos] = useState<ProjetoArvore[]>([]);
