@@ -1,10 +1,12 @@
 // Revisão de vídeo — Fase 2: monitor do dropzone + ação de finalizar.
 //
-// Chamada 1 (pg_cron, body {}): varre 06_ENTREGA/01_REVISAO de cada projeto
-//   ativo, acha vídeos [NNN]_[PROJETO]_vNN.(mp4|mov) e registra os novos como
+// Chamada 1 (pg_cron, body {}): varre a pasta de revisão de cada projeto ativo
+//   (v2: drive_pastas.revisao = 03_EXPORT/01_REVISAO, pelo ID; v1: 06_ENTREGA/01_REVISAO,
+//   pelo nome), acha vídeos [NNN]_[PROJETO]_vNN.(mp4|mov) e registra os novos como
 //   EM_REVISAO_INTERNA em video_versions (idempotente por drive_file_id).
 // Chamada 2 (body {"action":"finalize","version_id":"..."}): copia o arquivo
-//   da versão para 06_ENTREGA/02_APROVADO como vFINAL e marca APROVADO.
+//   da versão para a pasta de aprovados (v2: 03_EXPORT/02_FINAL, pelo ID; v1: 06_ENTREGA/02_APROVADO)
+//   como vFINAL e marca APROVADO.
 //
 // Auth: header x-drive-secret == DRIVE_WEBHOOK_SECRET. Deploy --no-verify-jwt.
 // Reusa os secrets/Service Account de drive-provision.
@@ -185,19 +187,29 @@ async function probeVideoMeta(driveFileId: string): Promise<VideoMeta | null> {
 
 // --- Monitor do dropzone --------------------------------------------------
 async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }> {
-  let query = db
-    .from('projects').select('id, drive_folder_id').eq('status', 'ativo').not('drive_folder_id', 'is', null)
-  if (onlyProjectId) query = query.eq('id', onlyProjectId)
-  const { data: projects } = await query
+  // Banco sem as colunas v2 (migration pendente): cai no select antigo.
+  const montar = (cols: string) => {
+    let q = db.from('projects').select(cols).eq('status', 'ativo').not('drive_folder_id', 'is', null)
+    if (onlyProjectId) q = q.eq('id', onlyProjectId)
+    return q
+  }
+  let { data: projects, error: erroProjetos } = await montar('id, drive_folder_id, drive_layout, drive_pastas')
+  if (erroProjetos) ({ data: projects } = await montar('id, drive_folder_id'))
   const { data: known } = await db.from('video_versions').select('drive_file_id')
   const knownIds = new Set((known || []).map((k: any) => k.drive_file_id))
 
   let found = 0
   for (const proj of projects || []) {
     try {
-      const entregaId = await findChildFolder(proj.drive_folder_id, '06_ENTREGA')
-      if (!entregaId) continue
-      const revisaoId = await findChildFolder(entregaId, '01_REVISAO')
+      let revisaoId: string | null
+      if (proj.drive_layout === 'v2') {
+        // v2: o ID salvo, nunca o nome. Sem ele o projeto é pulado (e não ganha pasta nova).
+        revisaoId = proj.drive_pastas?.revisao ?? null
+      } else {
+        const entregaId = await findChildFolder(proj.drive_folder_id, '06_ENTREGA')
+        if (!entregaId) continue
+        revisaoId = await findChildFolder(entregaId, '01_REVISAO')
+      }
       if (!revisaoId) continue
 
       // Vídeos novos (qualquer nome). Cada upload nasce como um VÍDEO separado
@@ -260,15 +272,27 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
 
 // --- Finalizar (copiar vFINAL para 02_APROVADO) ---------------------------
 async function finalizeVersion(versionId: string): Promise<void> {
-  const { data: v, error } = await db
-    .from('video_versions').select('*, project:projects(drive_folder_id)').eq('id', versionId).single()
+  // Banco sem as colunas v2 (migration pendente): cai no select antigo.
+  let { data: v, error } = await db
+    .from('video_versions').select('*, project:projects(drive_folder_id, drive_layout, drive_pastas)').eq('id', versionId).single()
+  if (error || !v) ({ data: v, error } = await db
+    .from('video_versions').select('*, project:projects(drive_folder_id)').eq('id', versionId).single())
   if (error || !v) throw new Error(`Versão ${versionId} não encontrada`)
   if (v.approved_file_id) return // já finalizada (idempotência)
   const projFolderId = v.project?.drive_folder_id
   if (!projFolderId) throw new Error('Projeto sem pasta no Drive')
 
-  const entregaId = await ensureFolder(projFolderId, '06_ENTREGA')
-  const aprovadoId = await ensureFolder(entregaId, '02_APROVADO')
+  // v2: 03_EXPORT/02_FINAL pelo ID. NUNCA cria pasta por nome (recriaria 06_ENTREGA num projeto novo).
+  // v1: 06_ENTREGA/02_APROVADO pelo nome, criando se faltar, como sempre foi.
+  const ehV2 = v.project?.drive_layout === 'v2'
+  let aprovadoId: string
+  if (ehV2) {
+    aprovadoId = v.project?.drive_pastas?.final
+    if (!aprovadoId) throw new Error('Projeto v2 sem a pasta 02_FINAL registrada')
+  } else {
+    const entregaId = await ensureFolder(projFolderId, '06_ENTREGA')
+    aprovadoId = await ensureFolder(entregaId, '02_APROVADO')
+  }
   // Nome do aprovado: insere _APROVADO antes da extensão (funciona com qualquer nome)
   const dot = (v.file_name as string).lastIndexOf('.')
   const finalName = dot > 0
@@ -279,7 +303,7 @@ async function finalizeVersion(versionId: string): Promise<void> {
     method: 'POST', body: JSON.stringify({ name: finalName, parents: [aprovadoId] }),
   })
   await db.from('video_versions').update({ approved_file_id: copy.id, status: 'APROVADO', updated_at: new Date().toISOString() }).eq('id', versionId)
-  await log(v.project_id, 'finalize', `vFINAL "${finalName}" copiado para 02_APROVADO`)
+  await log(v.project_id, 'finalize', `vFINAL "${finalName}" copiado para ${ehV2 ? '03_EXPORT/02_FINAL' : '02_APROVADO'}`)
 }
 
 // Finaliza versões que o app marcou como APROVADO mas ainda não têm o vFINAL

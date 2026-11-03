@@ -9,6 +9,7 @@ import TaskVideoReview, { prefetchEntregasDoProjeto } from '@/components/produca
 import TaskRoteiros, { prefetchRoteirosDoProjeto } from '@/components/producao/TaskRoteiros';
 import ProjectEscopo from '@/components/producao/ProjectEscopo';
 import ProjectDocuments from '@/components/producao/ProjectDocuments';
+import { aguardandoMarca } from '@/lib/driveLayout';
 import ProjectNotes from '@/components/producao/ProjectNotes';
 import SecaoPortalProjeto from '@/components/producao/SecaoPortalProjeto';
 import ProjectStatusPipeline from '@/components/producao/ProjectStatusPipeline';
@@ -179,6 +180,8 @@ import DOMPurify from 'dompurify';
 interface Client {
   id: string;
   name: string;
+  /** Lista fechada de marcas do cliente (ex.: Vitru). Cliente com marcas só ganha pasta no Drive depois que o projeto escolhe uma. */
+  marcas?: string[] | null;
 }
 
 interface Project {
@@ -193,6 +196,8 @@ interface Project {
   descricao: string | null;
   category: 'digital' | 'filme' | 'live' | null;
   drive_folder_id: string | null;
+  /** Marca do projeto (uma das marcas do cliente); define a pasta no Drive. */
+  marca?: string | null;
   budget?: {
     category: 'digital' | 'filme' | 'live';
   } | null;
@@ -1045,6 +1050,8 @@ export default function Projetos() {
   const [newProjDesc, setNewProjDesc] = useState('');
   const [newProjStart, setNewProjStart] = useState('');
   const [newProjEnd, setNewProjEnd] = useState('');
+  const [newProjMarca, setNewProjMarca] = useState('');
+  const [escolhendoMarca, setEscolhendoMarca] = useState(false);
   const [applyTemplate, setApplyTemplate] = useState(true);
 
   // Filter members on @mention query
@@ -1293,10 +1300,15 @@ export default function Projetos() {
   async function fetchData(silent = false) {
     if (!silent) setLoading(true);
     try {
-      const { data: clientsData, error: cErr } = await supabase
+      // clients.marcas chega por migration; antes dela, o select antigo.
+      let { data: clientsData, error: cErr } = await supabase
+        .from('clients')
+        .select('id, name, marcas')
+        .order('name', { ascending: true });
+      if (cErr) ({ data: clientsData, error: cErr } = await supabase
         .from('clients')
         .select('id, name')
-        .order('name', { ascending: true });
+        .order('name', { ascending: true }) as any);
       if (cErr) throw cErr;
 
       const { data: projectsData, error: pErr } = await supabase
@@ -2232,6 +2244,7 @@ export default function Projetos() {
     try {
       const r = await saveOsToDrive({ budgetId, projectId });
       if (r.ok) { if (r.url && selectedProjectIdRef.current === projectId) setOsUrl(r.url); }
+      else if (r.aguardandoMarca) osTentados.delete(projectId); // tenta de novo quando a pasta existir
       else if (!r.skipped) toast.error(r.error || 'Não foi possível salvar a OS no Drive.');
     } finally {
       setSavingOs(false);
@@ -2258,6 +2271,8 @@ export default function Projetos() {
           descricao: newProjDesc || null,
           data_inicio: newProjStart || null,
           data_fim: newProjEnd || null,
+          // Só vai no insert quando escolhida (cliente com marcas), para não exigir a coluna nos demais.
+          ...(newProjMarca && newProjCategory !== 'live' ? { marca: newProjMarca } : {}),
           status: 'ativo'
         })
         .select()
@@ -2305,6 +2320,7 @@ export default function Projetos() {
       setNewProjDesc('');
       setNewProjStart('');
       setNewProjEnd('');
+      setNewProjMarca('');
       setApplyTemplate(true);
 
       await fetchData();
@@ -2365,6 +2381,37 @@ export default function Projetos() {
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+  // Cliente com marcas e projeto sem marca: a pasta do Drive ainda não nasceu (live fica fora: segue o template antigo).
+  const clienteDoProjeto = clients.find(c => c.id === selectedProject?.client_id);
+  const projetoSemMarca = !!selectedProject && !selectedProject.drive_folder_id
+    && (selectedProject.category || selectedProject.budget?.category) !== 'live'
+    && aguardandoMarca(clienteDoProjeto?.marcas, selectedProject.marca);
+
+  const escolherMarca = async (marca: string) => {
+    const proj = selectedProject;
+    if (!proj || !marca) return;
+    setEscolhendoMarca(true);
+    try {
+      const { error } = await supabase.from('projects').update({ marca }).eq('id', proj.id);
+      if (error) { toast.error('Não foi possível salvar a marca.'); return; }
+      setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, marca } : p));
+      toast.info('Marca salva. Criando a pasta no Drive…');
+      // A pasta nasce em segundo plano (trigger → drive-provision): confere por alguns segundos.
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const { data } = await supabase.from('projects').select('drive_folder_id').eq('id', proj.id).single();
+        if (data?.drive_folder_id) {
+          await fetchData();
+          toast.success('Pasta do projeto criada no Drive!');
+          if (proj.budget_id && canManageRef.current) { osTentados.add(proj.id); void handleSaveOs(proj.id, proj.budget_id); }
+          return;
+        }
+      }
+      toast.warning('A pasta ainda está sendo criada. Recarregue a página em instantes.');
+    } finally {
+      setEscolhendoMarca(false);
+    }
+  };
   // Lembra o projeto aberto (a busca global mostra os recentes).
   useEffect(() => {
     if (!selectedProject) return;
@@ -2428,11 +2475,38 @@ export default function Projetos() {
               /* ================= SELECTED PROJECT DETAILS & TASKS ================= */
               <div className="space-y-5">
 
+                {/* Cliente com marcas: sem marca não há pasta no Drive. Aviso grande para ninguém chegar na gravação sem pasta. */}
+                {projetoSemMarca && (
+                  <div role="alert" className="rounded-lumos border-2 border-amber-500/60 bg-amber-500/10 p-4 flex items-center gap-3 flex-wrap">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                    <div className="min-w-0 flex-1 basis-64">
+                      <p className="text-sm font-black text-lumos-text-primary">Escolha a marca para criar a pasta do Drive</p>
+                      <p className="text-xs text-lumos-text-secondary mt-0.5">
+                        {clienteDoProjeto?.name} tem marcas. Enquanto a marca não for escolhida, o projeto fica sem pasta no Drive (e sem a OS salva lá). Resolva antes da gravação.
+                      </p>
+                    </div>
+                    {canManage ? (
+                      <div className="w-56 max-sm:w-full">
+                        <Select
+                          value=""
+                          onChange={escolherMarca}
+                          placeholder={escolhendoMarca ? 'Criando a pasta…' : 'Escolher a marca…'}
+                          disabled={escolhendoMarca}
+                          className="input-lumos w-full h-10 text-xs font-bold"
+                          options={(clienteDoProjeto?.marcas ?? []).map(m => ({ value: m, label: m }))}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Peça a quem gerencia projetos para escolher a marca.</span>
+                    )}
+                  </div>
+                )}
+
                 {/* ================= HEADER DO PROJETO (hub em abas) ================= */}
                 <div className="card p-5 md:p-6 pb-0 space-y-3">
                   {/* Breadcrumb: cliente e código */}
                   <p className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
-                    {selectedClient?.name || 'Sem cliente'}{selectedProject.code ? <> · <span className="text-lumos-text-primary">{formatBudgetCode(selectedProject.code)}</span></> : null}
+                    {selectedClient?.name || 'Sem cliente'}{selectedProject.marca ? <> › <span className="text-lumos-text-primary">{selectedProject.marca}</span></> : null}{selectedProject.code ? <> · <span className="text-lumos-text-primary">{formatBudgetCode(selectedProject.code)}</span></> : null}
                   </p>
 
                   {/* Nome + chips + ações */}
@@ -2497,7 +2571,7 @@ export default function Projetos() {
                         className="btn-secondary py-2 px-3 flex items-center gap-2 text-xs font-semibold"
                         title="A pasta é criada sozinha logo depois que o projeto nasce. Se demorar, recarregue a página."
                       >
-                        <FolderClosed className="w-3.5 h-3.5" /> Pasta ainda não criada
+                        <FolderClosed className="w-3.5 h-3.5" /> {projetoSemMarca ? 'Escolha a marca' : 'Pasta ainda não criada'}
                       </button>
                     )}
                     {selectedProject.budget_id && (
@@ -4204,13 +4278,27 @@ export default function Projetos() {
                   </label>
                   <Select
                     value={newProjClient}
-                    onChange={setNewProjClient}
+                    onChange={v => { setNewProjClient(v); setNewProjMarca(''); }}
                     placeholder="Selecione um Cliente"
                     className="input-lumos w-full h-11 text-xs font-semibold"
                     menuClassName="max-h-72"
                     options={clients.map(c => ({ value: c.id, label: c.name }))}
                   />
                 </div>
+
+                {newProjCategory !== 'live' && (clients.find(c => c.id === newProjClient)?.marcas?.length ?? 0) > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">
+                      Marca (define a pasta no Drive)
+                    </label>
+                    <Select
+                      value={newProjMarca}
+                      onChange={setNewProjMarca}
+                      className="input-lumos w-full h-11 text-xs font-semibold"
+                      options={[{ value: '', label: 'Escolher depois (a pasta espera a marca)' }, ...(clients.find(c => c.id === newProjClient)?.marcas ?? []).map(m => ({ value: m, label: m }))]}
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">

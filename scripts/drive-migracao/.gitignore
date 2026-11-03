@@ -1,0 +1,5 @@
+# Nada daqui deve ir para o repositório: chave da conta de serviço, dados de projetos e saídas de execução.
+saida-drive/
+projetos*.json
+*conta-de-servico*.json
+sa.json

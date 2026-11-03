@@ -4,30 +4,35 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { ServiceOrderPDF } from '@/components/editor/ServiceOrderPDF';
 import { getPdfFileName } from '@/utils/pdfFileName';
+import { aguardandoMarca } from '@/lib/driveLayout';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-export interface SaveOsResult { ok: boolean; skipped?: boolean; url?: string; error?: string; }
+export interface SaveOsResult { ok: boolean; skipped?: boolean; aguardandoMarca?: boolean; url?: string; error?: string; }
 
 // Gera a OS (PDF, no navegador) e manda pra função `drive-os-upload`, que salva na
-// subpasta "OS" da pasta do projeto no Drive com a conta de serviço — não depende
+// subpasta "OS" do projeto (v1) ou em 00_DOCUMENTOS (v2) no Drive com a conta de serviço — não depende
 // de a pessoa estar logada no Google. Também registra na seção Documentos.
 // Não duplica: se o projeto já tem uma OS registrada, pula.
 export function useSaveOsToDrive() {
   const { profile } = useAuth();
 
   // Garante a pasta do projeto no Drive (provisiona sob demanda e aguarda).
-  const resolveProjectFolder = useCallback(async (projectId: string): Promise<{ folderId: string | null; name: string }> => {
-    const { data } = await supabase.from('projects').select('drive_folder_id, name').eq('id', projectId).single();
-    if (data?.drive_folder_id) return { folderId: data.drive_folder_id, name: data.name || '' };
+  const resolveProjectFolder = useCallback(async (projectId: string): Promise<{ folderId: string | null; name: string; aguardandoMarca?: boolean }> => {
+    // Cliente com marcas: sem marca escolhida não há pasta (e esperar não adianta). Banco sem a coluna: select antigo.
+    let { data, error } = await supabase.from('projects').select('drive_folder_id, name, marca, client:clients(marcas)').eq('id', projectId).single();
+    if (error) ({ data } = await supabase.from('projects').select('drive_folder_id, name').eq('id', projectId).single() as any);
+    const proj = data as any;
+    if (proj?.drive_folder_id) return { folderId: proj.drive_folder_id, name: proj.name || '' };
+    if (aguardandoMarca(proj?.client?.marcas, proj?.marca)) return { folderId: null, name: proj?.name || '', aguardandoMarca: true };
     // toca no projeto pra disparar o provisionamento
     await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId);
     for (let i = 0; i < 14; i++) {
       await sleep(1500);
       const { data: d } = await supabase.from('projects').select('drive_folder_id').eq('id', projectId).single();
-      if (d?.drive_folder_id) return { folderId: d.drive_folder_id, name: data?.name || '' };
+      if (d?.drive_folder_id) return { folderId: d.drive_folder_id, name: proj?.name || '' };
     }
-    return { folderId: null, name: data?.name || '' };
+    return { folderId: null, name: proj?.name || '' };
   }, []);
 
   const saveOsToDrive = useCallback(async (opts: { budgetId: string; projectId: string }): Promise<SaveOsResult> => {
@@ -46,7 +51,9 @@ export function useSaveOsToDrive() {
       const { data: items } = await supabase.from('budget_items').select('*').eq('version_id', budget.active_version_id).order('sort_order', { ascending: true });
       if (!version) return { ok: false, error: 'Versão do orçamento não encontrada.' };
 
-      const { folderId, name: projectName } = await resolveProjectFolder(projectId);
+      const { folderId, name: projectName, aguardandoMarca: semMarca } = await resolveProjectFolder(projectId);
+      // Sem marca escolhida a OS fica para depois: ao abrir o projeto com a pasta pronta, ela é salva sozinha.
+      if (!folderId && semMarca) return { ok: false, skipped: true, aguardandoMarca: true };
       if (!folderId) return { ok: false, error: 'A pasta do projeto no Drive ainda não está pronta.' };
 
       const blob = await pdf(

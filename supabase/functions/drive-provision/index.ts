@@ -2,13 +2,19 @@
 //
 // Disparada por Database Webhook em INSERT na tabela projects.
 // 1. Garante a pasta do CLIENTE em Clientes/ (criada no 1º projeto aprovado,
-//    espelhando o modelo _TEMPLATES/CLIENTE; fallback: _ASSETS padrão).
-// 2. Cria a pasta do PROJETO ([NNN]_[NOME] ou [NNN]_[NOME]_LIVE) espelhando
-//    _TEMPLATES/DIGITAL ou _TEMPLATES/LIVE conforme a categoria.
-// 3. Grava os IDs em clients/projects.drive_folder_id e loga em drive_sync_log.
+//    espelhando o modelo _TEMPLATES/_ASSETS; fallback: _ASSETS padrão).
+// 2. Cria a pasta do PROJETO. Dois layouts (ver layout.ts):
+//    · v2 (projetos novos, exceto live): Cliente › [Marca] › AAAA-MM › NNN_NOME, com as
+//      subpastas 00_DOCUMENTOS, 01_BRUTO, 02_ARTES/01_TRILHAS, 03_EXPORT/01_REVISAO e
+//      03_EXPORT/02_FINAL criadas POR CÓDIGO (sem template). Os IDs vão para projects.drive_pastas.
+//      Cliente com marcas (clients.marcas) só ganha a pasta depois que o projeto escolhe uma.
+//    · v1 (live e projetos antigos): [NNN]_[NOME] ou [NNN]_[NOME]_LIVE direto no cliente,
+//      espelhando _TEMPLATE_PROJETO ou _TEMPLATE_LIVE.
+// 3. Grava os IDs em clients/projects e loga em drive_sync_log.
 //
-// Idempotente: nunca duplica (checa drive_folder_id e, na criação, reusa
-// pasta homônima já existente). Retry com backoff em erros 429/5xx do Drive.
+// Idempotente: nunca duplica. Se a pasta do projeto existe pelo ID (mesmo em outro pai, porque
+// alguém a moveu) NÃO cria outra; só renomeia quando ela ainda está no pai esperado.
+// Retry com backoff em erros 429/5xx do Drive.
 //
 // Secrets necessários: GOOGLE_SERVICE_ACCOUNT_JSON, DRIVE_SHARED_DRIVE_ID,
 // DRIVE_CLIENTES_FOLDER_ID, DRIVE_TEMPLATES_FOLDER_ID, DRIVE_WEBHOOK_SECRET.
@@ -16,6 +22,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { ARVORE_V2, NOMES_V2, aguardandoMarca, layoutDoProjeto, mesDoProjeto, nomeDeContainer, type PastasV2 } from "./layout.ts"
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined
 
@@ -106,13 +113,13 @@ async function driveFetch(path: string, init: RequestInit = {}, attempt = 1): Pr
   return body
 }
 
-async function listChildren(parentId: string): Promise<{ id: string; name: string; mimeType: string }[]> {
-  const items: { id: string; name: string; mimeType: string }[] = []
+async function listChildren(parentId: string): Promise<{ id: string; name: string; mimeType: string; createdTime?: string }[]> {
+  const items: { id: string; name: string; mimeType: string; createdTime?: string }[] = []
   let pageToken = ''
   do {
     const q = encodeURIComponent(`'${parentId}' in parents and trashed=false`)
     const page = await driveFetch(
-      `files?q=${q}&fields=files(id,name,mimeType),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`
+      `files?q=${q}&fields=files(id,name,mimeType,createdTime),nextPageToken&pageSize=200&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}${pageToken ? `&pageToken=${pageToken}` : ''}`
     )
     items.push(...(page.files || []))
     pageToken = page.nextPageToken || ''
@@ -152,17 +159,54 @@ async function folderAlive(folderId: string | null): Promise<boolean> {
   }
 }
 
-// A pasta existe, não está na lixeira E ainda é filha do pai esperado. Cobre o
-// caso de o pai (cliente) ter sido pra lixeira: o filho mantém trashed=false,
-// mas o pai mudou — então precisa recriar.
-async function folderUnder(folderId: string | null, parentId: string): Promise<boolean> {
+// A pasta existe pelo ID e continua "viva": não está na lixeira e o pai dela também não.
+// O pai pode ser QUALQUER um: se alguém moveu a pasta (reorganização), ela continua sendo a
+// pasta do projeto e o app não cria outra. Pai na lixeira (cliente apagado) conta como perdida,
+// porque o filho mantém trashed=false mesmo assim.
+async function pastaViva(folderId: string | null): Promise<boolean> {
   if (!folderId) return false
   try {
     const meta = await driveFetch(`files/${folderId}?fields=trashed,parents`)
-    return meta?.trashed !== true && Array.isArray(meta?.parents) && meta.parents.includes(parentId)
+    if (meta?.trashed === true) return false
+    const pai = Array.isArray(meta?.parents) ? meta.parents[0] : null
+    if (!pai) return true
+    const metaPai = await driveFetch(`files/${pai}?fields=trashed`)
+    return metaPai?.trashed !== true
   } catch (_) {
-    return false
+    return false // 404 / sem acesso → tratar como inexistente
   }
+}
+
+async function paiDaPasta(folderId: string): Promise<string | null> {
+  try {
+    const meta = await driveFetch(`files/${folderId}?fields=parents`)
+    return Array.isArray(meta?.parents) ? (meta.parents[0] ?? null) : null
+  } catch (_) {
+    return null
+  }
+}
+
+// Pasta-contêiner (marca, mês): achada pelo nome, criada se faltar. Se duas execuções criarem a
+// mesma ao mesmo tempo, todas passam a usar a mais antiga (a sobra fica vazia; nada é apagado).
+async function ensureContainer(parentId: string, name: string): Promise<string> {
+  const doMesmoNome = async () => (await listChildren(parentId))
+    .filter(c => c.mimeType === FOLDER_MIME && c.name === name)
+    .sort((a, b) => String(a.createdTime || '').localeCompare(String(b.createdTime || '')))
+  const existentes = await doMesmoNome()
+  if (existentes.length) return existentes[0].id
+  await createFolder(parentId, name)
+  return (await doMesmoNome())[0].id
+}
+
+// Layout v2: cria as subpastas por código e devolve o ID de cada uma.
+// `fresh` = a pasta do projeto acabou de nascer (não precisa procurar antes de criar).
+async function criarSubpastasV2(raizId: string, fresh: boolean): Promise<PastasV2> {
+  const ids: Partial<PastasV2> = {}
+  for (const no of ARVORE_V2) {
+    const pai = no.pai ? ids[no.pai]! : raizId
+    ids[no.chave] = fresh ? await createFolder(pai, NOMES_V2[no.chave]) : await ensureFolder(pai, NOMES_V2[no.chave])
+  }
+  return ids as PastasV2
 }
 
 // Espelha recursivamente um modelo: subpastas são criadas, arquivos são
@@ -261,6 +305,109 @@ async function ensureClientFolder(client: { id: string; name: string; drive_fold
   return folderId
 }
 
+// Marcas do cliente (lista fechada). Banco sem a coluna (migration pendente) → sem marcas.
+async function marcasDoCliente(clientId: string): Promise<string[]> {
+  try {
+    const { data, error } = await db.from('clients').select('marcas').eq('id', clientId).single()
+    if (error) return []
+    return Array.isArray(data?.marcas) ? data.marcas : []
+  } catch (_) {
+    return []
+  }
+}
+
+// O trigger de UPDATE dispara a cada edição de um projeto sem pasta; o aviso "aguardando marca"
+// só precisa ficar registrado uma vez.
+async function logUmaVez(projectId: string, action: string, detail: string): Promise<void> {
+  try {
+    const { data } = await db.from('drive_sync_log').select('id')
+      .eq('entity_type', 'project').eq('entity_id', projectId).eq('action', action).limit(1)
+    if (!data?.length) await log('project', projectId, action, detail)
+  } catch (_) { /* log nunca derruba o fluxo */ }
+}
+
+// Onde a pasta v2 DEVE estar: Cliente › [Marca] › AAAA-MM. Só procura, nunca cria.
+async function paiEsperadoV2(project: any, clientFolderId: string): Promise<string | null> {
+  let pai: string | null = clientFolderId
+  if (project.marca) pai = await findChildFolder(pai, nomeDeContainer(project.marca))
+  if (!pai) return null
+  return await findChildFolder(pai, mesDoProjeto(project.data_inicio, project.created_at))
+}
+
+// A pasta do projeto já existe pelo ID. Não cria outra. Renomeia só se o nome/código mudou E ela
+// ainda está no pai de origem; se alguém a moveu, ela fica exatamente onde está.
+async function conferirPastaExistente(project: any, layout: 'v1' | 'v2', clientFolderId: string, folderName: string): Promise<void> {
+  const id: string = project.drive_folder_id
+  const paiAtual = await paiDaPasta(id)
+  const paiEsperado = layout === 'v2' ? await paiEsperadoV2(project, clientFolderId) : clientFolderId
+  if (paiEsperado && paiAtual === paiEsperado) {
+    await renameFolderIfNeeded(id, folderName, project.id)
+  } else {
+    await log('project', project.id, 'skip_rename', 'Pasta do projeto fora do pai de origem (foi movida): mantida onde está, sem renomear nem recriar')
+  }
+
+  // Backfill (só v1): projetos antigos podem não ter o ID do dropzone salvo ainda.
+  if (layout === 'v1' && !project.drive_upload_folder_id) {
+    const entregaId = await findChildFolder(id, '06_ENTREGA')
+    const up = entregaId ? await findChildFolder(entregaId, '01_REVISAO') : null
+    if (up) await db.from('projects').update({ drive_upload_folder_id: up }).eq('id', project.id)
+  }
+  await log('project', project.id, 'ok', 'Pasta verificada no Drive (idempotência)')
+}
+
+// Layout antigo (live e projetos já existentes): pasta direto no cliente, espelhando o template.
+async function criarProjetoV1(project: any, clientFolderId: string, folderName: string, isLive: boolean): Promise<void> {
+  const existingFolder = await findChildFolder(clientFolderId, folderName)
+  const projectFolderId = existingFolder ?? await createFolder(clientFolderId, folderName)
+
+  // Estrutura real do Drive tem um nível a mais: _TEMPLATE_PROJETO/NNN_NOMEPROJETO
+  // (ou _TEMPLATE_LIVE/..._LIVE).
+  const wrapperName = isLive ? '_TEMPLATE_LIVE' : '_TEMPLATE_PROJETO'
+  const innerName = isLive ? 'NNN_NOMEPROJETO_LIVE' : 'NNN_NOMEPROJETO'
+  const wrapperId = await findChildFolder(TEMPLATES_FOLDER_ID, wrapperName)
+  const templateId = wrapperId ? await findChildFolder(wrapperId, innerName) : null
+  if (templateId) {
+    await mirrorTemplate(templateId, projectFolderId, !existingFolder)
+  } else {
+    await log('project', project.id, 'template_missing', `${wrapperName}/${innerName} não encontrado — pasta criada vazia`, 'error')
+  }
+
+  // Localiza o dropzone de upload (06_ENTREGA/01_REVISAO) p/ linkar no app
+  let uploadFolderId: string | null = null
+  const entregaId = await findChildFolder(projectFolderId, '06_ENTREGA')
+  if (entregaId) uploadFolderId = await findChildFolder(entregaId, '01_REVISAO')
+
+  await db.from('projects')
+    .update({ drive_folder_id: projectFolderId, drive_upload_folder_id: uploadFolderId })
+    .eq('id', project.id)
+  await log('project', project.id, 'create_folder', `Pasta "${folderName}" criada em "${project.client.name.trim()}" (${projectFolderId})`)
+}
+
+// Layout novo: Cliente › [Marca] › AAAA-MM › NNN_NOME, subpastas por código, IDs no banco.
+async function criarProjetoV2(project: any, clientFolderId: string, folderName: string): Promise<void> {
+  const marcas = await marcasDoCliente(project.client.id)
+  if (aguardandoMarca(marcas, project.marca)) {
+    await logUmaVez(project.id, 'wait_marca', `Cliente tem marcas (${marcas.join(', ')}): a pasta será criada quando o projeto escolher uma`)
+    return
+  }
+
+  let paiId = clientFolderId
+  if (project.marca) paiId = await ensureContainer(paiId, nomeDeContainer(project.marca))
+  const mes = mesDoProjeto(project.data_inicio, project.created_at)
+  paiId = await ensureContainer(paiId, mes)
+
+  // Reusa pasta homônima já existente (execução anterior que caiu no meio).
+  const existente = await findChildFolder(paiId, folderName)
+  const projectFolderId = existente ?? await createFolder(paiId, folderName)
+  const pastas = await criarSubpastasV2(projectFolderId, !existente)
+
+  await db.from('projects')
+    .update({ drive_folder_id: projectFolderId, drive_upload_folder_id: pastas.revisao, drive_layout: 'v2', drive_pastas: pastas })
+    .eq('id', project.id)
+  const caminho = [project.client.name.trim(), project.marca ? nomeDeContainer(project.marca) : null, mes, folderName].filter(Boolean).join(' › ')
+  await log('project', project.id, 'create_folder', `Pasta v2 criada: ${caminho} (${projectFolderId})`)
+}
+
 async function provisionProject(projectId: string): Promise<void> {
   // Busca o projeto completo (o payload do webhook pode não ter tudo)
   const { data: project, error } = await db
@@ -283,45 +430,22 @@ async function provisionProject(projectId: string): Promise<void> {
   const isLive = category === 'live'
   const folderName = `${jobCode(project.code)}_${slugify(project.name)}${isLive ? '_LIVE' : ''}`
 
-  // 2. Idempotência: se a pasta salva existe E continua dentro do cliente atual,
-  //    não recria — mas RENOMEIA se o nome/código do projeto mudou (edição).
-  if (await folderUnder(project.drive_folder_id, clientFolderId)) {
-    await renameFolderIfNeeded(project.drive_folder_id!, folderName, projectId)
-    // Backfill: projetos antigos podem não ter o ID do dropzone salvo ainda.
-    if (!project.drive_upload_folder_id) {
-      const entregaId = await findChildFolder(project.drive_folder_id!, '06_ENTREGA')
-      const up = entregaId ? await findChildFolder(entregaId, '01_REVISAO') : null
-      if (up) await db.from('projects').update({ drive_upload_folder_id: up }).eq('id', projectId)
-    }
-    await log('project', projectId, 'ok', 'Pasta verificada/renomeada no Drive (idempotência)')
+  const layout = layoutDoProjeto({
+    isLive,
+    driveFolderId: project.drive_folder_id,
+    driveLayout: project.drive_layout ?? null,
+    temColunasV2: 'drive_layout' in project, // select('*'): a coluna só vem se a migration já rodou
+  })
+
+  // 2. Idempotência: a pasta salva existe pelo ID? Então não recria, esteja onde estiver.
+  if (await pastaViva(project.drive_folder_id)) {
+    await conferirPastaExistente(project, layout, clientFolderId, folderName)
     return
   }
 
-  // 3. Pasta do projeto (sabendo se é nova → mirror mais rápido, sem finds)
-  const existingFolder = await findChildFolder(clientFolderId, folderName)
-  const projectFolderId = existingFolder ?? await createFolder(clientFolderId, folderName)
-
-  // 4. Espelha o template da categoria. Estrutura real do Drive tem um nível a
-  //    mais: _TEMPLATE_PROJETO/NNN_NOMEPROJETO (ou _TEMPLATE_LIVE/..._LIVE).
-  const wrapperName = isLive ? '_TEMPLATE_LIVE' : '_TEMPLATE_PROJETO'
-  const innerName = isLive ? 'NNN_NOMEPROJETO_LIVE' : 'NNN_NOMEPROJETO'
-  const wrapperId = await findChildFolder(TEMPLATES_FOLDER_ID, wrapperName)
-  const templateId = wrapperId ? await findChildFolder(wrapperId, innerName) : null
-  if (templateId) {
-    await mirrorTemplate(templateId, projectFolderId, !existingFolder)
-  } else {
-    await log('project', projectId, 'template_missing', `${wrapperName}/${innerName} não encontrado — pasta criada vazia`, 'error')
-  }
-
-  // 5. Localiza o dropzone de upload (06_ENTREGA/01_REVISAO) p/ linkar no app
-  let uploadFolderId: string | null = null
-  const entregaId = await findChildFolder(projectFolderId, '06_ENTREGA')
-  if (entregaId) uploadFolderId = await findChildFolder(entregaId, '01_REVISAO')
-
-  await db.from('projects')
-    .update({ drive_folder_id: projectFolderId, drive_upload_folder_id: uploadFolderId })
-    .eq('id', projectId)
-  await log('project', projectId, 'create_folder', `Pasta "${folderName}" criada em "${project.client.name.trim()}" (${projectFolderId})`)
+  // 3. Cria no layout do projeto.
+  if (layout === 'v2') await criarProjetoV2(project, clientFolderId, folderName)
+  else await criarProjetoV1(project, clientFolderId, folderName, isLive)
 }
 
 // ---------------------------------------------------------------------------

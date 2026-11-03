@@ -1,4 +1,4 @@
-// Salva a Ordem de Serviço (PDF) na subpasta "OS" da pasta do projeto no Drive,
+// Salva a Ordem de Serviço (PDF) no Drive: na subpasta "OS" do projeto (v1) ou em 00_DOCUMENTOS (v2),
 // usando a conta de serviço — ou seja, sem depender de a pessoa estar logada no
 // Google. O navegador gera o PDF e manda os bytes pra cá.
 //
@@ -93,12 +93,21 @@ serve(async (req) => {
     // %PDF-
     if (!(pdf[0] === 0x25 && pdf[1] === 0x50 && pdf[2] === 0x44 && pdf[3] === 0x46)) return json({ error: 'não é um PDF' }, 400)
 
-    const { data: proj } = await db.from('projects').select('drive_folder_id').eq('id', projectId).maybeSingle()
+    // Banco sem as colunas v2 (migration pendente): cai no select antigo.
+    let proj: any = (await db.from('projects').select('drive_folder_id, drive_layout, drive_pastas').eq('id', projectId).maybeSingle()).data
+    if (!proj) proj = (await db.from('projects').select('drive_folder_id').eq('id', projectId).maybeSingle()).data
     if (!proj?.drive_folder_id) return json({ error: 'pasta do projeto ainda não está pronta' }, 409)
 
     const token = await googleToken()
-    const osFolder = (await findInFolder(proj.drive_folder_id, 'OS', token, true))?.id
-      ?? await createFolder(proj.drive_folder_id, 'OS', token)
+    let osFolder: string
+    if (proj.drive_layout === 'v2') {
+      // v2: a OS vai em 00_DOCUMENTOS, pelo ID salvo. Nunca cria pasta por nome.
+      osFolder = proj.drive_pastas?.documentos
+      if (!osFolder) return json({ error: 'projeto v2 sem a pasta 00_DOCUMENTOS registrada' }, 409)
+    } else {
+      osFolder = (await findInFolder(proj.drive_folder_id, 'OS', token, true))?.id
+        ?? await createFolder(proj.drive_folder_id, 'OS', token)
+    }
 
     const existing = await findInFolder(osFolder, fileName, token, false)
     if (existing) return json({ ok: true, id: existing.id, webViewLink: existing.webViewLink ?? null, already: true })

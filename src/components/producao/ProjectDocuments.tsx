@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
 import { useRealtimeRefetch } from '@/hooks/useRealtimeRefetch';
 import { useGoogleDrive } from '@/hooks/useGoogleDrive';
+import { aguardandoMarca, pastaV2DaCategoria, type DriveLayout, type PastasV2 } from '@/lib/driveLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/context/ToastContext';
 import Modal from '@/components/common/Modal';
@@ -29,7 +30,8 @@ interface Doc {
 }
 
 // Categorias = subpastas reais no Drive do projeto. Ao subir/criar, o arquivo
-// vai direto pra pasta certa (00_GERAL / 01_ROTEIRO / 02_PRODUCAO).
+// vai direto pra pasta certa. v1: 00_GERAL / 01_ROTEIRO / 02_PRODUCAO / 06_ENTREGA (pelo nome).
+// v2: tudo em 00_DOCUMENTOS, e "Entrega (portal)" em 03_EXPORT/02_FINAL (pelo ID salvo).
 const CATEGORIES: { value: string; label: string; folder: string }[] = [
   { value: 'geral', label: 'Geral', folder: '00_GERAL' },
   { value: 'roteiro', label: 'Roteiro', folder: '01_ROTEIRO' },
@@ -92,6 +94,9 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [folderId, setFolderId] = useState<string | null>(driveFolderId ?? null);
+  // Estrutura de pastas do projeto: v2 usa os IDs salvos; v1 acha as subpastas pelo nome.
+  const [layout, setLayout] = useState<DriveLayout>('v1');
+  const [pastas, setPastas] = useState<Partial<PastasV2> | null>(null);
   const [activeCat, setActiveCat] = useState('todos'); // aba ativa: filtra a lista E define o destino do upload
   const [newMenu, setNewMenu] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
@@ -119,9 +124,16 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   // Mantém o folderId em dia: usa o da prop; se vier vazio, confere no banco
   // (pode ter sido provisionado depois sem o pai ter recarregado).
   useEffect(() => {
-    if (driveFolderId) { setFolderId(driveFolderId); return; }
-    supabase.from('projects').select('drive_folder_id').eq('id', projectId).single()
-      .then(({ data }) => { if (data?.drive_folder_id) setFolderId(data.drive_folder_id); });
+    if (driveFolderId) setFolderId(driveFolderId);
+    // Layout e IDs das subpastas vêm sempre do banco (banco sem as colunas novas: cai no select antigo).
+    (async () => {
+      let { data, error } = await supabase.from('projects').select('drive_folder_id, drive_layout, drive_pastas').eq('id', projectId).single();
+      if (error) ({ data } = await supabase.from('projects').select('drive_folder_id').eq('id', projectId).single() as any);
+      const d = data as any;
+      if (d?.drive_folder_id) setFolderId(d.drive_folder_id);
+      setLayout(d?.drive_layout === 'v2' ? 'v2' : 'v1');
+      setPastas(d?.drive_pastas ?? null);
+    })();
   }, [projectId, driveFolderId]);
 
   async function fetchDocs(silent = false) {
@@ -140,6 +152,16 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   // e aguarda o drive_folder_id aparecer.
   const ensureFolder = async (): Promise<string | null> => {
     if (folderId) return folderId;
+    // Cliente com marcas: a pasta só nasce depois que o projeto escolhe uma. Tocar no projeto não adianta.
+    {
+      let { data, error } = await supabase.from('projects').select('marca, client:clients(marcas)').eq('id', projectId).single();
+      if (error) data = null as any;
+      const d = data as any;
+      if (d && aguardandoMarca(d.client?.marcas, d.marca)) {
+        toast.error('Escolha a marca do projeto para criar a pasta do Drive.');
+        return null;
+      }
+    }
     toast.info('Criando a pasta do projeto no Drive…');
     const { error } = await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId);
     if (error) { toast.error('Não foi possível iniciar a criação da pasta.'); return null; }
@@ -170,6 +192,8 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
   // dentro da pasta do projeto. Acha por nome; se não existir, cria. Se algo
   // falhar, cai pra pasta raiz do projeto (upload nunca fica travado).
   const getCategoryFolder = async (cat: string, projectFolderId: string): Promise<string> => {
+    // v2: pasta pelo ID salvo; nunca procura nem cria pasta por nome. Sem o ID, cai na raiz do projeto.
+    if (layout === 'v2') return pastaV2DaCategoria(pastas, cat) ?? projectFolderId;
     const name = catFolderName(cat);
     if (!name) return projectFolderId;
     const key = `${projectFolderId}:${cat}`;
@@ -244,6 +268,8 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     if (isDriveFile && folderId) {
       try {
         const target = await getCategoryFolder(newCat, folderId);
+        // v2: geral, roteiro e produção são a mesma pasta (00_DOCUMENTOS); não há o que mover.
+        if (layout === 'v2' && target === await getCategoryFolder(doc.tag, folderId)) return;
         await moveFileToFolder(doc.drive_file_id!, target);
       } catch {
         toast.error('Categoria salva, mas não consegui mover no Drive.');
