@@ -14,6 +14,9 @@ import { textoSobre } from '@/lib/cores';
 import { formatBudgetCode } from '@/utils/formatters';
 import { haQuanto, textoEnvio } from '@/lib/dataEnvio';
 import Select from '@/components/ui/Select';
+import SeletorMes from '@/components/common/SeletorMes';
+import { useMesLembrado } from '@/hooks/useMesLembrado';
+import { chaveMes } from '@/lib/filtroMes';
 import Modal from '@/components/common/Modal';
 import VideoThumb from '@/components/producao/VideoThumb';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
@@ -62,6 +65,9 @@ interface Video {
   parado: boolean;
   abertos: number;   // comentários em aberto na versão atual
 }
+
+/** Mês de referência do vídeo: quando a versão atual foi enviada (cai para a criação do registro). */
+const mesDoVideo = (v: Video) => chaveMes(v.atual.uploaded_at || v.atual.created_at);
 
 const diasDesde = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
 const pl = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
@@ -123,6 +129,7 @@ export default function RevisaoDeVideos() {
   const [statusSel, setStatusSel] = useState<Set<Status>>(new Set());
   const [projetoFiltro, setProjetoFiltro] = useState('');
   const [clienteFiltro, setClienteFiltro] = useState('');
+  const [mes, setMes] = useMesLembrado('lumos_filtro_mes_revisao');
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<'recentes' | 'enviados' | 'parados' | 'projeto' | 'status'>('recentes');
   const [comEncerrados, setComEncerrados] = useState(false);
@@ -179,7 +186,13 @@ export default function RevisaoDeVideos() {
     });
   }, [rows, abertosPorVersao]);
 
-  // Escopo (projetos ativos, cliente, projeto, busca): os números dos cards e das opções vêm daqui.
+  // Meses que existem nos vídeos visíveis (com ou sem projetos encerrados): as opções do seletor.
+  const mesesDosVideos = useMemo(
+    () => videos.filter(v => comEncerrados || v.atual.project!.status !== 'concluido').map(mesDoVideo),
+    [videos, comEncerrados],
+  );
+
+  // Escopo (projetos ativos, cliente, projeto, mês, busca): os números dos cards e das opções vêm daqui.
   const noEscopo = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return videos.filter(v => {
@@ -187,10 +200,11 @@ export default function RevisaoDeVideos() {
       if (!comEncerrados && p.status === 'concluido') return false;
       if (projetoFiltro && p.id !== projetoFiltro) return false;
       if (clienteFiltro && (p.client?.name || '') !== clienteFiltro) return false;
+      if (mes && mesDoVideo(v) !== mes) return false;
       if (q && !`${v.atual.file_name} ${p.name} ${p.code || ''} ${p.client?.name || ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [videos, comEncerrados, projetoFiltro, clienteFiltro, busca]);
+  }, [videos, comEncerrados, projetoFiltro, clienteFiltro, mes, busca]);
 
   const contagem = useMemo(() => {
     const c: Record<Status, number> = { EM_REVISAO_INTERNA: 0, ALTERACOES_INTERNAS: 0, EM_REVISAO_CLIENTE: 0, ALTERACOES_CLIENTE: 0, APROVADO: 0 };
@@ -212,7 +226,7 @@ export default function RevisaoDeVideos() {
 
   // Filtro novo = seleção nova: marcar, filtrar e mover sem ver o que está marcado
   // mudaria vídeos escondidos. E só vale o que está na lista de agora.
-  useEffect(() => { setSelecionados(new Set()); }, [rapida, statusSel, projetoFiltro, clienteFiltro, busca, comEncerrados]);
+  useEffect(() => { setSelecionados(new Set()); }, [rapida, statusSel, projetoFiltro, clienteFiltro, mes, busca, comEncerrados]);
   const marcados = useMemo(() => lista.filter(v => selecionados.has(v.atual.group_id)), [lista, selecionados]);
   const alternar = (id: string) => setSelecionados(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -240,7 +254,7 @@ export default function RevisaoDeVideos() {
   };
 
   const visiveis = visao === 'lista' ? lista.slice(0, limite) : lista.slice(0, 120);
-  useEffect(() => { setLimite(POR_PAGINA); }, [rapida, statusSel, projetoFiltro, clienteFiltro, busca, comEncerrados, ordem]);
+  useEffect(() => { setLimite(POR_PAGINA); }, [rapida, statusSel, projetoFiltro, clienteFiltro, mes, busca, comEncerrados, ordem]);
 
   // Capas: só dos vídeos que aparecem (a miniatura é uma imagem inteira dentro da linha do banco).
   useEffect(() => {
@@ -277,8 +291,8 @@ export default function RevisaoDeVideos() {
     setTarefasAbertas((data as any) || []);
   };
 
-  const temFiltro = rapida !== 'todos' || statusSel.size > 0 || !!projetoFiltro || !!clienteFiltro || !!busca.trim();
-  const limpar = () => { setRapida('todos'); setStatusSel(new Set()); setProjetoFiltro(''); setClienteFiltro(''); setBusca(''); };
+  const temFiltro = rapida !== 'todos' || statusSel.size > 0 || !!projetoFiltro || !!clienteFiltro || !!mes || !!busca.trim();
+  const limpar = () => { setRapida('todos'); setStatusSel(new Set()); setProjetoFiltro(''); setClienteFiltro(''); setMes(''); setBusca(''); };
 
   // Cards: cada um é um atalho para a visão rápida correspondente.
   const cards: { k: Rapida; titulo: string; n: number; sub: string; cor: string; Icon: any }[] = [
@@ -356,6 +370,9 @@ export default function RevisaoDeVideos() {
           <div className="w-56 max-md:flex-1">
             <Select value={projetoFiltro} onChange={setProjetoFiltro} searchable className="input-lumos h-9 w-full text-xs"
               options={[{ value: '', label: 'Todos os projetos' }, ...projetos.map(([id, nome]) => ({ value: id, label: nome }))]} />
+          </div>
+          <div className="w-40 max-md:flex-1">
+            <SeletorMes value={mes} onChange={setMes} chaves={mesesDosVideos} />
           </div>
           <div className="w-44 max-md:flex-1">
             <Select value={ordem} onChange={v => setOrdem(v as typeof ordem)} className="input-lumos h-9 w-full text-xs" ariaLabel="Ordenar"

@@ -10,6 +10,8 @@ import { useToast } from '@/context/ToastContext';
 import InternalReviewModal from './InternalReviewModal';
 import { useConfirm } from '@/components/ui/useConfirm';
 import Select from '@/components/ui/Select';
+import SeletorMes from '@/components/common/SeletorMes';
+import { chaveMes } from '@/lib/filtroMes';
 import { type ReviewStatus, STATUS_UI, taskStatusToVideo } from '@/lib/reviewStatus';
 import { sincronizarTarefa } from '@/lib/reviewTransition';
 import { captureVideoThumb, capaDoStream, valeCapturarCapa, capaJaFalhou, marcarCapaFalhou } from '@/lib/videoThumb';
@@ -140,8 +142,10 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
   });
   useEffect(() => { try { localStorage.setItem('lumos_entregas_ordem', ordem); } catch { /* ignore */ } }, [ordem]);
   const [taskFilter, setTaskFilter] = useState('all');   // 'all' | 'none' | id da tarefa
-  // Some quando troca de projeto: tarefa de outro projeto não filtra nada aqui.
-  useEffect(() => { setTaskFilter('all'); }, [projectId]);
+  // Mês do envio ('AAAA-MM'; '' = todos). Não é lembrado: a aba sempre abre em "Todos os meses".
+  const [mes, setMes] = useState('');
+  // Some quando troca de projeto: tarefa e mês de outro projeto não filtram nada aqui.
+  useEffect(() => { setTaskFilter('all'); setMes(''); }, [projectId]);
   // Grade (cards) ou lista (linhas compactas) — preferência persiste por navegador.
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     try { return (localStorage.getItem('lumos_entregas_view') as 'grid' | 'list') || 'grid'; } catch { return 'grid'; }
@@ -569,6 +573,9 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     [tasks],
   );
 
+  // Mês de cada vídeo (versão atual): quando foi enviado, ou a criação do registro se vazio.
+  const mesesDosGrupos = useMemo(() => groups.map(g => chaveMes(g.current.uploaded_at || g.current.created_at)), [groups]);
+
   const shownGroups = useMemo(() => {
     const envio = (g: Group) => new Date(g.current.uploaded_at || g.current.created_at).getTime();
     const mexeu = (g: Group) => new Date(g.current.updated_at || g.current.uploaded_at || g.current.created_at).getTime();
@@ -576,6 +583,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
 
     const lista = groups.filter(g => {
       if (statusFilter !== 'all' && g.current.status !== statusFilter) return false;
+      if (mes && chaveMes(g.current.uploaded_at || g.current.created_at) !== mes) return false;
       if (taskFilter === 'none' && g.current.task_id) return false;
       if (taskFilter !== 'all' && taskFilter !== 'none' && g.current.task_id !== taskFilter) return false;
       if (search.trim()) {
@@ -601,7 +609,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     };
     return [...lista].sort(porOrdem[ordem] || recentesPrimeiro);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, statusFilter, taskFilter, search, ordem, tituloDaTarefa]);
+  }, [groups, statusFilter, taskFilter, mes, search, ordem, tituloDaTarefa]);
 
   // Quantas entregas cada tarefa tem — o número no filtro evita escolher uma
   // tarefa que não tem entrega nenhuma e achar que a lista quebrou.
@@ -1201,6 +1209,13 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
                   .map(s => ({ value: s, label: `${STATUS_UI[s].label} · ${statusCounts[s]}` }))]} />
           </div>
 
+          {/* Mês do envio */}
+          <div className="w-40 flex-shrink-0">
+            <SeletorMes value={mes} onChange={setMes} chaves={mesesDosGrupos} ariaLabel="Filtrar por mês de envio"
+              className={clsx('w-full h-9 px-3 rounded-lumos border bg-lumos-surface text-[11px] font-bold transition-colors',
+                mes ? 'border-lumos-yellow/60 text-lumos-yellow' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary hover:border-lumos-yellow/40')} />
+          </div>
+
           {/* Filtro por tarefa. Só aparece quando há tarefa em jogo: num projeto
               sem tarefa nenhuma seria um controle que não faz nada. */}
           {(tasks.length > 0 || taskCounts['__sem__'] !== groups.length) && (
@@ -1243,7 +1258,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
                   setConfirmingDelete(false);
                   setSelected(e.target.checked ? new Set(shownGroups.map(g => g.id)) : new Set());
                 }} />
-              Selecionar {statusFilter !== 'all' || taskFilter !== 'all' || search.trim() ? 'filtrados' : 'todos'}
+              Selecionar {statusFilter !== 'all' || taskFilter !== 'all' || mes || search.trim() ? 'filtrados' : 'todos'}
             </label>
           )}
 
