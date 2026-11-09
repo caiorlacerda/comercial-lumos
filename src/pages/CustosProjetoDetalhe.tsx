@@ -18,7 +18,7 @@ import { useToast } from '@/context/ToastContext';
 import { MobileCardList, MobileCard, MobileCardEmpty } from '@/components/ui/MobileCards';
 import { TITULO_LABEL, LABEL_ATRASO } from '@/lib/statusRecebimento';
 
-const CurrencyInput = ({ value, onChange, className }: any) => {
+const CurrencyInput = ({ value, onChange, className, disabled }: any) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '');
     const numberValue = rawValue ? parseInt(rawValue) / 100 : 0;
@@ -28,6 +28,7 @@ const CurrencyInput = ({ value, onChange, className }: any) => {
     <input
       type="text"
       className={className}
+      disabled={disabled}
       value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
       onChange={handleChange}
     />
@@ -798,21 +799,23 @@ export default function CustosProjetoDetalhe() {
   // (projectFinanceiro.nf_percent); cai para a do orçamento e por fim 0.18.
   const nfPct = Number(projectFinanceiro?.nf_percent ?? project.active_version?.nf_pct ?? 0.18);
 
-  // Faturamento Bruto (venda) — o MESMO número que o comercial mostra como
-  // "Valor Final". Vem de calcFinancials, que é a fonte única do preço.
+  // Faturamento Bruto (venda) = o que foi CONTRATADO. Vem da view (vw_rentabilidade.valor_vendido), que usa a soma das
+  // parcelas do projeto e, só enquanto não existe parcela, o valor gravado no financeiro.
   //
-  // Aqui essa conta era refeita na mão, e refeita errado de dois jeitos: tratava
-  // a margem como markup (custo × 1,35 em vez de custo ÷ 0,65) e o imposto como
-  // acréscimo por cima (× 1,18). No Jantar Manioca isso virava R$ 6.212,70 onde
-  // o contrato era R$ 6.000,00. Preço é assunto do comercial; o financeiro lê,
-  // não recalcula.
+  // Antes isto era o preço do orçamento recalculado ao vivo (calcFinancials). Só que a fórmula do preço mudou em 14/08 para
+  // TODOS os orçamentos, inclusive os já fechados e faturados: a Alice Blitz (vendida a R$ 6.000,00) aparecia com R$ 6.053,27.
+  // O contrato não muda quando a fórmula muda; por isso o financeiro lê o contratado e só cai no preço ao vivo quando não há
+  // nenhum valor gravado (projeto recém-aprovado sem registro financeiro, por exemplo).
   const orcamento = project.active_version
     ? calcFinancials((project.budget_items || []) as any, project.active_version as any)
     : null;
 
-  const faturamentoBruto = project.budget_id && orcamento
-    ? orcamento.valorFinal
-    : (projectFinanceiro?.valor_vendido ?? Number(project.production_value || 0));
+  const vendaContratada = Number(projectFinanceiro?.valor_vendido ?? 0);
+  const faturamentoBruto = vendaContratada > 0
+    ? vendaContratada
+    : (project.budget_id && orcamento
+        ? orcamento.valorFinal
+        : Number(project.production_value || 0));
 
   // Imposto NF — fatia da nota, não acréscimo por cima dela: 12% de imposto é
   // 12% do que o cliente paga, e esse dinheiro sai da margem. Mesma regra do
@@ -1496,10 +1499,16 @@ export default function CustosProjetoDetalhe() {
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-lumos-text-secondary uppercase tracking-widest">Valor Vendido *</label>
                     <CurrencyInput
-                      className="input-lumos w-full font-bold"
+                      className="input-lumos w-full font-bold disabled:opacity-60"
                       value={financeForm.valor_vendido}
+                      disabled={projectFinanceiro?.venda_origem === 'parcelas'}
                       onChange={(val: number) => setFinanceForm({ ...financeForm, valor_vendido: val })}
                     />
+                    {projectFinanceiro?.venda_origem === 'parcelas' && (
+                      <p className="text-[11px] text-lumos-text-secondary">
+                        Vem da soma das parcelas em Contas a Receber (o que foi contratado). Para mudar o valor, ajuste as parcelas lá.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1615,7 +1624,7 @@ export default function CustosProjetoDetalhe() {
                     
                     {/* Passo 1: Orçamento Bruto */}
                     <div className="flex justify-between items-center text-sm border-b border-lumos-border/50 pb-2">
-                      <span className="text-lumos-text-secondary">1. Faturamento Bruto (Orçamento)</span>
+                      <span className="text-lumos-text-secondary">1. Faturamento Bruto (Contratado)</span>
                       <span className="font-bold text-lumos-text-primary max-lg:whitespace-nowrap max-lg:flex-shrink-0 max-lg:pl-2 max-lg:text-right">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamentoBruto)}
                       </span>

@@ -13,6 +13,7 @@ import ViewToggle, { type ViewMode } from '@/components/common/ViewToggle';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/hooks/useAuth';
 import { formatBudgetCode } from '@/utils/formatters';
+import { calcFinancials } from '@/utils/financials';
 import { useViewPrefs } from '@/hooks/useViewPrefs';
 import { notify, getAdminUserIds } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
@@ -216,7 +217,8 @@ export default function CustosProjeto() {
               margin_pct,
               nf_pct,
               discount_value,
-              budget_items(unit_cost, quantity)
+              imposto_reajusta_preco,
+              budget_items(item_group, unit_cost, quantity)
             )
           )
         `)
@@ -240,15 +242,11 @@ export default function CustosProjeto() {
         // --- CÁLCULO DE CUSTOS E FATURAMENTO (IDÊNTICO AO DETALHE) ---
         let estimatedCost = 0;
         const budget = p.budget;
-        let marginPct = 0.40; // default margin
         let budgetNfPct = 0.18; // alíquota do orçamento (reconstrói a venda)
-        let discountValue = 0;
 
         if (budget?.active_version) {
           const version = budget.active_version;
-          marginPct = Number(version.margin_pct ?? 0.40);
           budgetNfPct = Number(version.nf_pct ?? 0.18);
-          discountValue = Number(version.discount_value ?? 0);
 
           const items = version.budget_items || [];
           estimatedCost = items.reduce(
@@ -274,10 +272,16 @@ export default function CustosProjeto() {
           ? estimatedCost
           : Number(p.valor_vendido || 0) * (1 - 0.40);
 
-        // Faturamento Bruto (Venda) — o valor contratado.
-        const totalProductionValue = p.proposta_id
-          ? Math.max(estimatedCost / (1 - Math.min(marginPct, 0.95)) - discountValue, 0)
-          : Number(p.valor_vendido || 0);
+        // Faturamento Bruto (Venda) — o valor CONTRATADO, o mesmo do detalhe: vem da view (soma das parcelas; sem parcela,
+        // o valor gravado). Só se não houver nenhum valor, cai no preço do orçamento pela MESMA função do detalhe
+        // (calcFinancials), que respeita a flag do imposto — antes aqui existia uma fórmula própria que a ignorava e
+        // mostrava preço, lucro e margem errados nos projetos novos (ex.: SPX Express 7.431,67 contra 10.616,67).
+        const vendaContratada = Number(p.valor_vendido || 0);
+        const totalProductionValue = vendaContratada > 0
+          ? vendaContratada
+          : (p.proposta_id && budget?.active_version
+              ? calcFinancials(budget.active_version.budget_items || [], budget.active_version).valorFinal
+              : 0);
 
         // Faturamento Líquido (Receita sem imposto): o imposto é fatia da nota.
         const faturamentoLiquido = totalProductionValue * (1 - effectiveNfPct);
