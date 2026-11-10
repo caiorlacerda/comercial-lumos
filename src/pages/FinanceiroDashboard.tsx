@@ -51,6 +51,7 @@ import {
   Legend,
   CartesianGrid,
 } from 'recharts';
+import { projetoNoPeriodo } from '@/lib/periodoFinanceiro';
 
 type PeriodType = 'semana' | 'mes' | 'trimestre' | 'semestre' | 'ano';
 
@@ -424,13 +425,13 @@ export default function FinanceiroDashboard() {
       const [rentRes, payablesRes, receivablesRes] = await Promise.all([
         supabase
           .from('vw_rentabilidade')
-          .select('*, client:clients(name), project:projects(name), categoria:categorias(nome), tipo_servico:tipos_servico(nome)')
-          .or(`and(data_recebimento_negociada.gte.${startDate},data_recebimento_negociada.lt.${endExclusive}),and(created_at.gte.${startDate},created_at.lt.${endExclusive})`),
+          .select('*, client:clients(name), project:projects(name), categoria:categorias(nome), tipo_servico:tipos_servico(nome)'),
         supabase.from('payables').select('amount, due_date, paid_at'),
         supabase.from('receivables').select('total_amount, received_amount, due_date, status, received_at')
       ]);
 
-      setRawProjects(rentRes.data || []);
+      // Período decidido no front pela regra única (recebido > vencimento > criação): cada projeto cai em um só mês.
+      setRawProjects((rentRes.data || []).filter((p: any) => projetoNoPeriodo(p, startDate, endExclusive)));
       setPayables(payablesRes.data || []);
       setReceivables(receivablesRes.data || []);
     } catch (error) {
