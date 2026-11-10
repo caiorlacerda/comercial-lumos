@@ -206,7 +206,13 @@ export default function FinanceiroMovimentacoes() {
       toast.error('Preencha data, descrição e valor.');
       return;
     }
-    const valorNum = Number(editando.valor);
+    const valorNum = typeof editando.valor === 'string'
+      ? Number((editando.valor as string).replace(/\./g, '').replace(',', '.'))
+      : Number(editando.valor);
+    if (!Number.isFinite(valorNum) || valorNum === 0) {
+      toast.error('Valor inválido.');
+      return;
+    }
     const payload = {
       data: editando.data,
       descricao: editando.descricao?.trim() || 'Lançamento manual',
@@ -457,8 +463,8 @@ export default function FinanceiroMovimentacoes() {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Valor (R$) *</label>
-                <input value={editando.valor ?? ''} inputMode="decimal" placeholder="-500,00 saída · 500,00 entrada"
-                  onChange={e => setEditando({ ...editando, valor: e.target.value.replace(/\./g, '').replace(',', '.') as unknown as number })}
+                <input value={typeof editando.valor === 'number' ? String(editando.valor).replace('.', ',') : (editando.valor ?? '')} inputMode="decimal" placeholder="-500,00 saída · 500,00 entrada"
+                  onChange={e => setEditando({ ...editando, valor: e.target.value as unknown as number })}
                   className="input-lumos w-full h-10 text-sm" />
               </div>
             </div>

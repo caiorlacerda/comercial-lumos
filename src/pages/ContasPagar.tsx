@@ -137,9 +137,23 @@ export default function ContasPagar() {
         if (error) throw error;
       } else if (formData.isRecurring) {
         const occurrences = [];
-        let currentDate = new Date(formData.due_date + 'T12:00:00'); // Use noon to avoid TZ issues
+        const baseDate = new Date(formData.due_date + 'T12:00:00'); // Use noon to avoid TZ issues
         const endDate = new Date();
         endDate.setFullYear(endDate.getFullYear() + 1);
+        const passoMeses: Record<string, number> = { mensal: 1, bimestral: 2, trimestral: 3, semestral: 6, anual: 12 };
+        // Cada ocorrência é calculada a partir da data ORIGINAL (não da anterior) e, em mês mais curto, cai no último dia:
+        // dia 31 de janeiro vira 28/29 de fevereiro e volta a 31 em março (antes derivava para o dia 3 e ficava lá).
+        const ocorrenciaN = (n: number): Date => {
+          const freq = formData.frequency;
+          if (freq === 'semanal') { const d = new Date(baseDate); d.setDate(d.getDate() + 7 * n); return d; }
+          const meses = (passoMeses[freq] ?? 0) * n;
+          const alvo = new Date(baseDate.getFullYear(), baseDate.getMonth() + meses, 1, 12);
+          const ultimoDia = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+          alvo.setDate(Math.min(baseDate.getDate(), ultimoDia));
+          return alvo;
+        };
+        let currentDate = baseDate;
+        let n = 0;
 
         while (currentDate <= endDate) {
           occurrences.push({
@@ -154,13 +168,9 @@ export default function ContasPagar() {
             created_by: profile?.id
           });
           
-          if (formData.frequency === 'semanal') currentDate.setDate(currentDate.getDate() + 7);
-          else if (formData.frequency === 'mensal') currentDate.setMonth(currentDate.getMonth() + 1);
-          else if (formData.frequency === 'bimestral') currentDate.setMonth(currentDate.getMonth() + 2);
-          else if (formData.frequency === 'trimestral') currentDate.setMonth(currentDate.getMonth() + 3);
-          else if (formData.frequency === 'semestral') currentDate.setMonth(currentDate.getMonth() + 6);
-          else if (formData.frequency === 'anual') currentDate.setFullYear(currentDate.getFullYear() + 1);
-          else break;
+          if (formData.frequency !== 'semanal' && !passoMeses[formData.frequency]) break;
+          n += 1;
+          currentDate = ocorrenciaN(n);
         }
         const { error } = await supabase.from('payables').insert(occurrences);
         if (error) throw error;
@@ -312,7 +322,11 @@ export default function ContasPagar() {
 
   const stats = {
     pending: payables.filter(p => !p.paid_at).reduce((acc, p) => acc + p.amount, 0),
-    paidMonth: payables.filter(p => p.paid_at && new Date(p.paid_at).getMonth() === new Date().getMonth()).reduce((acc, p) => acc + p.amount, 0),
+    paidMonth: payables.filter(p => {
+      if (!p.paid_at) return false;
+      const pago = new Date(p.paid_at), hoje = new Date();
+      return pago.getFullYear() === hoje.getFullYear() && pago.getMonth() === hoje.getMonth();
+    }).reduce((acc, p) => acc + p.amount, 0),
     overdueCount: payables.filter(p => !p.paid_at && p.due_date && jaPassou(p.due_date)).length
   };
 
