@@ -36,6 +36,7 @@ import {
   Cell,
   Pie
 } from 'recharts';
+import { dataDoProjeto } from '@/lib/periodoFinanceiro';
 
 interface ProjetoRentabilidade {
   id: string;
@@ -146,11 +147,8 @@ export default function FinanceiroRelatorios() {
   const yearOptions = useMemo(() => {
     const years = new Set<string>();
     data.forEach(item => {
-      const date = item.data_recebimento_negociada || item.created_at;
-      if (date) {
-        const year = item.data_recebimento_negociada ? String(date).slice(0, 4) : new Date(date).getFullYear().toString();
-        years.add(year);
-      }
+      const dia = dataDoProjeto(item);
+      if (dia) years.add(dia.slice(0, 4));
     });
     return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [data]);
@@ -175,13 +173,8 @@ export default function FinanceiroRelatorios() {
 
       // Year Filter
       if (selectedYear) {
-        const date = item.data_recebimento_negociada || item.created_at;
-        if (date) {
-          const year = item.data_recebimento_negociada ? String(date).slice(0, 4) : new Date(date).getFullYear().toString();
-          if (year !== selectedYear) return false;
-        } else {
-          return false;
-        }
+        const dia = dataDoProjeto(item);
+        if (!dia || dia.slice(0, 4) !== selectedYear) return false;
       }
 
       return true;
