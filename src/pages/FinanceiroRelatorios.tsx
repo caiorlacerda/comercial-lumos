@@ -430,7 +430,7 @@ export default function FinanceiroRelatorios() {
 
         {/* Card 2: NF Impostos */}
         <div className="card p-5 border-t-4 border-purple-500 shadow-md">
-          <p className="text-[9px] font-black text-lumos-text-secondary uppercase tracking-widest">NF / Impostos (18%)</p>
+          <p className="text-[9px] font-black text-lumos-text-secondary uppercase tracking-widest">NF / Impostos</p>
           <p className="text-xl font-black text-lumos-text-primary mt-1.5 tracking-tight">{formatBRL(totals.nfTotal)}</p>
           <div className="flex items-center gap-1 mt-2 text-[10px] text-purple-400 font-bold">
             <FileText className="w-3.5 h-3.5" />
@@ -559,7 +559,7 @@ export default function FinanceiroRelatorios() {
                     <th className="py-3 px-4">{activeTab === 'projetos' ? 'Projeto / Cliente' : 'Grupo'}</th>
                     {activeTab === 'projetos' && <th className="py-3 px-4">Dimensões</th>}
                     <th className="py-3 px-4 text-right">Fat. Bruto</th>
-                    <th className="py-3 px-4 text-right">NF (18%)</th>
+                    <th className="py-3 px-4 text-right">NF / Imposto</th>
                     <th className="py-3 px-4 text-right">Custos</th>
                     <th className="py-3 px-4 text-right">Lucro Líquido</th>
                     <th className="py-3 px-4 text-right">Margem %</th>

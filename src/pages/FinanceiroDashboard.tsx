@@ -99,7 +99,7 @@ const DASHBOARD_BLOCKS_CATALOG: DashboardBlockDef[] = [
   {
     id: 'kpi-impostos',
     title: 'Provisão de Impostos',
-    description: 'Estimativa de impostos incidentes sobre o faturamento do período (18%).',
+    description: 'Estimativa de impostos incidentes sobre o faturamento do período, na alíquota de cada projeto (configuração do financeiro).',
     group: 'rentabilidade',
     defaultSize: 'small',
     defaultActive: false
@@ -945,7 +945,7 @@ export default function FinanceiroDashboard() {
                         <div className="p-2 bg-purple-500/10 rounded-lumos text-purple-500 w-fit mb-4">
                           <FileText className="w-5 h-5" />
                         </div>
-                        <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Provisão de Impostos (18%)</p>
+                        <p className="text-[10px] font-bold text-lumos-text-secondary uppercase tracking-widest">Provisão de Impostos</p>
                         <p className="text-[clamp(14px,12cqw,24px)] sm:text-2xl max-sm:whitespace-nowrap font-black text-lumos-text-primary mt-1 tracking-tight">
                           {formatBRL(dashboardData.totals.nfTotal)}
                         </p>
