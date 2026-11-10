@@ -247,7 +247,7 @@ function MetaLucroModal({ onClose }: { onClose: () => void }) {
 function EditarMetasModal({ ano, metas, onClose, onSave }: {
   ano: number; metas: number[]; onClose: () => void; onSave: (valores: number[]) => void;
 }) {
-  const [valores, setValores] = useState<string[]>(metas.map(m => (m ? String(m) : '')));
+  const [valores, setValores] = useState<string[]>(metas.map(m => (m ? String(m).replace('.', ',') : '')));
   const [replicar, setReplicar] = useState('');
   return (
     <Modal isOpen onClose={onClose} title={`Editar metas de ${ano}`} maxWidth="max-w-md">
@@ -256,7 +256,7 @@ function EditarMetasModal({ ano, metas, onClose, onSave }: {
           <input value={replicar} onChange={e => setReplicar(e.target.value)} inputMode="decimal"
             placeholder="Ex: 30000" className="input-lumos h-9 flex-1 text-xs" />
           <button onClick={() => {
-            const v = replicar.replace(/\./g, '').replace(',', '.');
+            const v = replicar.trim();
             if (v) setValores(Array(12).fill(v));
           }} className="btn-secondary h-9 px-3 text-xs whitespace-nowrap">Aplicar em todos</button>
         </div>

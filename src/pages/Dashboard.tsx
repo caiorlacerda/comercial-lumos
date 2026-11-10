@@ -79,8 +79,12 @@ export default function Dashboard() {
   async function fetchData() {
     try {
       setLoading(true);
-      // Fetch all budgets for KPIs (limit 1000 for safety, but effectively 'all')
-      const { data, error } = await supabase
+      // Busca TODOS os orçamentos para os KPIs, em páginas de 100 (um .limit(100) cortava o total quando passou de 100).
+      const PAGE = 100;
+      const data: any[] = [];
+      let error: any = null;
+      for (let from = 0; ; from += PAGE) {
+        const res = await supabase
         .from('budgets')
         .select(`
           *,
@@ -107,7 +111,12 @@ export default function Dashboard() {
           )
         `)
         .order('updated_at', { ascending: false })
-        .limit(100);
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+        if (res.error) { error = res.error; break; }
+        data.push(...((res.data as any[]) || []));
+        if (!res.data || res.data.length < PAGE) break;
+      }
 
       if (error) throw error;
       
