@@ -495,11 +495,42 @@ function NovaCobrancaModal({ fornecedores, onClose, onCreated, profileId }: {
   const [valor, setValor] = useState('');
   const [dataServico, setDataServico] = useState('');
   const [saving, setSaving] = useState(false);
+  // Serviços e valores que o fornecedor já cobra (cadastro dele em Fornecedores).
+  const [servicos, setServicos] = useState<{ id: string; tipo_servico: string; valor: number | null }[]>([]);
+  const [servicoId, setServicoId] = useState('');
 
   useEffect(() => {
     supabase.from('projects').select('id, name').order('created_at', { ascending: false }).limit(100)
       .then(({ data }) => setProjetos(data || []));
   }, []);
+
+  const valorParaCampo = (v: number) => v.toFixed(2).replace('.', ',');
+
+  // Escolher o serviço do cadastro preenche o valor (e o job, se ainda estiver vazio).
+  const aplicarServico = (s: { id: string; tipo_servico: string; valor: number | null }) => {
+    setServicoId(s.id);
+    if (s.valor != null) setValor(valorParaCampo(Number(s.valor)));
+    setDescricao(d => (d.trim() ? d : s.tipo_servico));
+  };
+
+  useEffect(() => {
+    setServicos([]); setServicoId('');
+    if (!fornecedorId) return;
+    let ativo = true;
+    supabase.from('fornecedor_servicos').select('id, tipo_servico, valor')
+      .eq('fornecedor_id', fornecedorId).order('tipo_servico')
+      .then(({ data }) => {
+        if (!ativo) return;
+        const lista = ((data as any[]) || []).map(r => ({ ...r, valor: r.valor == null ? null : Number(r.valor) }));
+        setServicos(lista);
+        // Só um serviço cadastrado: já traz o valor dele, sem sobrescrever o que a pessoa digitou.
+        if (lista.length === 1 && lista[0].valor != null) {
+          setServicoId(lista[0].id);
+          setValor(v => (v.trim() ? v : valorParaCampo(lista[0].valor as number)));
+        }
+      });
+    return () => { ativo = false; };
+  }, [fornecedorId]);
 
   const soma = (dias: number) => {
     const d = new Date(`${dataServico}T12:00:00`); d.setDate(d.getDate() + dias);
@@ -535,6 +566,21 @@ function NovaCobrancaModal({ fornecedores, onClose, onCreated, profileId }: {
           <Select className="input-lumos w-full" value={fornecedorId} onChange={setFornecedorId} placeholder="Escolha o fornecedor"
             options={fornecedores.map(f => ({ value: f.id, label: f.nome + (f.email ? '' : ' (sem e-mail)') }))} />
         </div>
+        {fornecedorId && (
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Valor do cadastro do fornecedor</label>
+            {servicos.length === 0 ? (
+              <p className="text-[11px] text-lumos-text-secondary">Esse fornecedor não tem serviço com valor cadastrado. Digite o valor abaixo.</p>
+            ) : (
+              <Select className="input-lumos w-full" value={servicoId} placeholder="Escolha um serviço pra puxar o valor"
+                onChange={id => { const sv = servicos.find(x => x.id === id); if (sv) aplicarServico(sv); }}
+                options={servicos.map(sv => ({
+                  value: sv.id,
+                  label: `${sv.tipo_servico} — ${sv.valor != null ? brl(sv.valor) : 'sem valor'}`,
+                }))} />
+            )}
+          </div>
+        )}
         <div className="space-y-1">
           <label className="text-[10px] font-black uppercase text-lumos-text-secondary tracking-wider block">Projeto</label>
           <Select className="input-lumos w-full" value={projectId} onChange={setProjectId} placeholder="Sem projeto"
