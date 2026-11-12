@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { addDays, addWeeks, isToday, subWeeks, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { clsx } from 'clsx';
@@ -21,13 +22,15 @@ import Modal from '@/components/common/Modal';
 import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
 import CelulaCronograma, { ItemFlutuante } from '@/components/cronograma/CelulaCronograma';
-import VincularItemModal, { type Vinculo } from '@/components/cronograma/VincularItemModal';
+import VincularItemModal from '@/components/cronograma/VincularItemModal';
+import { TarefasCatalogoContext, carregarTarefasAbertas } from '@/components/cronograma/TarefasCatalogo';
 import QuemEditaModal, { PERMISSAO_CRONOGRAMA } from '@/components/cronograma/QuemEditaModal';
 import VincularNomesModal from '@/components/cronograma/VincularNomesModal';
 import { type ItemAutomatico, automaticosDaCelula, buscarAutomaticos } from '@/lib/cronogramaAutomatico';
 import AgendaDaSemana from '@/components/cronograma/AgendaDaSemana';
 import {
   type Item, type Linha, type Semana, type TipoItem, type TipoLinha,
+  type TarefaCatalogo, type Vinculo,
   SELECT_ITEM, TIPOS, diasDaSemana, iso, nomeDaLinha, rotuloDaSemana, segundaDe, tipoPadraoDaLinha, dataDeIso,
 } from '@/lib/cronograma';
 
@@ -53,10 +56,21 @@ export default function CronogramaEdicao() {
   const [quemEdita, setQuemEdita] = useState(false);
   const [vinculandoNomes, setVinculandoNomes] = useState(false);
 
-  const [inicio, setInicio] = useState<Date>(() => segundaDe(new Date()));
+  // A semana pode vir na URL (?semana=AAAA-MM-DD), como no aviso "No cronograma" de dentro da tarefa.
+  const [searchParams] = useSearchParams();
+  const semanaInicial = useMemo(() => {
+    const p = searchParams.get('semana');
+    return segundaDe(p && /^\d{4}-\d{2}-\d{2}$/.test(p) ? dataDeIso(p) : new Date());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [inicio, setInicio] = useState<Date>(semanaInicial);
   const chave = iso(inicio);
-  const [dados, setDados] = useState<Dados | null>(() => lerCache<Dados>(`cronograma:${iso(segundaDe(new Date()))}`) ?? null);
-  const [carregando, setCarregando] = useState(() => !lerCache(`cronograma:${iso(segundaDe(new Date()))}`));
+  const [dados, setDados] = useState<Dados | null>(() => lerCache<Dados>(`cronograma:${iso(semanaInicial)}`) ?? null);
+  const [carregando, setCarregando] = useState(() => !lerCache(`cronograma:${iso(semanaInicial)}`));
+  // As tarefas em aberto da plataforma: alimentam a busca "Vincular a uma tarefa" e a sugestão ao digitar.
+  const [tarefas, setTarefas] = useState<TarefaCatalogo[]>([]);
+  const carregarTarefas = useCallback(() => { carregarTarefasAbertas().then(setTarefas).catch(() => {}); }, []);
+  useEffect(() => { carregarTarefas(); }, [carregarTarefas]);
+  useRealtimeRefetch(['project_tasks'], carregarTarefas);
   useBarraDeCarregamento(carregando);
   const [criando, setCriando] = useState(false);
   const [levarItens, setLevarItens] = useState(true);
@@ -133,11 +147,12 @@ export default function CronogramaEdicao() {
   // ── Itens (otimista: a tela muda na hora e o banco acompanha) ──────────
   const mutar = (fn: (d: Dados) => Dados) => setDados(prev => (prev ? fn(prev) : prev));
 
-  const adicionarItem = async (linha: Linha, dia: string, texto: string, tipo: TipoItem) => {
+  const adicionarItem = async (linha: Linha, dia: string, texto: string, tipo: TipoItem, vinculo?: Vinculo) => {
     const doDia = (dados?.itens || []).filter(i => i.linha_id === linha.id && i.dia === dia);
     const ordem = doDia.reduce((m, i) => Math.max(m, i.ordem), 0) + 1;
     const { data, error } = await supabase.from('cronograma_itens')
-      .insert({ linha_id: linha.id, dia, texto, tipo, ordem, created_by: profile?.id ?? null })
+      .insert({ linha_id: linha.id, dia, texto, tipo, ordem, created_by: profile?.id ?? null,
+        project_id: vinculo?.project.id ?? null, task_id: vinculo?.task?.id ?? null })
       .select(SELECT_ITEM).single();
     if (error || !data) { toast.error('Não foi possível salvar o item.'); return; }
     mutar(d => ({ ...d, itens: d.itens.some(i => i.id === data.id) ? d.itens : [...d.itens, data as unknown as Item] }));
@@ -299,8 +314,8 @@ export default function CronogramaEdicao() {
   const itensDe = (linhaId: string, dia: string) =>
     (dados?.itens || []).filter(i => i.linha_id === linhaId && i.dia === dia).sort((a, b) => a.ordem - b.ordem);
   const automaticosDe = (linha: Linha, dia: string): ItemAutomatico[] =>
-    linha.tipo === 'externas' || linha.tipo === 'entregas'
-      ? automaticosDaCelula(automaticos, linha.tipo, dia, itensDe(linha.id, dia).map(i => i.texto))
+    linha.tipo === 'externas' || linha.tipo === 'entregas' || (linha.tipo === 'pessoa' && linha.user_id)
+      ? automaticosDaCelula(automaticos, linha, dia, itensDe(linha.id, dia))
       : [];
 
   // Preenche "Projetos em andamento" com os projetos ativos da plataforma (o texto segue livre depois).
@@ -326,6 +341,7 @@ export default function CronogramaEdicao() {
   const ehEstaSemana = chave === iso(segundaDe(new Date()));
 
   return (
+    <TarefasCatalogoContext.Provider value={tarefas}>
     <div className="space-y-4 font-work-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
@@ -429,7 +445,7 @@ export default function CronogramaEdicao() {
                     {linhasOrdenadas.map(l => (
                       <LinhaDoCronograma key={l.id} linha={l} dias={dias} podeEditar={podeEditar}
                         itensDe={itensDe} automaticosDe={automaticosDe} celulaAlvo={celulaAlvo} onAdicionar={adicionarItem} onAtualizar={atualizarItem} onRemover={removerItem}
-                        onVincular={setVinculando} onDesvincular={id => vincularItem(id, null)} onRenomear={renomearLinha} onRemoverLinha={removerLinha} />
+                        onVincular={setVinculando} onDesvincular={id => vincularItem(id, null)} onLigar={vincularItem} onRenomear={renomearLinha} onRemoverLinha={removerLinha} />
                     ))}
                   </SortableContext>
                   <DragOverlay dropAnimation={null}>
@@ -497,28 +513,30 @@ export default function CronogramaEdicao() {
       {quemEdita && <QuemEditaModal onClose={() => setQuemEdita(false)} />}
       {vinculandoNomes && <VincularNomesModal onClose={() => setVinculandoNomes(false)} onConcluido={() => carregar(true)} />}
       {vinculando && (
-        <VincularItemModal item={vinculando} onClose={() => setVinculando(null)}
+        <VincularItemModal item={vinculando} linha={(dados?.linhas || []).find(l => l.id === vinculando.linha_id) ?? null} onClose={() => setVinculando(null)}
           onSalvar={async v => { await vincularItem(vinculando.id, v); setVinculando(null); }} />
       )}
       {dialogoConfirmar}
     </div>
+    </TarefasCatalogoContext.Provider>
   );
 }
 
 // ── Uma linha da grade (arrastável pela alça à esquerda) ─────────────────────
 // Fica FORA da página de propósito: declarada dentro, seria recriada a cada atualização de estado.
-function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, automaticosDe, celulaAlvo, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular, onRenomear, onRemoverLinha }: {
+function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, automaticosDe, celulaAlvo, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular, onLigar, onRenomear, onRemoverLinha }: {
   linha: Linha;
   dias: ReturnType<typeof diasDaSemana>;
   podeEditar: boolean;
   itensDe: (linhaId: string, dia: string) => Item[];
   automaticosDe: (linha: Linha, dia: string) => ItemAutomatico[];
   celulaAlvo: string | null;
-  onAdicionar: (linha: Linha, dia: string, texto: string, tipo: TipoItem) => void;
+  onAdicionar: (linha: Linha, dia: string, texto: string, tipo: TipoItem, vinculo?: Vinculo) => void;
   onAtualizar: (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => void;
   onRemover: (id: string) => void;
   onVincular: (item: Item) => void;
   onDesvincular: (id: string) => void;
+  onLigar: (id: string, vinculo: Vinculo | null) => void;
   onRenomear: (linha: Linha, nome: string) => void;
   onRemoverLinha: (linha: Linha) => void;
 }) {
@@ -559,9 +577,10 @@ function LinhaDoCronograma({ linha: l, dias, podeEditar, itensDe, automaticosDe,
         <div key={d.iso} className={clsx('border-l border-lumos-border/60 flex flex-col', isToday(d.data) && 'bg-lumos-yellow/[0.05]')}>
           <CelulaCronograma
             linhaId={l.id} dia={d.iso} destaque={celulaAlvo === `${l.id}|${d.iso}`}
-            itens={itensDe(l.id, d.iso)} automaticos={automaticosDe(l, d.iso)} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
-            onAdicionar={(texto, tipo) => onAdicionar(l, d.iso, texto, tipo)}
-            onAtualizar={onAtualizar} onRemover={onRemover} onVincular={onVincular} onDesvincular={onDesvincular} />
+            itens={itensDe(l.id, d.iso)} automaticos={automaticosDe(l, d.iso)} userId={l.user_id} podeEditar={podeEditar} tipoPadrao={tipoPadraoDaLinha(l)} fimDeSemana={d.fimDeSemana}
+            onAdicionar={(texto, tipo, vinculo) => onAdicionar(l, d.iso, texto, tipo, vinculo)}
+            onAtualizar={onAtualizar} onRemover={onRemover} onVincular={onVincular} onDesvincular={onDesvincular}
+            onLigar={(id, v) => onLigar(id, v)} />
         </div>
       ))}
     </div>

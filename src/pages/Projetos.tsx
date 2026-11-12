@@ -32,6 +32,7 @@ import type * as YType from 'yjs';
 import { TipoPilula, TipoSeletor } from '@/components/producao/TipoDeTarefa';
 import { tipoDoPrefixo, useTiposTarefa } from '@/lib/tiposTarefa';
 import TaskCollaborators from '@/components/producao/TaskCollaborators';
+import TarefaNoCronograma from '@/components/cronograma/TarefaNoCronograma';
 import { supabase } from '@/lib/supabase';
 import { hojeLocalISO } from '@/lib/dataSemHora';
 
@@ -3863,6 +3864,9 @@ export default function Projetos() {
                     variant="full"
                   />
                 </div>
+
+                {/* Onde esta tarefa está marcada no cronograma da equipe (só aparece se houver) */}
+                <TarefaNoCronograma taskId={selectedTask.id} />
 
                 {/* Tipo (Roteiro, Edição, Motion...) */}
                 {tiposTarefa.length > 0 && (
