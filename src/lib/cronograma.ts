@@ -85,6 +85,19 @@ export function sugerirTarefas(texto: string, catalogo: TarefaCatalogo[], userId
     .slice(0, max);
 }
 
+/**
+ * Busca da menção "@": qualquer palavra do que foi digitado depois do @ (mesmo curta) precisa aparecer no
+ * "projeto + título". Sem nada digitado ainda, lista as tarefas da própria pessoa da linha primeiro.
+ */
+export function buscarTarefasArroba(consulta: string, catalogo: TarefaCatalogo[], userId?: string | null, max = 6): TarefaCatalogo[] {
+  const palavras = normalizar(consulta).split(/[^a-z0-9]+/).filter(Boolean);
+  const dela = (t: TarefaCatalogo) => Number(!!userId && t.responsavel_id === userId);
+  return catalogo
+    .filter(t => { const h = normalizar(`${t.projeto} ${t.titulo}`); return palavras.every(p => h.includes(p)); })
+    .sort((a, b) => dela(b) - dela(a) || a.titulo.length - b.titulo.length)
+    .slice(0, max);
+}
+
 /** Colunas lidas de cada item, com o nome do projeto e da tarefa vinculados. */
 export const SELECT_ITEM = 'id, linha_id, dia, ordem, texto, tipo, task_id, project_id, project:projects(id, name), task:project_tasks(id, titulo, status)';
 
