@@ -1,10 +1,12 @@
 import { format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Link2 } from 'lucide-react';
 import Select from '@/components/ui/Select';
 import UserAvatar from '@/components/common/UserAvatar';
-import { type Item, type Linha, diasDaSemana, nomeDaLinha, tipoDoItem } from '@/lib/cronograma';
+import { type Item, type Linha, diasDaSemana, linkDoItem, nomeDaLinha, tipoDoItem } from '@/lib/cronograma';
+import StatusTarefa from '@/components/cronograma/StatusTarefa';
 import type { ItemAutomatico } from '@/lib/cronogramaAutomatico';
 import ItemAutomaticoView from '@/components/cronograma/ItemAutomaticoView';
 
@@ -26,6 +28,7 @@ interface Props {
 }
 
 export default function AgendaDaSemana({ linhas, itens, dias, automaticosDe, filtroLinha, onFiltro }: Props) {
+  const navigate = useNavigate();
   const visiveis = filtroLinha ? linhas.filter(l => l.id === filtroLinha) : linhas;
   const total = itens.filter(i => visiveis.some(l => l.id === i.linha_id)).length
     + visiveis.reduce((n, l) => n + dias.reduce((m, d) => m + automaticosDe(l, d.iso).length, 0), 0);
@@ -78,9 +81,11 @@ export default function AgendaDaSemana({ linhas, itens, dias, automaticosDe, fil
                             <div className="min-w-0">
                               <p className="text-[12px] leading-snug text-lumos-text-primary whitespace-pre-wrap break-words">{i.texto}</p>
                               {i.project_id && (
-                                <p className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-lumos-text-secondary">
+                                <button type="button" onClick={() => navigate(linkDoItem(i)!)} title={`Abrir ${i.task_id ? 'a tarefa' : 'o projeto'}`}
+                                  className="mt-0.5 flex items-center gap-1 max-w-full text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
                                   <Link2 className="w-2.5 h-2.5 flex-shrink-0" /> <span className="truncate">{i.project?.name || 'Projeto'}{i.task?.titulo ? ` · ${i.task.titulo}` : ''}</span>
-                                </p>
+                                  {i.task_id && <StatusTarefa status={i.task?.status} className="flex-shrink-0" />}
+                                </button>
                               )}
                             </div>
                           </div>

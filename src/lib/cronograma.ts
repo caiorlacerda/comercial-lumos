@@ -41,11 +41,52 @@ export interface Item {
   project_id: string | null;
   /** Vínculo opcional com um projeto/tarefa da plataforma (vem junto na consulta). */
   project?: { id: string; name: string } | null;
-  task?: { id: string; titulo: string } | null;
+  task?: { id: string; titulo: string; status?: string | null } | null;
+}
+
+/** Projeto (e, se houver, a tarefa) ao qual um item é ligado. */
+export interface Vinculo {
+  project: { id: string; name: string };
+  task: { id: string; titulo: string; status?: string | null } | null;
+}
+
+/** Para onde o clique no vínculo leva: a tarefa exata (se houver) ou o projeto. */
+export const linkDoItem = (i: Pick<Item, 'project_id' | 'task_id'>): string | null =>
+  i.project_id ? `/producao/projetos?projectId=${i.project_id}${i.task_id ? `&taskId=${i.task_id}` : ''}` : null;
+
+/** Uma tarefa em aberto da plataforma, no formato leve que o cronograma usa para ligar e sugerir. */
+export interface TarefaCatalogo {
+  id: string;
+  titulo: string;
+  status: string;
+  project_id: string;
+  projeto: string;
+  responsavel_id: string | null;
+}
+
+export const vinculoDeTarefa = (t: TarefaCatalogo): Vinculo => ({
+  project: { id: t.project_id, name: t.projeto },
+  task: { id: t.id, titulo: t.titulo, status: t.status },
+});
+
+/** Minúsculas e sem acento, para comparar texto digitado com título de tarefa. */
+export const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/**
+ * Tarefas que combinam com o que a pessoa está digitando: todas as palavras (3+ letras) precisam aparecer no
+ * "projeto + título". As tarefas da própria pessoa da linha vêm primeiro.
+ */
+export function sugerirTarefas(texto: string, catalogo: TarefaCatalogo[], userId?: string | null, max = 5): TarefaCatalogo[] {
+  const palavras = normalizar(texto).split(/[^a-z0-9]+/).filter(p => p.length >= 3);
+  if (!palavras.length) return [];
+  return catalogo
+    .filter(t => { const h = normalizar(`${t.projeto} ${t.titulo}`); return palavras.every(p => h.includes(p)); })
+    .sort((a, b) => Number(b.responsavel_id === userId && !!userId) - Number(a.responsavel_id === userId && !!userId) || a.titulo.length - b.titulo.length)
+    .slice(0, max);
 }
 
 /** Colunas lidas de cada item, com o nome do projeto e da tarefa vinculados. */
-export const SELECT_ITEM = 'id, linha_id, dia, ordem, texto, tipo, task_id, project_id, project:projects(id, name), task:project_tasks(id, titulo)';
+export const SELECT_ITEM = 'id, linha_id, dia, ordem, texto, tipo, task_id, project_id, project:projects(id, name), task:project_tasks(id, titulo, status)';
 
 /** As cores da legenda da planilha: sem cor, verde, azul e laranja. */
 export const TIPOS: { id: TipoItemFixo; label: string; caixa: string; ponto: string }[] = [

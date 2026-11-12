@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
@@ -6,7 +6,9 @@ import { Link2, Plus, Unlink, X } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { type Item, type TipoItem, CORES_LIVRES, TIPOS, tipoDoItem } from '@/lib/cronograma';
+import { type Item, type TarefaCatalogo, type TipoItem, type Vinculo, CORES_LIVRES, TIPOS, linkDoItem, sugerirTarefas, tipoDoItem, vinculoDeTarefa } from '@/lib/cronograma';
+import StatusTarefa from '@/components/cronograma/StatusTarefa';
+import { useTarefasCatalogo } from '@/components/cronograma/TarefasCatalogo';
 import type { ItemAutomatico } from '@/lib/cronogramaAutomatico';
 import ItemAutomaticoView from '@/components/cronograma/ItemAutomaticoView';
 
@@ -15,6 +17,7 @@ import ItemAutomaticoView from '@/components/cronograma/ItemAutomaticoView';
  *  · clique num item para editar; Enter grava; texto vazio apaga o item
  *  · "+" no fim da célula adiciona; Enter grava e abre o próximo; Esc ou vazio fecha
  *  · o ponto colorido troca o tipo (a cor da legenda) e vincula o item a um projeto/tarefa
+ *  · ao digitar, aparecem tarefas parecidas da plataforma: Enter/clique liga o item à tarefa; o ícone de corrente (ao passar o mouse) abre a busca
  *  · arraste um item para mudar a ordem, o dia ou a pessoa (o DndContext fica na página)
  * Sem permissão de edição a célula só mostra.
  */
@@ -27,12 +30,14 @@ interface Props {
   tipoPadrao: TipoItem;
   fimDeSemana?: boolean;
   destaque?: boolean;          // é a célula onde o item arrastado vai cair
-  automaticos?: ItemAutomatico[];   // diárias/entregas que vêm sozinhas (só leitura)
-  onAdicionar: (texto: string, tipo: TipoItem) => void;
+  automaticos?: ItemAutomatico[];   // diárias/entregas/prazos que vêm sozinhos (só leitura)
+  userId?: string | null;      // a pessoa da linha (as tarefas dela são sugeridas primeiro)
+  onAdicionar: (texto: string, tipo: TipoItem, vinculo?: Vinculo) => void;
   onAtualizar: (id: string, patch: Partial<Pick<Item, 'texto' | 'tipo'>>) => void;
   onRemover: (id: string) => void;
   onVincular: (item: Item) => void;
   onDesvincular: (id: string) => void;
+  onLigar: (id: string, vinculo: Vinculo) => void;
 }
 
 function MenuDeTipo({ item, ancora, onEscolher, onVincular, onDesvincular, onFechar }: {
@@ -105,15 +110,23 @@ function MenuDeTipo({ item, ancora, onEscolher, onVincular, onDesvincular, onFec
   );
 }
 
-function CampoDeTexto({ inicial, placeholder, onGravar, onCancelar, onApagarVazio }: {
-  inicial: string; placeholder?: string;
-  onGravar: (texto: string, continuar: boolean) => void;
+function CampoDeTexto({ inicial, placeholder, userId, onGravar, onCancelar, onApagarVazio }: {
+  inicial: string; placeholder?: string; userId?: string | null;
+  onGravar: (texto: string, continuar: boolean, tarefa?: TarefaCatalogo) => void;
   onCancelar: () => void;
   onApagarVazio?: () => void;
 }) {
   const [texto, setTexto] = useState(inicial);
   const ref = useRef<HTMLTextAreaElement>(null);
   const feito = useRef(false);
+  const catalogo = useTarefasCatalogo();
+  const [indice, setIndice] = useState(-1);
+  const [fechada, setFechada] = useState(false);
+  // Sugestões só depois que a pessoa mexe no texto (clicar para editar não abre nada).
+  const sugestoes = useMemo(
+    () => (!fechada && texto.trim() !== inicial.trim() ? sugerirTarefas(texto, catalogo, userId) : []),
+    [fechada, texto, inicial, catalogo, userId]);
+  useEffect(() => { setIndice(-1); setFechada(false); }, [texto]);
 
   // A caixa cresce com o texto (a planilha também deixava a célula crescer).
   useEffect(() => {
@@ -131,30 +144,63 @@ function CampoDeTexto({ inicial, placeholder, onGravar, onCancelar, onApagarVazi
     onGravar(t, continuar);
   };
 
+  // Escolher uma tarefa sugerida: grava o item já ligado a ela (o texto vira "Projeto · Tarefa", editável depois).
+  const escolher = (t: TarefaCatalogo) => {
+    if (feito.current) return;
+    feito.current = true;
+    onGravar(t.projeto ? `${t.projeto} · ${t.titulo}` : t.titulo, true, t);
+  };
+
   return (
-    <textarea
-      ref={ref} rows={1} value={texto} placeholder={placeholder}
-      onChange={e => setTexto(e.target.value)}
-      onKeyDown={e => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); gravar(true); }
-        else if (e.key === 'Escape') { e.preventDefault(); feito.current = true; onCancelar(); }
-      }}
-      onBlur={() => gravar(false)}
-      className="w-full resize-none overflow-hidden bg-transparent outline-none text-[12px] leading-snug text-lumos-text-primary placeholder:text-lumos-text-secondary/60"
-    />
+    <>
+      <textarea
+        ref={ref} rows={1} value={texto} placeholder={placeholder}
+        onChange={e => setTexto(e.target.value)}
+        onKeyDown={e => {
+          if (sugestoes.length && e.key === 'ArrowDown') { e.preventDefault(); setIndice(i => (i + 1) % sugestoes.length); }
+          else if (sugestoes.length && e.key === 'ArrowUp') { e.preventDefault(); setIndice(i => (i <= 0 ? sugestoes.length - 1 : i - 1)); }
+          else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (indice >= 0 && sugestoes[indice]) escolher(sugestoes[indice]); else gravar(true);
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            if (sugestoes.length) setFechada(true); else { feito.current = true; onCancelar(); }
+          }
+        }}
+        onBlur={() => gravar(false)}
+        className="w-full resize-none overflow-hidden bg-transparent outline-none text-[12px] leading-snug text-lumos-text-primary placeholder:text-lumos-text-secondary/60"
+      />
+      {sugestoes.length > 0 && (
+        <div className="mt-1 pt-1 border-t border-lumos-border/60 space-y-0.5">
+          <p className="text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary">Ligar a uma tarefa (↑↓ e Enter)</p>
+          {sugestoes.map((t, i) => (
+            // mouseDown sem foco: o campo não perde o foco (e não grava o texto solto) antes do clique valer.
+            <button key={t.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => escolher(t)}
+              className={clsx('w-full text-left rounded px-1.5 py-1 border transition-colors', i === indice ? 'border-lumos-yellow/70 bg-lumos-yellow/15' : 'border-transparent hover:bg-lumos-text-primary/5')}>
+              <span className="block text-[11px] font-bold leading-snug text-lumos-text-primary break-words">{t.titulo}</span>
+              <span className="flex items-center gap-1 text-[9px] text-lumos-text-secondary min-w-0">
+                <span className="truncate">{t.projeto}</span><StatusTarefa status={t.status} />
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
-/** Nome do projeto (e da tarefa) ao qual o item está ligado; clicar abre o projeto. */
-function Vinculo({ item }: { item: Item }) {
+/** Projeto e tarefa aos quais o item está ligado; clicar abre a TAREFA (ou o projeto, se não houver tarefa) e mostra o andamento dela. */
+function AtalhoDoVinculo({ item }: { item: Item }) {
   const navigate = useNavigate();
-  if (!item.project_id) return null;
+  const link = linkDoItem(item);
+  if (!link) return null;
   const nome = item.project?.name || 'Projeto';
   const rotulo = item.task?.titulo ? `${nome} · ${item.task.titulo}` : nome;
   return (
-    <button type="button" onClick={() => navigate(`/producao/projetos?projectId=${item.project_id}`)} title={`Abrir o projeto: ${rotulo}`}
+    <button type="button" onClick={() => navigate(link)} title={`Abrir ${item.task_id ? 'a tarefa' : 'o projeto'}: ${rotulo}`}
       className="mt-0.5 flex items-center gap-1 max-w-full text-[10px] font-bold text-lumos-text-secondary hover:text-lumos-yellow transition-colors">
       <Link2 className="w-2.5 h-2.5 flex-shrink-0" /> <span className="truncate">{rotulo}</span>
+      {item.task_id && <StatusTarefa status={item.task?.status} className="flex-shrink-0" />}
     </button>
   );
 }
@@ -170,10 +216,10 @@ export function ItemFlutuante({ item }: { item: Item }) {
   );
 }
 
-function LinhaDeItem({ item, linhaId, dia, podeEditar, onAtualizar, onRemover, onVincular, onDesvincular }: {
-  item: Item; linhaId: string; dia: string; podeEditar: boolean;
+function LinhaDeItem({ item, linhaId, dia, userId, podeEditar, onAtualizar, onRemover, onVincular, onDesvincular, onLigar }: {
+  item: Item; linhaId: string; dia: string; userId?: string | null; podeEditar: boolean;
   onAtualizar: Props['onAtualizar']; onRemover: Props['onRemover'];
-  onVincular: Props['onVincular']; onDesvincular: Props['onDesvincular'];
+  onVincular: Props['onVincular']; onDesvincular: Props['onDesvincular']; onLigar: Props['onLigar'];
 }) {
   const [editando, setEditando] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -205,8 +251,12 @@ function LinhaDeItem({ item, linhaId, dia, podeEditar, onAtualizar, onRemover, o
       <div className="min-w-0 flex-1">
         {editando ? (
           <CampoDeTexto
-            inicial={item.texto}
-            onGravar={texto => { setEditando(false); if (texto !== item.texto) onAtualizar(item.id, { texto }); }}
+            inicial={item.texto} userId={userId}
+            onGravar={(texto, _continuar, tarefa) => {
+              setEditando(false);
+              if (texto !== item.texto) onAtualizar(item.id, { texto });
+              if (tarefa) onLigar(item.id, vinculoDeTarefa(tarefa));
+            }}
             onCancelar={() => setEditando(false)}
             onApagarVazio={() => { setEditando(false); onRemover(item.id); }}
           />
@@ -216,20 +266,28 @@ function LinhaDeItem({ item, linhaId, dia, podeEditar, onAtualizar, onRemover, o
             {item.texto}
           </p>
         )}
-        {!editando && <Vinculo item={item} />}
+        {!editando && <AtalhoDoVinculo item={item} />}
       </div>
 
       {podeEditar && !editando && (
-        <button type="button" onClick={() => onRemover(item.id)} title="Remover item"
-          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 text-lumos-text-secondary hover:text-red-500 transition-opacity flex-shrink-0">
-          <X className="w-3 h-3" />
-        </button>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          {!item.project_id && (
+            <button type="button" onClick={() => onVincular(item)} title="Vincular a uma tarefa"
+              className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 text-lumos-text-secondary hover:text-lumos-yellow transition-opacity">
+              <Link2 className="w-3 h-3" />
+            </button>
+          )}
+          <button type="button" onClick={() => onRemover(item.id)} title="Remover item"
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 text-lumos-text-secondary hover:text-red-500 transition-opacity">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
       )}
     </div>
   );
 }
 
-export default function CelulaCronograma({ linhaId, dia, itens, automaticos = [], podeEditar, tipoPadrao, fimDeSemana, destaque, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular }: Props) {
+export default function CelulaCronograma({ linhaId, dia, itens, automaticos = [], userId, podeEditar, tipoPadrao, fimDeSemana, destaque, onAdicionar, onAtualizar, onRemover, onVincular, onDesvincular, onLigar }: Props) {
   const [novo, setNovo] = useState(false);
   // Depois de gravar com Enter o campo é remontado limpo, pronto para o próximo item.
   const [chave, setChave] = useState(0);
@@ -242,8 +300,8 @@ export default function CelulaCronograma({ linhaId, dia, itens, automaticos = []
         destaque && 'bg-lumos-yellow/15 ring-2 ring-inset ring-lumos-yellow/60')}>
       <SortableContext items={itens.map(i => i.id)} strategy={verticalListSortingStrategy}>
         {itens.map(i => (
-          <LinhaDeItem key={i.id} item={i} linhaId={linhaId} dia={dia} podeEditar={podeEditar}
-            onAtualizar={onAtualizar} onRemover={onRemover} onVincular={onVincular} onDesvincular={onDesvincular} />
+          <LinhaDeItem key={i.id} item={i} linhaId={linhaId} dia={dia} userId={userId} podeEditar={podeEditar}
+            onAtualizar={onAtualizar} onRemover={onRemover} onVincular={onVincular} onDesvincular={onDesvincular} onLigar={onLigar} />
         ))}
       </SortableContext>
 
@@ -252,8 +310,8 @@ export default function CelulaCronograma({ linhaId, dia, itens, automaticos = []
       {podeEditar && novo && (
         <div className={clsx('rounded border border-dashed border-lumos-yellow/60 px-1.5 py-1', tipoDoItem(tipoPadrao).caixa)}>
           <CampoDeTexto
-            key={chave} inicial="" placeholder="Escreva e dê Enter…"
-            onGravar={(texto, continuar) => { onAdicionar(texto, tipoPadrao); if (continuar) setChave(c => c + 1); else setNovo(false); }}
+            key={chave} inicial="" placeholder="Escreva e dê Enter…" userId={userId}
+            onGravar={(texto, continuar, tarefa) => { onAdicionar(texto, tipoPadrao, tarefa ? vinculoDeTarefa(tarefa) : undefined); if (continuar) setChave(c => c + 1); else setNovo(false); }}
             onCancelar={() => setNovo(false)}
           />
         </div>
