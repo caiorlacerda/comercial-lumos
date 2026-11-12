@@ -6,7 +6,7 @@ import { Link2, Plus, Unlink, X } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { type Item, type TarefaCatalogo, type TipoItem, type Vinculo, CORES_LIVRES, TIPOS, linkDoItem, sugerirTarefas, tipoDoItem, vinculoDeTarefa } from '@/lib/cronograma';
+import { type Item, type TarefaCatalogo, type TipoItem, type Vinculo, CORES_LIVRES, TIPOS, buscarTarefasArroba, linkDoItem, sugerirTarefas, tipoDoItem, vinculoDeTarefa } from '@/lib/cronograma';
 import StatusTarefa from '@/components/cronograma/StatusTarefa';
 import { useTarefasCatalogo } from '@/components/cronograma/TarefasCatalogo';
 import type { ItemAutomatico } from '@/lib/cronogramaAutomatico';
@@ -16,6 +16,7 @@ import ItemAutomaticoView from '@/components/cronograma/ItemAutomaticoView';
  * Uma célula do cronograma (linha × dia): a lista de itens, digitada no ritmo da planilha.
  *  · clique num item para editar; Enter grava; texto vazio apaga o item
  *  · "+" no fim da célula adiciona; Enter grava e abre o próximo; Esc ou vazio fecha
+ *  · "@" abre a busca de tarefas (como uma menção): escolha com ↑↓ e Enter/Tab/clique; o item é gravado ligado a ela e o texto segue livre
  *  · o ponto colorido troca o tipo (a cor da legenda) e vincula o item a um projeto/tarefa
  *  · ao digitar, aparecem tarefas parecidas da plataforma: Enter/clique liga o item à tarefa; o ícone de corrente (ao passar o mouse) abre a busca
  *  · arraste um item para mudar a ordem, o dia ou a pessoa (o DndContext fica na página)
@@ -122,11 +123,28 @@ function CampoDeTexto({ inicial, placeholder, userId, onGravar, onCancelar, onAp
   const catalogo = useTarefasCatalogo();
   const [indice, setIndice] = useState(-1);
   const [fechada, setFechada] = useState(false);
-  // Sugestões só depois que a pessoa mexe no texto (clicar para editar não abre nada).
+  const [cursor, setCursor] = useState(inicial.length);
+  const proxCursor = useRef<number | null>(null);
+  // Tarefa marcada com "@": o item é gravado ligado a ela (o texto continua livre).
+  const [marcada, setMarcada] = useState<TarefaCatalogo | null>(null);
+
+  // Menção: um "@" no começo ou depois de espaço abre a busca; o que vem depois dele, até o cursor, é a consulta.
+  const arroba = useMemo(() => {
+    const m = /(^|\s)@([^\n@]{0,40})$/.exec(texto.slice(0, cursor));
+    return m ? { inicio: cursor - m[2].length - 1, consulta: m[2] } : null;
+  }, [texto, cursor]);
+  const mencoes = useMemo(() => {
+    if (fechada || !arroba) return [];
+    return buscarTarefasArroba(arroba.consulta, catalogo, userId);
+  },[fechada, arroba, catalogo, userId]);
+  // Sugestões automáticas só depois que a pessoa mexe no texto (clicar para editar não abre nada) e fora da menção.
   const sugestoes = useMemo(
-    () => (!fechada && texto.trim() !== inicial.trim() ? sugerirTarefas(texto, catalogo, userId) : []),
-    [fechada, texto, inicial, catalogo, userId]);
-  useEffect(() => { setIndice(-1); setFechada(false); }, [texto]);
+    () => (!fechada && !arroba && texto.trim() !== inicial.trim() ? sugerirTarefas(texto, catalogo, userId) : []),
+    [fechada, arroba, texto, inicial, catalogo, userId]);
+  const emMencao = !!arroba && !fechada;
+  const lista = emMencao ? mencoes : sugestoes;
+  // Na menção o primeiro resultado já vem marcado (a pessoa pediu a busca); nas sugestões, só depois de ↑↓.
+  useEffect(() => { setIndice(emMencao ? 0 : -1); setFechada(false); }, [texto]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A caixa cresce com o texto (a planilha também deixava a célula crescer).
   useEffect(() => {
@@ -135,13 +153,30 @@ function CampoDeTexto({ inicial, placeholder, userId, onGravar, onCancelar, onAp
     el.style.height = `${el.scrollHeight}px`;
   }, [texto]);
   useEffect(() => { ref.current?.focus(); ref.current?.setSelectionRange(texto.length, texto.length); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Depois de inserir uma menção, o cursor volta para logo depois dela.
+  useEffect(() => {
+    if (proxCursor.current == null) return;
+    ref.current?.setSelectionRange(proxCursor.current, proxCursor.current);
+    proxCursor.current = null;
+  }, [texto]);
 
   const gravar = (continuar: boolean) => {
     if (feito.current) return;
     feito.current = true;
     const t = texto.trim();
     if (!t) { if (onApagarVazio) onApagarVazio(); else onCancelar(); return; }
-    onGravar(t, continuar);
+    onGravar(t, continuar, marcada ?? undefined);
+  };
+
+  // "@": troca o "@consulta" pelo nome da tarefa e guarda a tarefa; o texto segue editável e Enter grava ligado a ela.
+  const marcar = (t: TarefaCatalogo) => {
+    if (!arroba) return;
+    const depois = texto.slice(cursor);
+    const novo = `${texto.slice(0, arroba.inicio)}${t.titulo}${depois.startsWith(' ') || !depois ? '' : ' '}`;
+    proxCursor.current = novo.length;
+    setTexto(`${novo}${depois}`);
+    setCursor(novo.length);
+    setMarcada(t);
   };
 
   // Escolher uma tarefa sugerida: grava o item já ligado a ela (o texto vira "Projeto · Tarefa", editável depois).
@@ -155,27 +190,44 @@ function CampoDeTexto({ inicial, placeholder, userId, onGravar, onCancelar, onAp
     <>
       <textarea
         ref={ref} rows={1} value={texto} placeholder={placeholder}
-        onChange={e => setTexto(e.target.value)}
+        onChange={e => { setTexto(e.target.value); setCursor(e.target.selectionStart ?? e.target.value.length); }}
+        onSelect={e => setCursor(e.currentTarget.selectionStart ?? 0)}
         onKeyDown={e => {
-          if (sugestoes.length && e.key === 'ArrowDown') { e.preventDefault(); setIndice(i => (i + 1) % sugestoes.length); }
-          else if (sugestoes.length && e.key === 'ArrowUp') { e.preventDefault(); setIndice(i => (i <= 0 ? sugestoes.length - 1 : i - 1)); }
-          else if (e.key === 'Enter' && !e.shiftKey) {
+          if (lista.length && e.key === 'ArrowDown') { e.preventDefault(); setIndice(i => (i + 1) % lista.length); }
+          else if (lista.length && e.key === 'ArrowUp') { e.preventDefault(); setIndice(i => (i <= 0 ? lista.length - 1 : i - 1)); }
+          else if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Tab' && emMencao && lista.length)) {
             e.preventDefault();
-            if (indice >= 0 && sugestoes[indice]) escolher(sugestoes[indice]); else gravar(true);
+            if (emMencao && lista[indice]) marcar(lista[indice]);
+            else if (e.key === 'Enter') {
+              if (indice >= 0 && sugestoes[indice]) escolher(sugestoes[indice]); else gravar(true);
+            }
           } else if (e.key === 'Escape') {
             e.preventDefault();
-            if (sugestoes.length) setFechada(true); else { feito.current = true; onCancelar(); }
+            if (lista.length || emMencao) setFechada(true); else { feito.current = true; onCancelar(); }
           }
         }}
         onBlur={() => gravar(false)}
         className="w-full resize-none overflow-hidden bg-transparent outline-none text-[12px] leading-snug text-lumos-text-primary placeholder:text-lumos-text-secondary/60"
       />
-      {sugestoes.length > 0 && (
+      {marcada && (
+        <div className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-lumos-yellow min-w-0">
+          <Link2 className="w-2.5 h-2.5 flex-shrink-0" />
+          <span className="truncate">{marcada.projeto ? `${marcada.projeto} · ${marcada.titulo}` : marcada.titulo}</span>
+          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => setMarcada(null)} title="Tirar a ligação com a tarefa"
+            className="flex-shrink-0 text-lumos-text-secondary hover:text-red-500"><X className="w-2.5 h-2.5" /></button>
+        </div>
+      )}
+      {emMencao && lista.length === 0 && arroba && arroba.consulta !== '' && !arroba.consulta.includes(' ') && (
+        <p className="mt-1 pt-1 border-t border-lumos-border/60 text-[10px] text-lumos-text-secondary">Nenhuma tarefa em aberto com “{arroba.consulta}”.</p>
+      )}
+      {lista.length > 0 && (
         <div className="mt-1 pt-1 border-t border-lumos-border/60 space-y-0.5">
-          <p className="text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary">Ligar a uma tarefa (↑↓ e Enter)</p>
-          {sugestoes.map((t, i) => (
+          <p className="text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary">
+            {emMencao ? 'Marcar tarefa (↑↓ e Enter)' : 'Ligar a uma tarefa (↑↓ e Enter)'}
+          </p>
+          {lista.map((t, i) => (
             // mouseDown sem foco: o campo não perde o foco (e não grava o texto solto) antes do clique valer.
-            <button key={t.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => escolher(t)}
+            <button key={t.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => (emMencao ? marcar(t) : escolher(t))}
               className={clsx('w-full text-left rounded px-1.5 py-1 border transition-colors', i === indice ? 'border-lumos-yellow/70 bg-lumos-yellow/15' : 'border-transparent hover:bg-lumos-text-primary/5')}>
               <span className="block text-[11px] font-bold leading-snug text-lumos-text-primary break-words">{t.titulo}</span>
               <span className="flex items-center gap-1 text-[9px] text-lumos-text-secondary min-w-0">
@@ -310,7 +362,7 @@ export default function CelulaCronograma({ linhaId, dia, itens, automaticos = []
       {podeEditar && novo && (
         <div className={clsx('rounded border border-dashed border-lumos-yellow/60 px-1.5 py-1', tipoDoItem(tipoPadrao).caixa)}>
           <CampoDeTexto
-            key={chave} inicial="" placeholder="Escreva e dê Enter…" userId={userId}
+            key={chave} inicial="" placeholder="Escreva e dê Enter · @ para tarefa" userId={userId}
             onGravar={(texto, continuar, tarefa) => { onAdicionar(texto, tipoPadrao, tarefa ? vinculoDeTarefa(tarefa) : undefined); if (continuar) setChave(c => c + 1); else setNovo(false); }}
             onCancelar={() => setNovo(false)}
           />
