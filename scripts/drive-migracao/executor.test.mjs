@@ -31,7 +31,7 @@ function novo() {
   add('p2', '228_SHOW_LIVE', 'cli'); add('p2x', '00_GERAL', 'p2');
   add('p3', '229_NOVO', 'cli');
 }
-const filhos = id => [...arvore.values()].filter(n => n.parents.includes(id));
+const filhos = id => [...arvore.values()].filter(n => n.parents.includes(id) && !n.trashed);
 const corpo = req => new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b ? JSON.parse(b) : {})); });
 
 const servidor = http.createServer(async (req, res) => {
@@ -43,7 +43,7 @@ const servidor = http.createServer(async (req, res) => {
   if (!m) return json({ error: { message: 'rota' } }, 404);
   if (req.method === 'GET' && !m[1]) {
     const pai = /'([^']+)' in parents/.exec(u.searchParams.get('q'))[1];
-    return json({ files: filhos(pai).map(f => ({ id: f.id, name: f.name, mimeType: f.mimeType })) });
+    return json({ files: filhos(pai).filter(f => !f.trashed).map(f => ({ id: f.id, name: f.name, mimeType: f.mimeType })) });
   }
   if (req.method === 'GET') { const n = arvore.get(m[1]); return n ? json({ id: n.id, name: n.name, parents: n.parents }) : json({ error: { message: 'nao existe' } }, 404); }
   if (req.method === 'POST') { const b = await corpo(req); const id = 'novo' + (++seq); arvore.set(id, { id, name: b.name, parents: b.parents, mimeType: b.mimeType }); return json({ id }); }
@@ -52,6 +52,7 @@ const servidor = http.createServer(async (req, res) => {
     const add = u.searchParams.get('addParents'); const rem = (u.searchParams.get('removeParents') || '').split(',').filter(Boolean);
     if (add) n.parents = [...n.parents.filter(p => !rem.includes(p)), add];
     if (b.name) n.name = b.name;
+    if (b.trashed) n.trashed = true;
     return json({ id: n.id });
   }
   return json({ error: { message: 'metodo' } }, 405);
@@ -70,9 +71,9 @@ fs.writeFileSync(path.join(tmp, 'projetos.json'), JSON.stringify([
   proj('p3', '229', 'NOVO', { layout: 'v2' }),
 ]));
 
-function rodar(extra, entrada) {
+function rodar(extra, entrada, projetosJson = path.join(tmp, 'projetos.json')) {
   return new Promise(resolve => {
-    const f = spawn(process.execPath, [path.join(aqui, 'migrar-projetos-v2.mjs'), '--projetos', path.join(tmp, 'projetos.json'), '--sa', path.join(tmp, 'sa.json'),
+    const f = spawn(process.execPath, [path.join(aqui, 'migrar-projetos-v2.mjs'), '--projetos', projetosJson, '--sa', path.join(tmp, 'sa.json'),
       '--drive-id', 'drive', '--cliente', 'Cliente Teste', '--saida', path.join(tmp, 'saida'), ...extra],
       { env: { ...process.env, DRIVE_API_BASE: `http://127.0.0.1:${porta}`, GOOGLE_TOKEN_URL: `http://127.0.0.1:${porta}/token` } });
     let out = ''; f.stdout.on('data', d => out += d); f.stderr.on('data', d => out += d);
@@ -166,11 +167,52 @@ r = await rodar(['--executar', '--renomear-assets'], 'Cliente Teste\n');
 ok('com --renomear-assets: a MESMA pasta vira MARCA (ID e conteúdo intactos)', nome('assets') === 'MARCA' && pai('assets') === 'cli' && pai('logos') === 'assets');
 ok('com --renomear-assets: os projetos também foram migrados', pai('rev') !== 'ent' && nome('apr') === '02_FINAL');
 ok('com --renomear-assets: nenhuma pasta nova MARCA/_ASSETS foi criada', filhos('cli').filter(f => f.name === 'MARCA' || f.name === '_ASSETS').length === 1);
-const feitos = fs.readdirSync(path.join(tmp, 'saida')).filter(f => f.startsWith('feito-')).map(f => JSON.parse(fs.readFileSync(path.join(tmp, 'saida', f), 'utf8'))).flat();
-ok('registro do que foi feito inclui a renomeação (nome antigo e novo, para desfazer)', feitos.some(x => x.feito?.some(y => y.op === 'renomeada' && y.nomeAntigo === '_ASSETS' && y.nomeNovo === 'MARCA' && y.id === 'assets')));
+const feitos = fs.readdirSync(path.join(tmp, 'saida')).filter(f => f.startsWith('feito-')).map(f => JSON.parse(fs.readFileSync(path.join(tmp, 'saida', f), 'utf8')));
+ok('registro do que foi feito inclui a renomeação (nome antigo e novo, para desfazer)', feitos.some(x => x.renomeouMarca?.de === '_ASSETS' && x.renomeouMarca?.para === 'MARCA' && x.renomeouMarca?.id === 'assets'));
 novo(); add('marca-ja', 'MARCA', 'cli');
 r = await rodar(['--executar', '--renomear-assets'], 'Cliente Teste\n');
 ok('MARCA e _ASSETS já coexistem: conflito, nada renomeado, projetos seguem', nome('assets') === '_ASSETS' && /CONFLITO/.test(r.out) && nome('apr') === '02_FINAL');
+
+
+// ---------- 7) regras novas: REDES/THUMB, CAM_BKP, 05_POS_PRODUCAO vazia, BRUTO redundante, TRILHA ----------
+function novoRegras() {
+  novo();
+  add('p4', '230_NOVAS', 'cli');
+  add('e4', '06_ENTREGA', 'p4'); add('rev4', '01_REVISAO', 'e4'); add('apr4', '02_APROVADO', 'e4');
+  add('fin4', 'final.mp4', 'apr4', false); add('cam4', 'CAM_1A_BKP_2610211103_0002.mp4', 'apr4', false);
+  add('rd4', '03_REDES', 'e4'); add('reels4', 'reels.mp4', 'rd4', false);
+  add('th4', '04_THUMB', 'e4'); add('capa4', 'capa.jpg', 'th4', false);
+  add('pp4', '05_POS_PRODUCAO', 'p4');
+  add('cap4', '03_CAPTACAO', 'p4'); add('br4', 'BRUTO', 'cap4'); add('cena4', 'cena.mov', 'br4', false); add('dia4', 'DIA 1', 'br4');
+  add('as4', '04_ASSETS', 'p4'); add('tr4', 'TRILHA', 'as4'); add('tema4', 'tema.wav', 'tr4', false); add('logos4', 'LOGOS', 'as4');
+}
+const arq4 = path.join(tmp, 'projetos4.json');
+fs.writeFileSync(arq4, JSON.stringify([proj('p4', '230', 'NOVAS', {})]));
+const lixo = id => !!arvore.get(id)?.trashed;
+const sub = (pai, nomeFilho) => filhos(pai).find(f => f.name === nomeFilho)?.id;
+
+novoRegras();
+r = await rodar([], undefined, arq4);
+ok('regras novas, simulação: só GET (nada escrito) e o plano mostra LIXEIRA, CONFLITO ausente', chamadas.length > 0 && chamadas.every(c => c.startsWith('GET ')) && /LIXEIRA\s+03_REDES/.test(r.out) && /LIXEIRA\s+05_POS_PRODUCAO/.test(r.out) && !/CONFLITO/.test(r.out));
+ok('regras novas, simulação: nada saiu do lugar nem foi para a lixeira', pai('reels4') === 'rd4' && !lixo('rd4') && !lixo('pp4') && pai('cena4') === 'br4');
+
+novoRegras();
+r = await rodar(['--executar'], 'Cliente Teste\n', arq4);
+const bruto4 = sub('p4', '01_BRUTO'), artes4 = sub('p4', '02_ARTES'), exp4 = sub('p4', '03_EXPORT');
+const trilhas4 = sub(artes4, '01_TRILHAS');
+ok('regras novas, execução: terminou sem erro', r.code === 0);
+ok('CAM_…_BKP_ saiu de 02_APROVADO para 01_BRUTO; o filme ficou', pai('cam4') === bruto4 && pai('fin4') === 'apr4');
+ok('02_APROVADO virou 03_EXPORT/02_FINAL e recebeu o conteúdo de REDES e THUMB', pai('apr4') === exp4 && nome('apr4') === '02_FINAL' && pai('reels4') === 'apr4' && pai('capa4') === 'apr4');
+ok('REDES e THUMB, esvaziadas, estão na lixeira (mesmo ID, nada excluído)', lixo('rd4') && lixo('th4') && arvore.has('rd4') && arvore.has('th4'));
+ok('05_POS_PRODUCAO vazia está na lixeira', lixo('pp4'));
+ok('BRUTO redundante: o conteúdo subiu direto para 01_BRUTO; BRUTO e 03_CAPTACAO foram para a lixeira', pai('cena4') === bruto4 && pai('dia4') === bruto4 && lixo('br4') && lixo('cap4'));
+ok('TRILHA mesclada em 02_ARTES/01_TRILHAS; TRILHA vazia na lixeira; 04_ASSETS dentro de 02_ARTES com LOGOS', !!trilhas4 && pai('tema4') === trilhas4 && lixo('tr4') && pai('as4') === artes4 && pai('logos4') === 'as4' && !lixo('as4'));
+ok('06_ENTREGA continua lá, vazia e FORA da lixeira (decisão pendente)', pai('e4') === 'p4' && filhos('e4').length === 0 && !lixo('e4') && /VAZIAS/.test(r.out));
+ok('regras novas: nunca DELETE nem cópia; as únicas escritas são POST (criar), PATCH (mover/lixeira)', !chamadas.some(c => c.startsWith('DELETE') || c.includes('/copy')) && chamadas.filter(c => !c.startsWith('GET ')).every(c => c.startsWith('POST ') || c.startsWith('PATCH ')));
+
+novoRegras();
+r = await rodar(['--executar', '--entrega-vazia-para-lixeira'], 'Cliente Teste\n', arq4);
+ok('--entrega-vazia-para-lixeira: 06_ENTREGA vazia também vai para a lixeira', lixo('e4') && !/VAZIAS/.test(r.out));
 
 servidor.close();
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo');

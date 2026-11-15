@@ -1,7 +1,9 @@
 // Supabase falso em memória: só o que a drive-provision usa. As tabelas ficam em globalThis.__db.
 export function createClient() {
   const db = globalThis.__db;
-  const filtra = (rows, filtros) => rows.filter(r => filtros.every(([k, v]) => r[k] === v));
+  // ilike: % vira qualquer coisa, _ vira um caractere; \% e \_ são literais (como no Postgres)
+  const ilike = (v, pad) => new RegExp('^' + pad.replace(/\\(.)|([%_])|([.*+?^${}()|[\]\\])/g, (_, lit, cur, esp) => lit ? lit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : cur === '%' ? '.*' : cur === '_' ? '.' : '\\' + esp) + '$', 'i').test(String(v ?? ''));
+  const filtra = (rows, filtros) => rows.filter(r => filtros.every(([k, v, tipo]) => tipo === 'ilike' ? ilike(r[k], v) : r[k] === v));
   return {
     from(tabela) {
       const rows = () => db[tabela] ?? (db[tabela] = []);
@@ -10,6 +12,7 @@ export function createClient() {
           const filtros = []; let lim = Infinity;
           const q = {
             eq(k, v) { filtros.push([k, v]); return q; },
+            ilike(k, v) { filtros.push([k, v, 'ilike']); return q; },
             limit(n) { lim = n; return q; },
             _linhas() { return filtra(rows(), filtros).slice(0, lim); },
             _com(r) {
@@ -29,8 +32,12 @@ export function createClient() {
           return q;
         },
         update(patch) {
-          const filtros = [];
-          const q = { eq(k, v) { filtros.push([k, v]); return q; }, then(res, rej) { filtra(rows(), filtros).forEach(r => Object.assign(r, patch)); return Promise.resolve({ error: null }).then(res, rej); } };
+          const filtros = []; let querLinhas = false;
+          const q = {
+            eq(k, v) { filtros.push([k, v]); return q; },
+            select() { querLinhas = true; return q; },
+            then(res, rej) { const alvo = filtra(rows(), filtros); alvo.forEach(r => Object.assign(r, patch)); return Promise.resolve({ data: querLinhas ? alvo.map(r => ({ id: r.id })) : null, error: null }).then(res, rej); },
+          };
           return q;
         },
         async insert(novos) { rows().push(...(Array.isArray(novos) ? novos : [novos])); return { error: null }; },
