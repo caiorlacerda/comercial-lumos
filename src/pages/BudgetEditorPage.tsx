@@ -100,7 +100,7 @@ interface Budget {
   code: string;
   project_name: string;
   category: 'digital' | 'filme' | 'live';
-  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
+  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado' | 'cancelado';
   client_id: string;
   active_version_id?: string;
   created_by?: string | null;
@@ -1372,7 +1372,7 @@ export default function BudgetEditorPage() {
   const updateBudget = (updates: Partial<Budget>) => {
     if (isReadOnly) return;
     if (updates.status && budget?.status && updates.status !== budget.status) {
-      const labels: Record<string, string> = { rascunho: 'Rascunho', em_negociacao: 'Em Negociação', aprovado: 'Aprovado', reprovado: 'Reprovado' };
+      const labels: Record<string, string> = { rascunho: 'Rascunho', em_negociacao: 'Em Negociação', aprovado: 'Aprovado', reprovado: 'Reprovado', cancelado: 'Cancelado' };
       logActivity('status_changed', `Status alterado: ${labels[budget.status]} → ${labels[updates.status]}`);
     }
     setBudget(prev => prev ? { ...prev, ...updates } : null);
@@ -2248,11 +2248,11 @@ export default function BudgetEditorPage() {
                       "input-lumos w-full font-black uppercase text-[10px] disabled:opacity-70",
                       budget?.status === 'aprovado' ? 'text-green-600' :
                       budget?.status === 'em_negociacao' ? 'text-lumos-yellow text-glow' :
-                      budget?.status === 'reprovado' ? 'text-red-600' : 'text-gray-400'
+                      budget?.status === 'reprovado' ? 'text-red-600' : budget?.status === 'cancelado' ? 'text-orange-500' : 'text-gray-400'
                     )}
                     value={budget?.status || 'rascunho'}
                     onChange={(v) => updateBudget({ status: v as any })}
-                    options={[{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovado' }, { value: 'reprovado', label: 'Reprovado' }]}
+                    options={[{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovado' }, { value: 'reprovado', label: 'Reprovado' }, { value: 'cancelado', label: 'Cancelado' }]}
                   />
                 </div>
               </div>

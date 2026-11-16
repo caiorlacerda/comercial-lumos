@@ -38,7 +38,7 @@ interface Budget {
   code: string;
   project_name: string;
   category: 'digital' | 'filme' | 'live';
-  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
+  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado' | 'cancelado';
   updated_at: string;
   active_version_id: string;
   clients: { name: string; agency_name?: string | null };
@@ -253,7 +253,7 @@ export default function Dashboard() {
     }
 
     if (sortField === 'status') {
-      const weights: Record<string, number> = { rascunho: 1, em_negociacao: 2, aprovado: 3, reprovado: 4 };
+      const weights: Record<string, number> = { rascunho: 1, em_negociacao: 2, aprovado: 3, reprovado: 4, cancelado: 5 };
       valA = weights[a.status] || 0;
       valB = weights[b.status] || 0;
     }
@@ -542,7 +542,7 @@ export default function Dashboard() {
                           "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
                           budget.status === 'aprovado' ? 'text-green-600 bg-green-500/10' : 
                           budget.status === 'em_negociacao' ? 'text-lumos-yellow bg-lumos-yellow/10' : 
-                          budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10' : 'text-lumos-text-secondary bg-lumos-bg'
+                          budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10' : budget.status === 'cancelado' ? 'text-orange-500 bg-orange-500/10' : 'text-lumos-text-secondary bg-lumos-bg'
                         )}>
                           {budget.status.replace('_', ' ')}
                         </span>

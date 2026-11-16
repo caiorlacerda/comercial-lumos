@@ -48,7 +48,7 @@ interface Budget {
   id: string;
   code: string;
   project_name: string;
-  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
+  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado' | 'cancelado';
   created_at: string;
   total?: number;
 }
@@ -148,14 +148,16 @@ export default function ClientProfile() {
     rascunho: <Clock className="w-3.5 h-3.5" />,
     em_negociacao: <Clock className="w-3.5 h-3.5" />,
     aprovado: <CheckCircle className="w-3.5 h-3.5" />,
-    reprovado: <XCircle className="w-3.5 h-3.5" />
+    reprovado: <XCircle className="w-3.5 h-3.5" />,
+    cancelado: <XCircle className="w-3.5 h-3.5" />
   };
 
   const statusColors = {
     rascunho: 'bg-lumos-bg text-lumos-text-secondary border-lumos-border',
     em_negociacao: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     aprovado: 'bg-green-500/10 text-green-500 border-green-500/20',
-    reprovado: 'bg-red-500/10 text-red-500 border-red-500/20'
+    reprovado: 'bg-red-500/10 text-red-500 border-red-500/20',
+    cancelado: 'bg-orange-500/10 text-orange-500 border-orange-500/20'
   };
 
   const totalAprovado = budgets

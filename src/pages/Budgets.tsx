@@ -50,7 +50,7 @@ interface Budget {
   code: string;
   project_name: string;
   category: 'digital' | 'filme' | 'live';
-  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado';
+  status: 'rascunho' | 'em_negociacao' | 'aprovado' | 'reprovado' | 'cancelado';
   created_at: string;
   updated_at: string;
   client_id: string;
@@ -112,7 +112,8 @@ export default function Budgets() {
     { value: 'rascunho', label: 'Rascunho', color: 'text-lumos-text-secondary bg-lumos-bg border-lumos-border' },
     { value: 'em_negociacao', label: 'Em Negociação', color: 'text-[#F5D87A] bg-[#F5D87A]/10 border-[#F5D87A]/20' },
     { value: 'aprovado', label: 'Aprovado', color: 'text-green-600 bg-green-500/10 border-green-500/20' },
-    { value: 'reprovado', label: 'Reprovado', color: 'text-red-500 bg-red-500/10 border-red-500/20' }
+    { value: 'reprovado', label: 'Reprovado', color: 'text-red-500 bg-red-500/10 border-red-500/20' },
+    { value: 'cancelado', label: 'Cancelado', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' }
   ];
 
   useEffect(() => {
@@ -310,10 +311,30 @@ export default function Budgets() {
     ]);
   };
 
+  // Aprovado, com recebimento ou com custos lançados não se exclui: a exclusão levaria as parcelas e os custos junto.
+  const orcamentosProtegidos = async (ids: string[]) => {
+    const [bs, rs, cs] = await Promise.all([
+      supabase.from('budgets').select('id, status').in('id', ids),
+      supabase.from('receivables').select('budget_id').in('budget_id', ids).gt('received_amount', 0),
+      supabase.from('project_costs').select('budget_id').in('budget_id', ids),
+    ]);
+    if (bs.error || rs.error || cs.error) throw (bs.error || rs.error || cs.error);
+    const protegidos = new Set<string>();
+    (bs.data || []).forEach((b: any) => { if (b.status === 'aprovado') protegidos.add(b.id); });
+    (rs.data || []).forEach((r: any) => r.budget_id && protegidos.add(r.budget_id));
+    (cs.data || []).forEach((c: any) => c.budget_id && protegidos.add(c.budget_id));
+    return protegidos;
+  };
+
   const handleDeleteBudget = async () => {
     if (!budgetToDelete) return;
 
     try {
+      if ((await orcamentosProtegidos([budgetToDelete.id])).size > 0) {
+        toast.error('Este orçamento está aprovado, tem recebimento ou custos lançados e não pode ser excluído. Mude o status para Cancelado.');
+        setBudgetToDelete(null);
+        return;
+      }
       await unlinkBudgetReferences([budgetToDelete.id]);
 
       const { error } = await supabase
@@ -339,6 +360,12 @@ export default function Budgets() {
 
     try {
       const idsToDelete = budgetsToDelete.map(b => b.id);
+      const protegidos = await orcamentosProtegidos(idsToDelete);
+      if (protegidos.size > 0) {
+        toast.error(`${protegidos.size} orçamento(s) da seleção estão aprovados, têm recebimento ou custos lançados e não podem ser excluídos. Nada foi excluído; mude o status para Cancelado.`);
+        setBudgetsToDelete([]);
+        return;
+      }
       await unlinkBudgetReferences(idsToDelete);
 
       const { error } = await supabase
@@ -578,7 +605,7 @@ export default function Budgets() {
 
       // Handle status priority
       if (sortField === 'status') {
-        const weights: Record<string, number> = { rascunho: 1, em_negociacao: 2, aprovado: 3, reprovado: 4 };
+        const weights: Record<string, number> = { rascunho: 1, em_negociacao: 2, aprovado: 3, reprovado: 4, cancelado: 5 };
         valA = weights[a.status] || 0;
         valB = weights[b.status] || 0;
       }
@@ -652,7 +679,7 @@ export default function Budgets() {
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary z-10 pointer-events-none" />
               <Select className="input-lumos h-11 pl-10 pr-8 text-[10px] font-black uppercase tracking-widest min-w-[160px]"
                 value={statusFilter} onChange={v => { setStatusFilter(v); setCurrentPage(1); }}
-                options={[{ value: 'all', label: 'Status: Todos' }, { value: 'rascunho', label: 'Rascunhos' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovados' }, { value: 'reprovado', label: 'Reprovados' }]} />
+                options={[{ value: 'all', label: 'Status: Todos' }, { value: 'rascunho', label: 'Rascunhos' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovados' }, { value: 'reprovado', label: 'Reprovados' }, { value: 'cancelado', label: 'Cancelados' }]} />
             </div>
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-lumos-text-secondary z-10 pointer-events-none" />
@@ -823,7 +850,8 @@ export default function Budgets() {
                             "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all hover:scale-105 active:scale-95",
                             budget.status === 'aprovado' ? 'text-green-600 bg-green-500/10 border-green-500/20' : 
                             budget.status === 'em_negociacao' ? 'text-[#F5D87A] bg-[#F5D87A]/10 border-[#F5D87A]/20' : 
-                            budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10 border-red-500/20' : 'text-lumos-text-secondary bg-lumos-bg border-lumos-border'
+                            budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10 border-red-500/20' :
+                            budget.status === 'cancelado' ? 'text-orange-500 bg-orange-500/10 border-orange-500/20' : 'text-lumos-text-secondary bg-lumos-bg border-lumos-border'
                           )}
                         >
                           {budget.status.replace('_', ' ')}
@@ -962,6 +990,7 @@ export default function Budgets() {
                     budget.status === 'aprovado' ? 'text-green-600 bg-green-500/10 border-green-500/20' :
                     budget.status === 'em_negociacao' ? 'text-[#F5D87A] bg-[#F5D87A]/10 border-[#F5D87A]/20' :
                     budget.status === 'reprovado' ? 'text-red-500 bg-red-500/10 border-red-500/20' :
+                    budget.status === 'cancelado' ? 'text-orange-500 bg-orange-500/10 border-orange-500/20' :
                     'text-lumos-text-secondary bg-lumos-bg border-lumos-border'
                   )}>
                     {budget.status.replace('_', ' ')}
