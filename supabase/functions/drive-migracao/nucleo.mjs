@@ -2,7 +2,7 @@
 // Não conhece Supabase nem HTTP: recebe o Drive (drive.mjs) e, ao executar, um `aoMigrar` que grava o projeto no banco.
 // É usado pela edge function drive-migracao e pelo script scripts/drive-migracao/migrar-projetos-v2.mjs.
 
-import { CAMINHOS, NOMES, caminhoDoMes, mesDoProjeto, planejarMarcaDoCliente, planejarProjeto } from './plano.mjs';
+import { CAMINHOS, NOMES, PASTA_MARCA, caminhoDoMes, mesDoProjeto, mesmoNomeDePasta, planejarMarcaDoCliente, planejarProjeto } from './plano.mjs';
 
 const norm = s => String(s ?? '').trim().toLowerCase();
 
@@ -48,10 +48,10 @@ async function moverParaMes(drive, p, executar) {
   if (!p.client_drive_folder_id) return { aviso: 'cliente sem pasta registrada: não movo para a pasta do mês' };
   const caminho = caminhoDoMes(p.marca, mes);
   if (!executar) return { texto: `- MOVE         a pasta do projeto → ${p.client_name}/${caminho.join('/')}/  (opção mover_para_mes)` };
-  // Cliente › PROJETOS › [sub-marca] › AAAA-MM: contêineres achados pelo nome e criados se faltarem.
+  // Cliente › Projetos › [sub-marca] › AAAA-MM: contêineres achados pelo nome (Projetos, em maiúsculas ou não) e criados se faltarem.
   let paiId = p.client_drive_folder_id;
   for (const nome of caminho) {
-    const achada = (await drive.listar(paiId)).find(f => f.isFolder && f.name === nome);
+    const achada = (await drive.listar(paiId)).find(f => f.isFolder && mesmoNomeDePasta(f.name, nome));
     paiId = achada ? achada.id : await drive.criarPasta(paiId, nome);
   }
   const r = await drive.mover(p.drive_folder_id, paiId);
@@ -75,9 +75,9 @@ export async function planejarCliente({ drive, cliente, projetos, opcoes = {} })
     else {
       planoMarca = planejarMarcaDoCliente(await drive.listar(clienteDriveId));
       const linha = {
-        renomear: `- RENOMEIA     _ASSETS  [${planoMarca.id}]  → MARCA   (mesma pasta, mesmo ID)`,
+        renomear: `- RENOMEIA     _ASSETS  [${planoMarca.id}]  → ${PASTA_MARCA}   (mesma pasta, mesmo ID)`,
         conflito: `- CONFLITO     ${planoMarca.motivo}`,
-        'ja-esta': '- já está como MARCA; nada a fazer',
+        'ja-esta': `- já está como ${PASTA_MARCA}; nada a fazer`,
         nada: `- ${planoMarca.motivo}`,
       }[planoMarca.acao];
       R.push('### Pasta de materiais fixos do cliente (renomear_assets)', linha, '');

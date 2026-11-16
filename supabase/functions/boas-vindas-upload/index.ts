@@ -153,6 +153,13 @@ async function findChildFolder(parentId: string, name: string): Promise<string |
   return page.files?.[0]?.id ?? null
 }
 
+// Igual à findChildFolder, mas ignorando maiúsculas e minúsculas. Para os nomes fixos da estrutura do cliente (Marca, Projetos,
+// _ASSETS): as pastas criadas antes de 16/11 se chamam MARCA/PROJETOS e as novas, Marca/Projetos; as duas contam como a mesma.
+async function findChildFolderIgnorandoCaixa(parentId: string, name: string): Promise<string | null> {
+  const alvo = name.trim().toLowerCase()
+  return (await listChildren(parentId)).find(c => c.mimeType === FOLDER_MIME && c.name.trim().toLowerCase() === alvo)?.id ?? null
+}
+
 async function createFolder(parentId: string, name: string): Promise<string> {
   const body = await driveFetch('files?fields=id', {
     method: 'POST',
@@ -198,8 +205,8 @@ async function mirrorTemplate(templateFolderId: string, targetFolderId: string, 
   }))
 }
 
-// Garante a pasta do cliente e devolve o id da pasta de materiais fixos dentro dela: MARCA (clientes
-// novos) ou _ASSETS (clientes antigos, que não são renomeados sozinhos). Se nenhuma existe, cria MARCA.
+// Garante a pasta do cliente e devolve o id da pasta de materiais fixos dentro dela: Marca (ou MARCA, de antes;
+// clientes novos) ou _ASSETS (clientes antigos, que não são renomeados sozinhos). Se nenhuma existe, cria Marca.
 // Reusa clients.drive_folder_id se ainda existir (auto-cura se foi apagada,
 // igual a drive-provision faz).
 export async function ensureClientAssetsFolder(client: { id: string; name: string; drive_folder_id: string | null }): Promise<string> {
@@ -216,18 +223,18 @@ export async function ensureClientAssetsFolder(client: { id: string; name: strin
     }])
   }
 
-  let marcaId = (await findChildFolder(clientFolderId!, 'MARCA')) ?? (await findChildFolder(clientFolderId!, '_ASSETS'))
+  let marcaId = (await findChildFolderIgnorandoCaixa(clientFolderId!, 'Marca')) ?? (await findChildFolderIgnorandoCaixa(clientFolderId!, '_ASSETS'))
   const criouAgora = !marcaId
-  if (!marcaId) marcaId = await ensureFolder(clientFolderId!, 'MARCA')
+  if (!marcaId) marcaId = await createFolder(clientFolderId!, 'Marca')
 
   // Pasta nova: monta a estrutura padrão do jeito que a drive-provision monta
-  // (espelha _TEMPLATES/MARCA ou _TEMPLATES/_ASSETS; sem template, cria as 5 subpastas na mão).
+  // (espelha _TEMPLATES/Marca ou _TEMPLATES/_ASSETS; sem template, cria as 5 subpastas na mão).
   // Sem isto, um cliente cujo primeiro contato com o Drive foi um upload de
   // boas-vindas nunca ganharia a estrutura — o folderAlive() curto-circuita
   // todas as vezes seguintes.
   if (criouAgora) {
     const clienteTemplateId = TEMPLATES_FOLDER_ID
-      ? ((await findChildFolder(TEMPLATES_FOLDER_ID, 'MARCA')) ?? (await findChildFolder(TEMPLATES_FOLDER_ID, '_ASSETS')))
+      ? ((await findChildFolderIgnorandoCaixa(TEMPLATES_FOLDER_ID, 'Marca')) ?? (await findChildFolderIgnorandoCaixa(TEMPLATES_FOLDER_ID, '_ASSETS')))
       : null
     if (clienteTemplateId) {
       await mirrorTemplate(clienteTemplateId, marcaId)
@@ -238,7 +245,7 @@ export async function ensureClientAssetsFolder(client: { id: string; name: strin
     }
   }
   // Cliente novo também ganha a pasta onde os projetos vão morar.
-  if (recemCriada) await ensureFolder(clientFolderId!, 'PROJETOS')
+  if (recemCriada && !(await findChildFolderIgnorandoCaixa(clientFolderId!, 'Projetos'))) await createFolder(clientFolderId!, 'Projetos')
 
   // GUIDELINES não vem do template da organização, mas o checklist precisa
   // dela — garantida sempre, pasta nova ou antiga.

@@ -126,7 +126,7 @@ serve(async (req) => {
     } catch (_) { /* sem nome: cai no Google de quem subiu */ }
 
     // Resolve a pasta de revisão do projeto.
-    //  · v2: o ID salvo (drive_pastas.revisao = 03_EXPORT/01_REVISAO); nunca procura por nome.
+    //  · v2: o ID salvo (drive_pastas.revisao = 03_Export/01_Revisao); nunca procura por nome.
     //  · v1: o ID salvo e, na falta dele, 06_ENTREGA/01_REVISAO pelo nome (como sempre foi).
     // Banco sem as colunas v2 (migration pendente): cai no select antigo.
     let proj: any = (await db.from('projects').select('drive_folder_id, drive_upload_folder_id, drive_layout, drive_pastas').eq('id', projectId).single()).data

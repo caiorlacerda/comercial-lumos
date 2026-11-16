@@ -1,11 +1,11 @@
 // Revisão de vídeo — Fase 2: monitor do dropzone + ação de finalizar.
 //
 // Chamada 1 (pg_cron, body {}): varre a pasta de revisão de cada projeto ativo
-//   (v2: drive_pastas.revisao = 03_EXPORT/01_REVISAO, pelo ID; v1: 06_ENTREGA/01_REVISAO,
+//   (v2: drive_pastas.revisao = 03_Export/01_Revisao, pelo ID; v1: 06_ENTREGA/01_REVISAO,
 //   pelo nome), acha vídeos [NNN]_[PROJETO]_vNN.(mp4|mov) e registra os novos como
 //   EM_REVISAO_INTERNA em video_versions (idempotente por drive_file_id).
 // Chamada 2 (body {"action":"finalize","version_id":"..."}): copia o arquivo
-//   da versão para a pasta de aprovados (v2: 03_EXPORT/02_FINAL, pelo ID; v1: 06_ENTREGA/02_APROVADO)
+//   da versão para a pasta de aprovados (v2: 03_Export/02_Final, pelo ID; v1: 06_ENTREGA/02_APROVADO)
 //   como vFINAL e marca APROVADO.
 //
 // Auth: header x-drive-secret == DRIVE_WEBHOOK_SECRET. Deploy --no-verify-jwt.
@@ -282,13 +282,13 @@ async function finalizeVersion(versionId: string): Promise<void> {
   const projFolderId = v.project?.drive_folder_id
   if (!projFolderId) throw new Error('Projeto sem pasta no Drive')
 
-  // v2: 03_EXPORT/02_FINAL pelo ID. NUNCA cria pasta por nome (recriaria 06_ENTREGA num projeto novo).
+  // v2: 03_Export/02_Final pelo ID. NUNCA cria pasta por nome (recriaria 06_ENTREGA num projeto novo).
   // v1: 06_ENTREGA/02_APROVADO pelo nome, criando se faltar, como sempre foi.
   const ehV2 = v.project?.drive_layout === 'v2'
   let aprovadoId: string
   if (ehV2) {
     aprovadoId = v.project?.drive_pastas?.final
-    if (!aprovadoId) throw new Error('Projeto v2 sem a pasta 02_FINAL registrada')
+    if (!aprovadoId) throw new Error('Projeto v2 sem a pasta 02_Final registrada')
   } else {
     const entregaId = await ensureFolder(projFolderId, '06_ENTREGA')
     aprovadoId = await ensureFolder(entregaId, '02_APROVADO')
@@ -303,7 +303,7 @@ async function finalizeVersion(versionId: string): Promise<void> {
     method: 'POST', body: JSON.stringify({ name: finalName, parents: [aprovadoId] }),
   })
   await db.from('video_versions').update({ approved_file_id: copy.id, status: 'APROVADO', updated_at: new Date().toISOString() }).eq('id', versionId)
-  await log(v.project_id, 'finalize', `vFINAL "${finalName}" copiado para ${ehV2 ? '03_EXPORT/02_FINAL' : '02_APROVADO'}`)
+  await log(v.project_id, 'finalize', `vFINAL "${finalName}" copiado para ${ehV2 ? '03_Export/02_Final' : '02_APROVADO'}`)
 }
 
 // Finaliza versões que o app marcou como APROVADO mas ainda não têm o vFINAL

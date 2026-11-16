@@ -4,45 +4,58 @@
 //
 // Regras (decididas com o Caio):
 //   · só MOVE (o ID da pasta/arquivo não muda). Nunca copia e nunca apaga de vez;
-//   · pasta antiga entra INTEIRA dentro da nova: 00/01/02 e OS → 00_DOCUMENTOS; 03_* → 01_BRUTO; 04_* → 02_ARTES;
-//   · 06_ENTREGA/01_REVISAO → 03_EXPORT/01_REVISAO e 06_ENTREGA/02_APROVADO → 03_EXPORT/02_FINAL (renomeada);
-//   · 06_ENTREGA/03_REDES e 04_THUMB: o CONTEÚDO vai para 03_EXPORT/02_FINAL e a pasta, se ficar vazia, vai para a lixeira;
-//   · 05_POS_PRODUCAO: vazia → lixeira; com conteúdo → NÃO é apagada, vai inteira para 01_BRUTO;
-//   · 03_*/BRUTO é redundante: a 03_* se dissolve (o conteúdo da BRUTO e o resto dela sobem para 01_BRUTO; vazias, vão para a lixeira);
-//     04_*/TRILHA(S) é mesclada em 02_ARTES/01_TRILHAS;
-//   · arquivo de backup de câmera (CAM_1A_BKP_…) achado nas pastas de entrega vai para 01_BRUTO;
+//   · nomes das pastas novas: só a primeira letra maiúscula (00_Documentos, 01_Bruto, 02_Artes/01_Trilhas, 03_Export/01_Revisao,
+//     03_Export/02_Final; no cliente, Marca e Projetos). Ao PROCURAR uma pasta a comparação ignora maiúsculas e minúsculas,
+//     então tanto o nome antigo (00_Documentos, MARCA…) quanto o novo são reconhecidos e nunca se cria uma pasta duplicada;
+//   · pasta antiga entra INTEIRA dentro da nova: 00/01/02 e OS → 00_Documentos; 03_* → 01_Bruto; 04_* → 02_Artes;
+//   · 06_ENTREGA/01_REVISAO → 03_Export/01_Revisao e 06_ENTREGA/02_APROVADO → 03_Export/02_Final (renomeada);
+//   · 06_ENTREGA/03_REDES e 04_THUMB: o CONTEÚDO vai para 03_Export/02_Final e a pasta, se ficar vazia, vai para a lixeira;
+//   · 05_POS_PRODUCAO: vazia → lixeira; com conteúdo → NÃO é apagada, vai inteira para 01_Bruto;
+//   · 03_*/BRUTO é redundante: a 03_* se dissolve (o conteúdo da BRUTO e o resto dela sobem para 01_Bruto; vazias, vão para a lixeira);
+//     04_*/TRILHA(S) é mesclada em 02_Artes/01_Trilhas;
+//   · arquivo de backup de câmera (CAM_1A_BKP_…) achado nas pastas de entrega vai para 01_Bruto;
 //   · segurança: pasta só vai para a lixeira se estiver vazia depois das movimentações (conferido de novo na hora de
 //     aplicar); conflito de nome nunca sobrescreve: o item fica onde está e aparece como CONFLITO.
 
 export const NOMES = {
-  documentos: '00_DOCUMENTOS',
-  bruto: '01_BRUTO',
-  artes: '02_ARTES',
-  trilhas: '01_TRILHAS',
-  export: '03_EXPORT',
-  revisao: '01_REVISAO',
-  final: '02_FINAL',
+  documentos: '00_Documentos',
+  bruto: '01_Bruto',
+  artes: '02_Artes',
+  trilhas: '01_Trilhas',
+  export: '03_Export',
+  revisao: '01_Revisao',
+  final: '02_Final',
 };
 
 /** Caminho legível de cada destino, para o relatório. */
 export const CAMINHOS = {
-  documentos: '00_DOCUMENTOS',
-  bruto: '01_BRUTO',
-  artes: '02_ARTES',
-  trilhas: '02_ARTES/01_TRILHAS',
-  export: '03_EXPORT',
-  revisao: '03_EXPORT/01_REVISAO',
-  final: '03_EXPORT/02_FINAL',
+  documentos: '00_Documentos',
+  bruto: '01_Bruto',
+  artes: '02_Artes',
+  trilhas: '02_Artes/01_Trilhas',
+  export: '03_Export',
+  revisao: '03_Export/01_Revisao',
+  final: '03_Export/02_Final',
 };
 
 const ALVOS_RAIZ = ['documentos', 'bruto', 'artes', 'export'];
 
 /** Pastas do nível do cliente (ver supabase/functions/drive-provision/layout.ts). */
-export const PASTA_MARCA = 'MARCA';            // materiais fixos (brandbook, logos, fontes, guidelines)
+export const PASTA_MARCA = 'Marca';            // materiais fixos (brandbook, logos, fontes, guidelines)
 export const PASTA_MARCA_ANTIGA = '_ASSETS';   // como os clientes antigos chamam a pasta acima
-export const PASTA_PROJETOS = 'PROJETOS';      // onde moram os projetos da estrutura nova
+export const PASTA_PROJETOS = 'Projetos';      // onde moram os projetos da estrutura nova
 
 const norm = s => String(s ?? '').trim().toLowerCase();
+
+/** Dois nomes de pasta são o mesmo, ignorando maiúsculas e minúsculas ("MARCA" = "Marca", "00_Documentos" = "00_Documentos"). */
+export const mesmoNome = (a, b) => norm(a) === norm(b);
+
+/**
+ * Mesmo nome de pasta, para achar contêineres. Os nomes FIXOS da estrutura (Marca, Projetos, _ASSETS e as pastas do projeto)
+ * ignoram maiúsculas e minúsculas; qualquer outro (sub-marca, projeto) continua exato, como sempre foi.
+ */
+const NOMES_FIXOS = new Set([...Object.values(NOMES), PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS].map(norm));
+export const mesmoNomeDePasta = (achado, procurado) => (NOMES_FIXOS.has(norm(procurado)) ? mesmoNome(achado, procurado) : achado === procurado);
 
 /** Backup de cartão de câmera: CAM_1A_BKP_2610211103_0002.mp4 (só arquivo, nunca pasta). */
 export const ehBackupDeCamera = nome => /^cam_[a-z0-9]+_bkp_/i.test(String(nome ?? ''));
@@ -54,19 +67,19 @@ export function caminhoDoMes(marca, mes) {
 }
 
 /**
- * Plano para a pasta de materiais fixos do cliente (opção renomear_assets): `_ASSETS` → `MARCA`,
+ * Plano para a pasta de materiais fixos do cliente (opção renomear_assets): `_ASSETS` → `Marca`,
  * renomeando a MESMA pasta (o ID não muda). Nunca cria, move nem apaga nada.
  * @param {{id:string,name:string,isFolder:boolean}[]} filhosDoCliente
  */
 export function planejarMarcaDoCliente(filhosDoCliente) {
   const pastas = filhosDoCliente.filter(f => f.isFolder);
-  const assets = pastas.filter(f => f.name === PASTA_MARCA_ANTIGA);
-  const marca = pastas.filter(f => f.name === PASTA_MARCA);
+  const assets = pastas.filter(f => mesmoNome(f.name, PASTA_MARCA_ANTIGA));
+  const marca = pastas.filter(f => mesmoNome(f.name, PASTA_MARCA));
   if (assets.length > 1) return { acao: 'conflito', motivo: `há ${assets.length} pastas _ASSETS no cliente; decida qual fica antes de renomear` };
-  if (assets.length === 1 && marca.length) return { acao: 'conflito', id: assets[0].id, motivo: 'o cliente já tem MARCA e _ASSETS ao mesmo tempo; nada será renomeado' };
+  if (assets.length === 1 && marca.length) return { acao: 'conflito', id: assets[0].id, motivo: 'o cliente já tem Marca e _ASSETS ao mesmo tempo; nada será renomeado' };
   if (assets.length === 1) return { acao: 'renomear', id: assets[0].id, de: PASTA_MARCA_ANTIGA, para: PASTA_MARCA };
   if (marca.length) return { acao: 'ja-esta', id: marca[0].id };
-  return { acao: 'nada', motivo: 'o cliente não tem _ASSETS nem MARCA' };
+  return { acao: 'nada', motivo: 'o cliente não tem _ASSETS nem Marca' };
 }
 
 /** Para onde vai uma pasta da raiz do projeto, pelo nome. null = não mexe. */
@@ -89,7 +102,7 @@ export function destinoDaPastaAntiga(nome) {
 export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
   const cache = new Map();
   const ls = async id => { if (!cache.has(id)) cache.set(id, await listar(id)); return cache.get(id); };
-  const achar = (lista, nome) => lista.find(f => f.isFolder && f.name === nome) ?? null;
+  const achar = (lista, nome) => lista.find(f => f.isFolder && mesmoNome(f.name, nome)) ?? null;
 
   const raiz = await ls(raizId);
   const passos = [];
@@ -105,7 +118,7 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
     nomesEm[chave] = new Set(filhos.map(f => norm(f.name)));
   };
 
-  // 1) Alvos da raiz: reaproveita a pasta com o nome exato (ex.: um 00_DOCUMENTOS que já existia) ou cria.
+  // 1) Alvos da raiz: reaproveita a pasta de mesmo nome, em maiúsculas ou não (ex.: um 00_Documentos que já existia), ou cria.
   const existe = {};
   for (const chave of ALVOS_RAIZ) {
     const achada = achar(raiz, NOMES[chave]);
@@ -114,14 +127,14 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
     else { passos.push({ op: 'criar', chave, nome: NOMES[chave], pai: 'raiz' }); registrar(chave, []); }
   }
 
-  // 2) 02_ARTES/01_TRILHAS
+  // 2) 02_Artes/01_Trilhas
   const trilhasJa = existe.artes ? achar(conteudo.artes, NOMES.trilhas) : null;
   if (trilhasJa) { passos.push({ op: 'reusar', chave: 'trilhas', id: trilhasJa.id, nome: trilhasJa.name }); registrar('trilhas', await ls(trilhasJa.id)); }
   else { passos.push({ op: 'criar', chave: 'trilhas', nome: NOMES.trilhas, pai: 'artes' }); registrar('trilhas', []); }
   nomesEm.artes.add(norm(NOMES.trilhas));
 
-  // 3) 03_EXPORT/01_REVISAO e 02_FINAL: vêm de 06_ENTREGA quando existem lá
-  const entregaPasta = raiz.find(f => f.isFolder && f.name === '06_ENTREGA') ?? null;
+  // 3) 03_Export/01_Revisao e 02_Final: vêm de 06_ENTREGA quando existem lá
+  const entregaPasta = raiz.find(f => f.isFolder && mesmoNome(f.name, '06_ENTREGA')) ?? null;
   const entrega = entregaPasta ? await ls(entregaPasta.id) : null;
   const revisaoJa = existe.export ? achar(conteudo.export, NOMES.revisao) : null;
   const finalJa = existe.export ? achar(conteudo.export, NOMES.final) : null;
@@ -169,7 +182,7 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
 
   const lixeira = (pasta, de, motivo) => { passos.push({ op: 'lixeira', id: pasta.id, nome: pasta.name, de, motivo }); saem.add(pasta.id); };
 
-  // 4) Backups de câmera nas pastas de entrega vão para 01_BRUTO (antes do conteúdo de REDES/THUMB seguir para o FINAL)
+  // 4) Backups de câmera nas pastas de entrega vão para 01_Bruto (antes do conteúdo de REDES/THUMB seguir para o FINAL)
   const subpastasEntrega = (entrega ?? []).filter(f => f.isFolder && ['03_redes', '04_thumb'].includes(norm(f.name)));
   for (const s of subpastasEntrega) varreduras.push([await ls(s.id), `06_ENTREGA/${s.name}`]);
   if (entrega) varreduras.push([entrega.filter(f => !f.isFolder), '06_ENTREGA']);
@@ -177,9 +190,9 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
     for (const f of filhos) if (!f.isFolder && ehBackupDeCamera(f.name) && !saem.has(f.id)) levar(f, 'bruto', de);
   }
 
-  // 5) 06_ENTREGA/03_REDES e 04_THUMB: conteúdo → 02_FINAL; a pasta vai para a lixeira se ficar vazia
+  // 5) 06_ENTREGA/03_REDES e 04_THUMB: conteúdo → 02_Final; a pasta vai para a lixeira se ficar vazia
   for (const s of subpastasEntrega) {
-    if (await esvaziar(s, 'final', `06_ENTREGA/${s.name}`)) lixeira(s, '06_ENTREGA', 'ficará vazia depois de mover o conteúdo para 02_FINAL');
+    if (await esvaziar(s, 'final', `06_ENTREGA/${s.name}`)) lixeira(s, '06_ENTREGA', 'ficará vazia depois de mover o conteúdo para 02_Final');
   }
 
   // 6) Pastas antigas da raiz
@@ -191,7 +204,7 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
     if (n === '05_pos_producao') {
       const filhos = await ls(f.id);
       if (!filhos.length) lixeira(f, 'raiz', 'está vazia');
-      else levar(f, 'bruto', 'raiz', { conteudo: filhos.map(x => x.name), nota: 'tem conteúdo: não é apagada, vai inteira para 01_BRUTO' });
+      else levar(f, 'bruto', 'raiz', { conteudo: filhos.map(x => x.name), nota: 'tem conteúdo: não é apagada, vai inteira para 01_Bruto' });
       continue;
     }
 
@@ -199,35 +212,35 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
     if (!para) { ignorados.push({ id: f.id, nome: f.name, motivo: 'nome fora do mapa; fica onde está' }); continue; }
 
     if (para === 'bruto') {
-      // 03_*/BRUTO é redundante (a 03_* já é o "bruto"): a 03_* se dissolve em 01_BRUTO. O conteúdo da BRUTO e tudo o
-      // mais que houver na 03_* sobem direto para 01_BRUTO, e as duas pastas, vazias, vão para a lixeira. Assim não
-      // sobra um invólucro com nome antigo (01_BRUTO/03_CAPTACAO/...) em volta de uma ou duas pastas. Sem BRUTO dentro,
-      // a 03_* entra inteira em 01_BRUTO, como as demais pastas antigas. O que não puder subir (conflito de nome) fica,
-      // e então a 03_* não é apagada: segue inteira para 01_BRUTO.
+      // 03_*/BRUTO é redundante (a 03_* já é o "bruto"): a 03_* se dissolve em 01_Bruto. O conteúdo da BRUTO e tudo o
+      // mais que houver na 03_* sobem direto para 01_Bruto, e as duas pastas, vazias, vão para a lixeira. Assim não
+      // sobra um invólucro com nome antigo (01_Bruto/03_CAPTACAO/...) em volta de uma ou duas pastas. Sem BRUTO dentro,
+      // a 03_* entra inteira em 01_Bruto, como as demais pastas antigas. O que não puder subir (conflito de nome) fica,
+      // e então a 03_* não é apagada: segue inteira para 01_Bruto.
       const filhos = await ls(f.id);
       const interna = filhos.find(x => x.isFolder && norm(x.name) === 'bruto');
       if (!interna) { levar(f, 'bruto', 'raiz'); continue; }
       let tudoSubiu = await esvaziar(interna, 'bruto', `${f.name}/${interna.name}`);
-      if (tudoSubiu) lixeira(interna, f.name, 'ficará vazia depois de subir o conteúdo para 01_BRUTO');
+      if (tudoSubiu) lixeira(interna, f.name, 'ficará vazia depois de subir o conteúdo para 01_Bruto');
       for (const outro of filhos) {
         if (outro.id === interna.id || saem.has(outro.id)) continue;
         if (!levar(outro, 'bruto', f.name)) tudoSubiu = false;
       }
-      if (tudoSubiu) lixeira(f, 'raiz', 'ficará vazia: a BRUTO e o resto dela subiram para 01_BRUTO');
+      if (tudoSubiu) lixeira(f, 'raiz', 'ficará vazia: a BRUTO e o resto dela subiram para 01_Bruto');
       else levar(f, 'bruto', 'raiz');
       continue;
     }
 
     if (para === 'artes' && n.startsWith('04_')) {
-      // 04_*/TRILHA(S) é mesclada em 02_ARTES/01_TRILHAS, sem duplicar a pasta
+      // 04_*/TRILHA(S) é mesclada em 02_Artes/01_Trilhas, sem duplicar a pasta
       if (nomesEm.artes.has(n)) { levar(f, 'artes', 'raiz'); continue; } // registra o CONFLITO e não mexe em nada dentro dela
       const trilha = (await ls(f.id)).find(x => x.isFolder && /^trilhas?$/.test(norm(x.name)));
-      if (trilha && await esvaziar(trilha, 'trilhas', `${f.name}/${trilha.name}`)) lixeira(trilha, f.name, 'ficará vazia depois de mesclar em 01_TRILHAS');
+      if (trilha && await esvaziar(trilha, 'trilhas', `${f.name}/${trilha.name}`)) lixeira(trilha, f.name, 'ficará vazia depois de mesclar em 01_Trilhas');
       levar(f, 'artes', 'raiz');
       continue;
     }
 
-    // O destino já tem uma PASTA com o mesmo nome (ex.: OS da raiz e 00_DOCUMENTOS/OS): em vez de conflitar, MESCLA.
+    // O destino já tem uma PASTA com o mesmo nome (ex.: OS da raiz e 00_Documentos/OS): em vez de conflitar, MESCLA.
     // O conteúdo da pasta antiga vai para a que já existe e a antiga, se ficar vazia, vai para a lixeira. Nome repetido
     // lá dentro continua sendo CONFLITO (nunca sobrescreve) e, então, a pasta antiga não é apagada.
     const igual = f.isFolder ? (conteudo[para] ?? []).find(x => x.isFolder && norm(x.name) === n) : null;
@@ -247,7 +260,7 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
 
   // 8) O que sobra em 06_ENTREGA depois dos movimentos
   const sobraEmEntrega = (entrega ?? []).filter(f => !saem.has(f.id)).map(f => ({ id: f.id, nome: f.name, pasta: f.isFolder }));
-  if (entrega === null) avisos.push('Projeto sem 06_ENTREGA: 01_REVISAO e 02_FINAL serão criadas vazias.');
+  if (entrega === null) avisos.push('Projeto sem 06_ENTREGA: 01_Revisao e 02_Final serão criadas vazias.');
   else if (sobraEmEntrega.length) avisos.push(`06_ENTREGA ainda terá ${sobraEmEntrega.length} item(ns) que não são 01_REVISAO/02_APROVADO.`);
   else if (opcoes.entregaVaziaParaLixeira) lixeira(entregaPasta, 'raiz', '06_ENTREGA ficará vazia (opção entrega_vazia_para_lixeira)');
   else avisos.push('06_ENTREGA ficará VAZIA. Ela não será apagada (decisão pendente do Caio); só vai para a lixeira com a opção entrega_vazia_para_lixeira.');
