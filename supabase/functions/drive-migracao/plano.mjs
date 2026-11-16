@@ -14,8 +14,13 @@
 //   · 03_*/BRUTO é redundante: a 03_* se dissolve (o conteúdo da BRUTO e o resto dela sobem para 01_Bruto; vazias, vão para a lixeira);
 //     04_*/TRILHA(S) é mesclada em 02_Artes/01_Trilhas;
 //   · arquivo de backup de câmera (CAM_1A_BKP_…) achado nas pastas de entrega vai para 01_Bruto;
-//   · segurança: pasta só vai para a lixeira se estiver vazia depois das movimentações (conferido de novo na hora de
-//     aplicar); conflito de nome nunca sobrescreve: o item fica onde está e aparece como CONFLITO.
+//   · PASTA VAZIA QUE NÃO É DA ESTRUTURA VAI PARA A LIXEIRA (regra do Caio, 16/11). "Vazia" = depois das movimentações não
+//     sobra nenhum ARQUIVO nela, contando as subpastas em qualquer profundidade. Fica sempre, mesmo vazia, só a estrutura
+//     (00_Documentos, 01_Bruto, 02_Artes, 02_Artes/01_Trilhas, 03_Export, 03_Export/01_Revisao e 03_Export/02_Final) e as
+//     pastas de cliente, sub-marca, mês e projeto. Vai a pasta mais alta de cada trecho vazio (as subpastas vão junto);
+//     o que ia ser movido ou marcado como CONFLITO e é só uma pasta vazia vai direto para a lixeira, sem ser movido;
+//   · segurança: nunca exclusão definitiva, só lixeira (recuperável), e só se a pasta estiver sem arquivos também na hora
+//     de aplicar (conferido de novo); conflito de nome nunca sobrescreve: o item fica onde está e aparece como CONFLITO.
 
 export const NOMES = {
   documentos: '00_Documentos',
@@ -39,6 +44,9 @@ export const CAMINHOS = {
 };
 
 const ALVOS_RAIZ = ['documentos', 'bruto', 'artes', 'export'];
+
+/** Máximo de pastas que a varredura de pastas vazias lê por projeto (cada pasta é uma leitura no Drive). Acima disso, não varre. */
+export const LIMITE_PASTAS_VARREDURA = 300;
 
 /** Pastas do nível do cliente (ver supabase/functions/drive-provision/layout.ts). */
 export const PASTA_MARCA = 'Marca';            // materiais fixos (brandbook, logos, fontes, guidelines)
@@ -94,10 +102,83 @@ export function destinoDaPastaAntiga(nome) {
 }
 
 /**
+ * Regra "pasta vazia que não é da estrutura vai para a lixeira". Projeta o estado FINAL da árvore do projeto (lê o Drive
+ * só para listar; aplica na memória as movimentações e lixeiras que o plano já tem) e acha as pastas sem nenhum arquivo,
+ * nem nas subpastas, que não são da estrutura. Altera `passos` no lugar: tira o MOVER/CONFLITO de pasta que é só uma pasta
+ * vazia e acrescenta uma LIXEIRA para a pasta mais alta de cada trecho vazio (as subpastas vão junto).
+ * Devolve { truncou } = true quando o projeto tem pastas demais para varrer (aí não mexe em nada).
+ */
+async function varrerPastasVazias({ raizId, ls, passos }) {
+  const nos = new Map();
+  const criar = (id, name, isFolder, pai) => { const n = { id, name, isFolder, pai, paiOriginal: pai, filhos: [], estrutura: false }; nos.set(id, n); return n; };
+  const raiz = criar(raizId, '', true, null);
+
+  // 1) árvore de hoje (cada pasta é uma listagem; passou do limite, desiste)
+  let lidas = 0;
+  const descer = async no => {
+    for (const f of await ls(no.id)) {
+      const c = criar(f.id, f.name, f.isFolder, no.id);
+      no.filhos.push(c.id);
+      if (f.isFolder) { if (++lidas > LIMITE_PASTAS_VARREDURA) return false; if ((await descer(c)) === false) return false; }
+    }
+    return true;
+  };
+  if ((await descer(raiz)) === false) return { truncou: true };
+
+  // 2) estado final: aplica em memória o que o plano já decidiu
+  const alvo = {}; // chave do destino → id do nó
+  const soltar = n => { const pai = nos.get(n.pai); if (pai) pai.filhos = pai.filhos.filter(x => x !== n.id); n.pai = null; };
+  const prender = (n, paiId) => { n.pai = paiId; nos.get(paiId).filhos.push(n.id); };
+  for (const st of passos) {
+    if (st.op === 'reusar') alvo[st.chave] = st.id;
+    else if (st.op === 'criar') {
+      const id = `novo:${st.chave}`;
+      const n = criar(id, st.nome, true, null); n.estrutura = true;
+      prender(n, st.pai === 'raiz' ? raizId : alvo[st.pai]);
+      alvo[st.chave] = id;
+    } else if (st.op === 'mover') {
+      const n = nos.get(st.id);
+      if (!n) continue;
+      soltar(n); prender(n, alvo[st.para] ?? raizId);
+      if (st.registra) alvo[st.registra] = st.id;
+    } else if (st.op === 'lixeira') { const n = nos.get(st.id); if (n) soltar(n); }
+  }
+  for (const k of Object.keys(NOMES)) { const n = nos.get(alvo[k]); if (n) n.estrutura = true; }
+
+  // 3) quem não tem arquivo nenhum (a estrutura conta como "tem": nunca é apagada nem some dentro de uma pasta apagada)
+  const memo = new Map();
+  const temArquivo = n => {
+    if (!n.isFolder || n.estrutura) return true;
+    if (!memo.has(n.id)) memo.set(n.id, n.filhos.some(id => temArquivo(nos.get(id))));
+    return memo.get(n.id);
+  };
+  const vazia = n => n.isFolder && !n.estrutura && n.id !== raizId && !temArquivo(n);
+  const alcancaveis = [];
+  const andar = n => { for (const id of n.filhos) { const c = nos.get(id); alcancaveis.push(c); if (c.isFolder) andar(c); } };
+  andar(raiz);
+  const vazias = alcancaveis.filter(vazia);
+  if (!vazias.length) return { truncou: false };
+
+  // 4) a pasta vazia que só ia ser movida (ou ficar como CONFLITO) vai direto para a lixeira, sem ser movida
+  const idsVazias = new Set(vazias.map(n => n.id));
+  for (let i = passos.length - 1; i >= 0; i--) if ((passos[i].op === 'mover' || passos[i].op === 'conflito') && idsVazias.has(passos[i].id)) passos.splice(i, 1);
+
+  // 5) só a mais alta de cada trecho vai para a lixeira
+  const caminhoOriginal = n => { const nomes = []; for (let c = nos.get(n.paiOriginal); c && c.id !== raizId; c = nos.get(c.paiOriginal)) nomes.unshift(c.name); return nomes.length ? nomes.join('/') : 'raiz'; };
+  for (const n of vazias) {
+    const pai = n.pai ? nos.get(n.pai) : null;
+    if (pai && vazia(pai)) continue;
+    const dentro = []; const coletar = x => { for (const id of x.filhos) { const c = nos.get(id); if (c.isFolder) { dentro.push(c.name); coletar(c); } } }; coletar(n);
+    passos.push({ op: 'lixeira', id: n.id, nome: n.name, de: caminhoOriginal(n), motivo: 'pasta vazia fora da estrutura (sem nenhum arquivo, nem nas subpastas)', subpastas: dentro });
+  }
+  return { truncou: false };
+}
+
+/**
  * @param {object} p
  * @param {string} p.raizId pasta do projeto no Drive
  * @param {(id:string) => Promise<{id:string,name:string,isFolder:boolean}[]>} p.listar filhos diretos (sem lixeira)
- * @param {{entregaVaziaParaLixeira?: boolean}} [p.opcoes]
+ * @param {{entregaVaziaParaLixeira?: boolean}} [p.opcoes] (entregaVaziaParaLixeira não muda mais nada: pasta vazia fora da estrutura sempre vai para a lixeira)
  */
 export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
   const cache = new Map();
@@ -258,12 +339,20 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
   // 7) Arquivos soltos na raiz: não se mexe
   for (const f of raiz.filter(x => !x.isFolder)) ignorados.push({ id: f.id, nome: f.name, motivo: 'arquivo solto na raiz; fica onde está' });
 
-  // 8) O que sobra em 06_ENTREGA depois dos movimentos
-  const sobraEmEntrega = (entrega ?? []).filter(f => !saem.has(f.id)).map(f => ({ id: f.id, nome: f.name, pasta: f.isFolder }));
+  // 8) Pasta vazia que não é da estrutura → lixeira (a regra vale para tudo, inclusive 06_ENTREGA)
+  const varredura = await varrerPastasVazias({ raizId, ls, passos });
+  // pasta da raiz que ia "ficar onde está" e foi para a lixeira por estar vazia deixa de constar como ignorada
+  const naLixeira = new Set(passos.filter(x => x.op === 'lixeira').map(x => x.id));
+  for (let i = ignorados.length - 1; i >= 0; i--) if (naLixeira.has(ignorados[i].id)) ignorados.splice(i, 1);
+  if (varredura.truncou) avisos.push(`Projeto com mais de ${LIMITE_PASTAS_VARREDURA} pastas: a varredura de pastas vazias NÃO foi feita (nenhuma pasta vazia irá para a lixeira por esta regra).`);
+
+  // O que sobra em 06_ENTREGA depois dos movimentos
+  const entregaFoiParaLixeira = !!entregaPasta && passos.some(x => x.op === 'lixeira' && x.id === entregaPasta.id);
+  const sobraEmEntrega = entregaFoiParaLixeira ? [] : (entrega ?? []).filter(f => !saem.has(f.id)).map(f => ({ id: f.id, nome: f.name, pasta: f.isFolder }));
   if (entrega === null) avisos.push('Projeto sem 06_ENTREGA: 01_Revisao e 02_Final serão criadas vazias.');
+  else if (entregaFoiParaLixeira) { /* já está no plano como LIXEIRA (vazia) */ }
   else if (sobraEmEntrega.length) avisos.push(`06_ENTREGA ainda terá ${sobraEmEntrega.length} item(ns) que não são 01_REVISAO/02_APROVADO.`);
-  else if (opcoes.entregaVaziaParaLixeira) lixeira(entregaPasta, 'raiz', '06_ENTREGA ficará vazia (opção entrega_vazia_para_lixeira)');
-  else avisos.push('06_ENTREGA ficará VAZIA. Ela não será apagada (decisão pendente do Caio); só vai para a lixeira com a opção entrega_vazia_para_lixeira.');
+  else avisos.push('06_ENTREGA ficará VAZIA, mas não foi para a lixeira porque a varredura de pastas vazias não rodou (projeto grande). Ela não será apagada.');
 
   return { passos, ignorados, avisos, sobraEmEntrega, entregaId: entregaPasta?.id ?? null };
 }

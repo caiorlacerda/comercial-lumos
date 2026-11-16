@@ -24,6 +24,7 @@ function novo() {
   // P1: projeto antigo típico
   add('p1', '227_FILME', 'cli');
   for (const [id, n] of [['g0', '00_GERAL'], ['g1', '01_ROTEIRO'], ['g2', '02_PRODUCAO'], ['g3', '03_CAPTACAO'], ['g4', '04_EDICAO'], ['g5', '05_ARTES'], ['ent', '06_ENTREGA'], ['os', 'OS'], ['dup', '99_DUPLICADOS']]) add(id, n, 'p1');
+  for (const id of ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'os', 'dup']) add('arq-' + id, `arq-${id}.txt`, id, false); // com arquivo: pasta vazia iria para a lixeira (regra de 16/11)
   add('leia', 'leia-me.txt', 'p1', false);
   add('rev', '01_REVISAO', 'ent'); add('apr', '02_APROVADO', 'ent');
   add('v1', 'video_V1.mp4', 'rev', false); add('v1a', 'video_V1_APROVADO.mp4', 'apr', false);
@@ -113,11 +114,11 @@ ok('execução: 01_Trilhas criada dentro de 02_Artes', filhos(artes).some(f => f
 ok('execução: 01_REVISAO e 02_APROVADO agora em 03_Export, com o MESMO ID', pai('rev') === exp && pai('apr') === exp);
 ok('execução: 02_APROVADO virou 02_Final e 01_REVISAO virou 01_Revisao (mesmos IDs)', nome('apr') === '02_Final' && nome('rev') === '01_Revisao');
 ok('execução: os vídeos continuam onde estavam dentro das pastas (IDs intactos)', pai('v1') === 'rev' && pai('v1a') === 'apr');
-ok('execução: 06_ENTREGA continua existindo, com o mesmo nome e vazia', pai('ent') === 'p1' && nome('ent') === '06_ENTREGA' && filhos('ent').length === 0);
+ok('execução: 06_ENTREGA, vazia fora da estrutura, foi para a LIXEIRA (mesmo ID e nome, nada excluído)', arvore.get('ent')?.trashed === true && nome('ent') === '06_ENTREGA' && filhos('ent').length === 0);
 ok('execução: 99_DUPLICADOS e o arquivo solto não saíram do lugar', pai('dup') === 'p1' && pai('leia') === 'p1');
 ok('execução: live e v2 não foram tocados', filhos('p2').length === 1 && pai('p2x') === 'p2' && filhos('p3').length === 0);
 ok('execução: nunca houve DELETE nem cópia', !chamadas.some(c => c.startsWith('DELETE') || c.includes('/copy')));
-ok('execução: avisa que 06_ENTREGA ficou vazia', /06_ENTREGA/.test(r.out) && /VAZIAS/.test(r.out));
+ok('execução: não sobra pendência de 06_ENTREGA vazia (ela já foi para a lixeira)', !/VAZIAS/.test(r.out));
 const sqlArq = fs.readdirSync(path.join(tmp, 'saida')).find(f => f.startsWith('atualizar-banco-'));
 const sql = fs.readFileSync(path.join(tmp, 'saida', sqlArq), 'utf8');
 ok('SQL gerado para o projeto migrado, com a revisão = ID antigo de 01_REVISAO', /uuid-p1/.test(sql) && /drive_upload_folder_id = 'rev'/.test(sql) && /"final":"apr"/.test(sql) && /"documentos":"/.test(sql));
@@ -189,8 +190,8 @@ function novoRegras() {
   add('rd4', '03_REDES', 'e4'); add('reels4', 'reels.mp4', 'rd4', false);
   add('th4', '04_THUMB', 'e4'); add('capa4', 'capa.jpg', 'th4', false);
   add('pp4', '05_POS_PRODUCAO', 'p4');
-  add('cap4', '03_CAPTACAO', 'p4'); add('br4', 'BRUTO', 'cap4'); add('cena4', 'cena.mov', 'br4', false); add('dia4', 'DIA 1', 'br4');
-  add('as4', '04_ASSETS', 'p4'); add('tr4', 'TRILHA', 'as4'); add('tema4', 'tema.wav', 'tr4', false); add('logos4', 'LOGOS', 'as4');
+  add('cap4', '03_CAPTACAO', 'p4'); add('br4', 'BRUTO', 'cap4'); add('cena4', 'cena.mov', 'br4', false); add('dia4', 'DIA 1', 'br4'); add('dia4f', 'dia1.mov', 'dia4', false);
+  add('as4', '04_ASSETS', 'p4'); add('tr4', 'TRILHA', 'as4'); add('tema4', 'tema.wav', 'tr4', false); add('logos4', 'LOGOS', 'as4'); add('logos4f', 'logo.png', 'logos4', false);
 }
 const arq4 = path.join(tmp, 'projetos4.json');
 fs.writeFileSync(arq4, JSON.stringify([proj('p4', '230', 'NOVAS', {})]));
@@ -213,12 +214,30 @@ ok('REDES e THUMB, esvaziadas, estão na lixeira (mesmo ID, nada excluído)', li
 ok('05_POS_PRODUCAO vazia está na lixeira', lixo('pp4'));
 ok('BRUTO redundante: o conteúdo subiu direto para 01_Bruto; BRUTO e 03_CAPTACAO foram para a lixeira', pai('cena4') === bruto4 && pai('dia4') === bruto4 && lixo('br4') && lixo('cap4'));
 ok('TRILHA mesclada em 02_Artes/01_Trilhas; TRILHA vazia na lixeira; 04_ASSETS dentro de 02_Artes com LOGOS', !!trilhas4 && pai('tema4') === trilhas4 && lixo('tr4') && pai('as4') === artes4 && pai('logos4') === 'as4' && !lixo('as4'));
-ok('06_ENTREGA continua lá, vazia e FORA da lixeira (decisão pendente)', pai('e4') === 'p4' && filhos('e4').length === 0 && !lixo('e4') && /VAZIAS/.test(r.out));
+ok('06_ENTREGA vazia vai para a lixeira por padrão (regra de 16/11), sem pendência', pai('e4') === 'p4' && filhos('e4').length === 0 && lixo('e4') && !/VAZIAS/.test(r.out));
 ok('regras novas: nunca DELETE nem cópia; as únicas escritas são POST (criar), PATCH (mover/lixeira)', !chamadas.some(c => c.startsWith('DELETE') || c.includes('/copy')) && chamadas.filter(c => !c.startsWith('GET ')).every(c => c.startsWith('POST ') || c.startsWith('PATCH ')));
 
 novoRegras();
 r = await rodar(['--executar', '--entrega-vazia-para-lixeira'], 'Cliente Teste\n', arq4);
-ok('--entrega-vazia-para-lixeira: 06_ENTREGA vazia também vai para a lixeira', lixo('e4') && !/VAZIAS/.test(r.out));
+ok('--entrega-vazia-para-lixeira não muda mais nada: 06_ENTREGA vazia vai para a lixeira do mesmo jeito', lixo('e4') && !/VAZIAS/.test(r.out));
+
+// ---------- regra de 16/11: pasta vazia fora da estrutura vai para a lixeira ----------
+function novoVazias() {
+  novoRegras();
+  add('vz5', '99_VAZIA', 'p4'); add('vz5a', 'Sub1', 'vz5'); add('vz5b', 'Sub2', 'vz5a');            // trecho vazio
+  add('mi5', '98_MISTA', 'p4'); add('mi5f', 'cena.mov', 'mi5', false); add('mi5v', 'Oca', 'mi5');   // arquivo + subpasta vazia
+  add('fu5', '97_FUNDO', 'p4'); add('fu5a', 'A', 'fu5'); add('fu5b', 'B', 'fu5a'); add('fu5f', 'raw.mov', 'fu5b', false); // arquivo no fundo
+}
+novoVazias();
+r = await rodar([], undefined, arq4);
+ok('regra de pasta vazia, simulação: mostra a LIXEIRA do trecho vazio e não escreve nada', /LIXEIRA\s+99_VAZIA/.test(r.out) && /LIXEIRA\s+Oca/.test(r.out) && chamadas.every(c => c.startsWith('GET ')) && !lixo('vz5'));
+novoVazias();
+r = await rodar(['--executar'], 'Cliente Teste\n', arq4);
+ok('regra de pasta vazia: 99_VAZIA (com Sub1 e Sub2 vazias) foi para a lixeira, e só ela recebeu o PATCH', lixo('vz5') && arvore.has('vz5a') && arvore.has('vz5b') && !lixo('vz5a') && !lixo('vz5b'));
+ok('regra de pasta vazia: 98_MISTA e a cena.mov ficam; só a subpasta vazia Oca vai para a lixeira', !lixo('mi5') && pai('mi5f') === 'mi5' && !lixo('mi5f') && lixo('mi5v'));
+ok('regra de pasta vazia: arquivo lá no fundo (97_FUNDO › A › B) protege todo o caminho', !lixo('fu5') && !lixo('fu5a') && !lixo('fu5b') && pai('fu5f') === 'fu5b');
+ok('regra de pasta vazia: nenhum arquivo foi para a lixeira, nada de DELETE', ['mi5f', 'fu5f', 'dia4f', 'logo4f', 'logos4f', 'tema4'].every(id => !arvore.get(id) || !lixo(id)) && !chamadas.some(c => c.startsWith('DELETE')));
+ok('regra de pasta vazia: a estrutura (01_Trilhas, 02_Artes…) criada vazia NÃO foi para a lixeira', ['01_Bruto', '02_Artes', '03_Export'].every(n => !lixo(sub('p4', n))));
 
 servidor.close();
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo');

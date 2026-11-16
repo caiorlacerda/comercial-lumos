@@ -1,7 +1,7 @@
 // Testa o planejador (supabase/functions/drive-migracao/plano.mjs) contra árvores de Drive em memória. Nada de rede.
 // Rodar:  node scripts/drive-migracao/plano.test.mjs
 import {
-  NOMES, caminhoDoMes, destinoDaPastaAntiga, ehBackupDeCamera, mesDoProjeto, planejarMarcaDoCliente, planejarProjeto, sqlDeAtualizacao,
+  LIMITE_PASTAS_VARREDURA, NOMES, caminhoDoMes, destinoDaPastaAntiga, ehBackupDeCamera, mesDoProjeto, planejarMarcaDoCliente, planejarProjeto, sqlDeAtualizacao,
 } from '../../supabase/functions/drive-migracao/plano.mjs';
 
 let falhas = 0;
@@ -18,7 +18,14 @@ function drive() {
   };
   return api;
 }
-const plano = (d, opcoes) => planejarProjeto({ raizId: 'P', listar: d.listar, opcoes });
+// Regra nova (16/11): pasta vazia fora da estrutura vai para a lixeira. Por isso os cenários de MOVIMENTAÇÃO abaixo usam `plano`,
+// que antes dá um arquivo a cada pasta que estaria vazia (senão ela seria lixeirada em vez de movida). Os cenários da regra
+// de pasta vazia usam `planoPuro`, que lê a árvore exatamente como foi montada.
+const planoPuro = (d, opcoes) => planejarProjeto({ raizId: 'P', listar: d.listar, opcoes });
+const plano = (d, opcoes) => {
+  for (const n of [...d.nos.values()]) if (n.isFolder && ![...d.nos.values()].some(c => c.pai === n.id)) d.arq(`arq-${n.id}`, `arq-${n.id}.txt`, n.id);
+  return planoPuro(d, opcoes);
+};
 const op = (r, o, extra = {}) => r.passos.filter(p => p.op === o && Object.entries(extra).every(([k, v]) => p[k] === v));
 const moveu = (r, id, para) => op(r, 'mover', { id, para }).length === 1;
 
@@ -30,7 +37,9 @@ function seguro(d, r) {
   const saem = new Set(r.passos.filter(p => p.op === 'mover' || p.op === 'lixeira').map(p => p.id));
   const lixeiras = op(r, 'lixeira');
   const nadaDeApagar = r.passos.every(p => ['criar', 'reusar', 'mover', 'conflito', 'lixeira'].includes(p.op));
-  const vazias = lixeiras.every(l => [...d.nos.values()].filter(n => n.pai === l.id).every(f => saem.has(f.id)));
+  // lixeira só com pasta sem ARQUIVO nenhum (nem nas subpastas) depois do plano: o que tem arquivo precisa ter saído
+  const semArquivo = id => [...d.nos.values()].filter(n => n.pai === id).every(f => saem.has(f.id) || (f.isFolder && semArquivo(f.id)));
+  const vazias = lixeiras.every(l => semArquivo(l.id));
   return nadaDeApagar && vazias;
 }
 
@@ -53,13 +62,13 @@ ok('backup de câmera: padrão CAM_<id>_BKP_…', ehBackupDeCamera('CAM_1A_BKP_2
   ok('típico: 02_APROVADO é movida e renomeada para 02_Final', op(t, 'mover', { id: 'apr', para: 'export', renomearPara: '02_Final', registra: 'final' }).length === 1);
   ok('típico: 00/01/02 e OS vão para documentos', ['a0', 'a1', 'a2', 'os'].every(id => moveu(t, id, 'documentos')));
   ok('típico: 03 → bruto; 04/05 → artes', moveu(t, 'a3', 'bruto') && moveu(t, 'a4', 'artes') && moveu(t, 'a5', 'artes'));
-  ok('típico: 06_ENTREGA não é movida nem renomeada', t.passos.every(p => p.id !== 'a6'));
+  ok('típico: 06_ENTREGA não é movida nem renomeada (vai para a lixeira, vazia depois de mover 01_REVISAO e 02_APROVADO)', t.passos.every(p => p.id !== 'a6' || p.op === 'lixeira'));
   ok('típico: 99_DUPLICADOS e arquivo solto ficam (ignorados)', t.ignorados.map(i => i.id).sort().join() === 'dup,f1');
-  ok('típico: 06_ENTREGA ficará vazia e o plano avisa (NÃO a apaga sem a opção)', t.sobraEmEntrega.length === 0 && t.avisos.some(a => /VAZIA/.test(a)) && op(t, 'lixeira').length === 0);
+  ok('típico: 06_ENTREGA vazia fora da estrutura → LIXEIRA (regra de 16/11), sem aviso de pendência', t.sobraEmEntrega.length === 0 && op(t, 'lixeira', { id: 'a6' }).length === 1 && !t.avisos.some(a => /VAZIA/.test(a)));
   ok('típico: só duas renomeações: 01_REVISAO→01_Revisao e 02_APROVADO→02_Final', t.passos.filter(p => p.renomearPara).map(p => p.renomearPara).sort().join() === '01_Revisao,02_Final');
   ok('típico: segurança (sem exclusão; lixeira só de pasta vazia)', seguro(d, t));
   const comOpcao = await plano(d, { entregaVaziaParaLixeira: true });
-  ok('opção entrega_vazia_para_lixeira: 06_ENTREGA vazia vai para a lixeira, por último', op(comOpcao, 'lixeira', { id: 'a6' }).length === 1 && comOpcao.passos.at(-1).id === 'a6' && seguro(d, comOpcao));
+  ok('a opção entrega_vazia_para_lixeira não muda mais nada: o plano é o mesmo (a regra já vale sempre)', op(comOpcao, 'lixeira', { id: 'a6' }).length === 1 && JSON.stringify(comOpcao.passos) === JSON.stringify(t.passos) && seguro(d, comOpcao));
 }
 
 // ---- 00 já se chama 00_Documentos: vira o alvo, não duplica
@@ -85,6 +94,70 @@ ok('backup de câmera: padrão CAM_<id>_BKP_…', ehBackupDeCamera('CAM_1A_BKP_2
   ok('caixa baixa (02_artes) também é a mesma pasta de 02_Artes', op(t, 'reusar', { chave: 'artes', id: 'ar' }).length === 1 && op(t, 'criar', { chave: 'artes' }).length === 0);
 }
 
+// ---- REGRA (Caio, 16/11): pasta vazia que NÃO é da estrutura vai para a lixeira. "Vazia" = nenhum arquivo, nem nas subpastas.
+{
+  // pasta vazia solta na raiz, e 04_ASSETS vazia: vão direto para a lixeira, sem serem movidas
+  const d = drive().pasta('P', 'proj', null).pasta('v', '99_VAZIA', 'P').pasta('as', '04_ASSETS', 'P').pasta('os', 'OS', 'P').arq('o1', 'os.pdf', 'os');
+  const t = await planoPuro(d);
+  ok('regra: pasta vazia fora da estrutura (99_VAZIA) vai para a lixeira', op(t, 'lixeira', { id: 'v' }).length === 1 && t.ignorados.every(i => i.id !== 'v'));
+  ok('regra: 04_ASSETS vazia vai para a lixeira em vez de ser movida para 02_Artes', op(t, 'lixeira', { id: 'as' }).length === 1 && op(t, 'mover', { id: 'as' }).length === 0);
+  ok('regra: pasta com arquivo (OS) continua sendo movida, nunca lixeira', moveu(t, 'os', 'documentos') && op(t, 'lixeira', { id: 'os' }).length === 0);
+  ok('regra: o motivo diz que é pasta vazia fora da estrutura', /vazia fora da estrutura/.test(op(t, 'lixeira', { id: 'v' })[0].motivo) && op(t, 'lixeira', { id: 'v' })[0].de === 'raiz');
+  ok('regra: nada de exclusão definitiva e lixeira só de pasta sem arquivo', seguro(d, t));
+}
+{
+  // pasta que só tem subpastas vazias (em qualquer profundidade): vai a de cima, com as subpastas junto, uma lixeira só
+  const d = drive().pasta('P', 'proj', null).pasta('a', '99_A', 'P').pasta('b', 'B', 'a').pasta('c', 'C', 'b').pasta('b2', 'B2', 'a');
+  const t = await planoPuro(d);
+  ok('regra: só a pasta mais alta do trecho vazio vai para a lixeira (99_A), e lista as subpastas', op(t, 'lixeira').filter(l => l.id !== undefined && ['a', 'b', 'c', 'b2'].includes(l.id)).map(l => l.id).join() === 'a' && JSON.stringify(op(t, 'lixeira', { id: 'a' })[0].subpastas.sort()) === JSON.stringify(['B', 'B2', 'C']));
+  ok('regra: trecho vazio, segurança', seguro(d, t));
+}
+{
+  // arquivo lá no fundo: nada do caminho é lixeira
+  const d = drive().pasta('P', 'proj', null).pasta('a', '99_A', 'P').pasta('b', 'B', 'a').pasta('c', 'C', 'b').arq('f', 'cena.mov', 'c');
+  const t = await planoPuro(d);
+  ok('regra: arquivo no fundo da árvore → nenhuma pasta do caminho vai para a lixeira', op(t, 'lixeira').length === 0 && t.ignorados.some(i => i.id === 'a'));
+}
+{
+  // subpasta vazia dentro de pasta que tem arquivo: só a subpasta vai para a lixeira
+  const d = drive().pasta('P', 'proj', null).pasta('a', '99_A', 'P').arq('f', 'cena.mov', 'a').pasta('x', 'Vazia', 'a').pasta('y', 'Cheia', 'a').arq('g', 'b.mov', 'y');
+  const t = await planoPuro(d);
+  ok('regra: subpasta vazia dentro de pasta com arquivo vai para a lixeira; a pasta e a Cheia ficam', op(t, 'lixeira').map(l => l.id).join() === 'x' && op(t, 'lixeira', { id: 'x' })[0].de === '99_A');
+}
+{
+  // a ESTRUTURA fica sempre, mesmo vazia: 00_Documentos, 01_Bruto, 02_Artes, 01_Trilhas, 03_Export, 01_Revisao e 02_Final existentes
+  const d = drive().pasta('P', 'proj', null).pasta('d', '00_Documentos', 'P').pasta('b', '01_BRUTO', 'P').pasta('ar', '02_Artes', 'P').pasta('tr', '01_Trilhas', 'ar')
+    .pasta('ex', '03_Export', 'P').pasta('rv', '01_Revisao', 'ex').pasta('fn', '02_Final', 'ex');
+  const t = await planoPuro(d);
+  ok('regra: a estrutura vazia (até com nome antigo em caixa alta) NUNCA vai para a lixeira', op(t, 'lixeira').length === 0 && op(t, 'criar').length === 0);
+}
+{
+  // 06_ENTREGA e as subpastas dela, vazias: uma lixeira só (a 06_ENTREGA), e o plano não fala mais em "pendência"
+  const d = drive().pasta('P', 'proj', null).pasta('e', '06_ENTREGA', 'P').pasta('rev', '01_REVISAO', 'e').arq('v', 'v1.mp4', 'rev').pasta('f', 'Fotos', 'e');
+  const t = await planoPuro(d);
+  ok('regra: 06_ENTREGA só com uma subpasta vazia (Fotos) vai para a lixeira inteira, e a 01_REVISAO (com vídeo) segue para 03_Export', op(t, 'lixeira').map(l => l.id).join() === 'e' && op(t, 'mover', { id: 'rev', para: 'export' }).length === 1 && t.sobraEmEntrega.length === 0 && t.avisos.length === 0);
+  ok('regra: 06_ENTREGA com subpasta vazia, segurança', seguro(d, t));
+}
+{
+  // conflito de nome com uma pasta VAZIA: não vira CONFLITO, vai para a lixeira
+  const d = drive().pasta('P', 'proj', null).pasta('ar', '02_Artes', 'P').pasta('x', '04_ASSETS', 'ar').arq('xf', 'a.png', 'x').pasta('as', '04_ASSETS', 'P');
+  const t = await planoPuro(d);
+  ok('regra: 04_ASSETS vazia que daria CONFLITO vai para a lixeira, sem CONFLITO', op(t, 'conflito').length === 0 && op(t, 'lixeira', { id: 'as' }).length === 1 && op(t, 'mover', { id: 'as' }).length === 0);
+}
+{
+  // projeto grande demais: não varre, avisa, não manda nada para a lixeira por esta regra
+  const d = drive().pasta('P', 'proj', null).pasta('g', '99_GRANDE', 'P');
+  for (let i = 0; i <= LIMITE_PASTAS_VARREDURA; i++) d.pasta(`p${i}`, `sub${i}`, 'g');
+  const t = await planoPuro(d);
+  ok(`regra: mais de ${LIMITE_PASTAS_VARREDURA} pastas → não varre, avisa e não manda nada para a lixeira`, op(t, 'lixeira').length === 0 && t.avisos.some(a => /varredura de pastas vazias NÃO foi feita/.test(a)));
+}
+{
+  // o plano nunca contém exclusão, em nenhum dos casos acima: só criar, reusar, mover, conflito e lixeira
+  const d = drive().pasta('P', 'proj', null).pasta('v', 'Vazia', 'P');
+  const t = await planoPuro(d);
+  ok('regra: os passos são só criar/reusar/mover/conflito/lixeira (nunca exclusão definitiva)', t.passos.every(p => ['criar', 'reusar', 'mover', 'conflito', 'lixeira'].includes(p.op)));
+}
+
 // ---- sem 06_ENTREGA
 {
   const d = drive().pasta('P', 'proj', null).pasta('a0', '00_GERAL', 'P');
@@ -101,10 +174,10 @@ ok('backup de câmera: padrão CAM_<id>_BKP_…', ehBackupDeCamera('CAM_1A_BKP_2
 
 // ---- pasta do mesmo nome já no destino (OS da raiz × 00_Documentos/OS): MESCLA, não conflita (decisão do Caio, 16/11)
 {
-  // as duas vazias: nada a mover, a da raiz (vazia) vai para a lixeira e a de dentro é reaproveitada
+  // pastas de mesmo nome com um arquivo cada: o conteúdo da OS da raiz vai para a de dentro e a da raiz, que sobra vazia, vai para a lixeira
   const d = drive().pasta('P', 'proj', null).pasta('d', '00_Documentos', 'P').pasta('os', 'OS', 'P').pasta('os2', 'OS', 'd').pasta('r', '01_ROTEIRO', 'P').pasta('x', '01_ROTEIRO', 'd');
   const t = await plano(d);
-  ok('mesmo nome (pasta) no alvo, ambas vazias → sem conflito; a da raiz vai para a lixeira', op(t, 'conflito').length === 0 && op(t, 'lixeira', { id: 'os' }).length === 1 && op(t, 'lixeira', { id: 'r' }).length === 1 && op(t, 'mover', { id: 'os' }).length === 0);
+  ok('mesmo nome (pasta) no alvo → sem conflito; a da raiz, que sobra vazia, vai para a lixeira', op(t, 'conflito').length === 0 && op(t, 'lixeira', { id: 'os' }).length === 1 && op(t, 'lixeira', { id: 'r' }).length === 1 && op(t, 'mover', { id: 'os' }).length === 0);
   ok('mesclar reaproveita a pasta que já existe no destino', op(t, 'reusar', { id: 'os2' }).length === 1 && op(t, 'reusar', { id: 'x' }).length === 1 && seguro(d, t));
 }
 {
@@ -182,7 +255,7 @@ ok('backup de câmera: padrão CAM_<id>_BKP_…', ehBackupDeCamera('CAM_1A_BKP_2
 // ---- 05_POS_PRODUCAO
 {
   const d = drive().pasta('P', 'proj', null).pasta('pp', '05_POS_PRODUCAO', 'P').pasta('o', '05_OUTRA', 'P').arq('o1', 'x.psd', 'o');
-  const t = await plano(d);
+  const t = await planoPuro(d);
   ok('05_POS_PRODUCAO vazia → lixeira (não é movida)', op(t, 'lixeira', { id: 'pp' }).length === 1 && op(t, 'mover', { id: 'pp' }).length === 0);
   ok('outras 05_* continuam indo para 02_Artes', moveu(t, 'o', 'artes'));
   ok('05_POS_PRODUCAO vazia: segurança', seguro(d, t));

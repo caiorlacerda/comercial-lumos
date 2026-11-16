@@ -3,7 +3,8 @@
 Reorganiza **por dentro** a pasta de cada projeto antigo (layout v1) para a estrutura nova, **de um cliente por vez**.
 
 - Só **move**. O ID de cada pasta/arquivo não muda, então vídeos, links e o banco continuam apontando para os mesmos arquivos.
-- **Nunca copia e nunca exclui de vez.** O que sobra vazio vai para a **lixeira** do Drive (recuperável), e **só se estiver vazio na hora de aplicar** (conferido de novo, mesmo que a simulação tenha dito que ficaria vazio).
+- **Nunca copia e nunca exclui de vez.** O que sobra vazio vai para a **lixeira** do Drive (recuperável), e **só se estiver sem arquivos na hora de aplicar** (conferido de novo, mesmo que a simulação tenha dito que ficaria vazio).
+- **Pasta vazia que não é da estrutura vai para a lixeira** (regra do Caio, 16/11). "Vazia" = depois das movimentações não sobra nenhum **arquivo** nela, contando as subpastas em qualquer profundidade. **Fica sempre, mesmo vazia:** a estrutura (`00_Documentos`, `01_Bruto`, `02_Artes`, `02_Artes/01_Trilhas`, `03_Export`, `03_Export/01_Revisao`, `03_Export/02_Final`) e as pastas de cliente, sub-marca, mês e projeto. Vai para a lixeira a pasta **mais alta** de cada trecho vazio (as subpastas vão junto). Uma pasta vazia que ia ser movida (ou daria CONFLITO) vai direto para a lixeira, sem ser movida. Isso vale para qualquer pasta do projeto, inclusive subpastas vazias dentro de pastas que têm arquivo. Projeto com mais de 300 pastas não é varrido (o plano avisa).
 - **Nunca sobrescreve.** Se o destino já tem um item com o mesmo nome, é marcado **CONFLITO** e o item fica onde está.
 - As únicas renomeações são `01_REVISAO` → `01_Revisao` e `02_APROVADO` → `02_Final` (e, só com `renomear_assets`, a `_ASSETS` do cliente → `Marca`, mesma pasta, mesmo ID).
 - **Nomes novos: só a primeira letra maiúscula** (`00_Documentos`, `01_Bruto`, `02_Artes/01_Trilhas`, `03_Export/01_Revisao`, `03_Export/02_Final`; no cliente, `Marca` e `Projetos`). Ao procurar uma pasta a comparação **ignora maiúsculas e minúsculas**: `00_Documentos`, `PROJETOS` e `MARCA` (nomes de antes de 16/11) são reconhecidas e **reaproveitadas**, nunca duplicadas.
@@ -32,7 +33,7 @@ Corpo (JSON):
 | `projeto` | Opcional: id ou código, para migrar um projeto só. |
 | `mover_para_mes` | Opcional (padrão `false`): também move a pasta do projeto para `Cliente › Projetos › [sub-marca] › AAAA-MM`. |
 | `renomear_assets` | Opcional (padrão `false`): renomeia `_ASSETS` → `Marca` no cliente. |
-| `entrega_vazia_para_lixeira` | Opcional (padrão `false`): manda a `06_ENTREGA` para a lixeira se, no fim, ela estiver vazia. |
+| `entrega_vazia_para_lixeira` | Não muda mais nada: a `06_ENTREGA` vazia já vai para a lixeira pela regra de pasta vazia acima (o parâmetro continua aceito por compatibilidade). |
 
 `executar` aplica o plano **montado na hora** (não o da simulação anterior), projeto a projeto, e grava cada projeto no banco (`drive_layout='v2'`, `drive_upload_folder_id` = ID da `01_Revisao`, `drive_pastas`) logo depois de mexer no Drive, com filtro `drive_layout='v1'`. Para no primeiro erro e devolve o que já foi feito. Cada projeto migrado deixa uma linha em `drive_sync_log` (`migracao_v2`).
 
@@ -58,7 +59,7 @@ Detalhes que valem a pena saber:
 - Pasta antiga entra **inteira** (ex.: `00_Documentos/00_GERAL`), sem mexer no conteúdo. Se já existir uma pasta com o nome exato do destino (ex.: um `00_Documentos` antigo), ela vira o destino.
 - Backup de câmera: só **arquivo** (nunca pasta) cujo nome começa com `CAM_<qualquer id>_BKP_`, e só nas pastas de entrega (`01_REVISAO`/`01_Revisao`, `02_APROVADO`/`02_Final`, `03_REDES`, `04_THUMB` e os arquivos soltos da `06_ENTREGA`). Arquivo solto na raiz do projeto não é tocado.
 - Nome fora do mapa (`99_DUPLICADOS`, arquivos soltos) fica onde está.
-- `06_ENTREGA`: o que sobrar nela (pastas fora do mapa) fica e é listado. Se não sobrar nada, ela **não** é apagada a menos que se peça `entrega_vazia_para_lixeira`.
+- `06_ENTREGA`: o que sobrar nela (pastas com arquivo fora do mapa) fica e é listado. Se não sobrar nenhum arquivo, ela vai para a lixeira (pasta vazia fora da estrutura).
 - Itens que a lixeira não pode levar (a pasta ainda tem coisa dentro por conflito de nome) ficam onde estão e aparecem como aviso.
 
 ## Plano (como ler)
@@ -91,7 +92,7 @@ update public.projects set drive_layout = 'v1', drive_pastas = null where id = '
 ## Testes
 ```bash
 node scripts/drive-migracao/plano.test.mjs      # regras do plano (árvores em memória, inclui a regra de segurança da lixeira)
-node scripts/drive-migracao/nucleo.test.mjs     # aplicação, lixeira só se vazia, parada no erro, modo somente leitura do Drive
+node scripts/drive-migracao/nucleo.test.mjs     # aplicação, lixeira só se sem arquivos (nem nas subpastas), parada no erro, modo somente leitura do Drive
 node scripts/drive-migracao/executor.test.mjs   # o script inteiro contra um Drive falso por HTTP
 node --experimental-strip-types scripts/testes-drive/migracao.test.mts   # a edge function: autenticação, 409, simulação, executar
 ```

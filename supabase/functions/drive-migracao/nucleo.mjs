@@ -32,7 +32,7 @@ export function descreverProjeto(p, plano) {
       L.push(`- MOVE         ${s.nome}  [${s.id}]  (${s.tipo})  de ${rotuloOrigem(s)} → ${rotuloDestino(s)}${s.renomearPara ? `   (renomeia para ${s.renomearPara})` : ''}`);
       if (s.nota) L.push(`                 ${s.nota}; conteúdo: ${s.conteudo?.length ? amostra(s.conteudo) : '—'}`);
     }
-    if (s.op === 'lixeira') L.push(`- LIXEIRA      ${s.nome}  [${s.id}]  em ${rotuloOrigem(s)}: ${s.motivo}  (só vai se estiver vazia na hora; é lixeira, não exclusão)`);
+    if (s.op === 'lixeira') L.push(`- LIXEIRA      ${s.nome}  [${s.id}]  em ${rotuloOrigem(s)}: ${s.motivo}${s.subpastas?.length ? `  (com subpastas vazias: ${amostra(s.subpastas, 6)})` : ''}  (só vai se estiver sem arquivos na hora; é lixeira, não exclusão)`);
     if (s.op === 'conflito') L.push(`- CONFLITO     ${s.nome}  [${s.id}]  ${s.motivo}: NÃO será movido nem sobrescrito`);
   }
   for (const i of plano.ignorados) L.push(`- fica         ${i.nome}  (${i.motivo})`);
@@ -111,7 +111,22 @@ export async function planejarCliente({ drive, cliente, projetos, opcoes = {} })
   return { texto: R.join('\n'), itens, pulados, planoMarca, resumo };
 }
 
-/** Aplica os passos de UM projeto. A lixeira só acontece se a pasta estiver vazia nesta hora. */
+/**
+ * Acha um ARQUIVO (não pasta) dentro da pasta, em qualquer profundidade; devolve o nome do primeiro que achar ou null.
+ * Pasta só com subpastas vazias conta como vazia. Passou de `limite` pastas lidas, devolve '(pasta grande demais para conferir)':
+ * na dúvida a pasta NÃO vai para a lixeira.
+ */
+async function acharArquivo(drive, id, estado = { lidas: 0, limite: 300 }) {
+  for (const f of await drive.listar(id)) {
+    if (!f.isFolder) return f.name;
+    if (++estado.lidas > estado.limite) return '(pasta grande demais para conferir)';
+    const achou = await acharArquivo(drive, f.id, estado);
+    if (achou) return achou;
+  }
+  return null;
+}
+
+/** Aplica os passos de UM projeto. A lixeira só acontece se a pasta estiver SEM ARQUIVOS (nem nas subpastas) nesta hora. */
 async function aplicar(drive, p, plano) {
   const ctx = { raiz: p.drive_folder_id };
   const feito = [];
@@ -125,8 +140,8 @@ async function aplicar(drive, p, plano) {
       if (s.registra) ctx[s.registra] = s.id;
       feito.push({ op: 'movida', id: s.id, nomeAntigo: r.nomeAntigo, nomeNovo: s.renomearPara ?? r.nomeAntigo, paisAntigos: r.paisAntigos, paiNovo: ctx[s.para] });
     } else if (s.op === 'lixeira') {
-      const restam = await drive.listar(s.id);
-      if (restam.length) feito.push({ op: 'lixeira-pulada', id: s.id, nome: s.nome, motivo: `ainda tem ${restam.length} item(ns): ${amostra(restam.map(x => x.name), 5)}` });
+      const arquivo = await acharArquivo(drive, s.id);
+      if (arquivo) feito.push({ op: 'lixeira-pulada', id: s.id, nome: s.nome, motivo: `ainda tem arquivo: ${arquivo}` });
       else { await drive.paraLixeira(s.id); feito.push({ op: 'lixeira', id: s.id, nome: s.nome }); }
     }
   }
