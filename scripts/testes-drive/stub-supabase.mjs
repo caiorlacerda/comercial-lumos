@@ -9,12 +9,14 @@ export function createClient() {
       const rows = () => db[tabela] ?? (db[tabela] = []);
       return {
         select(cols) {
-          const filtros = []; let lim = Infinity;
+          const filtros = []; let lim = Infinity; let ordem = null;
           const q = {
             eq(k, v) { filtros.push([k, v]); return q; },
             ilike(k, v) { filtros.push([k, v, 'ilike']); return q; },
             limit(n) { lim = n; return q; },
-            _linhas() { return filtra(rows(), filtros).slice(0, lim); },
+            order(k, o) { ordem = [k, o?.ascending !== false]; return q; },
+            async maybeSingle() { const r = q._linhas()[0]; return { data: r ? q._com(r) : null, error: null }; },
+            _linhas() { const r = filtra(rows(), filtros); if (ordem) r.sort((a, b) => (a[ordem[0]] > b[ordem[0]] ? 1 : -1) * (ordem[1] ? 1 : -1)); return r.slice(0, lim); },
             _com(r) {
               const o = { ...r };
               if (tabela === 'projects' && /client:clients/.test(cols)) {
