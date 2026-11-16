@@ -331,6 +331,9 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
       const { data, error } = await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
       if (error) throw error;
       await fetchVersions();
+      // Pasta de revisão na lixeira sem substituta: avisa em vez de dizer "tudo em dia".
+      const problema = (data as any)?.problemas?.[0]?.mensagem;
+      if (problema) { toast.error(problema); return; }
       const found = (data as any)?.found ?? 0;
       toast.success(found > 0 ? `${found} vídeo(s) encontrado(s) ✓` : 'Tudo em dia — nenhum vídeo novo.');
     } catch { toast.error('Não foi possível verificar o Drive agora.'); }
@@ -414,6 +417,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
     rodandoRef.current = true;
     setUploading(true);
     let enviados = 0, erros = 0;
+    let primeiroErro = '';
 
     const trabalhador = async () => {
       for (;;) {
@@ -426,6 +430,7 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
           setFila(f => f.map(i => i.id === item.id ? { ...i, status: 'ok', pct: 1 } : i));
         } catch (e: any) {
           erros++;
+          if (!primeiroErro) primeiroErro = String(e?.message || '');
           setFila(f => f.map(i => i.id === item.id ? { ...i, status: 'erro', erro: String(e?.message || 'falhou') } : i));
         }
       }
@@ -437,10 +442,12 @@ export default function VideoReviewPanel({ projectId, tasks, abrirVersao }: Prop
 
     // Uma varredura só no fim, não uma por arquivo.
     if (enviados) {
-      await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
+      const { data: scan } = await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
       await fetchVersions();
+      const problema = (scan as any)?.problemas?.[0]?.mensagem;
+      if (problema) toast.error(problema);
     }
-    if (erros) toast.error(`${erros} arquivo(s) falharam${enviados ? ', os outros subiram' : ''}.`);
+    if (erros) toast.error(`${erros} arquivo(s) falharam${enviados ? ', os outros subiram' : ''}.${primeiroErro ? ` ${primeiroErro}` : ''}`);
     else toast.success(`${enviados} vídeo(s) enviados ✓`);
 
     rodandoRef.current = false;
