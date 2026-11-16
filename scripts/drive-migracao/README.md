@@ -53,6 +53,7 @@ Corpo (JSON):
 
 Detalhes que valem a pena saber:
 
+- **Pasta antiga com o mesmo nome de uma pasta que já existe no destino é MESCLADA** (ex.: `OS` da raiz × `00_DOCUMENTOS/OS`): o conteúdo vai para a pasta que já existe e a antiga, se ficar vazia, vai para a lixeira. Arquivo de nome repetido lá dentro continua sendo CONFLITO (nunca sobrescreve) e, então, a pasta antiga fica.
 - Pasta antiga entra **inteira** (ex.: `00_DOCUMENTOS/00_GERAL`), sem mexer no conteúdo. Se já existir uma pasta com o nome exato do destino (ex.: um `00_DOCUMENTOS` antigo), ela vira o destino.
 - Backup de câmera: só **arquivo** (nunca pasta) cujo nome começa com `CAM_<qualquer id>_BKP_`, e só nas pastas de entrega (`01_REVISAO`, `02_APROVADO`/`02_FINAL`, `03_REDES`, `04_THUMB` e os arquivos soltos da `06_ENTREGA`). Arquivo solto na raiz do projeto não é tocado.
 - Nome fora do mapa (`99_DUPLICADOS`, arquivos soltos) fica onde está.
