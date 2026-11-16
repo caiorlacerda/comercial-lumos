@@ -2,7 +2,7 @@
 //
 // Disparada por Database Webhook em INSERT na tabela projects.
 // 1. Garante a pasta do CLIENTE em Clientes/ (criada no 1º projeto aprovado). Cliente novo ganha
-//    Marca (materiais fixos: BRAND-BOOK, FONTES, GRAFICOS, IMAGENS, LOGOS, GUIDELINES; espelha
+//    Marca (materiais fixos: Brand-book, Fontes, Graficos, Imagens, Logos, Guidelines; espelha
 //    _TEMPLATES/Marca ou _TEMPLATES/_ASSETS) e Projetos. Cliente que já tem `_ASSETS` NÃO é
 //    renomeado aqui: o código aceita Marca (ou MARCA, de antes) ou _ASSETS.
 // 2. Cria a pasta do PROJETO. Dois layouts (ver layout.ts):
@@ -24,7 +24,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, mesmoNomeDePasta, nomeDeContainer, type PastasV2 } from "./layout.ts"
+import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, mesmoNomeDePasta, nomeDeContainer, nomeDeSubpastaMarca, type PastasV2 } from "./layout.ts"
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined
 
@@ -216,14 +216,16 @@ async function criarSubpastasV2(raizId: string, fresh: boolean): Promise<PastasV
 // Otimizado p/ velocidade: os irmãos de cada nível são processados EM PARALELO
 // e, quando o alvo é recém-criado (targetIsFresh), pula-se o findChildFolder
 // (a subpasta ainda não existe) — evita dezenas de listagens sequenciais.
-async function mirrorTemplate(templateFolderId: string, targetFolderId: string, targetIsFresh = false): Promise<void> {
+// `nomeTopo` (opcional) muda o nome das subpastas do PRIMEIRO nível ao espelhar (usado na Marca: BRAND-BOOK → Brand-book).
+async function mirrorTemplate(templateFolderId: string, targetFolderId: string, targetIsFresh = false, nomeTopo?: (nome: string) => string): Promise<void> {
   const children = await listChildren(templateFolderId)
   await Promise.all(children.map(async (child) => {
     if (SYSTEM_FILES.has(child.name)) return
     if (child.mimeType === FOLDER_MIME) {
+      const nomeNovo = nomeTopo ? nomeTopo(child.name) : child.name
       const newId = targetIsFresh
-        ? await createFolder(targetFolderId, child.name)
-        : await ensureFolder(targetFolderId, child.name)
+        ? await createFolder(targetFolderId, nomeNovo)
+        : await ensureFolder(targetFolderId, nomeNovo)
       // Filhos de uma pasta recém-criada são sempre novos → recursa como fresh.
       await mirrorTemplate(child.id, newId, true)
     } else {
@@ -296,10 +298,11 @@ async function ensureClientFolder(client: { id: string; name: string; drive_fold
   if (!marcaExistente) {
     const marcaId = await createFolder(folderId, PASTA_MARCA)
     const templateMarcaId = (await findChildFolder(TEMPLATES_FOLDER_ID, PASTA_MARCA)) ?? (await findChildFolder(TEMPLATES_FOLDER_ID, PASTA_MARCA_ANTIGA))
-    if (templateMarcaId) await mirrorTemplate(templateMarcaId, marcaId, true)
-    // As subpastas padrão que o template não trouxer (a GUIDELINES nunca vem dele: o portal de boas-vindas precisa dela).
-    const jaTem = new Set((await listChildren(marcaId)).map(c => c.name))
-    for (const sub of SUBPASTAS_MARCA) if (!jaTem.has(sub)) await createFolder(marcaId, sub)
+    if (templateMarcaId) await mirrorTemplate(templateMarcaId, marcaId, true, nomeDeSubpastaMarca)
+    // As subpastas padrão que o template não trouxer (a Guidelines nunca vem dele: o portal de boas-vindas precisa dela).
+    // A comparação ignora a caixa: BRAND-BOOK (do modelo antigo) e Brand-book são a mesma pasta, nunca duplicada.
+    const jaTem = new Set((await listChildren(marcaId)).map(c => c.name.trim().toLowerCase()))
+    for (const sub of SUBPASTAS_MARCA) if (!jaTem.has(sub.toLowerCase())) await createFolder(marcaId, sub)
   }
   // Onde os projetos novos vão morar.
   await ensureContainer(folderId, PASTA_PROJETOS)

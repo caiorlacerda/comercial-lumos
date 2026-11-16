@@ -50,7 +50,7 @@ const provisionar = async (id: string) => { const r = await handler(new Request(
 function cenario(clientes: any[], projetos: any[], opts: { semColunasV2?: boolean } = {}) {
   drive = new Map(); t = 0; n = 0; escritas = [];
   add('drive', 'DRIVE', null); add('clientes', 'Clientes', 'drive'); add('templates', '_TEMPLATES', 'drive');
-  add('t-assets', '_ASSETS', 'templates'); add('t-assets-bb', 'BRAND-BOOK', 't-assets');
+  add('t-assets', '_ASSETS', 'templates'); add('t-assets-bb', 'BRAND-BOOK', 't-assets'); add('t-assets-lg', 'LOGOS', 't-assets');
   add('t-p', '_TEMPLATE_PROJETO', 'templates'); add('t-p-in', 'NNN_NOMEPROJETO', 't-p');
   add('t-p-0', '00_GERAL', 't-p-in'); add('t-p-e', '06_ENTREGA', 't-p-in'); add('t-p-r', '01_REVISAO', 't-p-e'); add('t-p-a', '02_APROVADO', 't-p-e');
   add('t-l', '_TEMPLATE_LIVE', 'templates'); add('t-l-in', 'NNN_NOMEPROJETO_LIVE', 't-l'); add('t-l-0', '00_GERAL', 't-l-in'); add('t-l-3', '03_TRANSMISSAO', 't-l-in');
@@ -75,7 +75,8 @@ ok('NÃO copia nada do template (sem 06_ENTREGA nem 00_GERAL no projeto)', porNo
 ok('banco: layout v2, 7 IDs, upload = 01_Revisao', p1.drive_layout === 'v2' && Object.keys(p1.drive_pastas).length === 7 && p1.drive_upload_folder_id === p1.drive_pastas.revisao && caminho(p1.drive_pastas.revisao).endsWith('03_Export/01_Revisao') && caminho(p1.drive_pastas.final).endsWith('03_Export/02_Final') && caminho(p1.drive_pastas.documentos).endsWith('/00_Documentos'));
 const cNovo = db.clients[0].drive_folder_id;
 ok('cliente novo ganhou a pasta, com Marca e Projetos', !!cNovo && porNome(cNovo, 'Marca').length === 1 && porNome(cNovo, 'Projetos').length === 1);
-ok('cliente novo: Marca traz as subpastas do template + as padrão + GUIDELINES', ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES'].every(n => porNome(porNome(cNovo, 'Marca')[0].id, n).length === 1));
+ok('cliente novo: Marca traz as subpastas do template + as padrão + Guidelines, só com a primeira maiúscula', ['Brand-book', 'Fontes', 'Graficos', 'Imagens', 'Logos', 'Guidelines'].every(n => porNome(porNome(cNovo, 'Marca')[0].id, n).length === 1));
+ok('...e o modelo em caixa alta (BRAND-BOOK, LOGOS) não deixa pasta duplicada nem em maiúsculas', filhos(porNome(cNovo, 'Marca')[0].id).length === 6 && !filhos(porNome(cNovo, 'Marca')[0].id).some(x => x.name === 'BRAND-BOOK' || x.name === 'LOGOS'));
 ok('cliente novo: NÃO cria _ASSETS', porNome(cNovo, '_ASSETS').length === 0);
 ok('o projeto fica dentro de Projetos (não solto no cliente)', porNome(cNovo, '227_MINI-MISSAO').length === 0);
 

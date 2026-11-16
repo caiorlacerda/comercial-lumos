@@ -1,5 +1,5 @@
 // Rodar:  node --experimental-strip-types scripts/testes-drive/layout.test.mts
-import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, mesmoNomeDePasta, nomeDeContainer, pastasV2Completas } from '../../supabase/functions/drive-provision/layout.ts'
+import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, mesmoNomeDePasta, nomeDeContainer, nomeDeSubpastaMarca, pastasV2Completas } from '../../supabase/functions/drive-provision/layout.ts'
 
 let falhas = 0
 const ok = (nome: string, cond: boolean) => { console.log((cond ? 'OK     ' : 'FALHA  ') + nome); if (!cond) falhas++ }
@@ -36,7 +36,10 @@ ok('caminho sem marca: Projetos/AAAA-MM', caminhoDoMes(null, '2026-10').join('/'
 ok('caminho com sub-marca: Projetos/Marca/AAAA-MM (a marca fica dentro de Projetos)', caminhoDoMes('Uniasselvi', '2026-10').join('/') === 'Projetos/Uniasselvi/2026-10')
 ok('caminho: barra na marca não cria nível extra', caminhoDoMes('A/B', '2026-10').join('/') === 'Projetos/A-B/2026-10')
 ok('nomes da pasta do cliente', PASTA_MARCA === 'Marca' && PASTA_MARCA_ANTIGA === '_ASSETS' && PASTA_PROJETOS === 'Projetos')
-ok('MARCA nova: as 5 subpastas de antes + GUIDELINES', ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES'].every(n => SUBPASTAS_MARCA.includes(n)) && SUBPASTAS_MARCA.length === 6)
+ok('Marca nova: as 5 subpastas de antes + Guidelines, só com a primeira maiúscula', SUBPASTAS_MARCA.join() === 'Brand-book,Fontes,Graficos,Imagens,Logos,Guidelines')
+ok('nome todo em caixa alta vira só com a primeira maiúscula (BRAND-BOOK → Brand-book)', nomeDeSubpastaMarca('BRAND-BOOK') === 'Brand-book' && nomeDeSubpastaMarca('GRAFICOS') === 'Graficos' && nomeDeSubpastaMarca('LOGOS') === 'Logos')
+ok('nome que já tem minúscula, ou sem letra, não muda (Fontes, Logo Cliente, 2026)', nomeDeSubpastaMarca('Fontes') === 'Fontes' && nomeDeSubpastaMarca('Logo Cliente') === 'Logo Cliente' && nomeDeSubpastaMarca('2026') === '2026')
+ok('subpasta antiga = nova (LOGOS = Logos, BRAND-BOOK = Brand-book, guidelines = Guidelines)', mesmoNomeDePasta('LOGOS', 'Logos') && mesmoNomeDePasta('BRAND-BOOK', 'Brand-book') && mesmoNomeDePasta('guidelines', 'Guidelines'))
 
 // árvore
 const vistos = new Set<string>()

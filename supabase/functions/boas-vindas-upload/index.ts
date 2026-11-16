@@ -172,6 +172,17 @@ async function ensureFolder(parentId: string, name: string): Promise<string> {
   return (await findChildFolder(parentId, name)) ?? (await createFolder(parentId, name))
 }
 
+// Igual à ensureFolder, mas ignorando maiúsculas e minúsculas: para as subpastas da Marca/_ASSETS, onde o nome antigo
+// (BRAND-BOOK, LOGOS…) e o novo (Brand-book, Logos) são a mesma pasta e nunca podem ser duplicados.
+export async function ensureFolderIgnorandoCaixa(parentId: string, name: string): Promise<string> {
+  return (await findChildFolderIgnorandoCaixa(parentId, name)) ?? (await createFolder(parentId, name))
+}
+
+// Nome todo em caixa alta (o que vem do modelo _TEMPLATES/_ASSETS: BRAND-BOOK) vira só com a primeira maiúscula (Brand-book).
+function nomeDeSubpastaMarca(nome: string): string {
+  return nome !== nome.toLowerCase() && nome === nome.toUpperCase() ? nome.charAt(0) + nome.slice(1).toLowerCase() : nome
+}
+
 async function folderAlive(folderId: string | null): Promise<boolean> {
   if (!folderId) return false
   try {
@@ -186,14 +197,16 @@ async function folderAlive(folderId: string | null): Promise<boolean> {
 // copiados (placeholders/modelos de doc), arquivos de sistema ignorados.
 // Idêntica à da drive-provision — a estrutura da pasta do cliente tem que ficar
 // igual independente de quem criou a pasta primeiro.
-async function mirrorTemplate(templateFolderId: string, targetFolderId: string, targetIsFresh = false): Promise<void> {
+// `nomeTopo` (opcional) muda o nome das subpastas do PRIMEIRO nível ao espelhar (usado na Marca: BRAND-BOOK → Brand-book).
+async function mirrorTemplate(templateFolderId: string, targetFolderId: string, targetIsFresh = false, nomeTopo?: (nome: string) => string): Promise<void> {
   const children = await listChildren(templateFolderId)
   await Promise.all(children.map(async (child) => {
     if (SYSTEM_FILES.has(child.name)) return
     if (child.mimeType === FOLDER_MIME) {
+      const nomeNovo = nomeTopo ? nomeTopo(child.name) : child.name
       const newId = targetIsFresh
-        ? await createFolder(targetFolderId, child.name)
-        : await ensureFolder(targetFolderId, child.name)
+        ? await createFolder(targetFolderId, nomeNovo)
+        : await ensureFolder(targetFolderId, nomeNovo)
       // Filhos de uma pasta recém-criada são sempre novos → recursa como fresh.
       await mirrorTemplate(child.id, newId, true)
     } else {
@@ -237,19 +250,19 @@ export async function ensureClientAssetsFolder(client: { id: string; name: strin
       ? ((await findChildFolderIgnorandoCaixa(TEMPLATES_FOLDER_ID, 'Marca')) ?? (await findChildFolderIgnorandoCaixa(TEMPLATES_FOLDER_ID, '_ASSETS')))
       : null
     if (clienteTemplateId) {
-      await mirrorTemplate(clienteTemplateId, marcaId)
+      await mirrorTemplate(clienteTemplateId, marcaId, false, nomeDeSubpastaMarca)
     } else {
-      for (const sub of ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS']) {
-        await ensureFolder(marcaId, sub)
+      for (const sub of ['Brand-book', 'Fontes', 'Graficos', 'Imagens', 'Logos']) {
+        await ensureFolderIgnorandoCaixa(marcaId, sub)
       }
     }
   }
   // Cliente novo também ganha a pasta onde os projetos vão morar.
   if (recemCriada && !(await findChildFolderIgnorandoCaixa(clientFolderId!, 'Projetos'))) await createFolder(clientFolderId!, 'Projetos')
 
-  // GUIDELINES não vem do template da organização, mas o checklist precisa
-  // dela — garantida sempre, pasta nova ou antiga.
-  await ensureFolder(marcaId, 'GUIDELINES')
+  // Guidelines não vem do template da organização, mas o checklist precisa
+  // dela — garantida sempre, pasta nova ou antiga (GUIDELINES, de antes, conta como a mesma).
+  await ensureFolderIgnorandoCaixa(marcaId, 'Guidelines')
 
   return marcaId
 }
@@ -292,21 +305,22 @@ async function notificarTime(clientId: string, clientName: string, itemLabel: st
   })))
 }
 
-// Nome da subpasta no Drive a partir do item_key: maiúsculo, sem acento,
-// espaço vira hífen — mesma normalização que drive-provision usa pra nome
-// de pasta de projeto (slugify), só que aqui aplicada ao item_key.
+// Nome da subpasta no Drive a partir do item_key: sem acento, espaço vira hífen, só a primeira letra maiúscula
+// (brand_book → Brand-book). A busca (ensureFolderIgnorandoCaixa) ignora a caixa, então a pasta antiga
+// (BRAND-BOOK, de antes de 16/11) é reaproveitada, nunca duplicada.
 // Exceção legada: a pasta canônica que ensureClientAssetsFolder pré-cria (e
-// que a drive-provision cria também) é LOGOS, no plural — o item_key 'logo'
-// normalizaria pra 'LOGO' e criaria uma pasta nova, órfã, ao lado da certa.
+// que a drive-provision cria também) é Logos, no plural — o item_key 'logo'
+// normalizaria pra 'Logo' e criaria uma pasta nova, órfã, ao lado da certa.
 // Qualquer outro item_key segue pelo nomeSubpasta() normal.
-const PASTA_LEGADO: Record<string, string> = { logo: 'LOGOS' }
+export const PASTA_LEGADO: Record<string, string> = { logo: 'Logos' }
 
-function nomeSubpasta(itemKey: string): string {
-  return itemKey
+export function nomeSubpasta(itemKey: string): string {
+  const slug = itemKey
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '-')
     .replace(/^-|-$/g, '') || 'ARQUIVOS'
+  return slug.charAt(0) + slug.slice(1).toLowerCase()
 }
 
 // Busca o item no doc publicado do cliente — item_key inválido, item que
@@ -395,7 +409,7 @@ serve(async (req) => {
 
   try {
     const assetsId = await ensureClientAssetsFolder(client)
-    const subfolderId = await ensureFolder(assetsId, PASTA_LEGADO[itemKey] ?? nomeSubpasta(itemKey))
+    const subfolderId = await ensureFolderIgnorandoCaixa(assetsId, PASTA_LEGADO[itemKey] ?? nomeSubpasta(itemKey))
     const bytes = new Uint8Array(await arquivo.arrayBuffer())
     const nomeFinal = nomeSeguro(arquivo.name)
     const fileId = await uploadFile(subfolderId, nomeFinal, MIME_POR_EXTENSAO[extensaoDe(nomeFinal)] ?? 'application/octet-stream', bytes)

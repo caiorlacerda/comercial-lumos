@@ -31,14 +31,22 @@ export const PASTA_MARCA = 'Marca'
 export const PASTA_MARCA_ANTIGA = '_ASSETS'
 /** Pasta do cliente que guarda todos os projetos novos. */
 export const PASTA_PROJETOS = 'Projetos'
-/** Subpastas de MARCA nos clientes novos (as da `_ASSETS` + a GUIDELINES do portal de boas-vindas). */
-export const SUBPASTAS_MARCA = ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES']
-
-const minusculo = (s: string) => s.trim().toLowerCase()
-const NOMES_FIXOS = new Set([...Object.values(NOMES_V2), PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS].map(minusculo))
+/** Subpastas da Marca nos clientes novos (as da `_ASSETS` + a Guidelines do portal de boas-vindas). Só a primeira letra maiúscula. */
+export const SUBPASTAS_MARCA = ['Brand-book', 'Fontes', 'Graficos', 'Imagens', 'Logos', 'Guidelines']
 
 /**
- * Mesmo nome de pasta? Os nomes FIXOS da estrutura (Marca, Projetos, _ASSETS e as pastas do projeto) ignoram maiúsculas e
+ * Nome de uma subpasta da Marca no formato novo: um nome TODO em caixa alta (BRAND-BOOK, GRAFICOS, o que vem do modelo
+ * _TEMPLATES/_ASSETS) vira só com a primeira maiúscula (Brand-book, Graficos). Qualquer outro nome fica como está.
+ */
+export function nomeDeSubpastaMarca(nome: string): string {
+  return nome !== nome.toLowerCase() && nome === nome.toUpperCase() ? nome.charAt(0) + nome.slice(1).toLowerCase() : nome
+}
+
+const minusculo = (s: string) => s.trim().toLowerCase()
+const NOMES_FIXOS = new Set([...Object.values(NOMES_V2), PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, ...SUBPASTAS_MARCA].map(minusculo))
+
+/**
+ * Mesmo nome de pasta? Os nomes FIXOS da estrutura (Marca, Projetos, _ASSETS, as subpastas da Marca e as pastas do projeto) ignoram maiúsculas e
  * minúsculas: a pasta antiga "MARCA" ou "00_DOCUMENTOS" é reconhecida como "Marca"/"00_Documentos" e nunca se cria uma duplicada.
  * Qualquer outro nome (cliente, sub-marca, projeto) continua exato, como sempre foi.
  */
