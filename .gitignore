@@ -1,4 +1,4 @@
-node_modules
+node_modules/
 dist
 # L for Agent
 .env
@@ -10,3 +10,6 @@ client_secret_*.json
 .worktrees/
 .superpowers/
 /public/version.json
+
+# Cache do npm (não versionar)
+.npm_cache/
