@@ -8,7 +8,7 @@
 //     03_Export/02_Final; no cliente, Marca e Projetos). Ao PROCURAR uma pasta a comparação ignora maiúsculas e minúsculas,
 //     então tanto o nome antigo (00_Documentos, MARCA…) quanto o novo são reconhecidos e nunca se cria uma pasta duplicada;
 //   · pasta antiga entra INTEIRA dentro da nova: 00/01/02 e OS → 00_Documentos; 03_* → 01_Bruto; 04_* → 02_Artes;
-//   · 06_ENTREGA/01_REVISAO → 03_Export/01_Revisao e 06_ENTREGA/02_APROVADO → 03_Export/02_Final (renomeada);
+//   · 06_ENTREGA/01_REVISAO → 03_Export/01_Revisao e 06_ENTREGA/02_APROVADO → 03_Export/02_Final (as duas são renomeadas na mudança);
 //   · 06_ENTREGA/03_REDES e 04_THUMB: o CONTEÚDO vai para 03_Export/02_Final e a pasta, se ficar vazia, vai para a lixeira;
 //   · 05_POS_PRODUCAO: vazia → lixeira; com conteúdo → NÃO é apagada, vai inteira para 01_Bruto;
 //   · 03_*/BRUTO é redundante: a 03_* se dissolve (o conteúdo da BRUTO e o resto dela sobem para 01_Bruto; vazias, vão para a lixeira);
@@ -60,7 +60,7 @@ export const mesmoNomeDePasta = (achado, procurado) => (NOMES_FIXOS.has(norm(pro
 /** Backup de cartão de câmera: CAM_1A_BKP_2610211103_0002.mp4 (só arquivo, nunca pasta). */
 export const ehBackupDeCamera = nome => /^cam_[a-z0-9]+_bkp_/i.test(String(nome ?? ''));
 
-/** Caminho a partir da pasta do cliente até a pasta do mês: PROJETOS › [sub-marca] › AAAA-MM. */
+/** Caminho a partir da pasta do cliente até a pasta do mês: Projetos › [sub-marca] › AAAA-MM. */
 export function caminhoDoMes(marca, mes) {
   const m = String(marca ?? '').replace(/[\\/]/g, '-').replace(/\s+/g, ' ').trim();
   return m ? [PASTA_PROJETOS, m, mes] : [PASTA_PROJETOS, mes];
@@ -148,7 +148,7 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
 
   if (revisaoJa) { passos.push({ op: 'reusar', chave: 'revisao', id: revisaoJa.id, nome: revisaoJa.name }); registrar('revisao', await ls(revisaoJa.id)); varreduras.push([conteudo.revisao, CAMINHOS.revisao]); }
   else if (revisaoOld) {
-    passos.push({ op: 'mover', id: revisaoOld.id, nome: revisaoOld.name, tipo: 'pasta', de: '06_ENTREGA', para: 'export', registra: 'revisao' });
+    passos.push({ op: 'mover', id: revisaoOld.id, nome: revisaoOld.name, tipo: 'pasta', de: '06_ENTREGA', para: 'export', renomearPara: NOMES.revisao, registra: 'revisao' });
     saem.add(revisaoOld.id); registrar('revisao', await ls(revisaoOld.id)); varreduras.push([conteudo.revisao, '06_ENTREGA/01_REVISAO']);
   } else { passos.push({ op: 'criar', chave: 'revisao', nome: NOMES.revisao, pai: 'export' }); registrar('revisao', []); }
 

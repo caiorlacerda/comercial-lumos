@@ -1,5 +1,5 @@
 // Rodar:  node --experimental-strip-types scripts/testes-drive/layout.test.mts
-import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, nomeDeContainer, pastasV2Completas } from '../../supabase/functions/drive-provision/layout.ts'
+import { ARVORE_V2, NOMES_V2, PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, SUBPASTAS_MARCA, aguardandoMarca, caminhoDoMes, layoutDoProjeto, mesDoProjeto, mesmoNomeDePasta, nomeDeContainer, pastasV2Completas } from '../../supabase/functions/drive-provision/layout.ts'
 
 let falhas = 0
 const ok = (nome: string, cond: boolean) => { console.log((cond ? 'OK     ' : 'FALHA  ') + nome); if (!cond) falhas++ }
@@ -31,11 +31,11 @@ ok('cliente sem marcas → segue sempre', aguardandoMarca([], null) === false &&
 ok('nome de marca: barra e espaços', nomeDeContainer('  Uni/asselvi   Ead ') === 'Uni-asselvi Ead')
 
 
-// caminho até o mês: PROJETOS › [sub-marca] › AAAA-MM
-ok('caminho sem marca: PROJETOS/AAAA-MM', caminhoDoMes(null, '2026-10').join('/') === 'PROJETOS/2026-10' && caminhoDoMes('  ', '2026-10').join('/') === 'PROJETOS/2026-10')
-ok('caminho com sub-marca: PROJETOS/Marca/AAAA-MM (a marca fica dentro de PROJETOS)', caminhoDoMes('Uniasselvi', '2026-10').join('/') === 'PROJETOS/Uniasselvi/2026-10')
-ok('caminho: barra na marca não cria nível extra', caminhoDoMes('A/B', '2026-10').join('/') === 'PROJETOS/A-B/2026-10')
-ok('nomes da pasta do cliente', PASTA_MARCA === 'MARCA' && PASTA_MARCA_ANTIGA === '_ASSETS' && PASTA_PROJETOS === 'PROJETOS')
+// caminho até o mês: Projetos › [sub-marca] › AAAA-MM
+ok('caminho sem marca: Projetos/AAAA-MM', caminhoDoMes(null, '2026-10').join('/') === 'Projetos/2026-10' && caminhoDoMes('  ', '2026-10').join('/') === 'Projetos/2026-10')
+ok('caminho com sub-marca: Projetos/Marca/AAAA-MM (a marca fica dentro de Projetos)', caminhoDoMes('Uniasselvi', '2026-10').join('/') === 'Projetos/Uniasselvi/2026-10')
+ok('caminho: barra na marca não cria nível extra', caminhoDoMes('A/B', '2026-10').join('/') === 'Projetos/A-B/2026-10')
+ok('nomes da pasta do cliente', PASTA_MARCA === 'Marca' && PASTA_MARCA_ANTIGA === '_ASSETS' && PASTA_PROJETOS === 'Projetos')
 ok('MARCA nova: as 5 subpastas de antes + GUIDELINES', ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES'].every(n => SUBPASTAS_MARCA.includes(n)) && SUBPASTAS_MARCA.length === 6)
 
 // árvore
@@ -44,7 +44,15 @@ let paiAntesDoFilho = true
 for (const n of ARVORE_V2) { if (n.pai && !vistos.has(n.pai)) paiAntesDoFilho = false; vistos.add(n.chave) }
 ok('árvore: pai sempre antes do filho', paiAntesDoFilho)
 ok('árvore: cobre todas as 7 pastas', vistos.size === 7 && Object.keys(NOMES_V2).every(k => vistos.has(k)))
-ok('nomes finais', NOMES_V2.revisao === '01_REVISAO' && NOMES_V2.final === '02_FINAL' && NOMES_V2.export === '03_EXPORT')
+ok('nomes só com a primeira letra maiúscula', Object.values(NOMES_V2).join() === '00_Documentos,01_Bruto,02_Artes,01_Trilhas,03_Export,01_Revisao,02_Final')
+// comparação de nomes: os fixos da estrutura ignoram a caixa (reconhecem o nome antigo); os demais continuam exatos
+ok('MARCA (antiga) = Marca', mesmoNomeDePasta('MARCA', PASTA_MARCA))
+ok('PROJETOS (antiga) = Projetos', mesmoNomeDePasta('PROJETOS', PASTA_PROJETOS))
+ok('00_DOCUMENTOS (antiga) = 00_Documentos, e 03_EXPORT/02_FINAL/01_REVISAO idem', mesmoNomeDePasta('00_DOCUMENTOS', NOMES_V2.documentos) && mesmoNomeDePasta('03_EXPORT', NOMES_V2.export) && mesmoNomeDePasta('02_FINAL', NOMES_V2.final) && mesmoNomeDePasta('01_REVISAO', NOMES_V2.revisao))
+ok('_assets em minúsculas = _ASSETS', mesmoNomeDePasta('_assets', PASTA_MARCA_ANTIGA))
+ok('nome de sub-marca/cliente continua exato (Uniasselvi ≠ UNIASSELVI)', !mesmoNomeDePasta('UNIASSELVI', 'Uniasselvi') && mesmoNomeDePasta('Uniasselvi', 'Uniasselvi'))
+ok('pasta de outro nome nunca bate', !mesmoNomeDePasta('Marca2', PASTA_MARCA) && !mesmoNomeDePasta('00_GERAL', NOMES_V2.documentos))
+ok('nomes finais', NOMES_V2.revisao === '01_Revisao' && NOMES_V2.final === '02_Final' && NOMES_V2.export === '03_Export')
 const completo = Object.fromEntries(Object.keys(NOMES_V2).map(k => [k, 'id-' + k]))
 ok('drive_pastas completo', pastasV2Completas(completo))
 ok('drive_pastas faltando uma', !pastasV2Completas({ ...completo, final: '' }) && !pastasV2Completas(null) && !pastasV2Completas({}))

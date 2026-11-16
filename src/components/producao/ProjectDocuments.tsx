@@ -31,7 +31,7 @@ interface Doc {
 
 // Categorias = subpastas reais no Drive do projeto. Ao subir/criar, o arquivo
 // vai direto pra pasta certa. v1: 00_GERAL / 01_ROTEIRO / 02_PRODUCAO / 06_ENTREGA (pelo nome).
-// v2: tudo em 00_DOCUMENTOS, e "Entrega (portal)" em 03_EXPORT/02_FINAL (pelo ID salvo).
+// v2: tudo em 00_Documentos, e "Entrega (portal)" em 03_Export/02_Final (pelo ID salvo).
 const CATEGORIES: { value: string; label: string; folder: string }[] = [
   { value: 'geral', label: 'Geral', folder: '00_GERAL' },
   { value: 'roteiro', label: 'Roteiro', folder: '01_ROTEIRO' },
@@ -268,7 +268,7 @@ export default function ProjectDocuments({ projectId, driveFolderId, canManage =
     if (isDriveFile && folderId) {
       try {
         const target = await getCategoryFolder(newCat, folderId);
-        // v2: geral, roteiro e produção são a mesma pasta (00_DOCUMENTOS); não há o que mover.
+        // v2: geral, roteiro e produção são a mesma pasta (00_Documentos); não há o que mover.
         if (layout === 'v2' && target === await getCategoryFolder(doc.tag, folderId)) return;
         await moveFileToFolder(doc.drive_file_id!, target);
       } catch {

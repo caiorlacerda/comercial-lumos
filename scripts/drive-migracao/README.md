@@ -5,7 +5,8 @@ Reorganiza **por dentro** a pasta de cada projeto antigo (layout v1) para a estr
 - Só **move**. O ID de cada pasta/arquivo não muda, então vídeos, links e o banco continuam apontando para os mesmos arquivos.
 - **Nunca copia e nunca exclui de vez.** O que sobra vazio vai para a **lixeira** do Drive (recuperável), e **só se estiver vazio na hora de aplicar** (conferido de novo, mesmo que a simulação tenha dito que ficaria vazio).
 - **Nunca sobrescreve.** Se o destino já tem um item com o mesmo nome, é marcado **CONFLITO** e o item fica onde está.
-- A única renomeação é `02_APROVADO` → `02_FINAL` (e, só com `renomear_assets`, a `_ASSETS` do cliente → `MARCA`, mesma pasta, mesmo ID).
+- As únicas renomeações são `01_REVISAO` → `01_Revisao` e `02_APROVADO` → `02_Final` (e, só com `renomear_assets`, a `_ASSETS` do cliente → `Marca`, mesma pasta, mesmo ID).
+- **Nomes novos: só a primeira letra maiúscula** (`00_Documentos`, `01_Bruto`, `02_Artes/01_Trilhas`, `03_Export/01_Revisao`, `03_Export/02_Final`; no cliente, `Marca` e `Projetos`). Ao procurar uma pasta a comparação **ignora maiúsculas e minúsculas**: `00_Documentos`, `PROJETOS` e `MARCA` (nomes de antes de 16/11) são reconhecidas e **reaproveitadas**, nunca duplicadas.
 - Lives e projetos que já são v2 são pulados.
 
 ## Como rodar (forma normal): edge function `drive-migracao`
@@ -29,33 +30,33 @@ Corpo (JSON):
 | `modo` | `"simulacao"` (padrão) ou `"executar"`. |
 | `confirmar_cliente` | **Obrigatório para executar**, igual ao nome do cliente (é o "digite o nome" do script). Sem isso, `400` e nada é feito. |
 | `projeto` | Opcional: id ou código, para migrar um projeto só. |
-| `mover_para_mes` | Opcional (padrão `false`): também move a pasta do projeto para `Cliente › PROJETOS › [sub-marca] › AAAA-MM`. |
-| `renomear_assets` | Opcional (padrão `false`): renomeia `_ASSETS` → `MARCA` no cliente. |
+| `mover_para_mes` | Opcional (padrão `false`): também move a pasta do projeto para `Cliente › Projetos › [sub-marca] › AAAA-MM`. |
+| `renomear_assets` | Opcional (padrão `false`): renomeia `_ASSETS` → `Marca` no cliente. |
 | `entrega_vazia_para_lixeira` | Opcional (padrão `false`): manda a `06_ENTREGA` para a lixeira se, no fim, ela estiver vazia. |
 
-`executar` aplica o plano **montado na hora** (não o da simulação anterior), projeto a projeto, e grava cada projeto no banco (`drive_layout='v2'`, `drive_upload_folder_id` = ID da `01_REVISAO`, `drive_pastas`) logo depois de mexer no Drive, com filtro `drive_layout='v1'`. Para no primeiro erro e devolve o que já foi feito. Cada projeto migrado deixa uma linha em `drive_sync_log` (`migracao_v2`).
+`executar` aplica o plano **montado na hora** (não o da simulação anterior), projeto a projeto, e grava cada projeto no banco (`drive_layout='v2'`, `drive_upload_folder_id` = ID da `01_Revisao`, `drive_pastas`) logo depois de mexer no Drive, com filtro `drive_layout='v1'`. Para no primeiro erro e devolve o que já foi feito. Cada projeto migrado deixa uma linha em `drive_sync_log` (`migracao_v2`).
 
 ## Mapa
 
 | Hoje (dentro da pasta do projeto) | Vai para |
 |---|---|
-| `00_*`, `01_*`, `02_*` e `OS` | dentro de `00_DOCUMENTOS` |
-| `03_*` (ex.: `03_CAPTACAO`) | dentro de `01_BRUTO` |
-| `03_*` que tem uma `BRUTO` dentro (redundante) | a `03_*` se **dissolve**: o conteúdo da `BRUTO` e tudo o mais que houver na `03_*` sobem direto para `01_BRUTO`, e as duas pastas, vazias, vão para a lixeira (evita `01_BRUTO/03_CAPTACAO/...` em volta de uma pasta só). Se algo não puder subir (conflito de nome), a `03_*` não é apagada e entra inteira em `01_BRUTO` |
-| `04_*` | dentro de `02_ARTES` |
-| `04_*/TRILHA` (ou `TRILHAS`) | o conteúdo é **mesclado** em `02_ARTES/01_TRILHAS`; a `TRILHA` vazia vai para a lixeira |
-| `05_POS_PRODUCAO` | **vazia** → lixeira. **Com conteúdo** → não é apagada: vai inteira para `01_BRUTO` (o plano lista o que há dentro) |
-| outras `05_*` | dentro de `02_ARTES` |
-| `06_ENTREGA/01_REVISAO` | `03_EXPORT/01_REVISAO` |
-| `06_ENTREGA/02_APROVADO` | `03_EXPORT/02_FINAL` (renomeada) |
-| `06_ENTREGA/03_REDES` e `04_THUMB` | o **conteúdo** vai para `03_EXPORT/02_FINAL`; a pasta, se ficar vazia, vai para a lixeira |
-| arquivo `CAM_<id>_BKP_…` (backup de câmera) nas pastas de entrega | `01_BRUTO` |
+| `00_*`, `01_*`, `02_*` e `OS` | dentro de `00_Documentos` |
+| `03_*` (ex.: `03_CAPTACAO`) | dentro de `01_Bruto` |
+| `03_*` que tem uma `BRUTO` dentro (redundante) | a `03_*` se **dissolve**: o conteúdo da `BRUTO` e tudo o mais que houver na `03_*` sobem direto para `01_Bruto`, e as duas pastas, vazias, vão para a lixeira (evita `01_Bruto/03_CAPTACAO/...` em volta de uma pasta só). Se algo não puder subir (conflito de nome), a `03_*` não é apagada e entra inteira em `01_Bruto` |
+| `04_*` | dentro de `02_Artes` |
+| `04_*/TRILHA` (ou `TRILHAS`) | o conteúdo é **mesclado** em `02_Artes/01_Trilhas`; a `TRILHA` vazia vai para a lixeira |
+| `05_POS_PRODUCAO` | **vazia** → lixeira. **Com conteúdo** → não é apagada: vai inteira para `01_Bruto` (o plano lista o que há dentro) |
+| outras `05_*` | dentro de `02_Artes` |
+| `06_ENTREGA/01_REVISAO` | `03_Export/01_Revisao` (renomeada) |
+| `06_ENTREGA/02_APROVADO` | `03_Export/02_Final` (renomeada) |
+| `06_ENTREGA/03_REDES` e `04_THUMB` | o **conteúdo** vai para `03_Export/02_Final`; a pasta, se ficar vazia, vai para a lixeira |
+| arquivo `CAM_<id>_BKP_…` (backup de câmera) nas pastas de entrega | `01_Bruto` |
 
 Detalhes que valem a pena saber:
 
-- **Pasta antiga com o mesmo nome de uma pasta que já existe no destino é MESCLADA** (ex.: `OS` da raiz × `00_DOCUMENTOS/OS`): o conteúdo vai para a pasta que já existe e a antiga, se ficar vazia, vai para a lixeira. Arquivo de nome repetido lá dentro continua sendo CONFLITO (nunca sobrescreve) e, então, a pasta antiga fica.
-- Pasta antiga entra **inteira** (ex.: `00_DOCUMENTOS/00_GERAL`), sem mexer no conteúdo. Se já existir uma pasta com o nome exato do destino (ex.: um `00_DOCUMENTOS` antigo), ela vira o destino.
-- Backup de câmera: só **arquivo** (nunca pasta) cujo nome começa com `CAM_<qualquer id>_BKP_`, e só nas pastas de entrega (`01_REVISAO`, `02_APROVADO`/`02_FINAL`, `03_REDES`, `04_THUMB` e os arquivos soltos da `06_ENTREGA`). Arquivo solto na raiz do projeto não é tocado.
+- **Pasta antiga com o mesmo nome de uma pasta que já existe no destino é MESCLADA** (ex.: `OS` da raiz × `00_Documentos/OS`): o conteúdo vai para a pasta que já existe e a antiga, se ficar vazia, vai para a lixeira. Arquivo de nome repetido lá dentro continua sendo CONFLITO (nunca sobrescreve) e, então, a pasta antiga fica.
+- Pasta antiga entra **inteira** (ex.: `00_Documentos/00_GERAL`), sem mexer no conteúdo. Se já existir uma pasta com o nome exato do destino (ex.: um `00_Documentos` antigo), ela vira o destino.
+- Backup de câmera: só **arquivo** (nunca pasta) cujo nome começa com `CAM_<qualquer id>_BKP_`, e só nas pastas de entrega (`01_REVISAO`/`01_Revisao`, `02_APROVADO`/`02_Final`, `03_REDES`, `04_THUMB` e os arquivos soltos da `06_ENTREGA`). Arquivo solto na raiz do projeto não é tocado.
 - Nome fora do mapa (`99_DUPLICADOS`, arquivos soltos) fica onde está.
 - `06_ENTREGA`: o que sobrar nela (pastas fora do mapa) fica e é listado. Se não sobrar nada, ela **não** é apagada a menos que se peça `entrega_vazia_para_lixeira`.
 - Itens que a lixeira não pode levar (a pasta ainda tem coisa dentro por conflito de nome) ficam onde estão e aparecem como aviso.
@@ -85,7 +86,7 @@ O `projetos.json` vem da consulta **B** de [`consultas.sql`](consultas.sql); a c
 ```sql
 update public.projects set drive_layout = 'v1', drive_pastas = null where id = '<id do projeto>';
 ```
-(`drive_upload_folder_id` continua válido: é o mesmo ID de `01_REVISAO`.)
+(`drive_upload_folder_id` continua válido: é o mesmo ID da pasta de revisão.)
 
 ## Testes
 ```bash
