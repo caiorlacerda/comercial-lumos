@@ -24,17 +24,20 @@ SET valor_vendido_antes_cancelar = COALESCE(valor_vendido_antes_cancelar, valor_
 WHERE id = 'e162fe04-b975-43c9-bbcd-e0b1e306cf17';
 UPDATE budgets SET status = 'cancelado' WHERE id = 'b523b5a9-075d-4e7e-bad3-99df36189faf';
 
--- 5) Centavos: 18 parcelas guardam casas longas (ex.: 6299,997814348). Arredonda para 2 casas.
+-- 5) Centavos: parcelas guardam casas longas (ex.: 6000,004528). Arredonda para 2 casas. Exceto o #244, que não se mexe.
 UPDATE receivables
 SET total_amount = round(total_amount, 2),
     received_amount = round(received_amount, 2),
     valor_previsto = round(valor_previsto, 2)
-WHERE total_amount <> round(total_amount, 2) OR received_amount <> round(received_amount, 2) OR valor_previsto <> round(valor_previsto, 2);
+WHERE (total_amount <> round(total_amount, 2) OR received_amount <> round(received_amount, 2) OR valor_previsto <> round(valor_previsto, 2))
+  AND budget_id IS DISTINCT FROM (SELECT id FROM budgets WHERE code = '#2026-244');   -- #244 fica exatamente como está
 
--- 6) 36 parcelas antigas sem project_id/origem: liga ao projeto do mesmo orçamento e marca a origem "proposta".
+-- 6) Parcelas antigas sem project_id/origem (menos a do #244): liga ao projeto do mesmo orçamento e marca a origem "proposta".
 UPDATE receivables r SET project_id = p.id
-FROM projects p WHERE r.project_id IS NULL AND r.budget_id IS NOT NULL AND p.budget_id = r.budget_id;
-UPDATE receivables SET origem = 'proposta' WHERE origem IS NULL AND budget_id IS NOT NULL;
+FROM projects p WHERE r.project_id IS NULL AND r.budget_id IS NOT NULL AND p.budget_id = r.budget_id
+  AND r.budget_id <> (SELECT id FROM budgets WHERE code = '#2026-244');
+UPDATE receivables SET origem = 'proposta' WHERE origem IS NULL AND budget_id IS NOT NULL
+  AND budget_id <> (SELECT id FROM budgets WHERE code = '#2026-244');
 
 -- CONFERÊNCIA
 SELECT b.code, b.status, (SELECT sum(total_amount) FROM receivables r WHERE r.budget_id = b.id AND r.status <> 'cancelado') parcelas,
