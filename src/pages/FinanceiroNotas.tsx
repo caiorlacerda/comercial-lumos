@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import {
-  AlertTriangle, Ban, CheckCircle2, Copy, FileText, Loader2, MailCheck, Plus, Receipt, RotateCcw, Search, Send,
+  AlertTriangle, Ban, CheckCircle2, ChevronDown, ChevronUp, Copy, FileText, Loader2, MailCheck, Plus, Receipt, RotateCcw, Search, Send,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -84,7 +84,8 @@ const NOTA_STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 const CHIPS_STATUS: { id: string; label: string }[] = [
-  { id: '', label: 'Todas' },
+  { id: '', label: 'Ativas' },
+  { id: 'todas', label: 'Todas (com canceladas)' },
   { id: 'agendada', label: 'Agendadas' },
   { id: 'email_enviado', label: 'E-mail enviado' },
   { id: 'vencidas', label: 'Sem nota (vencidas)' },
@@ -92,6 +93,9 @@ const CHIPS_STATUS: { id: string; label: string }[] = [
   { id: 'paga', label: 'Pagas' },
   { id: 'cancelada', label: 'Canceladas' },
 ];
+
+type OrdemChave = 'data_servico' | 'enviar_em' | 'pagar_em';
+type Ordem = { key: OrdemChave; dir: 'asc' | 'desc' } | null;
 
 function ValorEditavel({ n, onSave }: { n: NotaRequest; onSave: (valor: number | null) => void }) {
   const [editando, setEditando] = useState(false);
@@ -135,6 +139,8 @@ export default function FinanceiroNotas() {
   const [projetoFiltro, setProjetoFiltro] = useState('');
   const [fornecedorFiltro, setFornecedorFiltro] = useState('');
   const [busca, setBusca] = useState('');
+  // null = ordem padrão (a do servidor: cobrança mais recente primeiro).
+  const [ordem, setOrdem] = useState<Ordem>(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -171,14 +177,53 @@ export default function FinanceiroNotas() {
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return notas.filter(n => {
+      // '' = "Ativas" (esconde canceladas); 'todas' = tudo, inclusive canceladas.
       if (statusFiltro === 'vencidas') { if (!semNotaVencida(n)) return false; }
-      else if (statusFiltro && n.status !== statusFiltro) return false;
+      else if (statusFiltro === '') { if (n.status === 'cancelada') return false; }
+      else if (statusFiltro !== 'todas' && n.status !== statusFiltro) return false;
       if (projetoFiltro && n.project_id !== projetoFiltro) return false;
       if (fornecedorFiltro && n.fornecedor?.id !== fornecedorFiltro) return false;
       if (q && !`${n.descricao} ${n.fornecedor?.nome || ''} ${n.projeto?.name || ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [notas, statusFiltro, projetoFiltro, fornecedorFiltro, busca]);
+
+  const canceladasTotal = useMemo(() => notas.filter(n => n.status === 'cancelada').length, [notas]);
+
+  // Ordenação clicável (só no cabeçalho desktop). Sem `ordem`, mantém a ordem do servidor.
+  const ordenadas = useMemo(() => {
+    if (!ordem) return filtradas;
+    const { key, dir } = ordem;
+    const mult = dir === 'asc' ? 1 : -1;
+    return [...filtradas].sort((a, b) => {
+      const va = a[key] || null;
+      const vb = b[key] || null;
+      // Nulos sempre por último, qualquer que seja a direção.
+      if (va !== vb) {
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return va < vb ? -mult : mult;
+      }
+      // Desempate: cobrança mais recente primeiro, depois id.
+      if (a.enviar_em !== b.enviar_em) return a.enviar_em < b.enviar_em ? 1 : -1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+  }, [filtradas, ordem]);
+
+  // Cicla: crescente -> decrescente -> padrão.
+  const alternarOrdem = (key: OrdemChave) => {
+    setOrdem(o => {
+      if (!o || o.key !== key) return { key, dir: 'asc' };
+      if (o.dir === 'asc') return { key, dir: 'desc' };
+      return null;
+    });
+  };
+  const ariaSort = (key: OrdemChave): 'ascending' | 'descending' | 'none' =>
+    ordem?.key === key ? (ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const IconeOrdem = ({ coluna }: { coluna: OrdemChave }) => {
+    if (ordem?.key !== coluna) return null;
+    return ordem.dir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />;
+  };
 
   const pendentes = notas.filter(n => ['agendada', 'email_enviado', 'nota_recebida'].includes(n.status)).length;
   const travadas = useMemo(() => ({
@@ -345,7 +390,7 @@ export default function FinanceiroNotas() {
                 statusFiltro === c.id
                   ? 'bg-lumos-yellow/15 text-lumos-yellow border-lumos-yellow/40'
                   : 'text-lumos-text-secondary border-lumos-border hover:text-lumos-text-primary')}>
-              {c.label}
+              {c.label}{c.id === 'cancelada' && canceladasTotal > 0 ? ` (${canceladasTotal})` : ''}
             </button>
           ))}
         </div>
@@ -377,7 +422,9 @@ export default function FinanceiroNotas() {
       ) : filtradas.length === 0 ? (
         <div className="card p-10 text-center space-y-2">
           <Receipt className="w-8 h-8 text-lumos-text-secondary mx-auto" />
-          <p className="text-sm font-bold text-lumos-text-primary">Nenhuma cobrança por aqui.</p>
+          <p className="text-sm font-bold text-lumos-text-primary">
+            {statusFiltro === '' ? 'Nenhuma nota ativa.' : 'Nenhuma cobrança por aqui.'}
+          </p>
           <p className="text-xs text-lumos-text-secondary max-w-md mx-auto">
             Fornecedor escalado em diária com data, ou custo de projeto com fornecedor, agenda a cobrança sozinho:
             28 dias depois do serviço o e-mail sai, e o pagamento fica previsto pros 35 dias.
@@ -394,15 +441,24 @@ export default function FinanceiroNotas() {
                     <th className="px-4 py-3">Fornecedor</th>
                     <th className="px-4 py-3">Job</th>
                     <th className="px-4 py-3">Valor</th>
-                    <th className="px-4 py-3" title="Data do serviço prestado">Serviço</th>
-                    <th className="px-4 py-3" title="Quando o e-mail de cobrança sai (serviço + 28 dias)">Cobrança</th>
-                    <th className="px-4 py-3" title="Pagamento previsto (serviço + 35 dias)">Pagamento</th>
+                    <th className="px-4 py-3 cursor-pointer hover:text-lumos-text-primary transition-colors select-none" aria-sort={ariaSort('data_servico')}
+                      onClick={() => alternarOrdem('data_servico')} title="Data do serviço prestado (clique pra ordenar)">
+                      <div className="flex items-center gap-1">Serviço <IconeOrdem coluna="data_servico" /></div>
+                    </th>
+                    <th className="px-4 py-3 cursor-pointer hover:text-lumos-text-primary transition-colors select-none" aria-sort={ariaSort('enviar_em')}
+                      onClick={() => alternarOrdem('enviar_em')} title="Quando o e-mail de cobrança sai (serviço + 28 dias). Clique pra ordenar">
+                      <div className="flex items-center gap-1">Cobrança <IconeOrdem coluna="enviar_em" /></div>
+                    </th>
+                    <th className="px-4 py-3 cursor-pointer hover:text-lumos-text-primary transition-colors select-none" aria-sort={ariaSort('pagar_em')}
+                      onClick={() => alternarOrdem('pagar_em')} title="Pagamento previsto (serviço + 35 dias). Clique pra ordenar">
+                      <div className="flex items-center gap-1">Pagamento <IconeOrdem coluna="pagar_em" /></div>
+                    </th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-lumos-border/50">
-                  {filtradas.map(n => (
+                  {ordenadas.map(n => (
                     <tr key={n.id} className="hover:bg-lumos-text-secondary/[0.03] transition-colors">
                       <td className="px-4 py-2.5">
                         <div className="font-bold text-lumos-text-primary">{n.fornecedor ? formatName(n.fornecedor.nome) : '—'}</div>
