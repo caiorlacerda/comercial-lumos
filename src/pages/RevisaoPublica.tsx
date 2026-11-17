@@ -169,6 +169,8 @@ export default function RevisaoPublica() {
   const [menuVersao, setMenuVersao] = useState(false);
   const atual = versoes.find(v => v.id === versaoAtiva) ?? versoes[0] ?? null;
   const vendoAntiga = !!atual && !!versoes.length && atual.id !== versoes[0].id;
+  // Download (arquivo e frame) só depois que o cliente aprovou esta versão E o link permite; o servidor (review-stream) confere de novo.
+  const podeBaixar = !!data && data.link.allow_download && data.video.client_decision === 'aprovado' && !vendoAntiga;
   const indice = atual ? versoes.findIndex(v => v.id === atual.id) : -1;
   const temAnterior = indice >= 0 && indice < versoes.length - 1;   // mais antiga
   const temProxima = indice > 0;                                    // mais nova
@@ -864,7 +866,7 @@ export default function RevisaoPublica() {
                 <AlertTriangle className="w-8 h-8 text-lumos-yellow" />
                 <p className="text-sm font-bold text-white max-w-sm">Não foi possível exibir este vídeo no seu navegador.</p>
                 <p className="text-xs text-white/60 max-w-sm leading-relaxed">Pode ser um formato não suportado. Tente outro navegador (Chrome) ou peça à produtora uma versão em MP4.</p>
-                {data.link.allow_download && (
+                {podeBaixar && (
                   <a href={`${streamUrl}&download=1`} download className="btn-primary h-9 px-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest rounded-lumos">
                     Baixar o arquivo
                   </a>
@@ -1009,7 +1011,7 @@ export default function RevisaoPublica() {
                         Arraste a imagem pra navegar. A anotação continua caindo no mesmo ponto.
                       </p>
                     )}
-                    {data.link.allow_download && (
+                    {podeBaixar && (
                       <>
                         <div className="h-px bg-lumos-border my-1" />
                         <button type="button" onClick={baixarFrame}
@@ -1022,7 +1024,7 @@ export default function RevisaoPublica() {
                 </>
               )}
             </div>
-            {data.link.allow_download && (
+            {podeBaixar && (
               <a href={`${streamUrl}&download=1`} download className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors" title="Baixar arquivo"><Download className="w-4 h-4" /></a>
             )}
             <button onClick={fullscreen} className="p-3.5 lg:p-2 rounded-lumos hover:bg-lumos-text-secondary/10 transition-colors"><Maximize className="w-4 h-4" /></button>
