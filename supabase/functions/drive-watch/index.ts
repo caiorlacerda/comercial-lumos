@@ -13,6 +13,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { ERRO_PASTA_LIXEIRA, resolverPastaRevisao } from './pasta.mjs'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -186,31 +187,49 @@ async function probeVideoMeta(driveFileId: string): Promise<VideoMeta | null> {
 }
 
 // --- Monitor do dropzone --------------------------------------------------
-async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }> {
+// A pasta existe, é pasta e não está na lixeira (o campo trashed também vale para pasta cujo pai está na lixeira).
+async function pastaViva(id: string): Promise<boolean> {
+  try {
+    const f = await driveFetch(`files/${encodeURIComponent(id)}?fields=id,mimeType,trashed`)
+    return f?.mimeType === FOLDER_MIME && f?.trashed === false
+  } catch (_) { return false }
+}
+
+async function scanDropzones(onlyProjectId?: string): Promise<{ found: number; problemas: { project_id: string; codigo: string; mensagem: string }[] }> {
   // Banco sem as colunas v2 (migration pendente): cai no select antigo.
   const montar = (cols: string) => {
     let q = db.from('projects').select(cols).eq('status', 'ativo').not('drive_folder_id', 'is', null)
     if (onlyProjectId) q = q.eq('id', onlyProjectId)
     return q
   }
-  let { data: projects, error: erroProjetos } = await montar('id, drive_folder_id, drive_layout, drive_pastas')
-  if (erroProjetos) ({ data: projects } = await montar('id, drive_folder_id'))
+  let { data: projects, error: erroProjetos } = await montar('id, drive_folder_id, drive_upload_folder_id, drive_layout, drive_pastas')
+  if (erroProjetos) ({ data: projects } = await montar('id, drive_folder_id, drive_upload_folder_id'))
   const { data: known } = await db.from('video_versions').select('drive_file_id')
   const knownIds = new Set((known || []).map((k: any) => k.drive_file_id))
 
   let found = 0
+  const problemas: { project_id: string; codigo: string; mensagem: string }[] = []
   for (const proj of projects || []) {
     try {
-      let revisaoId: string | null
-      if (proj.drive_layout === 'v2') {
-        // v2: o ID salvo, nunca o nome. Sem ele o projeto é pulado (e não ganha pasta nova).
-        revisaoId = proj.drive_pastas?.revisao ?? null
-      } else {
-        const entregaId = await findChildFolder(proj.drive_folder_id, '06_ENTREGA')
-        if (!entregaId) continue
-        revisaoId = await findChildFolder(entregaId, '01_REVISAO')
+      // Pasta de revisão VIVA: nunca registra (nem segue) pasta na lixeira. Se a salva morreu, procura a viva no layout
+      // do projeto e atualiza o banco; sem substituta, registra o problema (antes era um `continue` silencioso).
+      const pasta = await resolverPastaRevisao({
+        proj,
+        drive: { estaViva: pastaViva, achar: findChildFolder },
+      })
+      if (!pasta.ok) {
+        if (pasta.codigo === ERRO_PASTA_LIXEIRA) {
+          problemas.push({ project_id: proj.id, codigo: pasta.codigo, mensagem: pasta.mensagem })
+          await log(proj.id, 'error', `Pasta de revisão ${pasta.salvo} está na lixeira e não há substituta: uploads não serão registrados`, 'error')
+        }
+        continue
       }
-      if (!revisaoId) continue
+      if (pasta.mudou && pasta.gravar) {
+        const { error: eGrava } = await db.from('projects').update(pasta.gravar).eq('id', proj.id)
+        if (eGrava) await db.from('projects').update({ drive_upload_folder_id: pasta.folderId }).eq('id', proj.id)
+        await log(proj.id, 'pasta_revisao_trocada', `Pasta de revisão trocada de ${pasta.trocouDe ?? '(nenhuma)'} para ${pasta.folderId} (a antiga não estava viva)`)
+      }
+      const revisaoId = pasta.folderId as string
 
       // Vídeos novos (qualquer nome). Cada upload nasce como um VÍDEO separado
       // (grupo próprio, versão 1) — a equipe empilha versões manualmente no app.
@@ -267,7 +286,7 @@ async function scanDropzones(onlyProjectId?: string): Promise<{ found: number }>
       await log(proj.id, 'error', `Scan falhou: ${err.message}`, 'error')
     }
   }
-  return { found }
+  return { found, problemas }
 }
 
 // --- Finalizar (copiar vFINAL para 02_APROVADO) ---------------------------

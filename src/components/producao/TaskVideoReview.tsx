@@ -340,7 +340,9 @@ export default function TaskVideoReview({ projectId, task, canManage }: Props) {
     setEnviando(null);
     toast.success(`${lista.length} vídeo(s) enviado(s) ✓ Vinculando à tarefa…`);
     // O scan cria o registro já com a tarefa. Damos um tempo e recarregamos.
-    await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
+    const { data: scan } = await supabase.functions.invoke('review-scan', { body: { project_id: projectId } });
+    const problema = (scan as any)?.problemas?.[0]?.mensagem;
+    if (problema) toast.error(problema);
     await recarregar();
   };
 

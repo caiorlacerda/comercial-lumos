@@ -10,6 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { ERRO_PASTA_LIXEIRA, resolverPastaRevisao } from './pasta.mjs'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -53,6 +54,14 @@ async function findChildFolder(parentId: string, name: string, token: string): P
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=drive&driveId=${DRIVE_ID}`, { headers: { Authorization: `Bearer ${token}` } })
   const body = await res.json()
   return body.files?.[0]?.id ?? null
+}
+
+// A pasta existe, é pasta e não está na lixeira (o campo trashed também vale para pasta cujo pai está na lixeira).
+async function pastaViva(id: string, token: string): Promise<boolean> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,mimeType,trashed&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return false
+  const f = await res.json().catch(() => ({}))
+  return f?.mimeType === FOLDER_MIME && f?.trashed === false
 }
 
 serve(async (req) => {
@@ -125,19 +134,26 @@ serve(async (req) => {
       }
     } catch (_) { /* sem nome: cai no Google de quem subiu */ }
 
-    // Resolve a pasta de revisão do projeto.
-    //  · v2: o ID salvo (drive_pastas.revisao = 03_EXPORT/01_REVISAO); nunca procura por nome.
-    //  · v1: o ID salvo e, na falta dele, 06_ENTREGA/01_REVISAO pelo nome (como sempre foi).
+    // Resolve a pasta de revisão do projeto, NUNCA devolvendo uma pasta na lixeira (o Drive aceita upload pelo ID
+    // de pasta na lixeira e o arquivo some das Entregas: pedido #14, Continuada). Se a pasta salva morreu, procura a
+    // viva no layout do projeto (v1: 06_ENTREGA/01_REVISAO; v2: 03_EXPORT/01_REVISAO) e atualiza o banco; senão, erro claro.
     // Banco sem as colunas v2 (migration pendente): cai no select antigo.
     let proj: any = (await db.from('projects').select('drive_folder_id, drive_upload_folder_id, drive_layout, drive_pastas').eq('id', projectId).single()).data
     if (!proj) proj = (await db.from('projects').select('drive_folder_id, drive_upload_folder_id').eq('id', projectId).single()).data
-    let folderId = (proj?.drive_layout === 'v2' ? (proj?.drive_pastas?.revisao ?? proj?.drive_upload_folder_id) : proj?.drive_upload_folder_id) as string | null
-    if (!folderId && proj?.drive_layout !== 'v2' && proj?.drive_folder_id) {
-      const entrega = await findChildFolder(proj.drive_folder_id, '06_ENTREGA', token)
-      folderId = entrega ? await findChildFolder(entrega, '01_REVISAO', token) : null
-      if (folderId) await db.from('projects').update({ drive_upload_folder_id: folderId }).eq('id', projectId)
+    const pasta = await resolverPastaRevisao({
+      proj,
+      drive: {
+        estaViva: (id: string) => pastaViva(id, token),
+        achar: (paiId: string, nome: string) => findChildFolder(paiId, nome, token),
+      },
+    })
+    if (!pasta.ok) return json({ error: pasta.mensagem, code: pasta.codigo }, pasta.codigo === ERRO_PASTA_LIXEIRA ? 409 : 400)
+    const folderId = pasta.folderId as string
+    if (pasta.mudou && pasta.gravar) {
+      const { error: eGrava } = await db.from('projects').update(pasta.gravar).eq('id', projectId)
+      if (eGrava) await db.from('projects').update({ drive_upload_folder_id: folderId }).eq('id', projectId)
+      console.warn(`drive-upload: pasta de revisão do projeto ${projectId} trocada de ${pasta.trocouDe ?? '(nenhuma)'} para ${folderId}`)
     }
-    if (!folderId) return json({ error: 'Projeto sem pasta de revisão (01_REVISAO)' }, 400)
 
     // 1) Abre a sessão resumável
     const initRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {
