@@ -69,7 +69,7 @@ async function resolverToken(token: string, wantsDownload: boolean, versaoPedida
   let version: any = null
   if (versaoPedida) {
     const { data } = await db.from('video_versions')
-      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status, group_id')
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status, group_id, client_decision')
       .eq('id', versaoPedida).maybeSingle()
     // Só serve se for do MESMO grupo que o token autoriza.
     const grupoDoLink = link.group_id
@@ -80,17 +80,21 @@ async function resolverToken(token: string, wantsDownload: boolean, versaoPedida
   // Uma consulta só resolve os dois casos — antes eram duas.
   if (!version && link.group_id) {
     const { data } = await db.from('video_versions')
-      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status')
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status, client_decision')
       .eq('group_id', link.group_id).order('versao', { ascending: false }).limit(1).maybeSingle()
     version = data
   }
   if (!version) {
     const { data } = await db.from('video_versions')
-      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status')
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status, client_decision')
       .eq('id', link.video_version_id).maybeSingle()
     version = data
   }
   if (!version?.drive_file_id) return guardar(null)
+  // O DOWNLOAD do original só existe depois que o CLIENTE aprovou esta versão (client_decision = 'aprovado').
+  // Antes disso o cliente só assiste. Ao aprovar, o download abre sozinho (o cache daqui dura 15s). Reabrir a etapa
+  // limpa a decisão (LIMPA_DECISAO), então o download fecha de novo. A equipe baixa pelo Drive/painel, não por este link.
+  if (wantsDownload && version.client_decision !== 'aprovado') return guardar(null)
 
   // Se há um proxy MP4 pronto (transcode do ProRes/.mov), reproduz ele. O
   // download continua entregando o arquivo original.
@@ -136,7 +140,7 @@ serve(async (req) => {
     if (sig !== await assinatura(vId, exp)) return new Response('assinatura inválida', { status: 403, headers: CORS })
 
     const { data: v } = await db.from('video_versions')
-      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status').eq('id', vId).maybeSingle()
+      .select('drive_file_id, mime_type, file_name, proxy_file_id, transcode_status, client_decision').eq('id', vId).maybeSingle()
     if (!v?.drive_file_id) return new Response('not found', { status: 404, headers: CORS })
     const usaProxy = !!v.proxy_file_id && v.transcode_status === 'ready'
     const gt = await googleToken()
