@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { gravarCache, lerCache } from '@/lib/cacheDeTela';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { EsqueletoPagina } from '@/components/ui/Esqueleto';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CalendarDays, Clapperboard, ClipboardList, Layers,
   List, LayoutGrid, Loader2, Search, Send, Video,
@@ -57,11 +57,13 @@ const ROTULO_CURTO = (t: Tipo) => TIPOS[t].label.replace(/s$/, '').replace(' ao 
 
 export default function Agenda() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
   const [loading, setLoading] = useState(() => !lerCache('agenda'));
   useBarraDeCarregamento(loading);
   const [itens, setItens] = useState<Item[]>(() => lerCache<{ itens: Item[] }>('agenda')?.itens ?? []);
   const [minhasTarefas, setMinhasTarefas] = useState<Set<string>>(() => new Set(lerCache<{ minhas: string[] }>('agenda')?.minhas ?? []));
+  const [equipe, setEquipe] = useState<{ id: string; full_name: string }[]>(() => lerCache<{ equipe?: { id: string; full_name: string }[] }>('agenda')?.equipe ?? []);
 
   // preferências de exibição (persistem por navegador)
   const [visao, setVisao] = useState<'calendario' | 'lista' | 'kanban'>(() => {
@@ -78,9 +80,20 @@ export default function Agenda() {
   const [tiposAtivos, setTiposAtivos] = useState<Set<Tipo>>(new Set(['diaria', 'ordem', 'tarefa', 'entrega']));
   const [projetoFiltro, setProjetoFiltro] = useState('');
   const [busca, setBusca] = useState('');
+  // Filtro por responsável: '' = todos | 'none' = sem responsável | id do usuário.
+  // Vem de ?resp= (igual ao Kanban de Produção) e é só estado de sessão.
+  const [respFiltro, setRespFiltro] = useState<string>(() => searchParams.get('resp') || '');
 
   const mudarVisao = (v: typeof visao) => { setVisao(v); try { localStorage.setItem('lumos_agenda_visao', v); } catch { /* ignora */ } };
   const mudarGran = (g: Granularidade) => { setGran(g); try { localStorage.setItem('lumos_agenda_gran', g); } catch { /* ignora */ } };
+  const mudarResp = (v: string) => {
+    setRespFiltro(v);
+    setSearchParams(prev => {
+      const n = new URLSearchParams(prev);
+      if (v) n.set('resp', v); else n.delete('resp');
+      return n;
+    }, { replace: true });
+  };
 
   const load = useCallback(async () => {
     // hora_entrega e tipo_id podem ainda não existir no banco (migration pendente) — cai
@@ -99,13 +112,14 @@ export default function Agenda() {
       const q = await supabase.from(tabela).select(completo);
       return q.error ? supabase.from(tabela).select(simples) : q;
     };
-    const [tarefasQ, diariasQ, ordensQ, collabsQ] = await Promise.all([
+    const [tarefasQ, diariasQ, ordensQ, collabsQ, equipeQ] = await Promise.all([
       buscarTarefas(),
       comPlanoB('project_diarias', 'id, nome, data, hora_inicio, hora_fim, duracao_horas, project_id, projects(name)', 'id, nome, data, hora_inicio, project_id, projects(name)'),
       comPlanoB('ordens_do_dia', 'id, titulo, data_producao, hora_inicio, hora_fim, project_id, projects(name)', 'id, titulo, data_producao, project_id, projects(name)'),
       profile?.id
         ? supabase.from('task_collaborators').select('task_id').eq('user_id', profile.id)
         : Promise.resolve({ data: [] as { task_id: string }[] }),
+      supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
     ]);
 
     const hoje = hojeIso();
@@ -152,7 +166,9 @@ export default function Agenda() {
     setItens(lista);
     const minhas = ((collabsQ.data as any[]) || []).map(c => c.task_id);
     setMinhasTarefas(new Set(minhas));
-    gravarCache('agenda', { itens: lista, minhas });
+    const eq = ((equipeQ.data as any[]) || []).map(u => ({ id: u.id as string, full_name: (u.full_name as string) || '' }));
+    setEquipe(eq);
+    gravarCache('agenda', { itens: lista, minhas, equipe: eq });
     setLoading(false);
   }, [profile?.id]);
   useEffect(() => { load(); }, [load]);
@@ -170,6 +186,9 @@ export default function Agenda() {
       if (!tiposAtivos.has(i.tipo)) return false;
       if (projetoFiltro && i.projectId !== projetoFiltro) return false;
       if (tipoFiltro && i.tipoId !== tipoFiltro) return false;
+      // Diárias e ordens do dia não têm responsável: somem ao filtrar por pessoa ou 'sem responsável'.
+      if (respFiltro === 'none') { if (i.tipo === 'diaria' || i.tipo === 'ordem' || i.respId) return false; }
+      else if (respFiltro && i.respId !== respFiltro) return false;
       if (agenda === 'minha') {
         const minha = i.respId === profile?.id
           || (i.tipo !== 'diaria' && i.tipo !== 'ordem' && minhasTarefas.has(i.id.split(':')[1]));
@@ -178,7 +197,7 @@ export default function Agenda() {
       if (q && !`${i.titulo} ${i.projeto || ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [itens, tiposAtivos, projetoFiltro, tipoFiltro, agenda, busca, profile?.id, minhasTarefas]);
+  }, [itens, tiposAtivos, projetoFiltro, tipoFiltro, respFiltro, agenda, busca, profile?.id, minhasTarefas]);
 
   const porDia = useMemo(() => {
     const m = new Map<string, Item[]>();
@@ -244,7 +263,7 @@ export default function Agenda() {
         </div>
       </div>
 
-      {/* Filtros: tipos + projeto + busca */}
+      {/* Filtros: tipos + projeto + responsável + busca */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* No celular os tipos viram uma fileira que rola, em vez de ocupar 3 linhas */}
         <div className="flex items-center gap-2 max-md:w-full max-md:overflow-x-auto max-md:flex-nowrap no-scrollbar">
@@ -265,6 +284,10 @@ export default function Agenda() {
         <div className="w-52 max-md:flex-1">
           <Select value={projetoFiltro} onChange={setProjetoFiltro} searchable className="input-lumos h-8 w-full text-xs"
             options={[{ value: '', label: 'Todos os projetos' }, ...projetos.map(([id, nome]) => ({ value: id, label: nome }))]} />
+        </div>
+        <div className="w-44 max-md:flex-1">
+          <Select value={respFiltro} onChange={mudarResp} className="input-lumos h-8 w-full text-xs"
+            options={[{ value: '', label: 'Todos os responsáveis' }, { value: 'none', label: 'Sem responsável' }, ...equipe.map(u => ({ value: u.id, label: u.full_name }))]} />
         </div>
         {tiposTarefa.length > 0 && (
           <div className="w-40 max-md:flex-1">
