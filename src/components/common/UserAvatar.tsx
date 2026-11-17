@@ -3,6 +3,7 @@ import { clsx } from 'clsx';
 import { useLayout } from '@/context/LayoutContext';
 import StatusDot from '@/components/common/StatusDot';
 import { effectiveStatus } from '@/lib/presence';
+import { inicial } from '@/lib/iniciais';
 
 export interface AvatarUser {
   id?: string | null;
@@ -24,9 +25,11 @@ interface Props {
 
 function initials(name?: string | null) {
   if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return parts[0].slice(0, 2).toUpperCase();
+  // Só palavras que começam com letra/número (emoji no fim do nome não vira "�").
+  const parts = name.trim().split(/\s+/).filter(p => inicial(p));
+  if (!parts.length) return '?';
+  if (parts.length >= 2) return (inicial(parts[0]) + inicial(parts[parts.length - 1])).toUpperCase();
+  return Array.from(parts[0]).slice(0, 2).join('').toUpperCase();
 }
 
 /**

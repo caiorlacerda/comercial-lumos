@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, Eye, EyeOff, LogOut, Search } from 'lucide-react';
@@ -121,7 +122,7 @@ export default function MobileHeader() {
               ) : (
                 <span>
                   {profile?.full_name
-                    ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                    ? profile.full_name.split(' ').map(n => inicial(n)).join('').slice(0, 2).toUpperCase()
                     : user?.email?.charAt(0).toUpperCase()}
                 </span>
               )}
@@ -144,7 +145,7 @@ export default function MobileHeader() {
               ) : (
                 <span>
                   {profile?.full_name
-                    ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                    ? profile.full_name.split(' ').map(n => inicial(n)).join('').slice(0, 2).toUpperCase()
                     : user?.email?.charAt(0).toUpperCase()}
                 </span>
               )}

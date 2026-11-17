@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import React, { useEffect, useState } from 'react';
 import {
   UserPlus,
@@ -474,7 +475,7 @@ export default function UsersPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lumos bg-lumos-yellow/10 flex items-center justify-center text-lumos-yellow font-bold text-sm border border-lumos-yellow/20">
-                          {user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                          {user.full_name.split(' ').map(n => inicial(n)).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex flex-col">
                           <span className="text-sm font-bold text-lumos-text-primary tracking-tight">
@@ -531,7 +532,7 @@ export default function UsersPage() {
                 <MobileCard key={user.id} onClick={() => openEditModal(user)}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lumos bg-lumos-yellow/10 flex items-center justify-center text-lumos-yellow font-bold text-sm border border-lumos-yellow/20 flex-shrink-0">
-                      {user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      {user.full_name.split(' ').map(n => inicial(n)).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold text-lumos-text-primary tracking-tight truncate">

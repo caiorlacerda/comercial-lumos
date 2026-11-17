@@ -2643,7 +2643,7 @@ export default function Projetos() {
                     <div className="w-full max-w-[240px] bg-lumos-border/30 h-1.5 rounded-full overflow-hidden">
                       <div className="bg-lumos-yellow h-full transition-all duration-500" style={{ width: `${getProjectTasksStats(selectedProject.id).pct}%` }} />
                     </div>
-                    <span>{getProjectTasksStats(selectedProject.id).pct}% · {getProjectTasksStats(selectedProject.id).completed} de {getProjectTasksStats(selectedProject.id).total} concluídas</span>
+                    <span>{(() => { const st = getProjectTasksStats(selectedProject.id); return st.total === 0 ? 'Sem tarefas ainda' : `${st.pct}% · ${st.completed} de ${st.total} ${st.completed === 1 ? 'concluída' : 'concluídas'} · ${st.total - st.completed} em aberto`; })()}</span>
                     {selectedProject.data_fim && (
                       <span className="ml-auto">Término: <b className="text-lumos-text-primary">{new Date(selectedProject.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')}</b></span>
                     )}
