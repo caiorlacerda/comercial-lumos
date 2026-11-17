@@ -2,7 +2,7 @@
 // Não conhece Supabase nem HTTP: recebe o Drive (drive.mjs) e, ao executar, um `aoMigrar` que grava o projeto no banco.
 // É usado pela edge function drive-migracao e pelo script scripts/drive-migracao/migrar-projetos-v2.mjs.
 
-import { CAMINHOS, NOMES, caminhoDoMes, mesDoProjeto, planejarMarcaDoCliente, planejarProjeto } from './plano.mjs';
+import { CAMINHOS, NOMES, PASTA_MARCA, caminhoDoMes, mesDoProjeto, mesmoNomeDePasta, planejarMarcaDoCliente, planejarProjeto } from './plano.mjs';
 
 const norm = s => String(s ?? '').trim().toLowerCase();
 
@@ -32,7 +32,7 @@ export function descreverProjeto(p, plano) {
       L.push(`- MOVE         ${s.nome}  [${s.id}]  (${s.tipo})  de ${rotuloOrigem(s)} → ${rotuloDestino(s)}${s.renomearPara ? `   (renomeia para ${s.renomearPara})` : ''}`);
       if (s.nota) L.push(`                 ${s.nota}; conteúdo: ${s.conteudo?.length ? amostra(s.conteudo) : '—'}`);
     }
-    if (s.op === 'lixeira') L.push(`- LIXEIRA      ${s.nome}  [${s.id}]  em ${rotuloOrigem(s)}: ${s.motivo}  (só vai se estiver vazia na hora; é lixeira, não exclusão)`);
+    if (s.op === 'lixeira') L.push(`- LIXEIRA      ${s.nome}  [${s.id}]  em ${rotuloOrigem(s)}: ${s.motivo}${s.subpastas?.length ? `  (com subpastas vazias: ${amostra(s.subpastas, 6)})` : ''}  (só vai se estiver sem arquivos na hora; é lixeira, não exclusão)`);
     if (s.op === 'conflito') L.push(`- CONFLITO     ${s.nome}  [${s.id}]  ${s.motivo}: NÃO será movido nem sobrescrito`);
   }
   for (const i of plano.ignorados) L.push(`- fica         ${i.nome}  (${i.motivo})`);
@@ -48,10 +48,10 @@ async function moverParaMes(drive, p, executar) {
   if (!p.client_drive_folder_id) return { aviso: 'cliente sem pasta registrada: não movo para a pasta do mês' };
   const caminho = caminhoDoMes(p.marca, mes);
   if (!executar) return { texto: `- MOVE         a pasta do projeto → ${p.client_name}/${caminho.join('/')}/  (opção mover_para_mes)` };
-  // Cliente › PROJETOS › [sub-marca] › AAAA-MM: contêineres achados pelo nome e criados se faltarem.
+  // Cliente › Projetos › [sub-marca] › AAAA-MM: contêineres achados pelo nome (Projetos, em maiúsculas ou não) e criados se faltarem.
   let paiId = p.client_drive_folder_id;
   for (const nome of caminho) {
-    const achada = (await drive.listar(paiId)).find(f => f.isFolder && f.name === nome);
+    const achada = (await drive.listar(paiId)).find(f => f.isFolder && mesmoNomeDePasta(f.name, nome));
     paiId = achada ? achada.id : await drive.criarPasta(paiId, nome);
   }
   const r = await drive.mover(p.drive_folder_id, paiId);
@@ -75,9 +75,9 @@ export async function planejarCliente({ drive, cliente, projetos, opcoes = {} })
     else {
       planoMarca = planejarMarcaDoCliente(await drive.listar(clienteDriveId));
       const linha = {
-        renomear: `- RENOMEIA     _ASSETS  [${planoMarca.id}]  → MARCA   (mesma pasta, mesmo ID)`,
+        renomear: `- RENOMEIA     _ASSETS  [${planoMarca.id}]  → ${PASTA_MARCA}   (mesma pasta, mesmo ID)`,
         conflito: `- CONFLITO     ${planoMarca.motivo}`,
-        'ja-esta': '- já está como MARCA; nada a fazer',
+        'ja-esta': `- já está como ${PASTA_MARCA}; nada a fazer`,
         nada: `- ${planoMarca.motivo}`,
       }[planoMarca.acao];
       R.push('### Pasta de materiais fixos do cliente (renomear_assets)', linha, '');
@@ -111,7 +111,22 @@ export async function planejarCliente({ drive, cliente, projetos, opcoes = {} })
   return { texto: R.join('\n'), itens, pulados, planoMarca, resumo };
 }
 
-/** Aplica os passos de UM projeto. A lixeira só acontece se a pasta estiver vazia nesta hora. */
+/**
+ * Acha um ARQUIVO (não pasta) dentro da pasta, em qualquer profundidade; devolve o nome do primeiro que achar ou null.
+ * Pasta só com subpastas vazias conta como vazia. Passou de `limite` pastas lidas, devolve '(pasta grande demais para conferir)':
+ * na dúvida a pasta NÃO vai para a lixeira.
+ */
+async function acharArquivo(drive, id, estado = { lidas: 0, limite: 300 }) {
+  for (const f of await drive.listar(id)) {
+    if (!f.isFolder) return f.name;
+    if (++estado.lidas > estado.limite) return '(pasta grande demais para conferir)';
+    const achou = await acharArquivo(drive, f.id, estado);
+    if (achou) return achou;
+  }
+  return null;
+}
+
+/** Aplica os passos de UM projeto. A lixeira só acontece se a pasta estiver SEM ARQUIVOS (nem nas subpastas) nesta hora. */
 async function aplicar(drive, p, plano) {
   const ctx = { raiz: p.drive_folder_id };
   const feito = [];
@@ -125,8 +140,8 @@ async function aplicar(drive, p, plano) {
       if (s.registra) ctx[s.registra] = s.id;
       feito.push({ op: 'movida', id: s.id, nomeAntigo: r.nomeAntigo, nomeNovo: s.renomearPara ?? r.nomeAntigo, paisAntigos: r.paisAntigos, paiNovo: ctx[s.para] });
     } else if (s.op === 'lixeira') {
-      const restam = await drive.listar(s.id);
-      if (restam.length) feito.push({ op: 'lixeira-pulada', id: s.id, nome: s.nome, motivo: `ainda tem ${restam.length} item(ns): ${amostra(restam.map(x => x.name), 5)}` });
+      const arquivo = await acharArquivo(drive, s.id);
+      if (arquivo) feito.push({ op: 'lixeira-pulada', id: s.id, nome: s.nome, motivo: `ainda tem arquivo: ${arquivo}` });
       else { await drive.paraLixeira(s.id); feito.push({ op: 'lixeira', id: s.id, nome: s.nome }); }
     }
   }

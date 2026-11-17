@@ -11,7 +11,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 export interface SaveOsResult { ok: boolean; skipped?: boolean; aguardandoMarca?: boolean; url?: string; error?: string; }
 
 // Gera a OS (PDF, no navegador) e manda pra função `drive-os-upload`, que salva na
-// subpasta "OS" do projeto (v1) ou em 00_DOCUMENTOS (v2) no Drive com a conta de serviço — não depende
+// subpasta "OS" do projeto (v1) ou em 00_Documentos (v2) no Drive com a conta de serviço — não depende
 // de a pessoa estar logada no Google. Também registra na seção Documentos.
 // Não duplica: se o projeto já tem uma OS registrada, pula.
 export function useSaveOsToDrive() {

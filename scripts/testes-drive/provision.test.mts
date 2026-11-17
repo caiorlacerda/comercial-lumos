@@ -50,7 +50,7 @@ const provisionar = async (id: string) => { const r = await handler(new Request(
 function cenario(clientes: any[], projetos: any[], opts: { semColunasV2?: boolean } = {}) {
   drive = new Map(); t = 0; n = 0; escritas = [];
   add('drive', 'DRIVE', null); add('clientes', 'Clientes', 'drive'); add('templates', '_TEMPLATES', 'drive');
-  add('t-assets', '_ASSETS', 'templates'); add('t-assets-bb', 'BRAND-BOOK', 't-assets');
+  add('t-assets', '_ASSETS', 'templates'); add('t-assets-bb', 'BRAND-BOOK', 't-assets'); add('t-assets-lg', 'LOGOS', 't-assets');
   add('t-p', '_TEMPLATE_PROJETO', 'templates'); add('t-p-in', 'NNN_NOMEPROJETO', 't-p');
   add('t-p-0', '00_GERAL', 't-p-in'); add('t-p-e', '06_ENTREGA', 't-p-in'); add('t-p-r', '01_REVISAO', 't-p-e'); add('t-p-a', '02_APROVADO', 't-p-e');
   add('t-l', '_TEMPLATE_LIVE', 'templates'); add('t-l-in', 'NNN_NOMEPROJETO_LIVE', 't-l'); add('t-l-0', '00_GERAL', 't-l-in'); add('t-l-3', '03_TRANSMISSAO', 't-l-in');
@@ -61,7 +61,7 @@ function cenario(clientes: any[], projetos: any[], opts: { semColunasV2?: boolea
 }
 let falhas = 0; const ok = (nome: string, c: any) => { console.log((c ? 'OK     ' : 'FALHA  ') + nome); if (!c) falhas++; };
 const proj = (id: string) => db.projects.find((p: any) => p.id === id);
-const pastasV2 = ['00_DOCUMENTOS', '01_BRUTO', '02_ARTES', '02_ARTES/01_TRILHAS', '03_EXPORT', '03_EXPORT/01_REVISAO', '03_EXPORT/02_FINAL'];
+const pastasV2 = ['00_Documentos', '01_Bruto', '02_Artes', '02_Artes/01_Trilhas', '03_Export', '03_Export/01_Revisao', '03_Export/02_Final'];
 const cli = { id: 'c1', name: 'Acme', marcas: [] as string[] };
 
 // 1) projeto novo, cliente sem marcas
@@ -69,22 +69,23 @@ cenario([cli], [{ id: 'p1' }]);
 ok('retorna 202', (await provisionar('p1')) === 202);
 const p1 = proj('p1');
 const raiz = p1.drive_folder_id;
-ok('pasta v2 em Clientes/Acme/PROJETOS/2026-10/227_MINI-MISSAO', caminho(raiz) === 'DRIVE/Clientes/Acme/PROJETOS/2026-10/227_MINI-MISSAO');
+ok('pasta v2 em Clientes/Acme/Projetos/2026-10/227_MINI-MISSAO', caminho(raiz) === 'DRIVE/Clientes/Acme/Projetos/2026-10/227_MINI-MISSAO');
 ok('as 5 subpastas + 2 filhas existem, criadas por código', pastasV2.every(c => { const [a, b] = c.split('/'); const pa = porNome(raiz, a)[0]; return pa && (!b || porNome(pa.id, b)[0]); }));
 ok('NÃO copia nada do template (sem 06_ENTREGA nem 00_GERAL no projeto)', porNome(raiz, '06_ENTREGA').length === 0 && porNome(raiz, '00_GERAL').length === 0);
-ok('banco: layout v2, 7 IDs, upload = 01_REVISAO', p1.drive_layout === 'v2' && Object.keys(p1.drive_pastas).length === 7 && p1.drive_upload_folder_id === p1.drive_pastas.revisao && caminho(p1.drive_pastas.revisao).endsWith('03_EXPORT/01_REVISAO') && caminho(p1.drive_pastas.final).endsWith('03_EXPORT/02_FINAL') && caminho(p1.drive_pastas.documentos).endsWith('/00_DOCUMENTOS'));
+ok('banco: layout v2, 7 IDs, upload = 01_Revisao', p1.drive_layout === 'v2' && Object.keys(p1.drive_pastas).length === 7 && p1.drive_upload_folder_id === p1.drive_pastas.revisao && caminho(p1.drive_pastas.revisao).endsWith('03_Export/01_Revisao') && caminho(p1.drive_pastas.final).endsWith('03_Export/02_Final') && caminho(p1.drive_pastas.documentos).endsWith('/00_Documentos'));
 const cNovo = db.clients[0].drive_folder_id;
-ok('cliente novo ganhou a pasta, com MARCA e PROJETOS', !!cNovo && porNome(cNovo, 'MARCA').length === 1 && porNome(cNovo, 'PROJETOS').length === 1);
-ok('cliente novo: MARCA traz as subpastas do template + as padrão + GUIDELINES', ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES'].every(n => porNome(porNome(cNovo, 'MARCA')[0].id, n).length === 1));
+ok('cliente novo ganhou a pasta, com Marca e Projetos', !!cNovo && porNome(cNovo, 'Marca').length === 1 && porNome(cNovo, 'Projetos').length === 1);
+ok('cliente novo: Marca traz as subpastas do template + as padrão + Guidelines, só com a primeira maiúscula', ['Brand-book', 'Fontes', 'Graficos', 'Imagens', 'Logos', 'Guidelines'].every(n => porNome(porNome(cNovo, 'Marca')[0].id, n).length === 1));
+ok('...e o modelo em caixa alta (BRAND-BOOK, LOGOS) não deixa pasta duplicada nem em maiúsculas', filhos(porNome(cNovo, 'Marca')[0].id).length === 6 && !filhos(porNome(cNovo, 'Marca')[0].id).some(x => x.name === 'BRAND-BOOK' || x.name === 'LOGOS'));
 ok('cliente novo: NÃO cria _ASSETS', porNome(cNovo, '_ASSETS').length === 0);
-ok('o projeto fica dentro de PROJETOS (não solto no cliente)', porNome(cNovo, '227_MINI-MISSAO').length === 0);
+ok('o projeto fica dentro de Projetos (não solto no cliente)', porNome(cNovo, '227_MINI-MISSAO').length === 0);
 
 // 2) segundo projeto no mesmo mês reaproveita a pasta do mês
 db.projects.push({ ...proj('p1'), id: 'p2', code: '2026-228', name: 'Outro', drive_folder_id: null, drive_upload_folder_id: null, drive_layout: 'v1', drive_pastas: null });
 await provisionar('p2');
 const cliPasta = db.clients[0].drive_folder_id;
-const projetosId = porNome(cliPasta, 'PROJETOS')[0].id;
-ok('mesmo mês: uma única PROJETOS e uma única 2026-10', porNome(cliPasta, 'PROJETOS').length === 1 && porNome(projetosId, '2026-10').length === 1 && caminho(proj('p2').drive_folder_id) === 'DRIVE/Clientes/Acme/PROJETOS/2026-10/228_OUTRO');
+const projetosId = porNome(cliPasta, 'Projetos')[0].id;
+ok('mesmo mês: uma única Projetos e uma única 2026-10', porNome(cliPasta, 'Projetos').length === 1 && porNome(projetosId, '2026-10').length === 1 && caminho(proj('p2').drive_folder_id) === 'DRIVE/Clientes/Acme/Projetos/2026-10/228_OUTRO');
 
 // 3) idempotência: rodar de novo não cria nada
 escritas = []; const antes = drive.size;
@@ -126,10 +127,10 @@ await provisionar('p1');
 ok('...e o aviso fica registrado uma única vez', db.drive_sync_log.filter((l: any) => l.action === 'wait_marca').length === 1);
 proj('p1').marca = 'Uniasselvi';
 await provisionar('p1');
-ok('marca escolhida: Vitru/PROJETOS/Uniasselvi/2026-10/227_MINI-MISSAO (a sub-marca fica DENTRO de PROJETOS)', caminho(proj('p1').drive_folder_id) === 'DRIVE/Clientes/Vitru/PROJETOS/Uniasselvi/2026-10/227_MINI-MISSAO' && proj('p1').drive_layout === 'v2');
+ok('marca escolhida: Vitru/Projetos/Uniasselvi/2026-10/227_MINI-MISSAO (a sub-marca fica DENTRO de Projetos)', caminho(proj('p1').drive_folder_id) === 'DRIVE/Clientes/Vitru/Projetos/Uniasselvi/2026-10/227_MINI-MISSAO' && proj('p1').drive_layout === 'v2');
 db.projects.push({ ...proj('p1'), id: 'p2', code: '2026-230', name: 'Outro', marca: 'Vitru', drive_folder_id: null, drive_upload_folder_id: null, drive_layout: 'v1', drive_pastas: null });
 await provisionar('p2');
-ok('outra marca do mesmo cliente tem a própria pasta', caminho(proj('p2').drive_folder_id) === 'DRIVE/Clientes/Vitru/PROJETOS/Vitru/2026-10/230_OUTRO');
+ok('outra marca do mesmo cliente tem a própria pasta', caminho(proj('p2').drive_folder_id) === 'DRIVE/Clientes/Vitru/Projetos/Vitru/2026-10/230_OUTRO');
 
 // 9) live: segue o template antigo, v1, direto no cliente
 cenario([cli], [{ id: 'p1', category: 'live' }]);
@@ -155,23 +156,33 @@ drive.get(velho).parents = [add('mes', '2026-10', cp)]; proj('p1').name = 'Renom
 await provisionar('p1');
 ok('v1 movido para a pasta do mês: não cria outra pasta de projeto', drive.size === antes4 && proj('p1').drive_folder_id === velho);
 
-// 10b) cliente EXISTENTE com _ASSETS ganha um projeto v2: _ASSETS não é renomeada nem duplicada; só PROJETOS nasce
+// 10b) cliente EXISTENTE com _ASSETS ganha um projeto v2: _ASSETS não é renomeada nem duplicada; só Projetos nasce
 cenario([cli], [{ id: 'p9' }]);
 const cx = add('cx', 'Acme', 'clientes'); db.clients[0].drive_folder_id = cx; const ax = add('ax', '_ASSETS', cx); add('axl', 'LOGOS', ax);
 await provisionar('p9');
 ok('cliente existente: continua com _ASSETS (mesmo ID, mesmo nome, mesmo conteúdo)', drive.get('ax').name === '_ASSETS' && drive.get('axl').parents[0] === 'ax');
-ok('cliente existente: NÃO ganha MARCA (nem duplicada, nem renomeada)', porNome(cx, 'MARCA').length === 0 && porNome(cx, '_ASSETS').length === 1);
-ok('cliente existente: PROJETOS é criada e o projeto vai para lá', caminho(proj('p9').drive_folder_id) === 'DRIVE/Clientes/Acme/PROJETOS/2026-10/227_MINI-MISSAO');
+ok('cliente existente: NÃO ganha Marca (nem duplicada, nem renomeada)', porNome(cx, 'Marca').length === 0 && porNome(cx, '_ASSETS').length === 1);
+ok('cliente existente: Projetos é criada e o projeto vai para lá', caminho(proj('p9').drive_folder_id) === 'DRIVE/Clientes/Acme/Projetos/2026-10/227_MINI-MISSAO');
 // 10c) cliente existente já com MARCA: reaproveita
 cenario([cli], [{ id: 'p9' }]);
 const cy = add('cy', 'Acme', 'clientes'); db.clients[0].drive_folder_id = cy; add('my', 'MARCA', cy);
 await provisionar('p9');
-ok('cliente com MARCA: não cria outra MARCA nem _ASSETS', porNome(cy, 'MARCA').length === 1 && porNome(cy, '_ASSETS').length === 0);
-// 10d) cliente existente sem MARCA nem _ASSETS: não é mexido além de PROJETOS
+ok('cliente com MARCA (nome antigo): não cria Marca ao lado nem _ASSETS', porNome(cy, 'MARCA').length === 1 && porNome(cy, 'Marca').length === 0 && porNome(cy, '_ASSETS').length === 0);
+// 10d) cliente existente sem MARCA nem _ASSETS: não é mexido além de Projetos
 cenario([cli], [{ id: 'p9' }]);
 const cz = add('cz', 'Acme', 'clientes'); db.clients[0].drive_folder_id = cz;
 await provisionar('p9');
-ok('cliente existente sem pasta de materiais: não é tocado (só ganha PROJETOS); MARCA é coisa de cliente novo', porNome(cz, 'MARCA').length === 0 && porNome(cz, '_ASSETS').length === 0 && porNome(cz, 'PROJETOS').length === 1);
+ok('cliente existente sem pasta de materiais: não é tocado (só ganha Projetos); Marca é coisa de cliente novo', porNome(cz, 'Marca').length === 0 && porNome(cz, '_ASSETS').length === 0 && porNome(cz, 'Projetos').length === 1);
+
+// 10e) cliente e projeto com nomes ANTIGOS em caixa alta (PROJETOS, 00_DOCUMENTOS…): reaproveita, não duplica
+cenario([cli], [{ id: 'p9' }]);
+const cw = add('cw', 'Acme', 'clientes'); db.clients[0].drive_folder_id = cw; add('pw', 'PROJETOS', cw); add('mw', '2026-10', 'pw');
+const xw = add('xw', '227_MINI-MISSAO', 'mw'); add('dw', '00_DOCUMENTOS', xw); const ew = add('ew', '03_EXPORT', xw); add('rw', '01_REVISAO', ew);
+await provisionar('p9');
+const nomesDe = (pai: string) => filhos(pai).map(x => x.name)
+ok('PROJETOS (nome antigo): o projeto entra nela, sem criar Projetos ao lado', porNome(cw, 'PROJETOS').length === 1 && porNome(cw, 'Projetos').length === 0 && proj('p9').drive_folder_id === xw)
+ok('subpastas antigas (00_DOCUMENTOS, 03_EXPORT/01_REVISAO) reaproveitadas pelo ID; só o que faltava foi criado', proj('p9').drive_pastas.documentos === 'dw' && proj('p9').drive_pastas.export === ew && proj('p9').drive_pastas.revisao === 'rw' && nomesDe(xw).filter(n => /^00_documentos$/i.test(n)).length === 1 && nomesDe(ew).filter(n => /^01_revisao$/i.test(n)).length === 1)
+ok('...e as que faltavam nascem com o nome novo (01_Bruto, 02_Final)', nomesDe(xw).includes('01_Bruto') && nomesDe(ew).includes('02_Final'))
 
 // 12) banco sem as colunas v2 (migration pendente): comportamento antigo
 cenario([cli], [{ id: 'p1' }], { semColunasV2: true });

@@ -70,7 +70,7 @@ if (!EXECUTAR) {
 }
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const resp = await rl.question(`\nIsto vai MOVER pastas no Drive de ${plano.itens.length} projeto(s) de "${CLIENTE}"${plano.planoMarca?.acao === 'renomear' ? ' e RENOMEAR a _ASSETS para MARCA' : ''}. Digite o nome do cliente para confirmar: `);
+const resp = await rl.question(`\nIsto vai MOVER pastas no Drive de ${plano.itens.length} projeto(s) de "${CLIENTE}"${plano.planoMarca?.acao === 'renomear' ? ' e RENOMEAR a _ASSETS para Marca' : ''}. Digite o nome do cliente para confirmar: `);
 rl.close();
 if (norm(resp) !== norm(CLIENTE)) parar('nome diferente: nada foi executado.');
 
@@ -81,7 +81,7 @@ const res = await executarPlanos({
 });
 
 for (const r of res.projetos) console.log(`\n${r.code ?? ''} ${r.nome}: ${r.erro ? `FALHOU: ${r.erro}\n   Pare aqui e me mostre o erro. O que já foi feito neste projeto está em ${SAIDA}/feito-*.json.` : 'ok'}`);
-if (res.renomeouMarca) console.log(`\nPasta de materiais fixos: _ASSETS → MARCA (ok, mesmo ID ${res.renomeouMarca.id})`);
+if (res.renomeouMarca) console.log(`\nPasta de materiais fixos: _ASSETS → Marca (ok, mesmo ID ${res.renomeouMarca.id})`);
 if (res.naoProcessados.length) console.log(`\nNão processados (tempo): ${res.naoProcessados.map(x => `${x.code ?? ''} ${x.nome}`).join(', ')}`);
 for (const a of res.avisos) console.log(`ATENÇÃO: ${a}`);
 

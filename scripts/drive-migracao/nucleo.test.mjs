@@ -44,6 +44,28 @@ function cenario() {
   ok('e mesmo assim o projeto é gravado como v2 (a pasta que sobrou é só um aviso)', res.projetos[0].persistido === true && !res.erro);
 }
 
+// ---- regra de 16/11: pasta vazia fora da estrutura → lixeira (vazia = sem ARQUIVO nenhum, nem nas subpastas), conferido na hora
+{
+  const d = cenario();
+  d.add('vz', '99_VAZIA', 'PA').add('vz1', 'Sub1', 'vz').add('vz2', 'Sub2', 'vz1'); // trecho vazio: 99_VAZIA › Sub1 › Sub2
+  const plano = await planejarCliente({ drive: d, cliente: 'Cli', projetos: [proj('A', 'PA')] });
+  const passo = plano.itens[0].plano.passos.find(s => s.op === 'lixeira' && s.id === 'vz');
+  ok('plano: o trecho vazio vira UMA lixeira, na pasta mais alta, e lista as subpastas', !!passo && passo.subpastas.sort().join() === 'Sub1,Sub2' && !plano.itens[0].plano.passos.some(s => s.op === 'lixeira' && (s.id === 'vz1' || s.id === 'vz2')));
+  ok('relatório: a linha LIXEIRA mostra as subpastas vazias e que é lixeira, não exclusão', /LIXEIRA\s+99_VAZIA.*Sub1, Sub2.*não exclusão/.test(plano.texto));
+  d.add('chegou', 'foto.jpg', 'vz2', false); // alguém põe um arquivo lá no fundo depois do plano
+  const res = await executarPlanos({ drive: d, plano, aoMigrar: async () => {} });
+  ok('na hora de aplicar: arquivo novo no fundo → a pasta NÃO vai para a lixeira e o arquivo fica', d.nos.get('vz').lixo === false && d.nos.get('chegou').pai === 'vz2');
+  ok('...e o resultado diz qual arquivo impediu', res.avisos.some(a => /99_VAZIA/.test(a) && /foto\.jpg/.test(a)));
+}
+{
+  const d = cenario();
+  d.add('vz', '99_VAZIA', 'PA').add('vz1', 'Sub1', 'vz').add('vz2', 'Sub2', 'vz1');
+  const plano = await planejarCliente({ drive: d, cliente: 'Cli', projetos: [proj('A', 'PA')] });
+  const res = await executarPlanos({ drive: d, plano, aoMigrar: async () => {} });
+  ok('na hora de aplicar: trecho de fato vazio → vai para a lixeira (uma única escrita nessa pasta; subpastas vão junto)', d.nos.get('vz').lixo === true && d.escritas.filter(e => e === 'lixeira vz').length === 1 && !d.escritas.includes('lixeira vz1') && !d.escritas.includes('lixeira vz2') && !res.erro);
+  ok('nunca exclusão definitiva: o Drive em memória não tem como excluir (só paraLixeira)', d.nos.has('vz') && d.nos.has('vz1') && d.nos.has('vz2'));
+}
+
 // ---- aoMigrar recebe os 7 IDs; erro para na hora e não segue para o próximo projeto
 {
   const d = cenario();

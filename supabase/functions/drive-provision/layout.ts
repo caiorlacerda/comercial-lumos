@@ -3,35 +3,58 @@
 //
 // Estrutura da pasta do cliente:
 //   Cliente
-//     MARCA                      materiais fixos (brandbook, logos, fontes, guidelines). Cliente antigo tem _ASSETS.
-//     PROJETOS
+//     Marca                      materiais fixos (brandbook, logos, fontes, guidelines). Cliente antigo tem _ASSETS.
+//     Projetos
 //       [Sub-marca]              só para cliente com marcas (ex.: Vitru › Uniasselvi)
 //         AAAA-MM
 //           NNN_NOME-DO-PROJETO  (projeto v2, exceto live)
-//             00_DOCUMENTOS
-//             01_BRUTO
-//             02_ARTES › 01_TRILHAS
-//             03_EXPORT › 01_REVISAO, 02_FINAL
+//             00_Documentos
+//             01_Bruto
+//             02_Artes › 01_Trilhas
+//             03_Export › 01_Revisao, 02_Final
+//
+// Nomes das pastas da estrutura: só a primeira letra maiúscula (decisão do Caio, 16/11). Pastas criadas antes disso
+// podem ter o nome antigo em caixa alta (MARCA, 00_DOCUMENTOS…): ao PROCURAR, use `mesmoNomeDePasta`, que ignora a caixa.
 
 export const NOMES_V2 = {
-  documentos: '00_DOCUMENTOS',
-  bruto: '01_BRUTO',
-  artes: '02_ARTES',
-  trilhas: '01_TRILHAS',
-  export: '03_EXPORT',
-  revisao: '01_REVISAO',
-  final: '02_FINAL',
+  documentos: '00_Documentos',
+  bruto: '01_Bruto',
+  artes: '02_Artes',
+  trilhas: '01_Trilhas',
+  export: '03_Export',
+  revisao: '01_Revisao',
+  final: '02_Final',
 } as const
 
 /** Pasta do cliente com os materiais fixos. Clientes antigos têm `_ASSETS` (não é renomeada sozinha). */
-export const PASTA_MARCA = 'MARCA'
+export const PASTA_MARCA = 'Marca'
 export const PASTA_MARCA_ANTIGA = '_ASSETS'
 /** Pasta do cliente que guarda todos os projetos novos. */
-export const PASTA_PROJETOS = 'PROJETOS'
-/** Subpastas de MARCA nos clientes novos (as da `_ASSETS` + a GUIDELINES do portal de boas-vindas). */
-export const SUBPASTAS_MARCA = ['BRAND-BOOK', 'FONTES', 'GRAFICOS', 'IMAGENS', 'LOGOS', 'GUIDELINES']
+export const PASTA_PROJETOS = 'Projetos'
+/** Subpastas da Marca nos clientes novos (as da `_ASSETS` + a Guidelines do portal de boas-vindas). Só a primeira letra maiúscula. */
+export const SUBPASTAS_MARCA = ['Brand-book', 'Fontes', 'Graficos', 'Imagens', 'Logos', 'Guidelines']
 
-/** Caminho a partir da pasta do cliente até a pasta do mês: PROJETOS › [sub-marca] › AAAA-MM. */
+/**
+ * Nome de uma subpasta da Marca no formato novo: um nome TODO em caixa alta (BRAND-BOOK, GRAFICOS, o que vem do modelo
+ * _TEMPLATES/_ASSETS) vira só com a primeira maiúscula (Brand-book, Graficos). Qualquer outro nome fica como está.
+ */
+export function nomeDeSubpastaMarca(nome: string): string {
+  return nome !== nome.toLowerCase() && nome === nome.toUpperCase() ? nome.charAt(0) + nome.slice(1).toLowerCase() : nome
+}
+
+const minusculo = (s: string) => s.trim().toLowerCase()
+const NOMES_FIXOS = new Set([...Object.values(NOMES_V2), PASTA_MARCA, PASTA_MARCA_ANTIGA, PASTA_PROJETOS, ...SUBPASTAS_MARCA].map(minusculo))
+
+/**
+ * Mesmo nome de pasta? Os nomes FIXOS da estrutura (Marca, Projetos, _ASSETS, as subpastas da Marca e as pastas do projeto) ignoram maiúsculas e
+ * minúsculas: a pasta antiga "MARCA" ou "00_DOCUMENTOS" é reconhecida como "Marca"/"00_Documentos" e nunca se cria uma duplicada.
+ * Qualquer outro nome (cliente, sub-marca, projeto) continua exato, como sempre foi.
+ */
+export function mesmoNomeDePasta(achado: string, procurado: string): boolean {
+  return NOMES_FIXOS.has(minusculo(procurado)) ? minusculo(achado) === minusculo(procurado) : achado === procurado
+}
+
+/** Caminho a partir da pasta do cliente até a pasta do mês: Projetos › [sub-marca] › AAAA-MM. */
 export function caminhoDoMes(marca: string | null | undefined, mes: string): string[] {
   const m = (marca ?? '').trim()
   return m ? [PASTA_PROJETOS, nomeDeContainer(m), mes] : [PASTA_PROJETOS, mes]

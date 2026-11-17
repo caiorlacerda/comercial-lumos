@@ -29,11 +29,20 @@ const base = { drive_folder_id: 'RAIZ' };
   ok('v1 ID na lixeira + caminho vivo: acha a pasta viva', r.ok && r.folderId === 'REV_NOVA' && r.mudou === true);
   ok('v1: manda gravar o novo drive_upload_folder_id', r.gravar?.drive_upload_folder_id === 'REV_NOVA' && r.trocouDe === 'REV_LIXO');
 
-  const f2 = { 'RAIZ|03_EXPORT': 'EXP', 'EXP|01_REVISAO': 'REV2_NOVA' };
+  const f2 = { 'RAIZ|03_Export': 'EXP', 'EXP|01_Revisao': 'REV2_NOVA' };
   const proj2 = { ...base, drive_layout: 'v2', drive_upload_folder_id: 'R_VELHA', drive_pastas: { revisao: 'R_VELHA', bruto: 'B' } };
   const r2 = await resolverPastaRevisao({ proj: proj2, drive: drive(['REV2_NOVA'], f2) });
-  ok('v2 ID na lixeira + 03_EXPORT/01_REVISAO vivo: acha', r2.ok && r2.folderId === 'REV2_NOVA');
+  ok('v2 ID na lixeira + 03_Export/01_Revisao vivo: acha', r2.ok && r2.folderId === 'REV2_NOVA');
   ok('v2: atualiza drive_pastas.revisao sem perder as outras chaves', r2.gravar?.drive_pastas?.revisao === 'REV2_NOVA' && r2.gravar?.drive_pastas?.bruto === 'B' && r2.gravar?.drive_upload_folder_id === 'REV2_NOVA');
+
+  // pastas com o nome ANTIGO em caixa alta (criadas antes de 16/11): também são achadas
+  const f3 = { 'RAIZ|03_EXPORT': 'EXP_VELHA', 'EXP_VELHA|01_REVISAO': 'REV3_NOVA' };
+  const r3 = await resolverPastaRevisao({ proj: proj2, drive: drive(['REV3_NOVA'], f3) });
+  ok('v2 ID na lixeira + 03_EXPORT/01_REVISAO (nome antigo em caixa alta) vivo: acha', r3.ok && r3.folderId === 'REV3_NOVA' && r3.mudou === true);
+  // o nome novo tem prioridade quando as duas existem
+  const f4 = { 'RAIZ|03_Export': 'EXP_N', 'EXP_N|01_Revisao': 'REV_N', 'RAIZ|03_EXPORT': 'EXP_V', 'EXP_V|01_REVISAO': 'REV_V' };
+  const r4 = await resolverPastaRevisao({ proj: proj2, drive: drive(['REV_N', 'REV_V'], f4) });
+  ok('v2: nome novo tem prioridade sobre o antigo', r4.ok && r4.folderId === 'REV_N');
 }
 
 // 3) Lixeira sem substituta: erro claro, nenhum ID para subir.
@@ -53,7 +62,7 @@ const base = { drive_folder_id: 'RAIZ' };
   const filhos = { 'RAIZ|06_ENTREGA': 'ENT', 'ENT|01_REVISAO': 'REV' };
   const r = await resolverPastaRevisao({ proj: { ...base, drive_layout: 'v1' }, drive: drive(['REV'], filhos) });
   ok('v1 sem ID salvo: acha pelo nome e manda gravar', r.ok && r.folderId === 'REV' && r.gravar?.drive_upload_folder_id === 'REV');
-  const r2 = await resolverPastaRevisao({ proj: { ...base, drive_layout: 'v2' }, drive: drive(['REV'], { 'RAIZ|03_EXPORT': 'EXP', 'EXP|01_REVISAO': 'REV' }) });
+  const r2 = await resolverPastaRevisao({ proj: { ...base, drive_layout: 'v2' }, drive: drive(['REV'], { 'RAIZ|03_Export': 'EXP', 'EXP|01_Revisao': 'REV' }) });
   ok('v2 sem ID salvo: não procura por nome (erro "sem pasta")', !r2.ok && r2.codigo === ERRO_SEM_PASTA);
   const r3 = await resolverPastaRevisao({ proj: { ...base, drive_layout: 'v1' }, drive: drive([]) });
   ok('v1 sem ID e sem pasta: erro "sem pasta" (não diz lixeira)', !r3.ok && r3.codigo === ERRO_SEM_PASTA);

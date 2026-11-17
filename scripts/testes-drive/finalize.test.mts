@@ -44,21 +44,21 @@ function cenario(projeto: any) {
   db.drive_sync_log = [];
 }
 
-// v2: copia para 03_EXPORT/02_FINAL pelo ID e NÃO cria pasta nenhuma
+// v2: copia para 03_Export/02_Final pelo ID e NÃO cria pasta nenhuma
 cenario({ drive_layout: 'v2', drive_pastas: { final: 'fin' } });
-add('fin', '02_FINAL', add('exp', '03_EXPORT', 'proj'));
+add('fin', '02_Final', add('exp', '03_Export', 'proj'));
 let r = await finalizar('v1');
 ok('v2: responde 200', r.status === 200);
-ok('v2: vFINAL copiado para 03_EXPORT/02_FINAL com _APROVADO', filhos('fin').some(x => x.name === 'Filme_V1_APROVADO.mp4'));
+ok('v2: vFINAL copiado para 03_Export/02_Final com _APROVADO', filhos('fin').some(x => x.name === 'Filme_V1_APROVADO.mp4'));
 ok('v2: nenhuma pasta criada (não recria 06_ENTREGA/02_APROVADO)', !escritas.some(e => e.startsWith('criar')) && filhos('proj').every(x => x.name !== '06_ENTREGA'));
 ok('v2: versão marcada APROVADO com o ID da cópia', db.video_versions[0].status === 'APROVADO' && !!db.video_versions[0].approved_file_id);
 ok('v2: o original continua onde estava', drive.get('orig').parents[0] === 'proj');
-ok('v2: log diz 03_EXPORT/02_FINAL', db.drive_sync_log.some((l: any) => /03_EXPORT\/02_FINAL/.test(l.detail)));
+ok('v2: log diz 03_Export/02_Final', db.drive_sync_log.some((l: any) => /03_Export\/02_Final/.test(l.detail)));
 
 // v2 sem o ID da pasta final: falha sem criar nada
 cenario({ drive_layout: 'v2', drive_pastas: { revisao: 'rev' } });
 r = await finalizar('v1');
-ok('v2 sem 02_FINAL registrada: erro, nada criado, nada copiado', r.status >= 400 && escritas.length === 0 && db.video_versions[0].approved_file_id === null);
+ok('v2 sem 02_Final registrada: erro, nada criado, nada copiado', r.status >= 400 && escritas.length === 0 && db.video_versions[0].approved_file_id === null);
 
 // v1: comportamento de sempre (cria 06_ENTREGA/02_APROVADO se faltar)
 cenario({ drive_layout: 'v1', drive_pastas: null });
@@ -72,7 +72,7 @@ r = await finalizar('v1');
 ok('sem colunas v2: comportamento v1', r.status === 200 && filhos('proj').some(x => x.name === '06_ENTREGA'));
 
 // idempotência
-cenario({ drive_layout: 'v2', drive_pastas: { final: 'fin' } }); add('fin', '02_FINAL', 'proj');
+cenario({ drive_layout: 'v2', drive_pastas: { final: 'fin' } }); add('fin', '02_Final', 'proj');
 db.video_versions[0].approved_file_id = 'ja-copiado';
 await finalizar('v1');
 ok('já finalizado: não copia de novo', escritas.length === 0);

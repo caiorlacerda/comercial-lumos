@@ -1,4 +1,4 @@
-// Salva a Ordem de Serviço (PDF) no Drive: na subpasta "OS" do projeto (v1) ou em 00_DOCUMENTOS (v2),
+// Salva a Ordem de Serviço (PDF) no Drive: na subpasta "OS" do projeto (v1) ou em 00_Documentos (v2),
 // usando a conta de serviço — ou seja, sem depender de a pessoa estar logada no
 // Google. O navegador gera o PDF e manda os bytes pra cá.
 //
@@ -101,9 +101,9 @@ serve(async (req) => {
     const token = await googleToken()
     let osFolder: string
     if (proj.drive_layout === 'v2') {
-      // v2: a OS vai em 00_DOCUMENTOS, pelo ID salvo. Nunca cria pasta por nome.
+      // v2: a OS vai em 00_Documentos, pelo ID salvo. Nunca cria pasta por nome.
       osFolder = proj.drive_pastas?.documentos
-      if (!osFolder) return json({ error: 'projeto v2 sem a pasta 00_DOCUMENTOS registrada' }, 409)
+      if (!osFolder) return json({ error: 'projeto v2 sem a pasta 00_Documentos registrada' }, 409)
     } else {
       osFolder = (await findInFolder(proj.drive_folder_id, 'OS', token, true))?.id
         ?? await createFolder(proj.drive_folder_id, 'OS', token)

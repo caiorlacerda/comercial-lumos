@@ -47,19 +47,19 @@ function cenario(clientFolder: string | null) {
 let falhas = 0; const ok = (nome: string, c: any) => { console.log((c ? 'OK     ' : 'FALHA  ') + nome); if (!c) falhas++; };
 const cli = () => ({ id: 'c1', name: 'Acme', drive_folder_id: db.clients[0].drive_folder_id });
 
-// 1) cliente novo: MARCA (do template) + GUIDELINES + PROJETOS; sem _ASSETS
+// 1) cliente novo: Marca (do template, que pode estar como MARCA) + GUIDELINES + Projetos; sem _ASSETS
 cenario(null);
 let id = await mod.ensureClientAssetsFolder(cli());
 let pasta = db.clients[0].drive_folder_id;
-ok('cliente novo: devolve a pasta MARCA', drive.get(id).name === 'MARCA' && drive.get(id).parents[0] === pasta);
-ok('cliente novo: MARCA traz as subpastas do template e a GUIDELINES', ['BRAND-BOOK', 'LOGOS', 'GUIDELINES'].every(x => porNome(id, x).length === 1));
-ok('cliente novo: ganha PROJETOS e não ganha _ASSETS', porNome(pasta, 'PROJETOS').length === 1 && porNome(pasta, '_ASSETS').length === 0);
+ok('cliente novo: devolve a pasta Marca', drive.get(id).name === 'Marca' && drive.get(id).parents[0] === pasta);
+ok('cliente novo: Marca traz as subpastas do template e a Guidelines, só com a primeira maiúscula', ['Brand-book', 'Logos', 'Guidelines'].every(x => porNome(id, x).length === 1) && !filhos(id).some(x => x.name === 'BRAND-BOOK' || x.name === 'LOGOS'));
+ok('cliente novo: ganha Projetos e não ganha _ASSETS', porNome(pasta, 'Projetos').length === 1 && porNome(pasta, '_ASSETS').length === 0);
 
-// 2) cliente antigo com _ASSETS: usa a _ASSETS, não cria MARCA nem PROJETOS
+// 2) cliente antigo com _ASSETS: usa a _ASSETS, não cria MARCA nem Projetos
 cenario('cli'); add('cli', 'Acme', 'clientes'); add('as', '_ASSETS', 'cli'); add('lg', 'LOGOS', 'as');
 id = await mod.ensureClientAssetsFolder(cli());
 ok('cliente antigo: usa a _ASSETS existente (mesmo ID)', id === 'as' && drive.get('as').name === '_ASSETS');
-ok('cliente antigo: garante a GUIDELINES dentro dela; não cria MARCA nem PROJETOS', porNome('as', 'GUIDELINES').length === 1 && porNome('cli', 'MARCA').length === 0 && porNome('cli', 'PROJETOS').length === 0);
+ok('cliente antigo: garante a Guidelines dentro dela; não cria Marca nem Projetos', porNome('as', 'Guidelines').length === 1 && porNome('cli', 'MARCA').length === 0 && porNome('cli', 'Marca').length === 0 && porNome('cli', 'Projetos').length === 0);
 const antes = drive.size;
 await mod.ensureClientAssetsFolder(cli());
 ok('rodar de novo não cria nada', drive.size === antes);
@@ -67,7 +67,11 @@ ok('rodar de novo não cria nada', drive.size === antes);
 // 3) cliente com MARCA: usa a MARCA
 cenario('cli'); add('cli', 'Acme', 'clientes'); add('mr', 'MARCA', 'cli');
 id = await mod.ensureClientAssetsFolder(cli());
-ok('cliente com MARCA: usa a MARCA existente', id === 'mr' && porNome('cli', 'MARCA').length === 1 && porNome('cli', '_ASSETS').length === 0);
+ok('cliente com MARCA (nome antigo): usa a existente, sem criar Marca ao lado', id === 'mr' && porNome('cli', 'MARCA').length === 1 && porNome('cli', 'Marca').length === 0 && porNome('cli', '_ASSETS').length === 0);
+// 3b) cliente com Marca (nome novo) e marca em minúsculas: também é a mesma
+cenario('cli'); add('cli', 'Acme', 'clientes'); add('mn', 'Marca', 'cli');
+id = await mod.ensureClientAssetsFolder(cli());
+ok('cliente com Marca (nome novo): usa a existente', id === 'mn' && porNome('cli', 'Marca').length === 1 && porNome('cli', 'MARCA').length === 0);
 
 // 4) tem MARCA e _ASSETS ao mesmo tempo: prefere a MARCA (a nova)
 cenario('cli'); add('cli', 'Acme', 'clientes'); add('mr', 'MARCA', 'cli'); add('as', '_ASSETS', 'cli');
@@ -77,7 +81,19 @@ ok('MARCA e _ASSETS juntas: prefere a MARCA', id === 'mr');
 // 5) cliente existente sem nenhuma das duas: cria MARCA (do template)
 cenario('cli'); add('cli', 'Acme', 'clientes');
 id = await mod.ensureClientAssetsFolder(cli());
-ok('cliente existente sem pasta de materiais: cria MARCA com o template', drive.get(id).name === 'MARCA' && porNome(id, 'BRAND-BOOK').length === 1 && porNome(id, 'GUIDELINES').length === 1 && porNome('cli', '_ASSETS').length === 0);
+ok('cliente existente sem pasta de materiais: cria Marca com o template', drive.get(id).name === 'Marca' && porNome(id, 'Brand-book').length === 1 && porNome(id, 'Guidelines').length === 1 && porNome('cli', '_ASSETS').length === 0);
+
+// 6) _ASSETS antiga com subpastas em CAIXA ALTA (como existem hoje): a Guidelines e o checklist reaproveitam, não duplicam
+cenario('cli'); add('cli', 'Acme', 'clientes'); add('as', '_ASSETS', 'cli'); add('lg', 'LOGOS', 'as'); add('bb', 'BRAND-BOOK', 'as'); add('gl', 'GUIDELINES', 'as');
+id = await mod.ensureClientAssetsFolder(cli());
+ok('_ASSETS com GUIDELINES em caixa alta: não cria Guidelines ao lado', id === 'as' && porNome('as', 'Guidelines').length === 0 && porNome('as', 'GUIDELINES').length === 1);
+const sub = async (chave: string) => mod.ensureFolderIgnorandoCaixa('as', mod.PASTA_LEGADO[chave] ?? mod.nomeSubpasta(chave));
+ok('checklist: logo acha a LOGOS antiga (mesmo ID, sem criar Logos)', (await sub('logo')) === 'lg' && porNome('as', 'Logos').length === 0);
+ok('checklist: brand_book acha a BRAND-BOOK antiga (mesmo ID, sem criar Brand-book)', (await sub('brand_book')) === 'bb' && porNome('as', 'Brand-book').length === 0);
+ok('checklist: guidelines acha a GUIDELINES antiga (mesmo ID)', (await sub('guidelines')) === 'gl');
+const ref1 = await sub('referencias'); const ref2 = await sub('referencias');
+ok('checklist: item novo (referencias) nasce como Referencias, e pedir de novo (ou como REFERENCIAS) devolve a mesma', drive.get(ref1).name === 'Referencias' && ref1 === ref2 && (await mod.ensureFolderIgnorandoCaixa('as', 'REFERENCIAS')) === ref1);
+ok('nomes das pastas do checklist: só a primeira maiúscula', mod.nomeSubpasta('brand_book') === 'Brand-book' && mod.nomeSubpasta('calendario_semestre') === 'Calendario-semestre' && mod.nomeSubpasta('referencias') === 'Referencias' && mod.nomeSubpasta('guidelines') === 'Guidelines' && mod.PASTA_LEGADO.logo === 'Logos');
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo');
 process.exit(falhas ? 1 : 0);

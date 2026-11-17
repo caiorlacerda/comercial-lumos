@@ -136,7 +136,7 @@ serve(async (req) => {
 
     // Resolve a pasta de revisão do projeto, NUNCA devolvendo uma pasta na lixeira (o Drive aceita upload pelo ID
     // de pasta na lixeira e o arquivo some das Entregas: pedido #14, Continuada). Se a pasta salva morreu, procura a
-    // viva no layout do projeto (v1: 06_ENTREGA/01_REVISAO; v2: 03_EXPORT/01_REVISAO) e atualiza o banco; senão, erro claro.
+    // viva no layout do projeto (v1: 06_ENTREGA/01_REVISAO; v2: 03_Export/01_Revisao) e atualiza o banco; senão, erro claro.
     // Banco sem as colunas v2 (migration pendente): cai no select antigo.
     let proj: any = (await db.from('projects').select('drive_folder_id, drive_upload_folder_id, drive_layout, drive_pastas').eq('id', projectId).single()).data
     if (!proj) proj = (await db.from('projects').select('drive_folder_id, drive_upload_folder_id').eq('id', projectId).single()).data
