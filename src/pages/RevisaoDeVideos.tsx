@@ -83,13 +83,13 @@ function Selo({ s, curto }: { s: Status; curto?: boolean }) {
   );
 }
 
-type Rapida = 'todos' | 'revisao' | 'ajuste' | 'aprovados' | 'nao_aprovados' | 'sem_ajuste' | 'parados';
+type Rapida = 'acao' | 'todos' | 'revisao' | 'ajuste' | 'aprovados' | 'sem_ajuste' | 'parados';
 const RAPIDAS: { value: Rapida; label: string }[] = [
+  { value: 'acao', label: 'Precisa de ação' },
   { value: 'todos', label: 'Tudo' },
   { value: 'revisao', label: 'Precisa de revisão' },
   { value: 'ajuste', label: 'Precisa de ajuste' },
   { value: 'aprovados', label: 'Aprovados' },
-  { value: 'nao_aprovados', label: 'Ainda não aprovados' },
   { value: 'sem_ajuste', label: 'Sem ajuste pendente' },
   { value: 'parados', label: `Parados (${DIAS_PARADO}+ dias)` },
 ];
@@ -99,7 +99,7 @@ const passaRapida = (v: Video, r: Rapida) => {
     case 'revisao': return PRECISA_REVISAO.includes(s);
     case 'ajuste': return PRECISA_AJUSTE.includes(s);
     case 'aprovados': return s === 'APROVADO';
-    case 'nao_aprovados': return s !== 'APROVADO';
+    case 'acao': return s !== 'APROVADO'; // revisão + ajuste (inclui os parados)
     case 'sem_ajuste': return !PRECISA_AJUSTE.includes(s);
     case 'parados': return v.parado;
     default: return true;
@@ -107,6 +107,9 @@ const passaRapida = (v: Video, r: Rapida) => {
 };
 
 const POR_PAGINA = 40;
+
+/** Quem enviou a versão: texto livre, então agrupa pela grafia normalizada (sem espaços nas pontas, sem diferença de caixa). */
+const chaveEditor = (v: Video) => (v.atual.uploaded_by || '').trim().toLowerCase();
 
 export default function RevisaoDeVideos() {
   const { isAdmin, can, profile } = useAuth();
@@ -125,10 +128,11 @@ export default function RevisaoDeVideos() {
     try { return localStorage.getItem('lumos_revisao_visao') === 'quadro' ? 'quadro' : 'lista'; } catch { return 'lista'; }
   });
   const mudarVisao = (v: 'lista' | 'quadro') => { setVisao(v); try { localStorage.setItem('lumos_revisao_visao', v); } catch { /* sem armazenamento */ } };
-  const [rapida, setRapida] = useState<Rapida>('todos');
+  const [rapida, setRapida] = useState<Rapida>('acao'); // abre no que precisa de ação; não é lembrado entre visitas
   const [statusSel, setStatusSel] = useState<Set<Status>>(new Set());
   const [projetoFiltro, setProjetoFiltro] = useState('');
   const [clienteFiltro, setClienteFiltro] = useState('');
+  const [editorFiltro, setEditorFiltro] = useState(''); // '' = todos os editores
   const [mes, setMes] = useMesLembrado('lumos_filtro_mes_revisao');
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<'recentes' | 'enviados' | 'parados' | 'projeto' | 'status'>('recentes');
@@ -200,11 +204,12 @@ export default function RevisaoDeVideos() {
       if (!comEncerrados && p.status === 'concluido') return false;
       if (projetoFiltro && p.id !== projetoFiltro) return false;
       if (clienteFiltro && (p.client?.name || '') !== clienteFiltro) return false;
+      if (editorFiltro && chaveEditor(v) !== editorFiltro) return false;
       if (mes && mesDoVideo(v) !== mes) return false;
       if (q && !`${v.atual.file_name} ${p.name} ${p.code || ''} ${p.client?.name || ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [videos, comEncerrados, projetoFiltro, clienteFiltro, mes, busca]);
+  }, [videos, comEncerrados, projetoFiltro, clienteFiltro, editorFiltro, mes, busca]);
 
   const contagem = useMemo(() => {
     const c: Record<Status, number> = { EM_REVISAO_INTERNA: 0, ALTERACOES_INTERNAS: 0, EM_REVISAO_CLIENTE: 0, ALTERACOES_CLIENTE: 0, APROVADO: 0 };
@@ -226,7 +231,7 @@ export default function RevisaoDeVideos() {
 
   // Filtro novo = seleção nova: marcar, filtrar e mover sem ver o que está marcado
   // mudaria vídeos escondidos. E só vale o que está na lista de agora.
-  useEffect(() => { setSelecionados(new Set()); }, [rapida, statusSel, projetoFiltro, clienteFiltro, mes, busca, comEncerrados]);
+  useEffect(() => { setSelecionados(new Set()); }, [rapida, statusSel, projetoFiltro, clienteFiltro, editorFiltro, mes, busca, comEncerrados]);
   const marcados = useMemo(() => lista.filter(v => selecionados.has(v.atual.group_id)), [lista, selecionados]);
   const alternar = (id: string) => setSelecionados(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -254,7 +259,7 @@ export default function RevisaoDeVideos() {
   };
 
   const visiveis = visao === 'lista' ? lista.slice(0, limite) : lista.slice(0, 120);
-  useEffect(() => { setLimite(POR_PAGINA); }, [rapida, statusSel, projetoFiltro, clienteFiltro, mes, busca, comEncerrados, ordem]);
+  useEffect(() => { setLimite(POR_PAGINA); }, [rapida, statusSel, projetoFiltro, clienteFiltro, editorFiltro, mes, busca, comEncerrados, ordem]);
 
   // Capas: só dos vídeos que aparecem (a miniatura é uma imagem inteira dentro da linha do banco).
   useEffect(() => {
@@ -284,6 +289,17 @@ export default function RevisaoDeVideos() {
     return [...s].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [videos, comEncerrados]);
 
+  // Editores (quem enviou a versão atual): uma opção por grafia normalizada, com a primeira grafia encontrada.
+  const editores = useMemo(() => {
+    const m = new Map<string, string>();
+    videos.forEach(v => {
+      if (!comEncerrados && v.atual.project!.status === 'concluido') return;
+      const k = chaveEditor(v);
+      if (k && !m.has(k)) m.set(k, (v.atual.uploaded_by || '').trim());
+    });
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+  }, [videos, comEncerrados]);
+
   const abrir = async (v: Video) => {
     setAberto(v);
     setTarefasAbertas([]);
@@ -291,8 +307,8 @@ export default function RevisaoDeVideos() {
     setTarefasAbertas((data as any) || []);
   };
 
-  const temFiltro = rapida !== 'todos' || statusSel.size > 0 || !!projetoFiltro || !!clienteFiltro || !!mes || !!busca.trim();
-  const limpar = () => { setRapida('todos'); setStatusSel(new Set()); setProjetoFiltro(''); setClienteFiltro(''); setMes(''); setBusca(''); };
+  const temFiltro = rapida !== 'acao' || statusSel.size > 0 || !!projetoFiltro || !!clienteFiltro || !!editorFiltro || !!mes || !!busca.trim();
+  const limpar = () => { setRapida('acao'); setStatusSel(new Set()); setProjetoFiltro(''); setClienteFiltro(''); setEditorFiltro(''); setMes(''); setBusca(''); };
 
   // Cards: cada um é um atalho para a visão rápida correspondente.
   const cards: { k: Rapida; titulo: string; n: number; sub: string; cor: string; Icon: any }[] = [
@@ -344,7 +360,7 @@ export default function RevisaoDeVideos() {
         {cards.map(c => {
           const ativo = rapida === c.k;
           return (
-            <button key={c.k} type="button" onClick={() => setRapida(ativo ? 'todos' : c.k)} aria-pressed={ativo}
+            <button key={c.k} type="button" onClick={() => setRapida(ativo ? 'acao' : c.k)} aria-pressed={ativo}
               className={clsx('card !p-4 text-left transition-all hover:border-lumos-yellow/40', ativo && 'ring-2 ring-lumos-yellow border-lumos-yellow/60')}>
               <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: c.cor, color: textoSobre(c.cor) }}><c.Icon className="w-3.5 h-3.5" /></span>
@@ -371,6 +387,10 @@ export default function RevisaoDeVideos() {
             <Select value={projetoFiltro} onChange={setProjetoFiltro} searchable className="input-lumos h-9 w-full text-xs"
               options={[{ value: '', label: 'Todos os projetos' }, ...projetos.map(([id, nome]) => ({ value: id, label: nome }))]} />
           </div>
+          <div className="w-44 max-md:flex-1">
+            <Select value={editorFiltro} onChange={setEditorFiltro} searchable className="input-lumos h-9 w-full text-xs" ariaLabel="Editor"
+              options={[{ value: '', label: 'Todos os editores' }, ...editores.map(([k, nome]) => ({ value: k, label: nome }))]} />
+          </div>
           <div className="w-40 max-md:flex-1">
             <SeletorMes value={mes} onChange={setMes} chaves={mesesDosVideos} />
           </div>
@@ -395,7 +415,11 @@ export default function RevisaoDeVideos() {
               const ativo = statusSel.has(s);
               return (
                 <button key={s} type="button" aria-pressed={ativo}
-                  onClick={() => setStatusSel(prev => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; })}
+                  onClick={() => {
+                    // Marcar "Aprovado" com a visão "Precisa de ação" daria lista vazia: libera para "Tudo".
+                    if (s === 'APROVADO' && !ativo && rapida === 'acao') setRapida('todos');
+                    setStatusSel(prev => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; });
+                  }}
                   className={clsx('chip-lumos h-8 px-3 rounded-full border text-[10.5px] font-black flex items-center gap-1.5 transition-colors flex-shrink-0 whitespace-nowrap',
                     ativo ? 'border-transparent' : 'border-lumos-border text-lumos-text-secondary hover:text-lumos-text-primary')}
                   style={ativo ? { background: STATUS[s].cor, color: textoSobre(STATUS[s].cor) } : undefined}>
@@ -418,7 +442,14 @@ export default function RevisaoDeVideos() {
       ) : lista.length === 0 ? (
         <div className="card p-10 text-center">
           <Film className="w-8 h-8 text-lumos-text-secondary/30 mx-auto mb-3" />
-          <p className="text-sm font-bold text-lumos-text-primary">{videos.length === 0 ? 'Nenhum vídeo em revisão ainda.' : 'Nenhum vídeo com esses filtros.'}</p>
+          {rapida === 'acao' && statusSel.size === 0 && noEscopo.length > 0 ? (
+            <>
+              <p className="text-sm font-bold text-lumos-text-primary">Nada precisa de ação agora</p>
+              <button type="button" onClick={() => setRapida('aprovados')} className="mt-2 text-xs font-bold text-lumos-yellow hover:underline">Ver aprovados</button>
+            </>
+          ) : (
+            <p className="text-sm font-bold text-lumos-text-primary">{videos.length === 0 ? 'Nenhum vídeo em revisão ainda.' : 'Nenhum vídeo com esses filtros.'}</p>
+          )}
           {temFiltro && <button type="button" onClick={limpar} className="mt-2 text-xs font-bold text-lumos-yellow hover:underline">Limpar filtros</button>}
         </div>
       ) : visao === 'lista' ? (
