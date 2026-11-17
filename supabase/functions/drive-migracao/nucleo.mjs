@@ -26,7 +26,7 @@ const amostra = (nomes, n = 8) => (nomes.length > n ? `${nomes.slice(0, n).join(
 export function descreverProjeto(p, plano) {
   const L = [`### ${p.code ?? ''} ${p.name}  (${p.status}, id ${p.id})`];
   for (const s of plano.passos) {
-    if (s.op === 'reusar') L.push(`- REAPROVEITA  ${s.nome}  [${s.id}]  → vira ${CAMINHOS[s.chave]}`);
+    if (s.op === 'reusar') L.push(`- REAPROVEITA  ${s.nome}  [${s.id}]  → vira ${CAMINHOS[s.chave] ?? s.chave}`);
     if (s.op === 'criar') L.push(`- CRIA         ${s.nome}  dentro de ${s.pai === 'raiz' ? 'a pasta do projeto' : NOMES[s.pai]}`);
     if (s.op === 'mover') {
       L.push(`- MOVE         ${s.nome}  [${s.id}]  (${s.tipo})  de ${rotuloOrigem(s)} → ${rotuloDestino(s)}${s.renomearPara ? `   (renomeia para ${s.renomearPara})` : ''}`);

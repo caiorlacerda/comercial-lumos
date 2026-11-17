@@ -148,7 +148,7 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
   // Move um item para um destino, sem sobrescrever: se o nome já existe lá, vira CONFLITO e o item fica onde está.
   const levar = (item, para, de, extra = {}) => {
     if (nomesEm[para].has(norm(item.name))) {
-      passos.push({ op: 'conflito', id: item.id, nome: item.name, tipo: item.isFolder ? 'pasta' : 'arquivo', de, para, motivo: `${CAMINHOS[para]} já tem "${item.name}"` });
+      passos.push({ op: 'conflito', id: item.id, nome: item.name, tipo: item.isFolder ? 'pasta' : 'arquivo', de, para, motivo: `${CAMINHOS[para] ?? para} já tem "${item.name}"` });
       return false;
     }
     nomesEm[para].add(norm(item.name));
@@ -224,6 +224,18 @@ export async function planejarProjeto({ raizId, listar, opcoes = {} }) {
       const trilha = (await ls(f.id)).find(x => x.isFolder && /^trilhas?$/.test(norm(x.name)));
       if (trilha && await esvaziar(trilha, 'trilhas', `${f.name}/${trilha.name}`)) lixeira(trilha, f.name, 'ficará vazia depois de mesclar em 01_TRILHAS');
       levar(f, 'artes', 'raiz');
+      continue;
+    }
+
+    // O destino já tem uma PASTA com o mesmo nome (ex.: OS da raiz e 00_DOCUMENTOS/OS): em vez de conflitar, MESCLA.
+    // O conteúdo da pasta antiga vai para a que já existe e a antiga, se ficar vazia, vai para a lixeira. Nome repetido
+    // lá dentro continua sendo CONFLITO (nunca sobrescreve) e, então, a pasta antiga não é apagada.
+    const igual = f.isFolder ? (conteudo[para] ?? []).find(x => x.isFolder && norm(x.name) === n) : null;
+    if (igual && !saem.has(igual.id)) {
+      const chaveMescla = `${CAMINHOS[para]}/${igual.name}`;
+      passos.push({ op: 'reusar', chave: chaveMescla, id: igual.id, nome: igual.name });
+      registrar(chaveMescla, await ls(igual.id));
+      if (await esvaziar(f, chaveMescla, f.name)) lixeira(f, 'raiz', `ficará vazia depois de mesclar em ${chaveMescla}`);
       continue;
     }
 

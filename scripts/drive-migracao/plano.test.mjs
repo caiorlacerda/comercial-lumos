@@ -84,11 +84,29 @@ ok('backup de câmera: padrão CAM_<id>_BKP_…', ehBackupDeCamera('CAM_1A_BKP_2
   ok('sobra em 06_ENTREGA é listada (não mexe)', t.sobraEmEntrega.map(s => s.id).sort().join() === 'o,x' && t.avisos.length >= 1 && op(t, 'lixeira').length === 0);
 }
 
-// ---- conflito: OS da raiz × 00_DOCUMENTOS/OS
+// ---- pasta do mesmo nome já no destino (OS da raiz × 00_DOCUMENTOS/OS): MESCLA, não conflita (decisão do Caio, 16/11)
 {
+  // as duas vazias: nada a mover, a da raiz (vazia) vai para a lixeira e a de dentro é reaproveitada
   const d = drive().pasta('P', 'proj', null).pasta('d', '00_DOCUMENTOS', 'P').pasta('os', 'OS', 'P').pasta('os2', 'OS', 'd').pasta('r', '01_ROTEIRO', 'P').pasta('x', '01_ROTEIRO', 'd');
   const t = await plano(d);
-  ok('mesmo nome já no alvo → conflito (não move, não sobrescreve)', op(t, 'conflito', { id: 'os' }).length === 1 && op(t, 'conflito', { id: 'r' }).length === 1 && op(t, 'mover', { id: 'os' }).length === 0 && op(t, 'mover', { id: 'r' }).length === 0);
+  ok('mesmo nome (pasta) no alvo, ambas vazias → sem conflito; a da raiz vai para a lixeira', op(t, 'conflito').length === 0 && op(t, 'lixeira', { id: 'os' }).length === 1 && op(t, 'lixeira', { id: 'r' }).length === 1 && op(t, 'mover', { id: 'os' }).length === 0);
+  ok('mesclar reaproveita a pasta que já existe no destino', op(t, 'reusar', { id: 'os2' }).length === 1 && op(t, 'reusar', { id: 'x' }).length === 1 && seguro(d, t));
+}
+{
+  // OS da raiz com um PDF, 00_DOCUMENTOS/OS já existe vazia: o PDF vai para lá e a OS da raiz vai para a lixeira
+  const d = drive().pasta('P', 'proj', null).pasta('d', '00_DOCUMENTOS', 'P').pasta('os', 'OS', 'P').arq('pdf', 'OS-279.pdf', 'os').pasta('os2', 'OS', 'd');
+  const t = await plano(d);
+  const mov = op(t, 'mover', { id: 'pdf' })[0];
+  ok('OS da raiz com PDF: o PDF vai para 00_DOCUMENTOS/OS', !!mov && mov.para === '00_DOCUMENTOS/OS');
+  ok('...e a OS da raiz, esvaziada, vai para a lixeira (nada é apagado)', op(t, 'lixeira', { id: 'os' }).length === 1 && op(t, 'conflito').length === 0 && seguro(d, t));
+  ok('a pasta OS de dentro é reaproveitada (mesmo ID) e vem ANTES do movimento', op(t, 'reusar', { id: 'os2' }).length === 1 && t.passos.findIndex(p => p.op === 'reusar' && p.id === 'os2') < t.passos.findIndex(p => p.op === 'mover' && p.id === 'pdf'));
+}
+{
+  // arquivo de mesmo nome já dentro de 00_DOCUMENTOS/OS: esse continua sendo CONFLITO e a OS da raiz NÃO é apagada
+  const d = drive().pasta('P', 'proj', null).pasta('d', '00_DOCUMENTOS', 'P').pasta('os', 'OS', 'P').arq('pdf', 'OS-279.pdf', 'os').arq('pdf2', 'OS-279.pdf', 'os').pasta('os2', 'OS', 'd').arq('ja', 'os-279.pdf', 'os2');
+  const t = await plano(d);
+  ok('nome repetido DENTRO da OS: conflito, nunca sobrescreve', op(t, 'conflito').length >= 1 && op(t, 'mover', { id: 'pdf' }).length + op(t, 'mover', { id: 'pdf2' }).length === 0);
+  ok('...e a OS da raiz não vai para a lixeira (ainda tem coisa)', op(t, 'lixeira', { id: 'os' }).length === 0 && seguro(d, t));
 }
 
 // ---- 06_ENTREGA/03_REDES e 04_THUMB: conteúdo → 02_FINAL, pastas vazias → lixeira
