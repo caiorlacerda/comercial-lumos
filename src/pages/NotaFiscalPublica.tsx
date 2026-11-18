@@ -189,7 +189,7 @@ export default function NotaFiscalPublica() {
             <input
               ref={fileRef}
               type="file"
-              accept=".pdf,.xml,.jpg,.jpeg,.png"
+              accept=".pdf,.xml,.jpg,.jpeg,.png,.webp"
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) enviarArquivo(f); e.target.value = ''; }}
             />
