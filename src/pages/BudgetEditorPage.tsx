@@ -144,6 +144,9 @@ function SortableItemRow({ id, isReadOnly, children, editando, destaque, aoFocar
   );
 }
 
+// Ids temporários do rascunho ('draft', 'draft-v1') nunca podem ir para o banco.
+const ehUuid = (v?: string | null) => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 export default function BudgetEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -205,8 +208,11 @@ export default function BudgetEditorPage() {
   const [dirty, setDirty] = useState(false);
   const isDirty = useMemo(() => ({
     get current() { return isDirtyRef.current; },
-    set current(v: boolean) { isDirtyRef.current = v; setDirty(v); },
+    set current(v: boolean) { isDirtyRef.current = v; setDirty(v); if (v) autoSalvarRef.current(); },
   }), []);
+  // Edição marcada como "alterada" numa proposta já criada também grava sozinha (como margem/moeda/status).
+  const autoSalvarRef = useRef<() => void>(() => {});
+  const handleSaveAtualRef = useRef<(mostrar?: boolean) => Promise<void>>(async () => {});
   // Gravações com espera (moeda, idioma, status, margem, imposto, texto de item) que ainda não saíram.
   const gravacoesPendentes = useRef<Record<string, () => Promise<boolean>>>({});
   const [temPendente, setTemPendente] = useState(false);
@@ -244,6 +250,9 @@ export default function BudgetEditorPage() {
   const briefingEditorRef = useRef<Editor | null>(null);
   const salvamentosEmAndamento = useRef(0);   // salvamentos desta pessoa no ar: a sincronização espera
   const marcaDeSalvamento = useRef(0);        // muda a cada salvamento: invalida uma busca que ficou velha no caminho
+  const gravacaoPropriaEm = useRef(0);        // quando esta pessoa gravou por último: eventos logo depois são dela mesma
+  const iniciarGravacao = () => { salvamentosEmAndamento.current++; marcaDeSalvamento.current++; gravacaoPropriaEm.current = Date.now(); };
+  const terminarGravacao = () => { salvamentosEmAndamento.current--; marcaDeSalvamento.current++; gravacaoPropriaEm.current = Date.now(); };
   const sincronizarRef = useRef<() => void>(() => {});
   const [itensDestacados, setItensDestacados] = useState<Set<string>>(new Set());
   const CAMPOS_ITEM = ['item_group', 'name', 'unit_cost', 'quantity', 'unit_label', 'description', 'catalog_item_id'];
@@ -617,13 +626,18 @@ export default function BudgetEditorPage() {
   // Persistent Save Logic
   const handleSave = async (showNotification: boolean = true) => {
     if (!budget || !version) return;
+    // Proposta "criada" mas ainda com os ids temporários do rascunho: nunca grava (evita "invalid input syntax for type uuid").
+    if (!isDraft && !(ehUuid(budget.id) && ehUuid(version.id))) return;
+    // Esta gravação completa já cobre a automática que estava agendada.
+    cancelarPendente('proposta-completa');
     // Adianta o que estava esperando o tempo de gravação (margem, imposto, moeda, idioma, status...).
     // Se alguma falhar, o campo já voltou ao valor salvo e a gravação completa não repete o erro.
     if (!isDraft && !(await gravarPendentes())) return;
     if (!isDirty.current) return;
 
     if (showNotification) notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
+    let idCriado: string | null = null;   // rascunho que acabou de virar proposta: a tela só troca de rota no fim
     try {
       let currentBudgetId = budget.id;
       let currentVersionId = version.id;
@@ -696,8 +710,10 @@ export default function BudgetEditorPage() {
           link: `/orcamentos/${currentBudgetId}`
         });
 
-        setIsDraft(false);
-        navigate(`/orcamentos/${currentBudgetId}`, { replace: true });
+        // Não troca de rota aqui: a tela ainda está com os ids temporários e faltam os itens. Troca no fim,
+        // quando tudo já foi gravado e o estado "alterado" foi limpo (senão o recarregamento da nova rota é ignorado
+        // e a saída da tela tenta gravar com o id 'draft-v1').
+        idCriado = currentBudgetId;
 
       } else {
         const [versaoRes, orcamentoRes] = await Promise.all([
@@ -761,12 +777,16 @@ export default function BudgetEditorPage() {
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       if (showNotification) notifySaveStatus('saved');
+      if (idCriado) {
+        setIsDraft(false);
+        navigate(`/orcamentos/${idCriado}`, { replace: true });
+      }
     } catch (err) {
       console.error('Save error:', err);
       if (showNotification) notifySaveStatus('error');
       toast.error(`Não foi possível salvar a proposta: ${mensagemDoErro(err)}`);
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
@@ -776,7 +796,9 @@ export default function BudgetEditorPage() {
     const base = baseRef.current?.[tipo];
     const mudou = base ? camposAlterados(base, campos, Object.keys(campos)) : campos;
     if (Object.keys(mudou).length === 0) return { error: null };
-    return supabase.from(tabela).update(mudou).eq('id', id);
+    const { data, error } = await supabase.from(tabela).update(mudou).eq('id', id).select('id');
+    if (!error && !data?.length) return { error: new Error('Nenhuma linha foi atualizada (sem permissão ou proposta não encontrada).') };
+    return { error };
   };
 
 
@@ -786,13 +808,14 @@ export default function BudgetEditorPage() {
 
   // Devolve true se gravou. Se falhar: avisa com a mensagem do banco e volta os campos ao valor salvo.
   const savePartialBudget = async (updates: Partial<Budget>): Promise<boolean> => {
-    if (isDraft || !budget) return true;
+    if (isDraft || !budget || !ehUuid(budget.id)) return true;
     notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
     const statusAntes = baseRef.current?.budget?.status ?? budget.status;
     try {
-      const { error } = await supabase.from('budgets').update(updates).eq('id', budget.id);
+      const { data: linhas, error } = await supabase.from('budgets').update(updates).eq('id', budget.id).select('id');
       if (error) throw error;
+      if (!linhas?.length) throw new Error('Nenhuma linha foi atualizada (sem permissão ou proposta não encontrada).');
       guardarNaBase({ budget: { ...(baseRef.current?.budget || {}), ...updates } });
 
       // O registro no Histórico só acontece depois que a gravação deu certo.
@@ -825,17 +848,18 @@ export default function BudgetEditorPage() {
       }
       return false;
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
   const savePartialVersion = async (updates: Partial<BudgetVersion>): Promise<boolean> => {
-    if (isDraft || !version) return true;
+    if (isDraft || !version || !ehUuid(version.id)) return true;
     notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
     try {
-      const { error } = await supabase.from('budget_versions').update(updates).eq('id', version.id);
+      const { data: linhas, error } = await supabase.from('budget_versions').update(updates).eq('id', version.id).select('id');
       if (error) throw error;
+      if (!linhas?.length) throw new Error('Nenhuma linha foi atualizada (sem permissão ou versão não encontrada).');
       guardarNaBase({ version: { ...(baseRef.current?.version || {}), ...updates } });
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
@@ -867,7 +891,7 @@ export default function BudgetEditorPage() {
       }
       return false;
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
@@ -1078,9 +1102,9 @@ export default function BudgetEditorPage() {
   };
 
   const syncItem = async (item: BudgetItem) => {
-    if (isReadOnly || isDraft || !version) return;
+    if (isReadOnly || isDraft || !version || !ehUuid(version.id)) return;
     notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
     try {
       // Posição na lista mais recente (a `items` deste fechamento pode estar velha, e o item recém-editado
       // nunca está nela: dava -1). Item que ainda não entrou na lista (acabou de ser criado) vai para o fim.
@@ -1109,7 +1133,7 @@ export default function BudgetEditorPage() {
       console.error('Error syncing item:', err);
       notifySaveStatus('error');
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
@@ -1148,9 +1172,9 @@ export default function BudgetEditorPage() {
     if (isReadOnly || isDraft) return;
     notifySaveStatus('saving');
     try {
-      salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+      iniciarGravacao();
       const { error } = await supabase.from('budget_items').delete().eq('id', itemId);
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
       if (error) throw error;
       guardarNaBase({ items: (baseRef.current?.items || []).filter(i => i.id !== itemId) });
       notifySaveStatus('saved');
@@ -1218,11 +1242,15 @@ export default function BudgetEditorPage() {
     if (ordemOuItens) setItems(novosItens);
 
     // Aviso: quem mexeu (se só uma pessoa está no documento, é ela) e o que mudou.
+    // Evento que veio logo depois de uma gravação desta própria pessoa não é "outra pessoa": aplica em silêncio.
+    const eventoProprio = Date.now() - gravacaoPropriaEm.current < 8000;
     const outras = pessoasRef.current;
     const autor = outras.length === 1 ? outras[0].nome.split(' ')[0]
       : outras.find(p => p.campo && alterados.some(id => p.campo === `item:${id}`))?.nome.split(' ')[0] || 'Outra pessoa';
     const nomes = alterados.map(id => novosItens.find(i => i.id === id)?.name || remotoItens.find(i => i.id === id)?.name).filter(Boolean) as string[];
-    if (alterados.length) {
+    if (eventoProprio) {
+      // nada a avisar
+    } else if (alterados.length) {
       toast.info(`${autor} alterou ${nomes.length ? `"${nomes[0]}"` : 'itens'}${alterados.length > 1 ? ` e mais ${alterados.length - 1}` : ''}.`);
       setItensDestacados(new Set(alterados));
       window.setTimeout(() => setItensDestacados(new Set()), 2600);
@@ -1281,6 +1309,14 @@ export default function BudgetEditorPage() {
   const triggerSave = (type: 'budget' | 'version', updates: any) => {
     const key = `${type}-${Object.keys(updates).join('-')}`;
     agendarGravacao(key, () => type === 'budget' ? savePartialBudget(updates) : savePartialVersion(updates));
+  };
+
+  // Qualquer campo marcado como "alterado" (isDirty) numa proposta já criada grava sozinho, com a mesma espera.
+  // Rascunho novo não: só vira proposta quando a pessoa clica em Salvar.
+  handleSaveAtualRef.current = handleSave;
+  autoSalvarRef.current = () => {
+    if (isDraft) return;
+    agendarGravacao('proposta-completa', async () => { await handleSaveAtualRef.current(true); return true; });
   };
 
   // Saída da tela / fechar a aba: grava o que está esperando e, numa proposta já criada, o que
@@ -1398,20 +1434,14 @@ export default function BudgetEditorPage() {
     const updatedItem = { ...item, ...updates };
     setItems(items.map(i => i.id === id ? updatedItem : i));
     
-    const isTextField = 'name' in updates || 'description' in updates;
-    
     if (!isDraft && version) {
-      if (isTextField) {
-        // Grava a linha como está NA HORA de salvar (não como estava ao digitar): se outra pessoa
-        // mexeu em outro campo nesses 5 s, a alteração dela já foi mesclada e não é desfeita.
-        // Fica registrada como pendente: sair da tela ou clicar em Salvar grava na hora.
-        agendarGravacao(`item-${id}`, async () => {
-          await syncItem(itemsRef.current.find(i => i.id === id) ?? updatedItem);
-          return true;
-        }, 5000);
-      } else {
-        setTimeout(() => syncItem(updatedItem), 0);
-      }
+      // Grava a linha como está NA HORA de salvar (não como estava ao digitar): se outra pessoa
+      // mexeu em outro campo nesse intervalo, a alteração dela já foi mesclada e não é desfeita.
+      // Fica registrada como pendente: o botão Salvar acende, e sair da tela ou clicar em Salvar grava na hora.
+      agendarGravacao(`item-${id}`, async () => {
+        await syncItem(itemsRef.current.find(i => i.id === id) ?? updatedItem);
+        return true;
+      }, 'name' in updates || 'description' in updates ? 1200 : 800);
     } else {
       isDirty.current = true;
     }
@@ -2680,7 +2710,7 @@ export default function BudgetEditorPage() {
           </div>
           <div className="space-y-2">
               <button 
-                onClick={() => addManualItem()}
+                onClick={() => { addManualItem(); setIsCatalogOpen(false); }}
                 className="w-full text-left p-6 rounded-lumos hover:bg-lumos-bg border-2 border-dashed border-gray-200 hover:border-lumos-yellow transition-all flex items-center justify-between group"
               >
                 <div className="flex items-center gap-4">
