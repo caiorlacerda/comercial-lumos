@@ -323,10 +323,33 @@ export default function BudgetEditorPage() {
     live: "Descreva a natureza do evento, audiência esperada, se é público ou privado, e se haverá gravação para edição posterior..."
   };
 
+  // Briefing & Condições: abre recolhido (título + 2 linhas). O editor continua montado mesmo recolhido
+  // (só fica escondido), senão o texto em conjunto e o "Carregar template" perderiam o documento.
+  const [briefingAberto, setBriefingAberto] = useState(false);
+  const briefingDecididoPara = useRef<string | null>(null);
+  const resumoDoBriefing = useMemo(() => {
+    const html = version?.notes_client || '';
+    if (!html.trim()) return '';
+    const comQuebras = html.replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n').replace(/<br\s*\/?>/gi, '\n');
+    const texto = new DOMParser().parseFromString(comQuebras, 'text/html').body.textContent || '';
+    return texto.replace(/[ \t ]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+  }, [version?.notes_client]);
+
+  // Decide uma vez por versão: abre sozinho em proposta nova (rascunho) ou com briefing vazio; senão fica recolhido.
+  useEffect(() => {
+    if (!version?.id || briefingDecididoPara.current === version.id) return;
+    briefingDecididoPara.current = version.id;
+    setBriefingAberto(isDraft || !(version.notes_client || '').trim());
+  }, [version?.id, version?.notes_client, isDraft]);
+  // Alguém está editando o briefing agora: abre para quem está olhando ver o que acontece.
+  const alguemNoBriefing = !!quemEdita('briefing');
+  useEffect(() => { if (alguemNoBriefing) setBriefingAberto(true); }, [alguemNoBriefing]);
+
   const handleLoadBriefingTemplate = (content: string) => {
     if (version?.notes_client && version.notes_client.trim() !== '') {
       if (!confirm('Substituir o briefing atual pelo template?')) return;
     }
+    setBriefingAberto(true);
     if (briefingEditorRef.current) {
       // Texto em conjunto: o template entra no documento compartilhado (e some para todos os que estão vendo).
       briefingEditorRef.current.commands.setContent(content);
@@ -1796,7 +1819,17 @@ export default function BudgetEditorPage() {
                 <FileText className="w-5 h-5" />
                 <h3 className="font-bold">Briefing & Condições</h3>
               </div>
-              
+
+              <div className="flex items-center gap-4">
+              {briefingAberto && (
+                <button
+                  onClick={() => setBriefingAberto(false)}
+                  aria-expanded={briefingAberto}
+                  className="flex items-center gap-1.5 text-[10px] font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
+                >
+                  <ChevronUp className="w-3 h-3" /> Recolher
+                </button>
+              )}
               {!isReadOnly && (
                 <div className="relative" ref={briefingPopoverRef}>
                   <button 
@@ -1834,7 +1867,22 @@ export default function BudgetEditorPage() {
                   )}
                 </div>
               )}
+              </div>
             </div>
+
+            {!briefingAberto && (
+              <div className="flex items-start gap-3 mb-0">
+                <p className="flex-1 min-w-0 text-xs text-lumos-text-secondary leading-relaxed line-clamp-2 whitespace-pre-line break-words">
+                  {resumoDoBriefing || 'Sem briefing ainda.'}
+                </p>
+                <button
+                  onClick={() => setBriefingAberto(true)}
+                  className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black uppercase text-lumos-yellow hover:scale-105 transition-all"
+                >
+                  <ChevronDown className="w-3 h-3" /> Expandir
+                </button>
+              </div>
+            )}
 
             {showBriefingSuggestion && !isReadOnly && (
               <div className="bg-lumos-yellow/10 border border-lumos-yellow/20 rounded-lumos p-3 flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
@@ -1855,6 +1903,8 @@ export default function BudgetEditorPage() {
               </div>
             )}
 
+            {/* Recolhido = escondido (display: none), não desmontado: o editor em conjunto segue ligado. */}
+            <div className={clsx('space-y-4', !briefingAberto && 'hidden')}>
             <div className="grid grid-cols-1 gap-6">
               <div className="space-y-4">
                 <div>
@@ -2151,6 +2201,7 @@ export default function BudgetEditorPage() {
                 </label>
               </div>
             )}
+            </div>
           </div>
 
           {(['equipe', 'equipamentos', 'producao', 'edicao'] as const).map(group => {
