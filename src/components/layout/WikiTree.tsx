@@ -53,9 +53,9 @@ export default function WikiTree() {
             <button type="button" onClick={() => kids.length && toggleExpand(p.id)} className="w-4 flex-shrink-0 flex items-center justify-center text-lumos-text-secondary/70">
               {kids.length ? (isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />) : <span className="w-3.5" />}
             </button>
-            <button type="button" onClick={() => navigate(`/wiki/${p.id}`)} className="flex-1 min-w-0 text-left py-1.5 flex items-center gap-1.5">
+            <button type="button" onClick={() => navigate(`/wiki/${p.id}`)} title={p.title} className="flex-1 min-w-0 text-left py-1.5 flex items-center gap-1.5">
               <span className="flex-shrink-0">{p.icon || <FileText className="w-3.5 h-3.5 opacity-60" />}</span>
-              <span className="truncate">{p.title}</span>
+              <span className="line-clamp-2 break-words leading-snug">{p.title}</span>
             </button>
             <button type="button" onClick={() => createPage(p.id)} title="Nova sub-página" className="w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white/10 flex-shrink-0"><Plus className="w-3.5 h-3.5" /></button>
             <button type="button" onClick={() => onDelete(p)} title="Excluir" className="w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>

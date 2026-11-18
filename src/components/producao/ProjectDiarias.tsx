@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { CalendarDays, CalendarOff, Clock, CloudRain, Copy, LayoutGrid, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
@@ -630,7 +631,7 @@ function EscalarModal({ diaria, catalogo, jaEscalados, onEscalar, onClose }: {
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-lumos-text-primary/5 transition-colors">
                   <span className={clsx('w-7 h-7 rounded-full text-[10px] font-black flex items-center justify-center flex-shrink-0',
                     pessoa.tipo === 'freela' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
-                    {pessoa.nome.trim().split(/\s+/).slice(0, 2).map(x => x[0]?.toUpperCase() || '').join('')}
+                    {pessoa.nome.trim().split(/\s+/).slice(0, 2).map(x => inicial(x).toUpperCase()).join('')}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="text-xs font-bold text-lumos-text-primary block truncate">{pessoa.nome}</span>

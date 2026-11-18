@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EsqueletoItens } from '@/components/ui/Esqueleto';
 import { Headset, Loader2, Plus, Search, Trash2, Users2 } from 'lucide-react';
@@ -185,7 +186,7 @@ export default function ProjectEquipe({ projectId, canManage }: Props) {
     <div className="card p-4 flex items-center gap-3 group">
       <div className={clsx('w-11 h-11 rounded-full grid place-items-center text-sm font-black flex-shrink-0',
         p.freela ? 'bg-purple-500/15 text-purple-500' : 'bg-lumos-yellow/15 text-lumos-yellow')}>
-        {p.nome.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase()}
+        {p.nome.split(' ').slice(0, 2).map(s => inicial(s)).join('').toUpperCase()}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-black truncate text-lumos-text-primary">{p.nome}</p>
@@ -302,7 +303,7 @@ export default function ProjectEquipe({ projectId, canManage }: Props) {
                     selecionado?.id === c.id ? 'bg-lumos-yellow/10' : 'hover:bg-lumos-text-primary/5')}>
                   <span className={clsx('w-7 h-7 rounded-full grid place-items-center text-[10px] font-black flex-shrink-0',
                     c.freela ? 'bg-purple-500/15 text-purple-500' : 'bg-lumos-yellow/15 text-lumos-yellow')}>
-                    {c.nome.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase()}
+                    {c.nome.split(' ').slice(0, 2).map(s => inicial(s)).join('').toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-bold truncate text-lumos-text-primary">{c.nome}</span>

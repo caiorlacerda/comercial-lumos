@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Menu, Sun, Moon, LogOut, Settings, User, Bell, ChevronDown, Search, Eye, EyeOff } from 'lucide-react';
@@ -162,7 +163,7 @@ export default function Topbar() {
               ) : (
                 <span>
                   {profile?.full_name
-                    ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                    ? profile.full_name.split(' ').map(n => inicial(n)).join('').slice(0, 2).toUpperCase()
                     : user?.email?.charAt(0).toUpperCase()}
                 </span>
               )}

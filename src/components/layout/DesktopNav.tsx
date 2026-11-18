@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -228,7 +229,7 @@ function AvatarMenu({
   }, [open]);
 
   const initials = profile?.full_name
-    ? profile.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+    ? profile.full_name.split(' ').map((n: string) => inicial(n)).join('').slice(0, 2).toUpperCase()
     : (user?.email?.charAt(0).toUpperCase() || '?');
 
   const statusOpt = (s: 'online' | 'busy' | 'away', label: string, dot: string) => {

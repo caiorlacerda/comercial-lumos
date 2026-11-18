@@ -583,9 +583,20 @@ export default function FinanceiroDashboard() {
       .slice(0, 8)
       .map(p => ({
         name: p.client?.name || 'Projeto',
+        projeto: p.project?.name || '',
         Faturamento: Number(p.valor_vendido || 0),
         Lucro: Number(p.lucro_liquido || 0)
       }));
+    // Cliente com mais de um projeto no Top 8 (ex.: Jotacom x3) aparecia repetido e sem como distinguir:
+    // nesses casos o rótulo do eixo passa a ser "Cliente · Projeto" (encurtado) e o tooltip traz o nome completo.
+    const nomesNoTop = new Map<string, number>();
+    sortedProjects.forEach(p => nomesNoTop.set(p.name, (nomesNoTop.get(p.name) || 0) + 1));
+    const chartData = sortedProjects.map((p, i) => {
+      const completo = p.projeto ? p.name + ' · ' + p.projeto : p.name;
+      const repetido = (nomesNoTop.get(p.name) || 0) > 1;
+      const curto = completo.length > 24 ? completo.slice(0, 23) + '…' : completo;
+      return { ...p, completo, rotulo: repetido ? curto : p.name, ordem: i };
+    });
 
     // Títulos Atrasados
     const overdueList = rawProjects
@@ -647,7 +658,7 @@ export default function FinanceiroDashboard() {
       receberSemana,
       overdueList,
       totalOverdue,
-      chartData: sortedProjects,
+      chartData,
       categoryChartData,
       clientChartData,
       icpMetrics,
@@ -879,14 +890,14 @@ export default function FinanceiroDashboard() {
                           <ResponsiveContainer width="100%" height={240}>
                             <BarChart data={dashboardData.chartData} barGap={4}>
                               <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
-                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#888' }} axisLine={false} tickLine={false} />
+                              <XAxis dataKey="ordem" interval={0} tickFormatter={(i) => dashboardData.chartData[i]?.rotulo ?? ''} tick={{ fontSize: 9, fill: '#888' }} axisLine={false} tickLine={false} />
                               <YAxis tickFormatter={(v) => `R$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={{ fontSize: 9, fill: '#888' }} axisLine={false} tickLine={false} width={45} />
                               <Tooltip
-                                content={({ active, payload, label }) => {
+                                content={({ active, payload }) => {
                                   if (!active || !payload?.length) return null;
                                   return (
                                     <div className="bg-lumos-surface border border-lumos-border rounded-lumos p-3 shadow-xl text-xs font-work-sans">
-                                      <p className="font-black uppercase text-lumos-text-secondary mb-1.5">{label}</p>
+                                      <p className="font-black uppercase text-lumos-text-secondary mb-1.5">{(payload[0].payload as any).completo}</p>
                                       {payload.map((p: any) => (
                                         <p key={p.name} style={{ color: p.fill }} className="font-bold">
                                           {p.name}: {formatBRL(p.value)}

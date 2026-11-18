@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import { useEffect, useMemo, useState } from 'react';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { EsqueletoItens } from '@/components/ui/Esqueleto';
@@ -41,7 +42,7 @@ const waLink = (tel?: string | null) => {
 };
 
 const iniciais = (nome: string) =>
-  nome.trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('');
+  nome.trim().split(/\s+/).slice(0, 2).map(p => inicial(p).toUpperCase()).join('');
 
 export default function Fornecedores() {
   const navigate = useNavigate();

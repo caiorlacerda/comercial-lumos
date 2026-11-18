@@ -1,3 +1,4 @@
+import { inicial } from '@/lib/iniciais';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import { EsqueletoPagina } from '@/components/ui/Esqueleto';
@@ -480,7 +481,7 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
       ) : (
         <div ref={wrapRef} className="relative">
           {/* cabeçalho */}
-          <div className="grid grid-cols-[192px_76px_1fr_96px_92px] gap-2 px-4 py-2 border-b border-lumos-border text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary max-lg:hidden">
+          <div className="grid grid-cols-[216px_76px_1fr_96px_92px] gap-2 px-4 py-2 border-b border-lumos-border text-[9px] font-black uppercase tracking-wider text-lumos-text-secondary max-lg:hidden">
             <span>Hora</span><span>Duração</span><span>Descrição</span><span>Ações</span><span>Status</span>
           </div>
 
@@ -494,16 +495,16 @@ function CronogramaPrincipal({ od, canManage, agora, hoje, locsAtivas, onChange,
             return (
               <SortableCronogramaRow key={i} id={i} rowRef={el => { rowRefs.current[k] = el; }}
                 style={{ minHeight: alturaMin, borderLeft: `3px solid ${t.cor}` }}
-                className={clsx('grid grid-cols-[192px_76px_1fr_96px_92px] max-lg:grid-cols-[96px_1fr_76px] gap-2 px-4 py-2 border-b border-lumos-border/60 items-start group',
+                className={clsx('grid grid-cols-[216px_76px_1fr_96px_92px] max-lg:grid-cols-[96px_1fr_76px] gap-2 px-4 py-2 border-b border-lumos-border/60 items-start group',
                   r.destaque && 'bg-lumos-yellow/[0.04]')}>
               {puxador => (<>
                 {/* hora: no celular os dois campos empilham, pra caber na coluna estreita */}
                 <span className="flex items-center gap-1 min-h-8 max-lg:flex-col max-lg:items-stretch tabular-nums text-[11.5px] font-black text-lumos-text-primary">
                   {canManage ? (
                     <>
-                      <CampoAoVivo type="time" aria-label="Hora de início" valor={r.inicio || ''} onSalvar={v => editarHorario(i, 'inicio', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
+                      <CampoAoVivo type="time" aria-label="Hora de início" valor={r.inicio || ''} onSalvar={v => editarHorario(i, 'inicio', v)} className="input-lumos h-8 text-[11px] w-[96px] max-lg:w-full px-1.5" />
                       <span className="text-lumos-text-secondary max-lg:hidden">–</span>
-                      <CampoAoVivo type="time" aria-label="Hora de término" valor={r.fim || ''} onSalvar={v => editarHorario(i, 'fim', v)} className="input-lumos h-8 text-[11px] w-[84px] max-lg:w-full px-1.5" />
+                      <CampoAoVivo type="time" aria-label="Hora de término" valor={r.fim || ''} onSalvar={v => editarHorario(i, 'fim', v)} className="input-lumos h-8 text-[11px] w-[96px] max-lg:w-full px-1.5" />
                     </>
                   ) : <>{r.inicio} – {r.fim}</>}
                 </span>
@@ -893,7 +894,7 @@ function EscolherDoCadastro({ projectId, jaNaFicha, onEscolher, onClose }: {
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-lumos-text-primary/5 transition-colors">
                   <span className={clsx('w-7 h-7 rounded-full text-[10px] font-black flex items-center justify-center flex-shrink-0',
                     pessoa.tipo === 'freela' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
-                    {pessoa.nome.trim().split(/\s+/).slice(0, 2).map(x => x[0]?.toUpperCase() || '').join('')}
+                    {pessoa.nome.trim().split(/\s+/).slice(0, 2).map(x => inicial(x).toUpperCase()).join('')}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="text-xs font-bold text-lumos-text-primary block truncate">{pessoa.nome}</span>
@@ -1670,7 +1671,7 @@ export default function OrdemDoDiaDetalhe() {
               {od.equipe.map((m, i) => (
                 <div key={i} className="card p-3.5 flex items-center gap-3 group">
                   <div className="w-9 h-9 rounded-full bg-lumos-yellow/15 text-lumos-yellow grid place-items-center text-[11px] font-black flex-shrink-0">
-                    {m.nome.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase()}
+                    {m.nome.split(' ').slice(0, 2).map(s => inicial(s)).join('').toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[12.5px] font-black text-lumos-text-primary truncate">{m.nome}</p>
@@ -1729,7 +1730,7 @@ export default function OrdemDoDiaDetalhe() {
                 <div key={i} className="card p-4 group">
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-full bg-purple-500/15 text-purple-500 grid place-items-center text-[13px] font-black flex-shrink-0">
-                      {t.nome.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase()}
+                      {t.nome.split(' ').slice(0, 2).map(s => inicial(s)).join('').toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-black text-lumos-text-primary truncate">{t.nome}</p>

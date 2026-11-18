@@ -114,6 +114,15 @@ export default function OnboardingGate() {
     setOpen(false);
   };
 
+  // Esc fecha o pop-up do mesmo jeito que "Pular por enquanto" (senão ele reabre a cada visita à Home).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') skip(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, profile?.id]);
+
   if (!profile) return null;
 
   // Banner fixo enquanto o cadastro não foi concluído (quando o modal está fechado)
