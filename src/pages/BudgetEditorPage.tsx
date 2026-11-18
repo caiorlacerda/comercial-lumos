@@ -83,7 +83,7 @@ import MoedaPanel from '@/components/editor/MoedaPanel';
 import IdiomaPanel from '@/components/editor/IdiomaPanel';
 import { camposDeIdioma } from '@/utils/idioma';
 import { coletarTextos, faltantes } from '@/lib/traducaoCore';
-import { camposDeMoeda, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
+import { camposDeMoeda, diasDesde, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 
 const PAYMENT_PRESETS = [
   '7 dias após a emissão da nota',
@@ -380,6 +380,25 @@ export default function BudgetEditorPage() {
     if (!version) return null;
     return calcFinancials(items, version);
   }, [items, version]);
+
+  // "Configurações da proposta" (margem %, imposto %, moeda, idioma): recolhido por padrão; os avisos
+  // que importam aparecem como selos no cabeçalho do bloco para não ficarem escondidos.
+  const [configAberta, setConfigAberta] = useState(false);
+  const configSelos = useMemo(() => {
+    const selos: { texto: string; aviso: boolean }[] = [];
+    if (!version) return selos;
+    if (moedaDaVersao(version) === 'USD') {
+      selos.push({ texto: 'US$', aviso: false });
+      const idade = diasDesde(version.fx_rate_at);
+      if (idade !== null && idade > (version.validity_days ?? 7)) selos.push({ texto: 'Cotação velha', aviso: true });
+    }
+    if (version.pdf_language === 'en') {
+      selos.push({ texto: 'EN', aviso: false });
+      const faltam = faltantes(coletarTextos(version, items), version.translations).length;
+      if (faltam > 0) selos.push({ texto: `${faltam} sem tradução`, aviso: true });
+    }
+    return selos;
+  }, [version, items]);
 
   // Validation logic
   const validation = useMemo(() => {
@@ -2321,11 +2340,58 @@ export default function BudgetEditorPage() {
             style={{ '--topo-sticky': `${colunaDireita.topo}px`, '--altura-sticky': `${colunaDireita.alturaMax}px` } as React.CSSProperties}
           >
           <div className="card shadow-xl border-lumos-yellow/10">
-            <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-lumos-text-primary flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-lumos-yellow" />
-              Resumo Financeiro
-            </h3>
-            
+            {/* Sempre à vista (e fixo no topo do bloco ao rolar): valor final, margem real e status. */}
+            <div className="lg:sticky lg:top-0 lg:z-10 bg-lumos-surface pb-4">
+              <h3 className="text-sm font-black uppercase tracking-widest mb-4 text-lumos-text-primary flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-lumos-yellow" />
+                Resumo Financeiro
+              </h3>
+
+              <div className="border-y border-lumos-yellow/20 bg-lumos-yellow/5 -mx-4 px-4 py-4 text-xs font-semibold">
+                <div className="flex flex-col gap-1 mb-4">
+                  <span className="text-[10px] text-lumos-text-secondary font-black uppercase">Valor de Venda Final</span>
+                  <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatarValorDaVersao(financials?.valorFinal || 0, version)}</span>
+                  {moedaDaVersao(version) === 'USD' && (
+                    <span className="text-[10px] text-lumos-text-secondary font-bold uppercase mt-1">
+                      Interno (só a equipe vê): {formatCurrency(financials?.valorFinal || 0)}
+                    </span>
+                  )}
+                </div>
+
+                <div className={clsx(
+                  "p-3 rounded-lumos flex items-center justify-between font-black uppercase text-[10px] border",
+                  (financials?.margemReal || 0) < 30 
+                    ? "bg-red-500/10 text-red-500 border-red-500/20" 
+                    : "bg-green-500/10 text-green-500 border-green-500/20"
+                )}>
+                  <span>Margem Real</span>
+                  <span>{financials?.margemReal.toFixed(1)}%</span>
+                </div>
+
+                {(financials?.margemReal || 0) < 30 && (
+                  <p className="text-[9px] text-red-500 mt-2 flex items-start gap-1 font-bold italic leading-tight">
+                    <AlertCircle className="w-3 h-3 flex-shrink-0" /> Margem abaixo do mínimo sugerido pela produtora (30%)
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-4">
+                <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-2 block">Status Proposta</label>
+                <Select
+                  disabled={isReadOnly}
+                  className={clsx(
+                    "input-lumos w-full font-black uppercase text-[10px] disabled:opacity-70",
+                    budget?.status === 'aprovado' ? 'text-green-600' :
+                    budget?.status === 'em_negociacao' ? 'text-lumos-yellow text-glow' :
+                    budget?.status === 'reprovado' ? 'text-red-600' : budget?.status === 'cancelado' ? 'text-orange-500' : 'text-gray-400'
+                  )}
+                  value={budget?.status || 'rascunho'}
+                  onChange={(v) => updateBudget({ status: v as any })}
+                  options={[{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovado' }, { value: 'reprovado', label: 'Reprovado' }, { value: 'cancelado', label: 'Cancelado' }]}
+                />
+              </div>
+            </div>
+
             <div className="space-y-4 text-xs font-semibold">
               {/* De onde vem o preço: custo direto + a margem pedida. */}
               <div className="space-y-2">
@@ -2355,117 +2421,98 @@ export default function BudgetEditorPage() {
                 </div>
               </div>
 
-              <div className="h-px bg-lumos-border my-4" />
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Margem (% do total)</label>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        disabled={isReadOnly}
-                        type="number" 
-                        className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
-                        value={version ? Math.round((version.margin_pct || 0) * 100) : 40}
-                        onChange={(e) => updateVersion({ margin_pct: (Number(e.target.value) || 0) / 100 })}
-                      />
-                      <span className="text-lumos-text-secondary text-[10px]">%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Imposto (NF)</label>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        disabled={isReadOnly}
-                        type="number" 
-                        className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
-                        value={version ? Math.round((version.nf_pct || 0) * 100) : 18}
-                        onChange={(e) => updateVersion({ nf_pct: (Number(e.target.value) || 0) / 100 })}
-                      />
-                      <span className="text-lumos-text-secondary text-[10px]">%</span>
-                    </div>
-                  </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                  <span className="text-lumos-text-secondary">Margem (total − custo)</span>
+                  <span className="text-lumos-text-primary">{formatCurrency(financials?.margem || 0)}</span>
                 </div>
-
-                {version && (
-                  <MoedaPanel
-                    version={version}
-                    disabled={isReadOnly}
-                    aprovado={budget?.status === 'aprovado'}
-                    feeMensal={version.payment_plan === 'fee_mensal'}
-                    onChange={updateVersion}
-                  />
-                )}
-
-                {version && (
-                  <IdiomaPanel
-                    version={version}
-                    items={items}
-                    disabled={isReadOnly}
-                    onChange={updateVersion}
-                  />
-                )}
-
-                <div>
-                  <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-2 block">Status Proposta</label>
-                  <Select
-                    disabled={isReadOnly}
-                    className={clsx(
-                      "input-lumos w-full font-black uppercase text-[10px] disabled:opacity-70",
-                      budget?.status === 'aprovado' ? 'text-green-600' :
-                      budget?.status === 'em_negociacao' ? 'text-lumos-yellow text-glow' :
-                      budget?.status === 'reprovado' ? 'text-red-600' : budget?.status === 'cancelado' ? 'text-orange-500' : 'text-gray-400'
-                    )}
-                    value={budget?.status || 'rascunho'}
-                    onChange={(v) => updateBudget({ status: v as any })}
-                    options={[{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovado' }, { value: 'reprovado', label: 'Reprovado' }, { value: 'cancelado', label: 'Cancelado' }]}
-                  />
+                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                  <span className="text-lumos-text-secondary">Sobra depois do imposto</span>
+                  <span className={clsx((financials?.lucro || 0) < 0 ? 'text-red-500' : 'text-lumos-text-primary')}>
+                    {formatCurrency(financials?.lucro || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                  <span className="text-lumos-text-secondary">Markup</span>
+                  <span className="text-lumos-text-secondary">{(financials?.markup || 0).toFixed(2)}×&nbsp;o custo</span>
                 </div>
               </div>
 
-              <div className="pt-6 mt-6 border-t border-lumos-yellow/20 bg-lumos-yellow/5 -mx-4 px-4 pb-6">
-                <div className="flex flex-col gap-1 mb-4">
-                  <span className="text-[10px] text-lumos-text-secondary font-black uppercase">Valor de Venda Final</span>
-                  <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatarValorDaVersao(financials?.valorFinal || 0, version)}</span>
-                  {moedaDaVersao(version) === 'USD' && (
-                    <span className="text-[10px] text-lumos-text-secondary font-bold uppercase mt-1">
-                      Interno (só a equipe vê): {formatCurrency(financials?.valorFinal || 0)}
-                    </span>
+              {/* Configurações: recolhidas por padrão; os avisos importantes aparecem como selos no cabeçalho.
+                  Recolhido = escondido (não desmontado), então a busca de cotação e a tradução seguem de pé. */}
+              <div className="rounded-lumos border border-lumos-border">
+                <button
+                  type="button"
+                  onClick={() => setConfigAberta(a => !a)}
+                  aria-expanded={configAberta}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+                >
+                  <span className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Configurações da proposta</span>
+                    {configSelos.map(s => (
+                      <span
+                        key={s.texto}
+                        className={clsx(
+                          'text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border',
+                          s.aviso ? 'text-amber-500 border-amber-500/40 bg-amber-500/10' : 'text-lumos-text-secondary border-lumos-border'
+                        )}
+                      >
+                        {s.texto}
+                      </span>
+                    ))}
+                  </span>
+                  {configAberta ? <ChevronUp className="w-3.5 h-3.5 flex-shrink-0 text-lumos-text-secondary" /> : <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 text-lumos-text-secondary" />}
+                </button>
+
+                <div className={clsx('space-y-4 px-3 pb-3', !configAberta && 'hidden')}>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Margem (% do total)</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          disabled={isReadOnly}
+                          type="number" 
+                          className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
+                          value={version ? Math.round((version.margin_pct || 0) * 100) : 40}
+                          onChange={(e) => updateVersion({ margin_pct: (Number(e.target.value) || 0) / 100 })}
+                        />
+                        <span className="text-lumos-text-secondary text-[10px]">%</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Imposto (NF)</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          disabled={isReadOnly}
+                          type="number" 
+                          className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
+                          value={version ? Math.round((version.nf_pct || 0) * 100) : 18}
+                          onChange={(e) => updateVersion({ nf_pct: (Number(e.target.value) || 0) / 100 })}
+                        />
+                        <span className="text-lumos-text-secondary text-[10px]">%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {version && (
+                    <MoedaPanel
+                      version={version}
+                      disabled={isReadOnly}
+                      aprovado={budget?.status === 'aprovado'}
+                      feeMensal={version.payment_plan === 'fee_mensal'}
+                      onChange={updateVersion}
+                    />
+                  )}
+
+                  {version && (
+                    <IdiomaPanel
+                      version={version}
+                      items={items}
+                      disabled={isReadOnly}
+                      onChange={updateVersion}
+                    />
                   )}
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className="text-lumos-text-secondary">Margem (total − custo)</span>
-                    <span className="text-lumos-text-primary">{formatCurrency(financials?.margem || 0)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className="text-lumos-text-secondary">Sobra depois do imposto</span>
-                    <span className={clsx((financials?.lucro || 0) < 0 ? 'text-red-500' : 'text-lumos-text-primary')}>
-                      {formatCurrency(financials?.lucro || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className="text-lumos-text-secondary">Markup</span>
-                    <span className="text-lumos-text-secondary">{(financials?.markup || 0).toFixed(2)}×&nbsp;o custo</span>
-                  </div>
-
-                  <div className={clsx(
-                    "p-3 rounded-lumos flex items-center justify-between font-black uppercase text-[10px] border",
-                    (financials?.margemReal || 0) < 30 
-                      ? "bg-red-500/10 text-red-500 border-red-500/20" 
-                      : "bg-green-500/10 text-green-500 border-green-500/20"
-                  )}>
-                    <span>Margem Real</span>
-                    <span>{financials?.margemReal.toFixed(1)}%</span>
-                  </div>
-                </div>
-
-                {(financials?.margemReal || 0) < 30 && (
-                  <p className="text-[9px] text-red-500 mt-2 flex items-start gap-1 font-bold italic leading-tight">
-                    <AlertCircle className="w-3 h-3 flex-shrink-0" /> Margem abaixo do mínimo sugerido pela produtora (30%)
-                  </p>
-                )}
               </div>
             </div>
 
