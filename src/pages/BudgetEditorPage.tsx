@@ -393,6 +393,26 @@ export default function BudgetEditorPage() {
   // "Configurações da proposta" (margem %, imposto %, moeda, idioma): recolhido por padrão; os avisos
   // que importam aparecem como selos no cabeçalho do bloco para não ficarem escondidos.
   const [configAberta, setConfigAberta] = useState(false);
+  // Ao escolher dólar o PDF vai para inglês sozinho. Se foi sozinho, voltar para real devolve o português;
+  // se a pessoa escolheu o idioma na mão (ou a tela foi recarregada), não mexe.
+  const idiomaAutomatico = useRef(false);
+  const aoMudarMoeda = (u: Partial<BudgetVersion>) => {
+    if (u.currency === 'USD' && u.pdf_language === 'en' && version?.pdf_language !== 'en') idiomaAutomatico.current = true;
+    if (u.currency === 'BRL') {
+      const devolver = idiomaAutomatico.current && version?.pdf_language === 'en';
+      idiomaAutomatico.current = false;
+      if (devolver) {
+        updateVersion({ ...u, pdf_language: 'pt' });
+        toast.info('PDF em português selecionado ao voltar para real. Para enviar em inglês, troque em "Idioma do PDF".');
+        return;
+      }
+    }
+    updateVersion(u);
+  };
+  const aoMudarIdioma = (u: Partial<BudgetVersion>) => {
+    if ('pdf_language' in u) idiomaAutomatico.current = false;
+    updateVersion(u);
+  };
   const configSelos = useMemo(() => {
     const selos: { texto: string; aviso: boolean }[] = [];
     if (!version) return selos;
@@ -2425,11 +2445,11 @@ export default function BudgetEditorPage() {
             <div className="space-y-4 text-xs font-semibold">
               {/* De onde vem o preço: custo direto + a margem pedida. */}
               <div className="space-y-2">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-3">
                   <span className="text-lumos-text-secondary uppercase">Custo Direto (Itens)</span>
                   <span className="text-lumos-text-primary">{formatCurrency(financials?.totalCusto || 0)}</span>
                 </div>
-                <div className="flex justify-between font-black text-sm text-lumos-text-primary">
+                <div className="flex justify-between gap-3 font-black text-sm text-lumos-text-primary">
                   <span className="uppercase">Margem ({Math.round((version?.margin_pct || 0) * 100)}%)</span>
                   <span>+{formatCurrency(financials?.margem || 0)}</span>
                 </div>
@@ -2439,11 +2459,11 @@ export default function BudgetEditorPage() {
 
               {/* Pra onde a margem vai. O imposto sai DAQUI, não do cliente. */}
               <div className="space-y-2 pl-3 border-l-2 border-lumos-border">
-                <div className="flex justify-between text-lumos-text-secondary">
+                <div className="flex justify-between gap-3 text-lumos-text-secondary">
                   <span className="uppercase">Imposto NF ({Math.round((version?.nf_pct || 0) * 100)}%)</span>
                   <span>−{formatCurrency(financials?.nf || 0)}</span>
                 </div>
-                <div className="flex justify-between text-lumos-text-primary">
+                <div className="flex justify-between gap-3 text-lumos-text-primary">
                   <span className="uppercase">Sobra pra Lumos</span>
                   <span className={clsx('font-black', (financials?.lucro || 0) < 0 && 'text-red-500')}>
                     {formatCurrency(financials?.lucro || 0)}
@@ -2452,19 +2472,19 @@ export default function BudgetEditorPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                <div className="flex justify-between items-center gap-3 text-[10px] font-black uppercase">
                   <span className="text-lumos-text-secondary">Margem (total − custo)</span>
-                  <span className="text-lumos-text-primary">{formatCurrency(financials?.margem || 0)}</span>
+                  <span className="text-lumos-text-primary whitespace-nowrap flex-shrink-0">{formatCurrency(financials?.margem || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                <div className="flex justify-between items-center gap-3 text-[10px] font-black uppercase">
                   <span className="text-lumos-text-secondary">Sobra depois do imposto</span>
-                  <span className={clsx((financials?.lucro || 0) < 0 ? 'text-red-500' : 'text-lumos-text-primary')}>
+                  <span className={clsx('whitespace-nowrap flex-shrink-0', (financials?.lucro || 0) < 0 ? 'text-red-500' : 'text-lumos-text-primary')}>
                     {formatCurrency(financials?.lucro || 0)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                <div className="flex justify-between items-center gap-3 text-[10px] font-black uppercase">
                   <span className="text-lumos-text-secondary">Markup</span>
-                  <span className="text-lumos-text-secondary">{(financials?.markup || 0).toFixed(2)}×&nbsp;o custo</span>
+                  <span className="text-lumos-text-secondary whitespace-nowrap flex-shrink-0">{(financials?.markup || 0).toFixed(2)}×&nbsp;o custo</span>
                 </div>
               </div>
 
@@ -2530,7 +2550,7 @@ export default function BudgetEditorPage() {
                       disabled={isReadOnly}
                       aprovado={budget?.status === 'aprovado'}
                       feeMensal={version.payment_plan === 'fee_mensal'}
-                      onChange={updateVersion}
+                      onChange={aoMudarMoeda}
                     />
                   )}
 
@@ -2539,7 +2559,7 @@ export default function BudgetEditorPage() {
                       version={version}
                       items={items}
                       disabled={isReadOnly}
-                      onChange={updateVersion}
+                      onChange={aoMudarIdioma}
                     />
                   )}
                 </div>
