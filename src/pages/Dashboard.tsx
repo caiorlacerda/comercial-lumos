@@ -146,17 +146,39 @@ export default function Dashboard() {
     }
   }
 
+  // Aprovado, com recebimento ou com custos lançados não se exclui: a exclusão levaria as parcelas e os custos junto.
+  // (Mesma conferência de Budgets.tsx.)
+  const orcamentosProtegidos = async (ids: string[]) => {
+    const [bs, rs, cs] = await Promise.all([
+      supabase.from('budgets').select('id, status').in('id', ids),
+      supabase.from('receivables').select('budget_id').in('budget_id', ids).gt('received_amount', 0),
+      supabase.from('project_costs').select('budget_id').in('budget_id', ids),
+    ]);
+    if (bs.error || rs.error || cs.error) throw (bs.error || rs.error || cs.error);
+    const protegidos = new Set<string>();
+    (bs.data || []).forEach((b: any) => { if (b.status === 'aprovado') protegidos.add(b.id); });
+    (rs.data || []).forEach((r: any) => r.budget_id && protegidos.add(r.budget_id));
+    (cs.data || []).forEach((c: any) => c.budget_id && protegidos.add(c.budget_id));
+    return protegidos;
+  };
+
   const handleDeleteBudget = async () => {
     if (!budgetToDelete) return;
     try {
+      if ((await orcamentosProtegidos([budgetToDelete.id])).size > 0) {
+        toast.error('Este orçamento está aprovado, tem recebimento ou custos lançados e não pode ser excluído. Mude o status para Cancelado.');
+        setBudgetToDelete(null);
+        return;
+      }
       const { error } = await supabase.from('budgets').delete().eq('id', budgetToDelete.id);
       if (error) throw error;
       setBudgets(prev => prev.filter(b => b.id !== budgetToDelete.id));
       setRecentBudgets(prev => prev.filter(b => b.id !== budgetToDelete.id));
       setBudgetToDelete(null);
       setActiveMenu(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error deleting budget:', err);
+      toast.error(`Erro ao deletar orçamento: ${err?.message || JSON.stringify(err)}`);
     }
   };
 

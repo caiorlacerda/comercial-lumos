@@ -100,8 +100,6 @@ export default function Templates() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    console.log('briefing templates result:', data, error);
-
     if (error) {
       console.error('Error fetching briefing templates:', error);
     } else {
