@@ -905,11 +905,21 @@ export default function BudgetEditorPage() {
             validity_days: version?.validity_days || 7,
             logistics_date: version?.logistics_date || null,
             logistics_time: version?.logistics_time || null,
-            logistics_location: version?.logistics_location || null
+            logistics_location: version?.logistics_location || null,
+            // Mesmos campos que o salvamento normal (handleSave) grava: sem eles, um rascunho em
+            // dólar/inglês virava modelo em BRL/PT e perdia plano de pagamento e fee mensal.
+            payment_plan: version?.payment_plan || null,
+            fee_mensal_inicio: version?.fee_mensal_inicio || null,
+            fee_mensal_fim: version?.fee_mensal_fim || null,
+            fee_mensal_valor: version?.fee_mensal_valor || null,
+            fee_mensal_adendos: (version?.fee_mensal_adendos || []).filter(a => a.mes && a.valor > 0),
+            fee_mensal_mostrar_na_proposta: version?.fee_mensal_mostrar_na_proposta || false,
+            ...camposDeMoeda(version),
+            ...camposDeIdioma(version)
           })
           .select()
           .single();
-        
+
         if (vError) throw vError;
 
         // Insert items
@@ -925,25 +935,30 @@ export default function BudgetEditorPage() {
             sort_order: idx,
             catalog_item_id: it.catalog_item_id
           }));
-          await supabase.from('budget_items').insert(itemsToInsert);
+          const { error: itensErro } = await supabase.from('budget_items').insert(itemsToInsert);
+          if (itensErro) throw itensErro;
         }
 
-        await supabase.from('budgets').update({ active_version_id: vData.id }).eq('id', budgetId);
-        
+        const { error: versaoAtivaErro } = await supabase.from('budgets').update({ active_version_id: vData.id }).eq('id', budgetId);
+        if (versaoAtivaErro) throw versaoAtivaErro;
+
         setIsDraft(false);
         setBudget({ ...bData, is_template: true, template_category: templateCategory.trim() });
         navigate(`/orcamentos/${budgetId}`, { replace: true });
       } else {
         // Just update existing budget
-        const { error } = await supabase
+        const { data: atualizados, error } = await supabase
           .from('budgets')
-          .update({ 
-            is_template: true, 
-            template_category: templateCategory.trim() 
+          .update({
+            is_template: true,
+            template_category: templateCategory.trim()
           })
-          .eq('id', budgetId);
+          .eq('id', budgetId)
+          .select('id');
 
         if (error) throw error;
+        // Sem permissão (RLS) o banco não dá erro: simplesmente não atualiza nenhuma linha.
+        if (!atualizados || atualizados.length === 0) throw new Error('Nenhuma linha foi atualizada (sem permissão para alterar este orçamento?).');
         setBudget(prev => prev ? { ...prev, is_template: true, template_category: templateCategory.trim() } : null);
       }
 
@@ -953,7 +968,7 @@ export default function BudgetEditorPage() {
     } catch (err) {
       console.error('Error saving as template:', err);
       notifySaveStatus('error');
-      toast.error('Erro ao salvar como template: ' + (err as any).message);
+      toast.error('Erro ao salvar como template: ' + ((err as any)?.message || String(err)));
     }
   };
 

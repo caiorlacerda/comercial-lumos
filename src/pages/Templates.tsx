@@ -119,6 +119,7 @@ export default function Templates() {
       fetchTemplates();
     } catch (err) {
       console.error('Error removing from templates:', err);
+      toast.error('Erro ao remover dos padrões: ' + ((err as any)?.message || String(err)));
     }
   };
 
@@ -128,7 +129,8 @@ export default function Templates() {
       const originalVersion = template.versions?.find(v => v.id === template.active_version_id) || template.versions?.[0];
       if (!originalVersion) throw new Error('Versão do template não encontrada');
 
-      const { data: originalItems } = await supabase.from('budget_items').select('*').eq('version_id', originalVersion.id);
+      const { data: originalItems, error: itensLeituraErro } = await supabase.from('budget_items').select('*').eq('version_id', originalVersion.id);
+      if (itensLeituraErro) throw itensLeituraErro;
 
       const { data: newBudget, error: bError } = await supabase.from('budgets').insert({
         code: '----',
@@ -154,7 +156,8 @@ export default function Templates() {
 
       if (vError) throw vError;
 
-      await supabase.from('budgets').update({ active_version_id: newVersion.id }).eq('id', newBudget.id);
+      const { error: versaoAtivaErro } = await supabase.from('budgets').update({ active_version_id: newVersion.id }).eq('id', newBudget.id);
+      if (versaoAtivaErro) throw versaoAtivaErro;
 
       if (originalItems && originalItems.length > 0) {
         const clonedItems = originalItems.map(item => ({
@@ -167,13 +170,14 @@ export default function Templates() {
           sort_order: item.sort_order,
           catalog_item_id: item.catalog_item_id
         }));
-        await supabase.from('budget_items').insert(clonedItems);
+        const { error: itensErro } = await supabase.from('budget_items').insert(clonedItems);
+        if (itensErro) throw itensErro;
       }
 
       navigate(`/orcamentos/${newBudget.id}`);
     } catch (err) {
       console.error('Error using template:', err);
-      toast.error('Erro ao criar orçamento a partir do template.');
+      toast.error('Erro ao criar orçamento a partir do template: ' + ((err as any)?.message || String(err)));
     } finally {
       setIsDuplicating(false);
     }
