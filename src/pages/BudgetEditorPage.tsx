@@ -83,7 +83,7 @@ import MoedaPanel from '@/components/editor/MoedaPanel';
 import IdiomaPanel from '@/components/editor/IdiomaPanel';
 import { camposDeIdioma } from '@/utils/idioma';
 import { coletarTextos, faltantes } from '@/lib/traducaoCore';
-import { camposDeMoeda, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
+import { camposDeMoeda, diasDesde, formatarValorDaVersao, moedaDaVersao } from '@/utils/moeda';
 
 const PAYMENT_PRESETS = [
   '7 dias após a emissão da nota',
@@ -144,6 +144,9 @@ function SortableItemRow({ id, isReadOnly, children, editando, destaque, aoFocar
   );
 }
 
+// Ids temporários do rascunho ('draft', 'draft-v1') nunca podem ir para o banco.
+const ehUuid = (v?: string | null) => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 export default function BudgetEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -199,8 +202,43 @@ export default function BudgetEditorPage() {
   const [isBriefingPopoverOpen, setIsBriefingPopoverOpen] = useState(false);
   const [showBriefingSuggestion, setShowBriefingSuggestion] = useState(false);
   
-  // Ref to track dirty state and prevent save loops
-  const isDirty = useRef(false);
+  // "Tem alteração pendente": mantém a interface `isDirty.current` (lida/escrita em vários pontos) e
+  // também avisa o React, para o botão "Salvar Proposta" acender e apagar na hora.
+  const isDirtyRef = useRef(false);
+  const [dirty, setDirty] = useState(false);
+  const isDirty = useMemo(() => ({
+    get current() { return isDirtyRef.current; },
+    set current(v: boolean) { isDirtyRef.current = v; setDirty(v); if (v) autoSalvarRef.current(); },
+  }), []);
+  // Edição marcada como "alterada" numa proposta já criada também grava sozinha (como margem/moeda/status).
+  const autoSalvarRef = useRef<() => void>(() => {});
+  const handleSaveAtualRef = useRef<(mostrar?: boolean) => Promise<void>>(async () => {});
+  // Gravações com espera (moeda, idioma, status, margem, imposto, texto de item) que ainda não saíram.
+  const gravacoesPendentes = useRef<Record<string, () => Promise<boolean>>>({});
+  const [temPendente, setTemPendente] = useState(false);
+  const saindo = useRef(false);
+  const gravarTudoRef = useRef<() => Promise<void>>(async () => {});
+
+  // Coluna direita (Resumo + Histórico) fixa logo abaixo do cabeçalho: mede o cabeçalho e a área de rolagem.
+  const cabecalhoRef = useRef<HTMLDivElement>(null);
+  const [colunaDireita, setColunaDireita] = useState({ topo: 112, alturaMax: 560 });
+  useEffect(() => {
+    const cab = cabecalhoRef.current;
+    const rolagem = cab?.closest('main') as HTMLElement | null;
+    if (!cab || !rolagem) return;
+    const medir = () => {
+      const topo = Math.round(cab.getBoundingClientRect().height) + 16;   // 16 = respiro abaixo do cabeçalho
+      // 32 = o mesmo respiro do rodapé da página (p-8): o bloco não "sobe" quando a página chega ao fim.
+      setColunaDireita(a => {
+        const alturaMax = Math.max(240, rolagem.clientHeight - topo - 32);
+        return a.topo === topo && a.alturaMax === alturaMax ? a : { topo, alturaMax };
+      });
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(cab); ro.observe(rolagem);
+    return () => ro.disconnect();
+  }, [loading]);
   const lastLoadedData = useRef<string>('');
 
   // ── Colaboração: o último estado do servidor que esta pessoa conhece (base da mesclagem) ──
@@ -212,6 +250,9 @@ export default function BudgetEditorPage() {
   const briefingEditorRef = useRef<Editor | null>(null);
   const salvamentosEmAndamento = useRef(0);   // salvamentos desta pessoa no ar: a sincronização espera
   const marcaDeSalvamento = useRef(0);        // muda a cada salvamento: invalida uma busca que ficou velha no caminho
+  const gravacaoPropriaEm = useRef(0);        // quando esta pessoa gravou por último: eventos logo depois são dela mesma
+  const iniciarGravacao = () => { salvamentosEmAndamento.current++; marcaDeSalvamento.current++; gravacaoPropriaEm.current = Date.now(); };
+  const terminarGravacao = () => { salvamentosEmAndamento.current--; marcaDeSalvamento.current++; gravacaoPropriaEm.current = Date.now(); };
   const sincronizarRef = useRef<() => void>(() => {});
   const [itensDestacados, setItensDestacados] = useState<Set<string>>(new Set());
   const CAMPOS_ITEM = ['item_group', 'name', 'unit_cost', 'quantity', 'unit_label', 'description', 'catalog_item_id'];
@@ -282,10 +323,33 @@ export default function BudgetEditorPage() {
     live: "Descreva a natureza do evento, audiência esperada, se é público ou privado, e se haverá gravação para edição posterior..."
   };
 
+  // Briefing & Condições: abre recolhido (título + 2 linhas). O editor continua montado mesmo recolhido
+  // (só fica escondido), senão o texto em conjunto e o "Carregar template" perderiam o documento.
+  const [briefingAberto, setBriefingAberto] = useState(false);
+  const briefingDecididoPara = useRef<string | null>(null);
+  const resumoDoBriefing = useMemo(() => {
+    const html = version?.notes_client || '';
+    if (!html.trim()) return '';
+    const comQuebras = html.replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n').replace(/<br\s*\/?>/gi, '\n');
+    const texto = new DOMParser().parseFromString(comQuebras, 'text/html').body.textContent || '';
+    return texto.replace(/[ \t ]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+  }, [version?.notes_client]);
+
+  // Decide uma vez por versão: abre sozinho em proposta nova (rascunho) ou com briefing vazio; senão fica recolhido.
+  useEffect(() => {
+    if (!version?.id || briefingDecididoPara.current === version.id) return;
+    briefingDecididoPara.current = version.id;
+    setBriefingAberto(isDraft || !(version.notes_client || '').trim());
+  }, [version?.id, version?.notes_client, isDraft]);
+  // Alguém está editando o briefing agora: abre para quem está olhando ver o que acontece.
+  const alguemNoBriefing = !!quemEdita('briefing');
+  useEffect(() => { if (alguemNoBriefing) setBriefingAberto(true); }, [alguemNoBriefing]);
+
   const handleLoadBriefingTemplate = (content: string) => {
     if (version?.notes_client && version.notes_client.trim() !== '') {
       if (!confirm('Substituir o briefing atual pelo template?')) return;
     }
+    setBriefingAberto(true);
     if (briefingEditorRef.current) {
       // Texto em conjunto: o template entra no documento compartilhado (e some para todos os que estão vendo).
       briefingEditorRef.current.commands.setContent(content);
@@ -326,6 +390,45 @@ export default function BudgetEditorPage() {
     return calcFinancials(items, version);
   }, [items, version]);
 
+  // "Configurações da proposta" (margem %, imposto %, moeda, idioma): recolhido por padrão; os avisos
+  // que importam aparecem como selos no cabeçalho do bloco para não ficarem escondidos.
+  const [configAberta, setConfigAberta] = useState(false);
+  // Ao escolher dólar o PDF vai para inglês sozinho. Se foi sozinho, voltar para real devolve o português;
+  // se a pessoa escolheu o idioma na mão (ou a tela foi recarregada), não mexe.
+  const idiomaAutomatico = useRef(false);
+  const aoMudarMoeda = (u: Partial<BudgetVersion>) => {
+    if (u.currency === 'USD' && u.pdf_language === 'en' && version?.pdf_language !== 'en') idiomaAutomatico.current = true;
+    if (u.currency === 'BRL') {
+      const devolver = idiomaAutomatico.current && version?.pdf_language === 'en';
+      idiomaAutomatico.current = false;
+      if (devolver) {
+        updateVersion({ ...u, pdf_language: 'pt' });
+        toast.info('PDF em português selecionado ao voltar para real. Para enviar em inglês, troque em "Idioma do PDF".');
+        return;
+      }
+    }
+    updateVersion(u);
+  };
+  const aoMudarIdioma = (u: Partial<BudgetVersion>) => {
+    if ('pdf_language' in u) idiomaAutomatico.current = false;
+    updateVersion(u);
+  };
+  const configSelos = useMemo(() => {
+    const selos: { texto: string; aviso: boolean }[] = [];
+    if (!version) return selos;
+    if (moedaDaVersao(version) === 'USD') {
+      selos.push({ texto: 'US$', aviso: false });
+      const idade = diasDesde(version.fx_rate_at);
+      if (idade !== null && idade > (version.validity_days ?? 7)) selos.push({ texto: 'Cotação velha', aviso: true });
+    }
+    if (version.pdf_language === 'en') {
+      selos.push({ texto: 'EN', aviso: false });
+      const faltam = faltantes(coletarTextos(version, items), version.translations).length;
+      if (faltam > 0) selos.push({ texto: `${faltam} sem tradução`, aviso: true });
+    }
+    return selos;
+  }, [version, items]);
+
   // Validation logic
   const validation = useMemo(() => {
     const missing = [];
@@ -358,11 +461,22 @@ export default function BudgetEditorPage() {
     }
     fetchClients();
 
-    // Cleanup timers on unmount
+    // Ao sair da tela (ou trocar de proposta) grava o que ainda estava esperando, em vez de descartar.
     return () => {
-      Object.values(saveTimers.current).forEach(clearTimeout);
+      void gravarTudoRef.current();
     };
   }, [id]);
+
+  // Fechar/recarregar a aba ou ir para outro site: dispara a gravação do que está pendente.
+  useEffect(() => {
+    const aoSair = () => { void gravarTudoRef.current(); };
+    window.addEventListener('beforeunload', aoSair);
+    window.addEventListener('pagehide', aoSair);
+    return () => {
+      window.removeEventListener('beforeunload', aoSair);
+      window.removeEventListener('pagehide', aoSair);
+    };
+  }, []);
 
   async function fetchClients() {
     const { data } = await supabase.from('clients').select('*').order('name');
@@ -487,7 +601,7 @@ export default function BudgetEditorPage() {
       setVersions(versionsData || []);
       setVersion(targetVersion);
       setItems(itemsData || []);
-      setExpandedDescriptions(new Set((itemsData || []).filter((i: any) => i.description).map((i: any) => i.id)));
+      setExpandedDescriptions(new Set());   // detalhe (unidade + observação) começa recolhido; a seta fica amarela se houver observação
       baseRef.current = { budget: budgetData, version: targetVersion, items: (itemsData as BudgetItem[]) || [] };
 
       // Load activity history (fails silently if table doesn't exist)
@@ -531,10 +645,19 @@ export default function BudgetEditorPage() {
 
   // Persistent Save Logic
   const handleSave = async (showNotification: boolean = true) => {
-    if (!budget || !version || !isDirty.current) return;
-    
+    if (!budget || !version) return;
+    // Proposta "criada" mas ainda com os ids temporários do rascunho: nunca grava (evita "invalid input syntax for type uuid").
+    if (!isDraft && !(ehUuid(budget.id) && ehUuid(version.id))) return;
+    // Esta gravação completa já cobre a automática que estava agendada.
+    cancelarPendente('proposta-completa');
+    // Adianta o que estava esperando o tempo de gravação (margem, imposto, moeda, idioma, status...).
+    // Se alguma falhar, o campo já voltou ao valor salvo e a gravação completa não repete o erro.
+    if (!isDraft && !(await gravarPendentes())) return;
+    if (!isDirty.current) return;
+
     if (showNotification) notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
+    let idCriado: string | null = null;   // rascunho que acabou de virar proposta: a tela só troca de rota no fim
     try {
       let currentBudgetId = budget.id;
       let currentVersionId = version.id;
@@ -607,8 +730,10 @@ export default function BudgetEditorPage() {
           link: `/orcamentos/${currentBudgetId}`
         });
 
-        setIsDraft(false);
-        navigate(`/orcamentos/${currentBudgetId}`, { replace: true });
+        // Não troca de rota aqui: a tela ainda está com os ids temporários e faltam os itens. Troca no fim,
+        // quando tudo já foi gravado e o estado "alterado" foi limpo (senão o recarregamento da nova rota é ignorado
+        // e a saída da tela tenta gravar com o id 'draft-v1').
+        idCriado = currentBudgetId;
 
       } else {
         const [versaoRes, orcamentoRes] = await Promise.all([
@@ -672,11 +797,16 @@ export default function BudgetEditorPage() {
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       if (showNotification) notifySaveStatus('saved');
+      if (idCriado) {
+        setIsDraft(false);
+        navigate(`/orcamentos/${idCriado}`, { replace: true });
+      }
     } catch (err) {
       console.error('Save error:', err);
       if (showNotification) notifySaveStatus('error');
+      toast.error(`Não foi possível salvar a proposta: ${mensagemDoErro(err)}`);
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
@@ -686,20 +816,33 @@ export default function BudgetEditorPage() {
     const base = baseRef.current?.[tipo];
     const mudou = base ? camposAlterados(base, campos, Object.keys(campos)) : campos;
     if (Object.keys(mudou).length === 0) return { error: null };
-    return supabase.from(tabela).update(mudou).eq('id', id);
+    const { data, error } = await supabase.from(tabela).update(mudou).eq('id', id).select('id');
+    if (!error && !data?.length) return { error: new Error('Nenhuma linha foi atualizada (sem permissão ou proposta não encontrada).') };
+    return { error };
   };
 
 
 
   // Optimized Partial Saves
-  const savePartialBudget = async (updates: Partial<Budget>) => {
-    if (isDraft || !budget) return;
+  const mensagemDoErro = (err: any): string => err?.message || 'erro desconhecido';
+
+  // Devolve true se gravou. Se falhar: avisa com a mensagem do banco e volta os campos ao valor salvo.
+  const savePartialBudget = async (updates: Partial<Budget>): Promise<boolean> => {
+    if (isDraft || !budget || !ehUuid(budget.id)) return true;
     notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
+    const statusAntes = baseRef.current?.budget?.status ?? budget.status;
     try {
-      const { error } = await supabase.from('budgets').update(updates).eq('id', budget.id);
+      const { data: linhas, error } = await supabase.from('budgets').update(updates).eq('id', budget.id).select('id');
       if (error) throw error;
+      if (!linhas?.length) throw new Error('Nenhuma linha foi atualizada (sem permissão ou proposta não encontrada).');
       guardarNaBase({ budget: { ...(baseRef.current?.budget || {}), ...updates } });
+
+      // O registro no Histórico só acontece depois que a gravação deu certo.
+      if (updates.status && statusAntes && updates.status !== statusAntes) {
+        const nomes: Record<string, string> = { rascunho: 'Rascunho', em_negociacao: 'Em Negociação', aprovado: 'Aprovado', reprovado: 'Reprovado', cancelado: 'Cancelado' };
+        logActivity('status_changed', `Status alterado: ${nomes[statusAntes] ?? statusAntes} → ${nomes[updates.status] ?? updates.status}`);
+      }
       
       // Sync to Receivables if approved
       if (updates.status === 'aprovado' && financials) {
@@ -712,25 +855,36 @@ export default function BudgetEditorPage() {
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       notifySaveStatus('saved');
+      return true;
     } catch (err) {
       console.error('Partial budget save error:', err);
       notifySaveStatus('error');
+      toast.error(`Não foi possível salvar a alteração: ${mensagemDoErro(err)}`);
+      const salvo = baseRef.current?.budget as Record<string, any> | undefined;
+      if (salvo) {
+        const volta: Record<string, any> = {};
+        Object.keys(updates).forEach(k => { volta[k] = salvo[k]; });
+        setBudget(prev => prev ? { ...prev, ...volta } : prev);
+      }
+      return false;
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
-  const savePartialVersion = async (updates: Partial<BudgetVersion>) => {
-    if (isDraft || !version) return;
+  const savePartialVersion = async (updates: Partial<BudgetVersion>): Promise<boolean> => {
+    if (isDraft || !version || !ehUuid(version.id)) return true;
     notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
     try {
-      const { error } = await supabase.from('budget_versions').update(updates).eq('id', version.id);
+      const { data: linhas, error } = await supabase.from('budget_versions').update(updates).eq('id', version.id).select('id');
       if (error) throw error;
+      if (!linhas?.length) throw new Error('Nenhuma linha foi atualizada (sem permissão ou versão não encontrada).');
       guardarNaBase({ version: { ...(baseRef.current?.version || {}), ...updates } });
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       notifySaveStatus('saved');
+      return true;
     } catch (err) {
       console.error('Partial version save error:', err);
       notifySaveStatus('error');
@@ -744,10 +898,20 @@ export default function BudgetEditorPage() {
           .eq('id', version.id)
           .single();
         if (data) setVersion(prev => prev ? { ...prev, ...data } : prev);
-        toast.error('Não foi possível alterar a moeda/cotação. O orçamento pode estar aprovado: volte para "Em Negociação" e tente de novo.');
+        toast.error(`Não foi possível alterar a moeda/cotação: ${mensagemDoErro(err)}. O orçamento pode estar aprovado: volte para "Em Negociação" e tente de novo.`);
+      } else {
+        toast.error(`Não foi possível salvar a alteração: ${mensagemDoErro(err)}`);
+        // Volta os campos ao valor salvo (a base é o último estado conhecido do servidor).
+        const salvo = baseRef.current?.version as Record<string, any> | undefined;
+        if (salvo) {
+          const volta: Record<string, any> = {};
+          Object.keys(updates).forEach(k => { volta[k] = salvo[k]; });
+          setVersion(prev => prev ? { ...prev, ...volta } : prev);
+        }
       }
+      return false;
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
@@ -958,9 +1122,9 @@ export default function BudgetEditorPage() {
   };
 
   const syncItem = async (item: BudgetItem) => {
-    if (isReadOnly || isDraft || !version) return;
+    if (isReadOnly || isDraft || !version || !ehUuid(version.id)) return;
     notifySaveStatus('saving');
-    salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    iniciarGravacao();
     try {
       // Posição na lista mais recente (a `items` deste fechamento pode estar velha, e o item recém-editado
       // nunca está nela: dava -1). Item que ainda não entrou na lista (acabou de ser criado) vai para o fim.
@@ -989,7 +1153,7 @@ export default function BudgetEditorPage() {
       console.error('Error syncing item:', err);
       notifySaveStatus('error');
     } finally {
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
     }
   };
 
@@ -1028,9 +1192,9 @@ export default function BudgetEditorPage() {
     if (isReadOnly || isDraft) return;
     notifySaveStatus('saving');
     try {
-      salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+      iniciarGravacao();
       const { error } = await supabase.from('budget_items').delete().eq('id', itemId);
-      salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
+      terminarGravacao();
       if (error) throw error;
       guardarNaBase({ items: (baseRef.current?.items || []).filter(i => i.id !== itemId) });
       notifySaveStatus('saved');
@@ -1098,11 +1262,15 @@ export default function BudgetEditorPage() {
     if (ordemOuItens) setItems(novosItens);
 
     // Aviso: quem mexeu (se só uma pessoa está no documento, é ela) e o que mudou.
+    // Evento que veio logo depois de uma gravação desta própria pessoa não é "outra pessoa": aplica em silêncio.
+    const eventoProprio = Date.now() - gravacaoPropriaEm.current < 8000;
     const outras = pessoasRef.current;
     const autor = outras.length === 1 ? outras[0].nome.split(' ')[0]
       : outras.find(p => p.campo && alterados.some(id => p.campo === `item:${id}`))?.nome.split(' ')[0] || 'Outra pessoa';
     const nomes = alterados.map(id => novosItens.find(i => i.id === id)?.name || remotoItens.find(i => i.id === id)?.name).filter(Boolean) as string[];
-    if (alterados.length) {
+    if (eventoProprio) {
+      // nada a avisar
+    } else if (alterados.length) {
       toast.info(`${autor} alterou ${nomes.length ? `"${nomes[0]}"` : 'itens'}${alterados.length > 1 ? ` e mais ${alterados.length - 1}` : ''}.`);
       setItensDestacados(new Set(alterados));
       window.setTimeout(() => setItensDestacados(new Set()), 2600);
@@ -1129,15 +1297,59 @@ export default function BudgetEditorPage() {
     return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', aoVoltar); supabase.removeChannel(canal); };
   }, [isDraft, budget?.id, version?.id]);
 
+  // Gravações com espera: agrupa digitação rápida, mas guarda a função para poder gravar na hora
+  // (botão Salvar, saída da tela, fechar a aba) em vez de perder a alteração.
+  const ESPERA_GRAVACAO_MS = 1200;
+
+  const cancelarPendente = (key: string) => {
+    if (saveTimers.current[key]) { clearTimeout(saveTimers.current[key]); delete saveTimers.current[key]; }
+    delete gravacoesPendentes.current[key];
+    setTemPendente(Object.keys(gravacoesPendentes.current).length > 0);
+  };
+
+  const executarPendente = async (key: string): Promise<boolean> => {
+    const run = gravacoesPendentes.current[key];
+    cancelarPendente(key);
+    return run ? run() : true;
+  };
+
+  const agendarGravacao = (key: string, run: () => Promise<boolean>, espera: number = ESPERA_GRAVACAO_MS) => {
+    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+    gravacoesPendentes.current[key] = run;
+    setTemPendente(true);
+    saveTimers.current[key] = setTimeout(() => { void executarPendente(key); }, espera);
+  };
+
+  // Grava agora tudo o que está esperando. true = todas deram certo.
+  const gravarPendentes = async (): Promise<boolean> => {
+    const resultados = await Promise.all(Object.keys(gravacoesPendentes.current).map(executarPendente));
+    return resultados.every(Boolean);
+  };
+
   const triggerSave = (type: 'budget' | 'version', updates: any) => {
     const key = `${type}-${Object.keys(updates).join('-')}`;
-    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
-    
-    saveTimers.current[key] = setTimeout(() => {
-      if (type === 'budget') savePartialBudget(updates);
-      else savePartialVersion(updates);
-      delete saveTimers.current[key];
-    }, 5000);
+    agendarGravacao(key, () => type === 'budget' ? savePartialBudget(updates) : savePartialVersion(updates));
+  };
+
+  // Qualquer campo marcado como "alterado" (isDirty) numa proposta já criada grava sozinho, com a mesma espera.
+  // Rascunho novo não: só vira proposta quando a pessoa clica em Salvar.
+  handleSaveAtualRef.current = handleSave;
+  autoSalvarRef.current = () => {
+    if (isDraft) return;
+    agendarGravacao('proposta-completa', async () => { await handleSaveAtualRef.current(true); return true; });
+  };
+
+  // Saída da tela / fechar a aba: grava o que está esperando e, numa proposta já criada, o que
+  // está marcado como alterado. Um rascunho novo nunca é criado sozinho ao sair.
+  gravarTudoRef.current = async () => {
+    if (saindo.current) return;
+    saindo.current = true;
+    try {
+      await gravarPendentes();
+      if (!isDraft && isDirty.current) await handleSave(false);
+    } finally {
+      saindo.current = false;
+    }
   };
 
   // Catalog Logic
@@ -1221,11 +1433,7 @@ export default function BudgetEditorPage() {
   const removeItem = (id: string) => {
     if (isReadOnly) return;
     // Cancel any pending debounced save for this item to prevent re-insertion after delete
-    const timerKey = `item-${id}`;
-    if (saveTimers.current[timerKey]) {
-      clearTimeout(saveTimers.current[timerKey]);
-      delete saveTimers.current[timerKey];
-    }
+    cancelarPendente(`item-${id}`);
     setItems(items.filter(i => i.id !== id));
 
     if (!isDraft && version) {
@@ -1246,21 +1454,14 @@ export default function BudgetEditorPage() {
     const updatedItem = { ...item, ...updates };
     setItems(items.map(i => i.id === id ? updatedItem : i));
     
-    const isTextField = 'name' in updates || 'description' in updates;
-    
     if (!isDraft && version) {
-      if (isTextField) {
-        const key = `item-${id}`;
-        if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
-        saveTimers.current[key] = setTimeout(() => {
-          // Grava a linha como está NA HORA de salvar (não como estava ao digitar): se outra pessoa
-          // mexeu em outro campo nesses 5 s, a alteração dela já foi mesclada e não é desfeita.
-          syncItem(itemsRef.current.find(i => i.id === id) ?? updatedItem);
-          delete saveTimers.current[key];
-        }, 5000);
-      } else {
-        setTimeout(() => syncItem(updatedItem), 0);
-      }
+      // Grava a linha como está NA HORA de salvar (não como estava ao digitar): se outra pessoa
+      // mexeu em outro campo nesse intervalo, a alteração dela já foi mesclada e não é desfeita.
+      // Fica registrada como pendente: o botão Salvar acende, e sair da tela ou clicar em Salvar grava na hora.
+      agendarGravacao(`item-${id}`, async () => {
+        await syncItem(itemsRef.current.find(i => i.id === id) ?? updatedItem);
+        return true;
+      }, 'name' in updates || 'description' in updates ? 1200 : 800);
     } else {
       isDirty.current = true;
     }
@@ -1371,10 +1572,7 @@ export default function BudgetEditorPage() {
 
   const updateBudget = (updates: Partial<Budget>) => {
     if (isReadOnly) return;
-    if (updates.status && budget?.status && updates.status !== budget.status) {
-      const labels: Record<string, string> = { rascunho: 'Rascunho', em_negociacao: 'Em Negociação', aprovado: 'Aprovado', reprovado: 'Reprovado', cancelado: 'Cancelado' };
-      logActivity('status_changed', `Status alterado: ${labels[budget.status]} → ${labels[updates.status]}`);
-    }
+    // (O registro de mudança de status no Histórico agora sai em savePartialBudget, só depois de gravar.)
     setBudget(prev => prev ? { ...prev, ...updates } : null);
     if (!isDraft) triggerSave('budget', updates);
     else isDirty.current = true;
@@ -1462,7 +1660,7 @@ export default function BudgetEditorPage() {
   return (
     <div className="flex flex-col gap-8 pb-20">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:sticky lg:top-0 lg:z-20 lg:bg-lumos-bg/95 lg:backdrop-blur-sm lg:py-4 lg:-mx-8 lg:px-8 lg:-mt-8 lg:mb-4 lg:border-b lg:border-lumos-border/50 transition-all">
+      <div ref={cabecalhoRef} className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:sticky lg:top-0 lg:z-20 lg:bg-lumos-bg/95 lg:backdrop-blur-sm lg:py-4 lg:-mx-8 lg:px-8 lg:-mt-8 lg:mb-4 lg:border-b lg:border-lumos-border/50 transition-all">
         <div className="flex items-center gap-4">
           <button onClick={goBack} title="Voltar" className="p-2 hover:bg-lumos-bg rounded-full transition-colors text-lumos-text-secondary">
             <ChevronLeft className="w-6 h-6" />
@@ -1556,7 +1754,7 @@ export default function BudgetEditorPage() {
           <PresencaNoDocumento pessoas={pessoasAqui} rotuloCampo={rotuloDoCampo} className="mr-1" />
           <div className="hidden md:flex flex-col items-end mr-2">
             <SavingIndicator />
-            {lastSavedTime && (
+            {lastSavedTime && !(dirty || temPendente) && (
               <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-green-600">
                 <CheckCircle className="w-3 h-3" /> Salvo às {lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -1566,7 +1764,7 @@ export default function BudgetEditorPage() {
             <div className="relative group/save">
               <MainSaveButton 
                 onSave={() => handleSave()} 
-                disabled={!isDirty.current || !validation.isValid}
+                disabled={!(dirty || temPendente) || !validation.isValid}
               />
               
               {!validation.isValid && (
@@ -1660,7 +1858,17 @@ export default function BudgetEditorPage() {
                 <FileText className="w-5 h-5" />
                 <h3 className="font-bold">Briefing & Condições</h3>
               </div>
-              
+
+              <div className="flex items-center gap-4">
+              {briefingAberto && (
+                <button
+                  onClick={() => setBriefingAberto(false)}
+                  aria-expanded={briefingAberto}
+                  className="flex items-center gap-1.5 text-[10px] font-black uppercase text-lumos-text-secondary hover:text-lumos-yellow transition-colors"
+                >
+                  <ChevronUp className="w-3 h-3" /> Recolher
+                </button>
+              )}
               {!isReadOnly && (
                 <div className="relative" ref={briefingPopoverRef}>
                   <button 
@@ -1698,7 +1906,22 @@ export default function BudgetEditorPage() {
                   )}
                 </div>
               )}
+              </div>
             </div>
+
+            {!briefingAberto && (
+              <div className="flex items-start gap-3 mb-0">
+                <p className="flex-1 min-w-0 text-xs text-lumos-text-secondary leading-relaxed line-clamp-2 whitespace-pre-line break-words">
+                  {resumoDoBriefing || 'Sem briefing ainda.'}
+                </p>
+                <button
+                  onClick={() => setBriefingAberto(true)}
+                  className="flex-shrink-0 flex items-center gap-1 text-[10px] font-black uppercase text-lumos-yellow hover:scale-105 transition-all"
+                >
+                  <ChevronDown className="w-3 h-3" /> Expandir
+                </button>
+              </div>
+            )}
 
             {showBriefingSuggestion && !isReadOnly && (
               <div className="bg-lumos-yellow/10 border border-lumos-yellow/20 rounded-lumos p-3 flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
@@ -1719,6 +1942,8 @@ export default function BudgetEditorPage() {
               </div>
             )}
 
+            {/* Recolhido = escondido (display: none), não desmontado: o editor em conjunto segue ligado. */}
+            <div className={clsx('space-y-4', !briefingAberto && 'hidden')}>
             <div className="grid grid-cols-1 gap-6">
               <div className="space-y-4">
                 <div>
@@ -2015,6 +2240,7 @@ export default function BudgetEditorPage() {
                 </label>
               </div>
             )}
+            </div>
           </div>
 
           {(['equipe', 'equipamentos', 'producao', 'edicao'] as const).map(group => {
@@ -2071,7 +2297,7 @@ export default function BudgetEditorPage() {
                           </div>
                           {/* Celular: quebra de linha entre "nome + ações" e "valor, quantidade, unidade" */}
                           <div aria-hidden className="hidden max-md:block max-md:order-3 basis-full h-0" />
-                          <div className="w-32 flex-shrink-0 max-md:order-4 max-md:flex-1 max-md:w-auto max-md:min-w-0">
+                          <div className="w-28 flex-shrink-0 max-md:order-4 max-md:flex-1 max-md:w-auto max-md:min-w-0">
                             <div className="flex items-center gap-1 border-b border-transparent hover:border-lumos-border transition-colors">
                               <span className="text-xs text-lumos-text-secondary">R$</span>
                               <input
@@ -2083,7 +2309,7 @@ export default function BudgetEditorPage() {
                               />
                             </div>
                           </div>
-                          <div className="w-16 flex-shrink-0 max-md:order-5 max-md:w-14">
+                          <div className="w-12 flex-shrink-0 max-md:order-5 max-md:w-14">
                             <input
                               disabled={isReadOnly}
                               type="number"
@@ -2092,19 +2318,10 @@ export default function BudgetEditorPage() {
                               onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
                             />
                           </div>
-                          <div className="w-24 flex-shrink-0 max-md:order-6">
-                            <Select
-                              disabled={isReadOnly}
-                              className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary disabled:opacity-70"
-                              value={item.unit_label}
-                              onChange={(v) => updateItem(item.id, { unit_label: v })}
-                              options={[{ value: 'diaria', label: 'diária' }, { value: 'hora', label: 'hora' }, { value: 'video', label: 'vídeo' }, { value: 'unidade', label: 'unidade' }, { value: 'pacote', label: 'pacote' }]}
-                            />
-                          </div>
-                          <div className="w-32 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary max-md:order-7 max-md:basis-full max-md:w-auto">
+                          <div className="w-28 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary max-md:order-7 max-md:basis-full max-md:w-auto">
                             {formatCurrency(item.unit_cost * item.quantity)}
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 max-md:order-2">
+                          <div className="flex items-center gap-1 flex-shrink-0 max-md:order-2">
                             <button
                               onClick={toggleDescription}
                               className={clsx(
@@ -2113,14 +2330,14 @@ export default function BudgetEditorPage() {
                                   ? "text-lumos-yellow bg-lumos-yellow/10"
                                   : "text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/5"
                               )}
-                              title={isExpanded ? "Fechar nota" : "Abrir nota"}
+                              title={isExpanded ? "Fechar detalhes" : "Detalhes (unidade e observação)"}
                             >
                               {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </button>
                             {!isReadOnly && (
                               <button
                                 onClick={() => removeItem(item.id)}
-                                className="text-red-400 hover:text-red-600 p-2 transition-colors"
+                                className="text-red-400 hover:text-red-600 p-2 transition-all opacity-0 group-hover:opacity-100 max-md:opacity-100"
                                 title="Remover Item"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -2129,7 +2346,19 @@ export default function BudgetEditorPage() {
                           </div>
                         </div>
                         {isExpanded && (
-                          <div className="px-10 pb-3 animate-in slide-in-from-top-1 duration-200">
+                          <div className="px-10 pb-3 animate-in slide-in-from-top-1 duration-200 flex gap-3 items-start max-md:flex-col">
+                            <div className="w-36 flex-shrink-0 max-md:w-full">
+                              <label className="text-[9px] font-bold text-lumos-text-secondary uppercase mb-1.5 block">Unidade</label>
+                              <Select
+                                disabled={isReadOnly}
+                                className="input-lumos w-full text-xs disabled:opacity-70"
+                                value={item.unit_label}
+                                onChange={(v) => updateItem(item.id, { unit_label: v })}
+                                options={[{ value: 'diaria', label: 'diária' }, { value: 'hora', label: 'hora' }, { value: 'video', label: 'vídeo' }, { value: 'unidade', label: 'unidade' }, { value: 'pacote', label: 'pacote' }]}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0 max-md:w-full">
+                              <label className="text-[9px] font-bold text-lumos-text-secondary uppercase mb-1.5 block">Observação</label>
                             <textarea
                               disabled={isReadOnly}
                               className="w-full bg-lumos-bg/50 border border-lumos-border/50 rounded-lumos p-3 text-xs text-lumos-text-primary focus:border-lumos-yellow/50 focus:ring-0 resize-none h-[60px] placeholder:text-lumos-text-secondary/30"
@@ -2137,6 +2366,7 @@ export default function BudgetEditorPage() {
                               value={item.description || ''}
                               onChange={(e) => updateItem(item.id, { description: e.target.value })}
                             />
+                            </div>
                           </div>
                         )}
                       </>
@@ -2153,111 +2383,21 @@ export default function BudgetEditorPage() {
         </div>
 
         {/* Financial Sidebar */}
-        <aside className="lg:col-span-1 space-y-6">
-          <div className="card sticky top-8 shadow-xl border-lumos-yellow/10">
-            <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-lumos-text-primary flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-lumos-yellow" />
-              Resumo Financeiro
-            </h3>
-            
-            <div className="space-y-4 text-xs font-semibold">
-              {/* De onde vem o preço: custo direto + a margem pedida. */}
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-lumos-text-secondary uppercase">Custo Direto (Itens)</span>
-                  <span className="text-lumos-text-primary">{formatCurrency(financials?.totalCusto || 0)}</span>
-                </div>
-                <div className="flex justify-between font-black text-sm text-lumos-text-primary">
-                  <span className="uppercase">Margem ({Math.round((version?.margin_pct || 0) * 100)}%)</span>
-                  <span>+{formatCurrency(financials?.margem || 0)}</span>
-                </div>
-              </div>
+        <aside className="lg:col-span-1">
+          {/* Resumo + Histórico num bloco só: fixo abaixo do cabeçalho, com rolagem própria se não couber. */}
+          <div
+            className="space-y-6 lg:sticky lg:top-[var(--topo-sticky)] lg:max-h-[var(--altura-sticky)] lg:overflow-y-auto lg:-mx-2 lg:px-2 lg:-mb-2 lg:pb-2"
+            style={{ '--topo-sticky': `${colunaDireita.topo}px`, '--altura-sticky': `${colunaDireita.alturaMax}px` } as React.CSSProperties}
+          >
+          <div className="card shadow-xl border-lumos-yellow/10">
+            {/* Sempre à vista (e fixo no topo do bloco ao rolar): valor final, margem real e status. */}
+            <div className="lg:sticky lg:top-0 lg:z-10 bg-lumos-surface pb-4">
+              <h3 className="text-sm font-black uppercase tracking-widest mb-4 text-lumos-text-primary flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-lumos-yellow" />
+                Resumo Financeiro
+              </h3>
 
-              <div className="h-px bg-lumos-border my-4" />
-
-              {/* Pra onde a margem vai. O imposto sai DAQUI, não do cliente. */}
-              <div className="space-y-2 pl-3 border-l-2 border-lumos-border">
-                <div className="flex justify-between text-lumos-text-secondary">
-                  <span className="uppercase">Imposto NF ({Math.round((version?.nf_pct || 0) * 100)}%)</span>
-                  <span>−{formatCurrency(financials?.nf || 0)}</span>
-                </div>
-                <div className="flex justify-between text-lumos-text-primary">
-                  <span className="uppercase">Sobra pra Lumos</span>
-                  <span className={clsx('font-black', (financials?.lucro || 0) < 0 && 'text-red-500')}>
-                    {formatCurrency(financials?.lucro || 0)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="h-px bg-lumos-border my-4" />
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Margem (% do total)</label>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        disabled={isReadOnly}
-                        type="number" 
-                        className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
-                        value={version ? Math.round((version.margin_pct || 0) * 100) : 40}
-                        onChange={(e) => setVersion(v => v ? { ...v, margin_pct: (Number(e.target.value) || 0) / 100 } : null)}
-                      />
-                      <span className="text-lumos-text-secondary text-[10px]">%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Imposto (NF)</label>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        disabled={isReadOnly}
-                        type="number" 
-                        className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
-                        value={version ? Math.round((version.nf_pct || 0) * 100) : 18}
-                        onChange={(e) => setVersion(v => v ? { ...v, nf_pct: (Number(e.target.value) || 0) / 100 } : null)}
-                      />
-                      <span className="text-lumos-text-secondary text-[10px]">%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {version && (
-                  <MoedaPanel
-                    version={version}
-                    disabled={isReadOnly}
-                    aprovado={budget?.status === 'aprovado'}
-                    feeMensal={version.payment_plan === 'fee_mensal'}
-                    onChange={updateVersion}
-                  />
-                )}
-
-                {version && (
-                  <IdiomaPanel
-                    version={version}
-                    items={items}
-                    disabled={isReadOnly}
-                    onChange={updateVersion}
-                  />
-                )}
-
-                <div>
-                  <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-2 block">Status Proposta</label>
-                  <Select
-                    disabled={isReadOnly}
-                    className={clsx(
-                      "input-lumos w-full font-black uppercase text-[10px] disabled:opacity-70",
-                      budget?.status === 'aprovado' ? 'text-green-600' :
-                      budget?.status === 'em_negociacao' ? 'text-lumos-yellow text-glow' :
-                      budget?.status === 'reprovado' ? 'text-red-600' : budget?.status === 'cancelado' ? 'text-orange-500' : 'text-gray-400'
-                    )}
-                    value={budget?.status || 'rascunho'}
-                    onChange={(v) => updateBudget({ status: v as any })}
-                    options={[{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovado' }, { value: 'reprovado', label: 'Reprovado' }, { value: 'cancelado', label: 'Cancelado' }]}
-                  />
-                </div>
-              </div>
-
-              <div className="pt-6 mt-6 border-t border-lumos-yellow/20 bg-lumos-yellow/5 -mx-6 px-6 pb-6">
+              <div className="border-y border-lumos-yellow/20 bg-lumos-yellow/5 -mx-4 px-4 py-4 text-xs font-semibold">
                 <div className="flex flex-col gap-1 mb-4">
                   <span className="text-[10px] text-lumos-text-secondary font-black uppercase">Valor de Venda Final</span>
                   <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatarValorDaVersao(financials?.valorFinal || 0, version)}</span>
@@ -2267,32 +2407,15 @@ export default function BudgetEditorPage() {
                     </span>
                   )}
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className="text-lumos-text-secondary">Margem (total − custo)</span>
-                    <span className="text-lumos-text-primary">{formatCurrency(financials?.margem || 0)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className="text-lumos-text-secondary">Sobra depois do imposto</span>
-                    <span className={clsx((financials?.lucro || 0) < 0 ? 'text-red-500' : 'text-lumos-text-primary')}>
-                      {formatCurrency(financials?.lucro || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className="text-lumos-text-secondary">Markup</span>
-                    <span className="text-lumos-text-secondary">{(financials?.markup || 0).toFixed(2)}×&nbsp;o custo</span>
-                  </div>
 
-                  <div className={clsx(
-                    "p-3 rounded-lumos flex items-center justify-between font-black uppercase text-[10px] border",
-                    (financials?.margemReal || 0) < 30 
-                      ? "bg-red-500/10 text-red-500 border-red-500/20" 
-                      : "bg-green-500/10 text-green-500 border-green-500/20"
-                  )}>
-                    <span>Margem Real</span>
-                    <span>{financials?.margemReal.toFixed(1)}%</span>
-                  </div>
+                <div className={clsx(
+                  "p-3 rounded-lumos flex items-center justify-between font-black uppercase text-[10px] border",
+                  (financials?.margemReal || 0) < 30 
+                    ? "bg-red-500/10 text-red-500 border-red-500/20" 
+                    : "bg-green-500/10 text-green-500 border-green-500/20"
+                )}>
+                  <span>Margem Real</span>
+                  <span>{financials?.margemReal.toFixed(1)}%</span>
                 </div>
 
                 {(financials?.margemReal || 0) < 30 && (
@@ -2300,6 +2423,146 @@ export default function BudgetEditorPage() {
                     <AlertCircle className="w-3 h-3 flex-shrink-0" /> Margem abaixo do mínimo sugerido pela produtora (30%)
                   </p>
                 )}
+              </div>
+
+              <div className="mt-4">
+                <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-2 block">Status Proposta</label>
+                <Select
+                  disabled={isReadOnly}
+                  className={clsx(
+                    "input-lumos w-full font-black uppercase text-[10px] disabled:opacity-70",
+                    budget?.status === 'aprovado' ? 'text-green-600' :
+                    budget?.status === 'em_negociacao' ? 'text-lumos-yellow text-glow' :
+                    budget?.status === 'reprovado' ? 'text-red-600' : budget?.status === 'cancelado' ? 'text-orange-500' : 'text-gray-400'
+                  )}
+                  value={budget?.status || 'rascunho'}
+                  onChange={(v) => updateBudget({ status: v as any })}
+                  options={[{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_negociacao', label: 'Em Negociação' }, { value: 'aprovado', label: 'Aprovado' }, { value: 'reprovado', label: 'Reprovado' }, { value: 'cancelado', label: 'Cancelado' }]}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs font-semibold">
+              {/* De onde vem o preço: custo direto + a margem pedida. */}
+              <div className="space-y-2">
+                <div className="flex justify-between gap-3">
+                  <span className="text-lumos-text-secondary uppercase">Custo Direto (Itens)</span>
+                  <span className="text-lumos-text-primary">{formatCurrency(financials?.totalCusto || 0)}</span>
+                </div>
+                <div className="flex justify-between gap-3 font-black text-sm text-lumos-text-primary">
+                  <span className="uppercase">Margem ({Math.round((version?.margin_pct || 0) * 100)}%)</span>
+                  <span>+{formatCurrency(financials?.margem || 0)}</span>
+                </div>
+              </div>
+
+              <div className="h-px bg-lumos-border my-4" />
+
+              {/* Pra onde a margem vai. O imposto sai DAQUI, não do cliente. */}
+              <div className="space-y-2 pl-3 border-l-2 border-lumos-border">
+                <div className="flex justify-between gap-3 text-lumos-text-secondary">
+                  <span className="uppercase">Imposto NF ({Math.round((version?.nf_pct || 0) * 100)}%)</span>
+                  <span>−{formatCurrency(financials?.nf || 0)}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-lumos-text-primary">
+                  <span className="uppercase">Sobra pra Lumos</span>
+                  <span className={clsx('font-black', (financials?.lucro || 0) < 0 && 'text-red-500')}>
+                    {formatCurrency(financials?.lucro || 0)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center gap-3 text-[10px] font-black uppercase">
+                  <span className="text-lumos-text-secondary">Margem (total − custo)</span>
+                  <span className="text-lumos-text-primary whitespace-nowrap flex-shrink-0">{formatCurrency(financials?.margem || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center gap-3 text-[10px] font-black uppercase">
+                  <span className="text-lumos-text-secondary">Sobra depois do imposto</span>
+                  <span className={clsx('whitespace-nowrap flex-shrink-0', (financials?.lucro || 0) < 0 ? 'text-red-500' : 'text-lumos-text-primary')}>
+                    {formatCurrency(financials?.lucro || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center gap-3 text-[10px] font-black uppercase">
+                  <span className="text-lumos-text-secondary">Markup</span>
+                  <span className="text-lumos-text-secondary whitespace-nowrap flex-shrink-0">{(financials?.markup || 0).toFixed(2)}×&nbsp;o custo</span>
+                </div>
+              </div>
+
+              {/* Configurações: recolhidas por padrão; os avisos importantes aparecem como selos no cabeçalho.
+                  Recolhido = escondido (não desmontado), então a busca de cotação e a tradução seguem de pé. */}
+              <div className="rounded-lumos border border-lumos-border">
+                <button
+                  type="button"
+                  onClick={() => setConfigAberta(a => !a)}
+                  aria-expanded={configAberta}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+                >
+                  <span className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-lumos-text-secondary">Configurações da proposta</span>
+                    {configSelos.map(s => (
+                      <span
+                        key={s.texto}
+                        className={clsx(
+                          'text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border',
+                          s.aviso ? 'text-amber-500 border-amber-500/40 bg-amber-500/10' : 'text-lumos-text-secondary border-lumos-border'
+                        )}
+                      >
+                        {s.texto}
+                      </span>
+                    ))}
+                  </span>
+                  {configAberta ? <ChevronUp className="w-3.5 h-3.5 flex-shrink-0 text-lumos-text-secondary" /> : <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 text-lumos-text-secondary" />}
+                </button>
+
+                <div className={clsx('space-y-4 px-3 pb-3', !configAberta && 'hidden')}>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Margem (% do total)</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          disabled={isReadOnly}
+                          type="number" 
+                          className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
+                          value={version ? Math.round((version.margin_pct || 0) * 100) : 40}
+                          onChange={(e) => updateVersion({ margin_pct: (Number(e.target.value) || 0) / 100 })}
+                        />
+                        <span className="text-lumos-text-secondary text-[10px]">%</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-lumos-text-secondary font-black uppercase mb-1 block">Imposto (NF)</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          disabled={isReadOnly}
+                          type="number" 
+                          className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
+                          value={version ? Math.round((version.nf_pct || 0) * 100) : 18}
+                          onChange={(e) => updateVersion({ nf_pct: (Number(e.target.value) || 0) / 100 })}
+                        />
+                        <span className="text-lumos-text-secondary text-[10px]">%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {version && (
+                    <MoedaPanel
+                      version={version}
+                      disabled={isReadOnly}
+                      aprovado={budget?.status === 'aprovado'}
+                      feeMensal={version.payment_plan === 'fee_mensal'}
+                      onChange={aoMudarMoeda}
+                    />
+                  )}
+
+                  {version && (
+                    <IdiomaPanel
+                      version={version}
+                      items={items}
+                      disabled={isReadOnly}
+                      onChange={aoMudarIdioma}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2421,6 +2684,7 @@ export default function BudgetEditorPage() {
               )}
             </div>
           )}
+          </div>
         </aside>
       </div>
 
@@ -2466,7 +2730,7 @@ export default function BudgetEditorPage() {
           </div>
           <div className="space-y-2">
               <button 
-                onClick={() => addManualItem()}
+                onClick={() => { addManualItem(); setIsCatalogOpen(false); }}
                 className="w-full text-left p-6 rounded-lumos hover:bg-lumos-bg border-2 border-dashed border-gray-200 hover:border-lumos-yellow transition-all flex items-center justify-between group"
               >
                 <div className="flex items-center gap-4">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { gravarCache, lerCache } from '@/lib/cacheDeTela';
 import { supabase } from '@/lib/supabase';
 import Select from '@/components/ui/Select';
@@ -105,6 +106,9 @@ export default function Budgets() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
+  // O menu da linha sai da tabela (que corta o que passa da borda): vai para o <body> com posição fixa.
+  const menuPortalRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
   const batchStatusRef = useRef<HTMLDivElement>(null);
 
@@ -123,7 +127,7 @@ export default function Budgets() {
     
     // Click outside listener
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node) && !menuPortalRef.current?.contains(e.target as Node)) {
         setActiveMenu(null);
       }
       if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
@@ -146,6 +150,15 @@ export default function Budgets() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  // Menu da linha em posição fixa: fecha ao rolar ou redimensionar (senão ficaria solto no lugar).
+  useEffect(() => {
+    if (!activeMenu) return;
+    const fechar = () => setActiveMenu(null);
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('resize', fechar);
+    return () => { window.removeEventListener('scroll', fechar, true); window.removeEventListener('resize', fechar); };
+  }, [activeMenu]);
 
   // Tempo real: orçamentos alterados por outros usuários aparecem sem spinner
   useRealtimeRefetch(['budgets', 'budget_items', 'clients'], () => { fetchBudgets(true); fetchClients(); });
@@ -896,6 +909,10 @@ export default function Budgets() {
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
+                            const r = e.currentTarget.getBoundingClientRect();
+                            const right = window.innerWidth - r.right;
+                            // Sem espaço embaixo (ex.: última ou única linha): abre para cima.
+                            setMenuPos(window.innerHeight - r.bottom < 300 ? { bottom: window.innerHeight - r.top + 4, right } : { top: r.bottom + 4, right });
                             setActiveMenu(activeMenu === budget.id ? null : budget.id);
                           }}
                           className="p-2 text-lumos-text-secondary hover:text-lumos-text-primary hover:bg-lumos-bg rounded-lumos transition-all"
@@ -904,8 +921,8 @@ export default function Budgets() {
                         </button>
                         
                         {/* Dropdown menu */}
-                        {activeMenu === budget.id && (
-                          <div className="absolute top-10 right-0 w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[9999] py-1 overflow-visible animate-in fade-in zoom-in-95 duration-200">
+                        {activeMenu === budget.id && menuPos && createPortal(
+                          <div ref={menuPortalRef} style={{ position: 'fixed', ...menuPos }} className="w-48 bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl z-[9999] py-1 overflow-visible animate-in fade-in zoom-in-95 duration-200">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -961,7 +978,8 @@ export default function Budgets() {
                               <Trash2 className="w-4 h-4" />
                               Deletar
                             </button>
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </div>
                     </td>
