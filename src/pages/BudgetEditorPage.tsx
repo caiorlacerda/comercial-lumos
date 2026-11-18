@@ -2663,7 +2663,7 @@ export default function BudgetEditorPage() {
           </div>
           <div className="space-y-2">
               <button 
-                onClick={() => addManualItem()}
+                onClick={() => { addManualItem(); setIsCatalogOpen(false); }}
                 className="w-full text-left p-6 rounded-lumos hover:bg-lumos-bg border-2 border-dashed border-gray-200 hover:border-lumos-yellow transition-all flex items-center justify-between group"
               >
                 <div className="flex items-center gap-4">
