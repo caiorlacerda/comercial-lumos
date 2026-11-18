@@ -79,7 +79,7 @@ export default function Templates() {
       .from('budgets')
       .select(`
         *,
-        versions:budget_versions(
+        versions:budget_versions!budget_id(
           id,
           version_number,
           margin_pct,
@@ -90,8 +90,10 @@ export default function Templates() {
       .eq('is_template', true)
       .order('template_category');
 
-    if (error) console.error('Error fetching templates:', error);
-    else setTemplates(data || []);
+    if (error) {
+      console.error('Error fetching templates:', error);
+      toast.error('Não foi possível carregar os modelos de orçamento: ' + error.message);
+    } else setTemplates(data || []);
   }
 
   async function fetchBriefingTemplates() {
