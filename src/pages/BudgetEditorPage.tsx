@@ -199,8 +199,19 @@ export default function BudgetEditorPage() {
   const [isBriefingPopoverOpen, setIsBriefingPopoverOpen] = useState(false);
   const [showBriefingSuggestion, setShowBriefingSuggestion] = useState(false);
   
-  // Ref to track dirty state and prevent save loops
-  const isDirty = useRef(false);
+  // "Tem alteração pendente": mantém a interface `isDirty.current` (lida/escrita em vários pontos) e
+  // também avisa o React, para o botão "Salvar Proposta" acender e apagar na hora.
+  const isDirtyRef = useRef(false);
+  const [dirty, setDirty] = useState(false);
+  const isDirty = useMemo(() => ({
+    get current() { return isDirtyRef.current; },
+    set current(v: boolean) { isDirtyRef.current = v; setDirty(v); },
+  }), []);
+  // Gravações com espera (moeda, idioma, status, margem, imposto, texto de item) que ainda não saíram.
+  const gravacoesPendentes = useRef<Record<string, () => Promise<boolean>>>({});
+  const [temPendente, setTemPendente] = useState(false);
+  const saindo = useRef(false);
+  const gravarTudoRef = useRef<() => Promise<void>>(async () => {});
   const lastLoadedData = useRef<string>('');
 
   // ── Colaboração: o último estado do servidor que esta pessoa conhece (base da mesclagem) ──
@@ -358,11 +369,22 @@ export default function BudgetEditorPage() {
     }
     fetchClients();
 
-    // Cleanup timers on unmount
+    // Ao sair da tela (ou trocar de proposta) grava o que ainda estava esperando, em vez de descartar.
     return () => {
-      Object.values(saveTimers.current).forEach(clearTimeout);
+      void gravarTudoRef.current();
     };
   }, [id]);
+
+  // Fechar/recarregar a aba ou ir para outro site: dispara a gravação do que está pendente.
+  useEffect(() => {
+    const aoSair = () => { void gravarTudoRef.current(); };
+    window.addEventListener('beforeunload', aoSair);
+    window.addEventListener('pagehide', aoSair);
+    return () => {
+      window.removeEventListener('beforeunload', aoSair);
+      window.removeEventListener('pagehide', aoSair);
+    };
+  }, []);
 
   async function fetchClients() {
     const { data } = await supabase.from('clients').select('*').order('name');
@@ -531,8 +553,12 @@ export default function BudgetEditorPage() {
 
   // Persistent Save Logic
   const handleSave = async (showNotification: boolean = true) => {
-    if (!budget || !version || !isDirty.current) return;
-    
+    if (!budget || !version) return;
+    // Adianta o que estava esperando o tempo de gravação (margem, imposto, moeda, idioma, status...).
+    // Se alguma falhar, o campo já voltou ao valor salvo e a gravação completa não repete o erro.
+    if (!isDraft && !(await gravarPendentes())) return;
+    if (!isDirty.current) return;
+
     if (showNotification) notifySaveStatus('saving');
     salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
     try {
@@ -675,6 +701,7 @@ export default function BudgetEditorPage() {
     } catch (err) {
       console.error('Save error:', err);
       if (showNotification) notifySaveStatus('error');
+      toast.error(`Não foi possível salvar a proposta: ${mensagemDoErro(err)}`);
     } finally {
       salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
     }
@@ -692,14 +719,24 @@ export default function BudgetEditorPage() {
 
 
   // Optimized Partial Saves
-  const savePartialBudget = async (updates: Partial<Budget>) => {
-    if (isDraft || !budget) return;
+  const mensagemDoErro = (err: any): string => err?.message || 'erro desconhecido';
+
+  // Devolve true se gravou. Se falhar: avisa com a mensagem do banco e volta os campos ao valor salvo.
+  const savePartialBudget = async (updates: Partial<Budget>): Promise<boolean> => {
+    if (isDraft || !budget) return true;
     notifySaveStatus('saving');
     salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
+    const statusAntes = baseRef.current?.budget?.status ?? budget.status;
     try {
       const { error } = await supabase.from('budgets').update(updates).eq('id', budget.id);
       if (error) throw error;
       guardarNaBase({ budget: { ...(baseRef.current?.budget || {}), ...updates } });
+
+      // O registro no Histórico só acontece depois que a gravação deu certo.
+      if (updates.status && statusAntes && updates.status !== statusAntes) {
+        const nomes: Record<string, string> = { rascunho: 'Rascunho', em_negociacao: 'Em Negociação', aprovado: 'Aprovado', reprovado: 'Reprovado', cancelado: 'Cancelado' };
+        logActivity('status_changed', `Status alterado: ${nomes[statusAntes] ?? statusAntes} → ${nomes[updates.status] ?? updates.status}`);
+      }
       
       // Sync to Receivables if approved
       if (updates.status === 'aprovado' && financials) {
@@ -712,16 +749,25 @@ export default function BudgetEditorPage() {
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       notifySaveStatus('saved');
+      return true;
     } catch (err) {
       console.error('Partial budget save error:', err);
       notifySaveStatus('error');
+      toast.error(`Não foi possível salvar a alteração: ${mensagemDoErro(err)}`);
+      const salvo = baseRef.current?.budget as Record<string, any> | undefined;
+      if (salvo) {
+        const volta: Record<string, any> = {};
+        Object.keys(updates).forEach(k => { volta[k] = salvo[k]; });
+        setBudget(prev => prev ? { ...prev, ...volta } : prev);
+      }
+      return false;
     } finally {
       salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
     }
   };
 
-  const savePartialVersion = async (updates: Partial<BudgetVersion>) => {
-    if (isDraft || !version) return;
+  const savePartialVersion = async (updates: Partial<BudgetVersion>): Promise<boolean> => {
+    if (isDraft || !version) return true;
     notifySaveStatus('saving');
     salvamentosEmAndamento.current++; marcaDeSalvamento.current++;
     try {
@@ -731,6 +777,7 @@ export default function BudgetEditorPage() {
       lastSavedRef.current = new Date();
       setLastSavedTime(new Date());
       notifySaveStatus('saved');
+      return true;
     } catch (err) {
       console.error('Partial version save error:', err);
       notifySaveStatus('error');
@@ -744,8 +791,18 @@ export default function BudgetEditorPage() {
           .eq('id', version.id)
           .single();
         if (data) setVersion(prev => prev ? { ...prev, ...data } : prev);
-        toast.error('Não foi possível alterar a moeda/cotação. O orçamento pode estar aprovado: volte para "Em Negociação" e tente de novo.');
+        toast.error(`Não foi possível alterar a moeda/cotação: ${mensagemDoErro(err)}. O orçamento pode estar aprovado: volte para "Em Negociação" e tente de novo.`);
+      } else {
+        toast.error(`Não foi possível salvar a alteração: ${mensagemDoErro(err)}`);
+        // Volta os campos ao valor salvo (a base é o último estado conhecido do servidor).
+        const salvo = baseRef.current?.version as Record<string, any> | undefined;
+        if (salvo) {
+          const volta: Record<string, any> = {};
+          Object.keys(updates).forEach(k => { volta[k] = salvo[k]; });
+          setVersion(prev => prev ? { ...prev, ...volta } : prev);
+        }
       }
+      return false;
     } finally {
       salvamentosEmAndamento.current--; marcaDeSalvamento.current++;
     }
@@ -1129,15 +1186,51 @@ export default function BudgetEditorPage() {
     return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', aoVoltar); supabase.removeChannel(canal); };
   }, [isDraft, budget?.id, version?.id]);
 
+  // Gravações com espera: agrupa digitação rápida, mas guarda a função para poder gravar na hora
+  // (botão Salvar, saída da tela, fechar a aba) em vez de perder a alteração.
+  const ESPERA_GRAVACAO_MS = 1200;
+
+  const cancelarPendente = (key: string) => {
+    if (saveTimers.current[key]) { clearTimeout(saveTimers.current[key]); delete saveTimers.current[key]; }
+    delete gravacoesPendentes.current[key];
+    setTemPendente(Object.keys(gravacoesPendentes.current).length > 0);
+  };
+
+  const executarPendente = async (key: string): Promise<boolean> => {
+    const run = gravacoesPendentes.current[key];
+    cancelarPendente(key);
+    return run ? run() : true;
+  };
+
+  const agendarGravacao = (key: string, run: () => Promise<boolean>, espera: number = ESPERA_GRAVACAO_MS) => {
+    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+    gravacoesPendentes.current[key] = run;
+    setTemPendente(true);
+    saveTimers.current[key] = setTimeout(() => { void executarPendente(key); }, espera);
+  };
+
+  // Grava agora tudo o que está esperando. true = todas deram certo.
+  const gravarPendentes = async (): Promise<boolean> => {
+    const resultados = await Promise.all(Object.keys(gravacoesPendentes.current).map(executarPendente));
+    return resultados.every(Boolean);
+  };
+
   const triggerSave = (type: 'budget' | 'version', updates: any) => {
     const key = `${type}-${Object.keys(updates).join('-')}`;
-    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
-    
-    saveTimers.current[key] = setTimeout(() => {
-      if (type === 'budget') savePartialBudget(updates);
-      else savePartialVersion(updates);
-      delete saveTimers.current[key];
-    }, 5000);
+    agendarGravacao(key, () => type === 'budget' ? savePartialBudget(updates) : savePartialVersion(updates));
+  };
+
+  // Saída da tela / fechar a aba: grava o que está esperando e, numa proposta já criada, o que
+  // está marcado como alterado. Um rascunho novo nunca é criado sozinho ao sair.
+  gravarTudoRef.current = async () => {
+    if (saindo.current) return;
+    saindo.current = true;
+    try {
+      await gravarPendentes();
+      if (!isDraft && isDirty.current) await handleSave(false);
+    } finally {
+      saindo.current = false;
+    }
   };
 
   // Catalog Logic
@@ -1221,11 +1314,7 @@ export default function BudgetEditorPage() {
   const removeItem = (id: string) => {
     if (isReadOnly) return;
     // Cancel any pending debounced save for this item to prevent re-insertion after delete
-    const timerKey = `item-${id}`;
-    if (saveTimers.current[timerKey]) {
-      clearTimeout(saveTimers.current[timerKey]);
-      delete saveTimers.current[timerKey];
-    }
+    cancelarPendente(`item-${id}`);
     setItems(items.filter(i => i.id !== id));
 
     if (!isDraft && version) {
@@ -1250,13 +1339,12 @@ export default function BudgetEditorPage() {
     
     if (!isDraft && version) {
       if (isTextField) {
-        const key = `item-${id}`;
-        if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
-        saveTimers.current[key] = setTimeout(() => {
-          // Grava a linha como está NA HORA de salvar (não como estava ao digitar): se outra pessoa
-          // mexeu em outro campo nesses 5 s, a alteração dela já foi mesclada e não é desfeita.
-          syncItem(itemsRef.current.find(i => i.id === id) ?? updatedItem);
-          delete saveTimers.current[key];
+        // Grava a linha como está NA HORA de salvar (não como estava ao digitar): se outra pessoa
+        // mexeu em outro campo nesses 5 s, a alteração dela já foi mesclada e não é desfeita.
+        // Fica registrada como pendente: sair da tela ou clicar em Salvar grava na hora.
+        agendarGravacao(`item-${id}`, async () => {
+          await syncItem(itemsRef.current.find(i => i.id === id) ?? updatedItem);
+          return true;
         }, 5000);
       } else {
         setTimeout(() => syncItem(updatedItem), 0);
@@ -1371,10 +1459,7 @@ export default function BudgetEditorPage() {
 
   const updateBudget = (updates: Partial<Budget>) => {
     if (isReadOnly) return;
-    if (updates.status && budget?.status && updates.status !== budget.status) {
-      const labels: Record<string, string> = { rascunho: 'Rascunho', em_negociacao: 'Em Negociação', aprovado: 'Aprovado', reprovado: 'Reprovado', cancelado: 'Cancelado' };
-      logActivity('status_changed', `Status alterado: ${labels[budget.status]} → ${labels[updates.status]}`);
-    }
+    // (O registro de mudança de status no Histórico agora sai em savePartialBudget, só depois de gravar.)
     setBudget(prev => prev ? { ...prev, ...updates } : null);
     if (!isDraft) triggerSave('budget', updates);
     else isDirty.current = true;
@@ -1556,7 +1641,7 @@ export default function BudgetEditorPage() {
           <PresencaNoDocumento pessoas={pessoasAqui} rotuloCampo={rotuloDoCampo} className="mr-1" />
           <div className="hidden md:flex flex-col items-end mr-2">
             <SavingIndicator />
-            {lastSavedTime && (
+            {lastSavedTime && !(dirty || temPendente) && (
               <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-green-600">
                 <CheckCircle className="w-3 h-3" /> Salvo às {lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -1566,7 +1651,7 @@ export default function BudgetEditorPage() {
             <div className="relative group/save">
               <MainSaveButton 
                 onSave={() => handleSave()} 
-                disabled={!isDirty.current || !validation.isValid}
+                disabled={!(dirty || temPendente) || !validation.isValid}
               />
               
               {!validation.isValid && (
@@ -2201,7 +2286,7 @@ export default function BudgetEditorPage() {
                         type="number" 
                         className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
                         value={version ? Math.round((version.margin_pct || 0) * 100) : 40}
-                        onChange={(e) => setVersion(v => v ? { ...v, margin_pct: (Number(e.target.value) || 0) / 100 } : null)}
+                        onChange={(e) => updateVersion({ margin_pct: (Number(e.target.value) || 0) / 100 })}
                       />
                       <span className="text-lumos-text-secondary text-[10px]">%</span>
                     </div>
@@ -2214,7 +2299,7 @@ export default function BudgetEditorPage() {
                         type="number" 
                         className="input-lumos w-full text-center font-bold text-lumos-text-primary disabled:opacity-70" 
                         value={version ? Math.round((version.nf_pct || 0) * 100) : 18}
-                        onChange={(e) => setVersion(v => v ? { ...v, nf_pct: (Number(e.target.value) || 0) / 100 } : null)}
+                        onChange={(e) => updateVersion({ nf_pct: (Number(e.target.value) || 0) / 100 })}
                       />
                       <span className="text-lumos-text-secondary text-[10px]">%</span>
                     </div>
