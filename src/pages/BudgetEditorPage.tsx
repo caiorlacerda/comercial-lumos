@@ -201,6 +201,27 @@ export default function BudgetEditorPage() {
   
   // Ref to track dirty state and prevent save loops
   const isDirty = useRef(false);
+
+  // Coluna direita (Resumo + Histórico) fixa logo abaixo do cabeçalho: mede o cabeçalho e a área de rolagem.
+  const cabecalhoRef = useRef<HTMLDivElement>(null);
+  const [colunaDireita, setColunaDireita] = useState({ topo: 112, alturaMax: 560 });
+  useEffect(() => {
+    const cab = cabecalhoRef.current;
+    const rolagem = cab?.closest('main') as HTMLElement | null;
+    if (!cab || !rolagem) return;
+    const medir = () => {
+      const topo = Math.round(cab.getBoundingClientRect().height) + 16;   // 16 = respiro abaixo do cabeçalho
+      // 32 = o mesmo respiro do rodapé da página (p-8): o bloco não "sobe" quando a página chega ao fim.
+      setColunaDireita(a => {
+        const alturaMax = Math.max(240, rolagem.clientHeight - topo - 32);
+        return a.topo === topo && a.alturaMax === alturaMax ? a : { topo, alturaMax };
+      });
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(cab); ro.observe(rolagem);
+    return () => ro.disconnect();
+  }, [loading]);
   const lastLoadedData = useRef<string>('');
 
   // ── Colaboração: o último estado do servidor que esta pessoa conhece (base da mesclagem) ──
@@ -1462,7 +1483,7 @@ export default function BudgetEditorPage() {
   return (
     <div className="flex flex-col gap-8 pb-20">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:sticky lg:top-0 lg:z-20 lg:bg-lumos-bg/95 lg:backdrop-blur-sm lg:py-4 lg:-mx-8 lg:px-8 lg:-mt-8 lg:mb-4 lg:border-b lg:border-lumos-border/50 transition-all">
+      <div ref={cabecalhoRef} className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:sticky lg:top-0 lg:z-20 lg:bg-lumos-bg/95 lg:backdrop-blur-sm lg:py-4 lg:-mx-8 lg:px-8 lg:-mt-8 lg:mb-4 lg:border-b lg:border-lumos-border/50 transition-all">
         <div className="flex items-center gap-4">
           <button onClick={goBack} title="Voltar" className="p-2 hover:bg-lumos-bg rounded-full transition-colors text-lumos-text-secondary">
             <ChevronLeft className="w-6 h-6" />
@@ -2153,8 +2174,13 @@ export default function BudgetEditorPage() {
         </div>
 
         {/* Financial Sidebar */}
-        <aside className="lg:col-span-1 space-y-6">
-          <div className="card sticky top-8 shadow-xl border-lumos-yellow/10">
+        <aside className="lg:col-span-1">
+          {/* Resumo + Histórico num bloco só: fixo abaixo do cabeçalho, com rolagem própria se não couber. */}
+          <div
+            className="space-y-6 lg:sticky lg:top-[var(--topo-sticky)] lg:max-h-[var(--altura-sticky)] lg:overflow-y-auto lg:-mx-2 lg:px-2 lg:-mb-2 lg:pb-2"
+            style={{ '--topo-sticky': `${colunaDireita.topo}px`, '--altura-sticky': `${colunaDireita.alturaMax}px` } as React.CSSProperties}
+          >
+          <div className="card shadow-xl border-lumos-yellow/10">
             <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-lumos-text-primary flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-lumos-yellow" />
               Resumo Financeiro
@@ -2257,7 +2283,7 @@ export default function BudgetEditorPage() {
                 </div>
               </div>
 
-              <div className="pt-6 mt-6 border-t border-lumos-yellow/20 bg-lumos-yellow/5 -mx-6 px-6 pb-6">
+              <div className="pt-6 mt-6 border-t border-lumos-yellow/20 bg-lumos-yellow/5 -mx-4 px-4 pb-6">
                 <div className="flex flex-col gap-1 mb-4">
                   <span className="text-[10px] text-lumos-text-secondary font-black uppercase">Valor de Venda Final</span>
                   <span className="text-4xl font-black text-lumos-yellow leading-none tracking-tighter drop-shadow-sm">{formatarValorDaVersao(financials?.valorFinal || 0, version)}</span>
@@ -2421,6 +2447,7 @@ export default function BudgetEditorPage() {
               )}
             </div>
           )}
+          </div>
         </aside>
       </div>
 
