@@ -553,7 +553,7 @@ export default function BudgetEditorPage() {
       setVersions(versionsData || []);
       setVersion(targetVersion);
       setItems(itemsData || []);
-      setExpandedDescriptions(new Set((itemsData || []).filter((i: any) => i.description).map((i: any) => i.id)));
+      setExpandedDescriptions(new Set());   // detalhe (unidade + observação) começa recolhido; a seta fica amarela se houver observação
       baseRef.current = { budget: budgetData, version: targetVersion, items: (itemsData as BudgetItem[]) || [] };
 
       // Load activity history (fails silently if table doesn't exist)
@@ -2228,7 +2228,7 @@ export default function BudgetEditorPage() {
                           </div>
                           {/* Celular: quebra de linha entre "nome + ações" e "valor, quantidade, unidade" */}
                           <div aria-hidden className="hidden max-md:block max-md:order-3 basis-full h-0" />
-                          <div className="w-32 flex-shrink-0 max-md:order-4 max-md:flex-1 max-md:w-auto max-md:min-w-0">
+                          <div className="w-28 flex-shrink-0 max-md:order-4 max-md:flex-1 max-md:w-auto max-md:min-w-0">
                             <div className="flex items-center gap-1 border-b border-transparent hover:border-lumos-border transition-colors">
                               <span className="text-xs text-lumos-text-secondary">R$</span>
                               <input
@@ -2240,7 +2240,7 @@ export default function BudgetEditorPage() {
                               />
                             </div>
                           </div>
-                          <div className="w-16 flex-shrink-0 max-md:order-5 max-md:w-14">
+                          <div className="w-12 flex-shrink-0 max-md:order-5 max-md:w-14">
                             <input
                               disabled={isReadOnly}
                               type="number"
@@ -2249,19 +2249,10 @@ export default function BudgetEditorPage() {
                               onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
                             />
                           </div>
-                          <div className="w-24 flex-shrink-0 max-md:order-6">
-                            <Select
-                              disabled={isReadOnly}
-                              className="bg-transparent border-none w-full p-0 text-[10px] uppercase font-bold text-lumos-text-secondary disabled:opacity-70"
-                              value={item.unit_label}
-                              onChange={(v) => updateItem(item.id, { unit_label: v })}
-                              options={[{ value: 'diaria', label: 'diária' }, { value: 'hora', label: 'hora' }, { value: 'video', label: 'vídeo' }, { value: 'unidade', label: 'unidade' }, { value: 'pacote', label: 'pacote' }]}
-                            />
-                          </div>
-                          <div className="w-32 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary max-md:order-7 max-md:basis-full max-md:w-auto">
+                          <div className="w-28 flex-shrink-0 text-right font-mono text-sm font-bold text-lumos-text-primary max-md:order-7 max-md:basis-full max-md:w-auto">
                             {formatCurrency(item.unit_cost * item.quantity)}
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 max-md:order-2">
+                          <div className="flex items-center gap-1 flex-shrink-0 max-md:order-2">
                             <button
                               onClick={toggleDescription}
                               className={clsx(
@@ -2270,14 +2261,14 @@ export default function BudgetEditorPage() {
                                   ? "text-lumos-yellow bg-lumos-yellow/10"
                                   : "text-lumos-text-secondary hover:text-lumos-yellow hover:bg-lumos-yellow/5"
                               )}
-                              title={isExpanded ? "Fechar nota" : "Abrir nota"}
+                              title={isExpanded ? "Fechar detalhes" : "Detalhes (unidade e observação)"}
                             >
                               {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </button>
                             {!isReadOnly && (
                               <button
                                 onClick={() => removeItem(item.id)}
-                                className="text-red-400 hover:text-red-600 p-2 transition-colors"
+                                className="text-red-400 hover:text-red-600 p-2 transition-all opacity-0 group-hover:opacity-100 max-md:opacity-100"
                                 title="Remover Item"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -2286,7 +2277,19 @@ export default function BudgetEditorPage() {
                           </div>
                         </div>
                         {isExpanded && (
-                          <div className="px-10 pb-3 animate-in slide-in-from-top-1 duration-200">
+                          <div className="px-10 pb-3 animate-in slide-in-from-top-1 duration-200 flex gap-3 items-start max-md:flex-col">
+                            <div className="w-36 flex-shrink-0 max-md:w-full">
+                              <label className="text-[9px] font-bold text-lumos-text-secondary uppercase mb-1.5 block">Unidade</label>
+                              <Select
+                                disabled={isReadOnly}
+                                className="input-lumos w-full text-xs disabled:opacity-70"
+                                value={item.unit_label}
+                                onChange={(v) => updateItem(item.id, { unit_label: v })}
+                                options={[{ value: 'diaria', label: 'diária' }, { value: 'hora', label: 'hora' }, { value: 'video', label: 'vídeo' }, { value: 'unidade', label: 'unidade' }, { value: 'pacote', label: 'pacote' }]}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0 max-md:w-full">
+                              <label className="text-[9px] font-bold text-lumos-text-secondary uppercase mb-1.5 block">Observação</label>
                             <textarea
                               disabled={isReadOnly}
                               className="w-full bg-lumos-bg/50 border border-lumos-border/50 rounded-lumos p-3 text-xs text-lumos-text-primary focus:border-lumos-yellow/50 focus:ring-0 resize-none h-[60px] placeholder:text-lumos-text-secondary/30"
@@ -2294,6 +2297,7 @@ export default function BudgetEditorPage() {
                               value={item.description || ''}
                               onChange={(e) => updateItem(item.id, { description: e.target.value })}
                             />
+                            </div>
                           </div>
                         )}
                       </>
