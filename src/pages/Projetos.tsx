@@ -1,5 +1,6 @@
 import { registrarProjetoRecente } from '@/lib/projetosRecentes';
 import { urlDaTarefa } from '@/lib/linkDaTarefa';
+import { ordenarTarefas, planejarMovimento, type Direcao } from '@/lib/ordemDasTarefas';
 import { EsqueletoLinhas, EsqueletoProjeto, EsqueletoTarefas } from '@/components/ui/Esqueleto';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
 import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
@@ -1030,6 +1031,7 @@ export default function Projetos() {
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
   // O menu da tarefa não pode passar da borda da tela (última linha, celular).
   const menuTarefaRef = useRef<HTMLDivElement>(null);
+  const filaDaOrdemRef = useRef<Promise<void>>(Promise.resolve());
   useLayoutEffect(() => {
     const el = menuTarefaRef.current;
     if (!el || !contextMenu) return;
@@ -1413,7 +1415,8 @@ export default function Projetos() {
         .is('deleted_at', null)                 // não traz as que estão na lixeira
         .order('ordem', { ascending: true });
       if (error) throw error;
-      setProjectTasks(data || []);
+      // Números repetidos em `ordem` vinham do banco em ordem qualquer: desempata sempre igual.
+      setProjectTasks(ordenarTarefas((data as Task[]) || []));
 
       // Contagem da lixeira (badge do botão), sem trazer as linhas.
       const { count } = await supabase
@@ -1526,6 +1529,38 @@ export default function Projetos() {
     .map(s => ({ status: s, tasks: filteredTasks.filter(t => groupKeyOf(t) === s) }))
     .filter(g => g.tasks.length > 0);
   const visibleTasks = taskGroups.flatMap(g => g.tasks);
+
+  // ── Subir / descer na prioridade (dentro da etapa). A ordem é do projeto: vale para o time todo. ──
+  const podeReordenar = (status: string) => canManage && status !== 'concluido';
+  /** Posição da tarefa na etapa, como está na tela (null = não dá para reordenar ali). */
+  const posicaoNaEtapa = (taskId: string) => {
+    const grupo = taskGroups.find(g => g.tasks.some(t => t.id === taskId));
+    if (!grupo || !podeReordenar(grupo.status)) return null;
+    const i = grupo.tasks.findIndex(t => t.id === taskId);
+    return { grupo, primeira: i === 0, ultima: i === grupo.tasks.length - 1 };
+  };
+  const moverTarefa = (taskId: string, direcao: Direcao) => {
+    const posicao = posicaoNaEtapa(taskId);
+    if (!posicao) return;
+    const chave = posicao.grupo.status;
+    const mudancas = planejarMovimento(
+      projectTasks.filter(t => groupKeyOf(t) === chave),      // a etapa inteira, mesmo com busca ou filtro
+      posicao.grupo.tasks.map(t => t.id),                     // o que se vê
+      taskId, direcao,
+    );
+    if (!mudancas.length) return;
+    const novas = new Map(mudancas.map(m => [m.id, m.ordem]));
+    // A tela muda na hora; a gravação entra numa fila para cliques seguidos não se atropelarem.
+    setProjectTasks(prev => ordenarTarefas(prev.map(t => novas.has(t.id) ? { ...t, ordem: novas.get(t.id)! } : t)));
+    const projeto = selectedProjectId;
+    filaDaOrdemRef.current = filaDaOrdemRef.current.then(async () => {
+      const respostas = await Promise.all(mudancas.map(m => supabase.from('project_tasks').update({ ordem: m.ordem }).eq('id', m.id).select('id')));
+      if (respostas.some(r => r.error || !r.data?.length)) {
+        toast.error('Não foi possível salvar a nova ordem.');
+        if (projeto) await fetchProjectTasks(projeto, true);
+      }
+    }).catch(() => { toast.error('Não foi possível salvar a nova ordem.'); });
+  };
   const hasActiveFilters = !!taskSearch.trim() || taskStatusFilter !== 'all' || tipoFilter !== 'all' || taskAssigneeFilter !== 'all' || onlyMine || tagFilter.length > 0;
   const listaAberta = taskLists.find(l => l.id === listFilter) || null;
 
@@ -3214,6 +3249,25 @@ export default function Projetos() {
                                       )}
                                       </div>
                                         </div>
+                                        {/* Subir / descer na prioridade: no fim do título, que está sempre à vista
+                                            (a coluna de Ações pode ficar fora da tela). Aparece ao passar o mouse. */}
+                                        {podeReordenar(group.status) && group.tasks.length > 1 && (
+                                          <span className="flex flex-col flex-shrink-0 self-center opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+                                            {(['subir', 'descer'] as const).map(direcao => (
+                                              <button
+                                                key={direcao}
+                                                type="button"
+                                                disabled={direcao === 'subir' ? task.id === group.tasks[0].id : task.id === group.tasks[group.tasks.length - 1].id}
+                                                onClick={(e) => { e.stopPropagation(); moverTarefa(task.id, direcao); }}
+                                                className="h-3.5 w-4 flex items-center justify-center text-lumos-text-secondary hover:text-lumos-yellow rounded hover:bg-lumos-border/20 transition-all disabled:opacity-25 disabled:pointer-events-none"
+                                                title={direcao === 'subir' ? 'Subir na prioridade' : 'Descer na prioridade'}
+                                                aria-label={`${direcao === 'subir' ? 'Subir' : 'Descer'} ${task.titulo} na prioridade`}
+                                              >
+                                                {direcao === 'subir' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                              </button>
+                                            ))}
+                                          </span>
+                                        )}
                                       </div>
                                     </td>
 
@@ -3395,6 +3449,7 @@ export default function Projetos() {
                                     <button
                                       type="button"
                                       onClick={(e) => {
+                                        e.stopPropagation();   // senão o "clicar fora" fecha o menu no mesmo toque
                                         const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                         setContextMenu({ x: Math.max(8, r.right - 150), y: r.bottom + 4, taskId: task.id });
                                       }}
@@ -4153,7 +4208,8 @@ export default function Projetos() {
       )}
 
       {/* ================= RIGHT-CLICK TASK CONTEXT MENU ================= */}
-      {contextMenu && (
+      {/* No <body>: dentro da página, a barra inferior do celular ficava por cima do menu. */}
+      {contextMenu && createPortal(
         <div 
           ref={menuTarefaRef}
           style={{ top: contextMenu.y, left: contextMenu.x }}
@@ -4180,6 +4236,21 @@ export default function Projetos() {
             <Link2 className="w-3.5 h-3.5 text-lumos-yellow" />
             Copiar link
           </button>
+          {(() => {
+            const posicao = posicaoNaEtapa(contextMenu.taskId);
+            if (!posicao || posicao.grupo.tasks.length < 2) return null;
+            return (['subir', 'descer'] as const).map(direcao => (
+              <button
+                key={direcao}
+                disabled={direcao === 'subir' ? posicao.primeira : posicao.ultima}
+                onClick={() => { moverTarefa(contextMenu.taskId, direcao); setContextMenu(null); }}
+                className="px-3 py-1.5 text-[11px] font-semibold text-left text-lumos-text-primary hover:bg-lumos-bg rounded transition-all flex items-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
+              >
+                {direcao === 'subir' ? <ChevronUp className="w-3.5 h-3.5 text-lumos-yellow" /> : <ChevronDown className="w-3.5 h-3.5 text-lumos-yellow" />}
+                {direcao === 'subir' ? 'Subir' : 'Descer'}
+              </button>
+            ));
+          })()}
           {canManage && (
             <button
               onClick={() => {
@@ -4241,7 +4312,8 @@ export default function Projetos() {
               Excluir
             </button>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ================= LIXEIRA (tarefas excluídas) ================= */}

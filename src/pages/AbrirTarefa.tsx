@@ -40,7 +40,7 @@ export default function AbrirTarefa() {
   } as const;
 
   return (
-    <div className="min-h-screen bg-lumos-bg text-lumos-text-primary flex items-center justify-center p-6">
+    <div className="min-h-[60vh] text-lumos-text-primary flex items-center justify-center p-6">
       {estado.tipo === 'procurando' ? (
         <p className="flex items-center gap-2 text-sm text-lumos-text-secondary"><Loader2 className="w-5 h-5 animate-spin" /> Abrindo a tarefa…</p>
       ) : (
