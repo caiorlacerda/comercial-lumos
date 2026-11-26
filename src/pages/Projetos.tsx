@@ -1,7 +1,8 @@
 import { registrarProjetoRecente } from '@/lib/projetosRecentes';
+import { urlDaTarefa } from '@/lib/linkDaTarefa';
 import { EsqueletoLinhas, EsqueletoProjeto, EsqueletoTarefas } from '@/components/ui/Esqueleto';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import VideoReviewPanel from '@/components/producao/VideoReviewPanel';
@@ -135,6 +136,7 @@ import {
   X, 
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Briefcase,
   AlertCircle,
   Clock,
@@ -1026,6 +1028,15 @@ export default function Projetos() {
   // Right-click context menu states
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
+  // O menu da tarefa não pode passar da borda da tela (última linha, celular).
+  const menuTarefaRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = menuTarefaRef.current;
+    if (!el || !contextMenu) return;
+    const r = el.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8) el.style.top = `${Math.max(8, contextMenu.y - (r.bottom - window.innerHeight + 8))}px`;
+    if (r.right > window.innerWidth - 8) el.style.left = `${Math.max(8, contextMenu.x - (r.right - window.innerWidth + 8))}px`;
+  }, [contextMenu]);
 
   // PDF Generation State
   const [isGeneratingOS, setIsGeneratingOS] = useState<string | null>(null);
@@ -1532,6 +1543,16 @@ export default function Projetos() {
     setTrashedTasks(data || []);
     setTrashCount((data || []).length);
     setTrashLoading(false);
+  };
+
+  const copiarLinkDaTarefa = async (taskId: string) => {
+    const url = urlDaTarefa(window.location.origin, taskId);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link da tarefa copiado ✓ Abre direto nela para quem é do time e está logado.');
+    } catch {
+      toast.error(`Não consegui copiar. O link é: ${url}`);
+    }
   };
 
   const restoreTask = async (taskId: string) => {
@@ -3733,6 +3754,15 @@ export default function Projetos() {
               
               <div className="flex items-center gap-2">
                 <PresencaNoDocumento pessoas={pessoasNaTarefa} rotuloCampo={(c) => c === 'titulo' ? 'o título' : c === 'descricao' ? 'a descrição' : null} className="mr-2" />
+                <button
+                  type="button"
+                  onClick={() => copiarLinkDaTarefa(selectedTask.id)}
+                  className="text-[11px] font-black uppercase tracking-wider border border-lumos-border text-lumos-text-secondary hover:text-lumos-yellow hover:border-lumos-yellow/60 px-3 py-1.5 rounded-lumos transition-all flex items-center gap-1.5"
+                  title="Copiar o link desta tarefa (só o time logado consegue abrir)"
+                  aria-label="Copiar link da tarefa"
+                >
+                  <Link2 className="w-3.5 h-3.5" /> <span className="max-sm:sr-only">Copiar link</span>
+                </button>
                 {canManage && descDirty && (
                   <button
                     onClick={handleSaveDescription}
@@ -4125,8 +4155,9 @@ export default function Projetos() {
       {/* ================= RIGHT-CLICK TASK CONTEXT MENU ================= */}
       {contextMenu && (
         <div 
+          ref={menuTarefaRef}
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="fixed z-[200] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1 flex flex-col min-w-[120px]"
+          className="fixed z-[200] bg-lumos-surface border border-lumos-border rounded-lumos shadow-2xl p-1 flex flex-col min-w-[120px] max-h-[calc(100vh-16px)] overflow-y-auto"
           onClick={(e) => e.stopPropagation()} // Prevent closing instantly
         >
           <button
@@ -4138,6 +4169,16 @@ export default function Projetos() {
           >
             <ChevronRight className="w-3.5 h-3.5 text-lumos-yellow" />
             Ver detalhes
+          </button>
+          <button
+            onClick={() => {
+              copiarLinkDaTarefa(contextMenu.taskId);
+              setContextMenu(null);
+            }}
+            className="px-3 py-1.5 text-[11px] font-semibold text-left text-lumos-text-primary hover:bg-lumos-bg rounded transition-all flex items-center gap-1.5"
+          >
+            <Link2 className="w-3.5 h-3.5 text-lumos-yellow" />
+            Copiar link
           </button>
           {canManage && (
             <button
