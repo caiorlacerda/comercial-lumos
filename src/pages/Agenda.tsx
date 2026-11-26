@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import Select from '@/components/ui/Select';
 import CalendarioEventos, { BarraDoCalendario } from '@/components/agenda/CalendarioEventos';
 import { useDiasFechados } from '@/components/agenda/useDiasFechados';
+import DiariaModal from '@/components/producao/DiariaModal';
 import { TipoPilula } from '@/components/producao/TipoDeTarefa';
 import { useTiposTarefa } from '@/lib/tiposTarefa';
 import {
@@ -41,6 +42,7 @@ interface Item {
   projeto?: string | null;
   projectId?: string | null;
   respId?: string | null;
+  escalados?: string[]; // diárias: ids do time (app_users) que estão na escala
   tipoId?: string | null; // tipo da tarefa (Edição, Motion...)
   link: string;
   atrasado?: boolean;
@@ -58,7 +60,9 @@ const ROTULO_CURTO = (t: Tipo) => TIPOS[t].label.replace(/s$/, '').replace(' ao 
 export default function Agenda() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { profile } = useAuth();
+  const { profile, isAdmin, can } = useAuth();
+  // Diária aberta no painel (o mesmo das Diárias do projeto). Os outros itens continuam levando à página deles.
+  const [diariaAberta, setDiariaAberta] = useState<{ id: string; projectId: string } | null>(null);
   const [loading, setLoading] = useState(() => !lerCache('agenda'));
   useBarraDeCarregamento(loading);
   const [itens, setItens] = useState<Item[]>(() => lerCache<{ itens: Item[] }>('agenda')?.itens ?? []);
@@ -112,7 +116,22 @@ export default function Agenda() {
       const q = await supabase.from(tabela).select(completo);
       return q.error ? supabase.from(tabela).select(simples) : q;
     };
-    const [tarefasQ, diariasQ, ordensQ, collabsQ, equipeQ] = await Promise.all([
+    // Quem do time está na escala de cada diária (para "Minha Agenda" e o filtro por pessoa).
+    // Em páginas de 1000: é o teto de linhas por resposta. Se a tabela não existir, ninguém está escalado.
+    const buscarEscalas = async () => {
+      const porDiaria = new Map<string, string[]>();
+      for (let de = 0; ; de += 1000) {
+        const q = await supabase.from('diaria_members').select('diaria_id, user_id').not('user_id', 'is', null)
+          .order('id').range(de, de + 999);
+        if (q.error) break;
+        for (const m of (q.data as { diaria_id: string; user_id: string }[]) || []) {
+          porDiaria.set(m.diaria_id, [...(porDiaria.get(m.diaria_id) || []), m.user_id]);
+        }
+        if ((q.data?.length || 0) < 1000) break;
+      }
+      return porDiaria;
+    };
+    const [tarefasQ, diariasQ, ordensQ, collabsQ, equipeQ, escalas] = await Promise.all([
       buscarTarefas(),
       comPlanoB('project_diarias', 'id, nome, data, hora_inicio, hora_fim, duracao_horas, project_id, projects(name)', 'id, nome, data, hora_inicio, project_id, projects(name)'),
       comPlanoB('ordens_do_dia', 'id, titulo, data_producao, hora_inicio, hora_fim, project_id, projects(name)', 'id, titulo, data_producao, project_id, projects(name)'),
@@ -120,6 +139,7 @@ export default function Agenda() {
         ? supabase.from('task_collaborators').select('task_id').eq('user_id', profile.id)
         : Promise.resolve({ data: [] as { task_id: string }[] }),
       supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
+      buscarEscalas(),
     ]);
 
     const hoje = hojeIso();
@@ -150,6 +170,7 @@ export default function Agenda() {
         horaFim: d.hora_fim ? String(d.hora_fim).slice(0, 5) : null,
         duracaoMin: d.duracao_horas ? Math.round(Number(d.duracao_horas) * 60) : null,
         projeto: d.projects?.name || null, projectId: d.project_id,
+        escalados: escalas.get(d.id) || [],
         link: `/producao/projetos?projectId=${d.project_id}&tab=diarias`,
       });
     }
@@ -186,11 +207,14 @@ export default function Agenda() {
       if (!tiposAtivos.has(i.tipo)) return false;
       if (projetoFiltro && i.projectId !== projetoFiltro) return false;
       if (tipoFiltro && i.tipoId !== tipoFiltro) return false;
-      // Diárias e ordens do dia não têm responsável: somem ao filtrar por pessoa ou 'sem responsável'.
+      // Ordens do dia não têm responsável: somem ao filtrar por pessoa. Diária aparece para quem está na escala dela.
+      // 'Sem responsável' continua sendo só de tarefas e entregas.
+      const naEscala = (pessoa?: string) => i.tipo === 'diaria' && !!pessoa && !!i.escalados?.includes(pessoa);
       if (respFiltro === 'none') { if (i.tipo === 'diaria' || i.tipo === 'ordem' || i.respId) return false; }
-      else if (respFiltro && i.respId !== respFiltro) return false;
+      else if (respFiltro && i.respId !== respFiltro && !naEscala(respFiltro)) return false;
       if (agenda === 'minha') {
         const minha = i.respId === profile?.id
+          || naEscala(profile?.id)
           || (i.tipo !== 'diaria' && i.tipo !== 'ordem' && minhasTarefas.has(i.id.split(':')[1]));
         if (!minha) return false;
       }
@@ -229,6 +253,11 @@ export default function Agenda() {
     });
   }, [filtrados, tipoPorId]);
   const porId = useMemo(() => new Map(filtrados.map(i => [i.id, i])), [filtrados]);
+
+  const abrirItem = (i: Item) => {
+    if (i.tipo === 'diaria' && i.projectId) setDiariaAberta({ id: i.id.split(':')[1], projectId: i.projectId });
+    else navigate(i.link);
+  };
 
   if (loading) return <EsqueletoPagina />;
 
@@ -313,7 +342,7 @@ export default function Agenda() {
           eventos={eventos} gran={gran} cursor={cursor}
           diaFechado={diaFechado}
           onEscolherDia={d => { setCursor(d); mudarGran('dia'); }}
-          onAbrir={e => { const i = porId.get(e.id); if (i) navigate(i.link); }}
+          onAbrir={e => { const i = porId.get(e.id); if (i) abrirItem(i); }}
         />
       )}
 
@@ -335,7 +364,7 @@ export default function Agenda() {
                 ) : doDia.map(i => {
                   const T = TIPOS[i.tipo];
                   return (
-                    <button key={i.id} type="button" onClick={() => navigate(i.link)}
+                    <button key={i.id} type="button" onClick={() => abrirItem(i)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-lumos-text-primary/5 border-b border-lumos-border/40 last:border-0">
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: i.atrasado ? '#ef4444' : T.cor }} />
                       {i.hora && <span className="text-[11px] font-black tabular-nums text-lumos-text-primary flex-shrink-0">{i.hora}</span>}
@@ -386,7 +415,7 @@ export default function Agenda() {
                   ) : doGrupo.slice(0, 40).map(i => {
                     const T = TIPOS[i.tipo];
                     return (
-                      <button key={i.id} type="button" onClick={() => navigate(i.link)}
+                      <button key={i.id} type="button" onClick={() => abrirItem(i)}
                         className="w-full text-left card !bg-lumos-bg/40 p-2.5 hover:border-lumos-yellow/40 transition-colors">
                         <span className="flex items-center gap-1.5 text-[9px] font-black uppercase" style={{ color: i.atrasado ? '#ef4444' : T.cor }}>
                           <T.Icon className="w-2.5 h-2.5" /> {ROTULO_CURTO(i.tipo)}
@@ -410,8 +439,20 @@ export default function Agenda() {
       })()}
 
       <p className="text-[10.5px] text-lumos-text-secondary flex items-center gap-1.5">
-        <Layers className="w-3 h-3" /> A agenda se alimenta sozinha: diárias e ordens do dia dos projetos, prazos e entregas das tarefas. Clicar em qualquer item leva direto pra ele.
+        <Layers className="w-3 h-3" /> A agenda se alimenta sozinha: diárias e ordens do dia dos projetos, prazos e entregas das tarefas. Clicar numa diária abre os dados e a equipe aqui mesmo; os outros itens levam direto pra eles.
       </p>
+
+      {diariaAberta && (
+        <DiariaModal
+          key={diariaAberta.id}
+          projectId={diariaAberta.projectId}
+          diariaId={diariaAberta.id}
+          canManage={isAdmin || can('ordem_do_dia')}
+          mostrarProjeto
+          onClose={() => setDiariaAberta(null)}
+          onMudou={() => { void load(); }}
+        />
+      )}
     </div>
   );
 }

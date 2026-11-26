@@ -1,7 +1,6 @@
-import { inicial } from '@/lib/iniciais';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EsqueletoItens } from '@/components/ui/Esqueleto';
-import { CalendarDays, CalendarOff, Clock, CloudRain, Copy, LayoutGrid, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users2, X } from 'lucide-react';
+import { CalendarDays, CalendarOff, Clock, CloudRain, LayoutGrid, MapPin, Pencil, Plus, UserPlus, Users2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { hojeLocalISO } from '@/lib/dataSemHora';
@@ -13,8 +12,9 @@ import PedidosDeDiaria from '@/components/producao/PedidosDeDiaria';
 import BloqueiosDeAgenda from '@/components/producao/BloqueiosDeAgenda';
 import { previsaoParaDiaria, type PrevisaoDia } from '@/lib/weather';
 import { SegmentedControl } from '@/components/ui/Tabs';
-import SeletorDeLocal from '@/components/producao/SeletorDeLocal';
-import { duracaoDaDiaria, horarioInvalido, viraODia } from '@/lib/horarioDiaria';
+import DiariaModal, { type DiariaDados } from '@/components/producao/DiariaModal';
+import { ListaDeEscalaveis, SELECT_DE_MEMBROS, chaveDoMembro, useCatalogoDeEscala, useConflitosDoDia, type MembroDiaria, type PessoaCatalogo } from '@/components/producao/escalaDaDiaria';
+import { viraODia } from '@/lib/horarioDiaria';
 import { consultaDeClima, type Local } from '@/lib/locais';
 import CalendarioEventos, { BarraDoCalendario } from '@/components/agenda/CalendarioEventos';
 import { type EventoCal, type Granularidade } from '@/components/agenda/calendario';
@@ -27,16 +27,6 @@ import { useDiasFechados } from '@/components/agenda/useDiasFechados';
  * (equipe interna ou fornecedor): fornecedor escalado em diária com data é o
  * que dispara a cobrança automática de nota fiscal.
  */
-
-export interface MembroDiaria {
-  id: string;
-  diaria_id: string;
-  funcao: string | null;
-  user: { id: string; full_name: string } | null;
-  freela: { id: string; nome: string } | null;
-}
-
-interface PessoaCatalogo { tipo: 'user' | 'freela'; id: string; nome: string; funcao?: string | null; doProjeto?: boolean }
 
 interface Diaria {
   id: string; nome: string; data: string | null; duracao_horas: number;
@@ -66,15 +56,14 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   const [loading, setLoading] = useState(true);
   const [diarias, setDiarias] = useState<Diaria[]>([]);
   const [clima, setClima] = useState<Record<string, PrevisaoDia | null>>({});
-  // Locais cadastrados usados pelas diárias (observações no card e endereço pro clima) e o cliente do projeto.
+  // Locais cadastrados usados pelas diárias (observações no card e endereço pro clima).
   const [locaisPorId, setLocaisPorId] = useState<Record<string, Local>>({});
-  const [cliente, setCliente] = useState<{ id: string | null; nome: string | null }>({ id: null, nome: null });
-  const [editando, setEditando] = useState<Partial<Diaria> | null>(null);
-  const [salvando, setSalvando] = useState(false);
+  // Painel da diária aberto: id de uma existente, ou null + valores de partida para uma nova.
+  const [aberta, setAberta] = useState<{ id: string | null; inicial?: DiariaDados } | null>(null);
   const [equipes, setEquipes] = useState<Record<string, MembroDiaria[]>>({});
   const [escalaIndisponivel, setEscalaIndisponivel] = useState(false);
   const [escalando, setEscalando] = useState<Diaria | null>(null);
-  const [catalogo, setCatalogo] = useState<PessoaCatalogo[]>([]);
+  const catalogo = useCatalogoDeEscala(projectId);
   const [editandoFuncao, setEditandoFuncao] = useState<MembroDiaria | null>(null);
   const [bloqueiosAbertos, setBloqueiosAbertos] = useState(false);
   // O que a lista mostra: por padrão só o que ainda precisa acontecer (hoje em diante e as sem data).
@@ -108,7 +97,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     // Escala de cada diária (tabela pode não existir antes da migration).
     if (lista.length > 0) {
       const eq = await supabase.from('diaria_members')
-        .select('id, diaria_id, funcao, user:app_users!user_id(id, full_name), freela:fornecedores(id, nome)')
+        .select(SELECT_DE_MEMBROS)
         .in('diaria_id', lista.map(d => d.id));
       if (eq.error) setEscalaIndisponivel(true);
       else {
@@ -124,45 +113,6 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     }
   }, [projectId]);
   useEffect(() => { load(); }, [load]);
-
-  // Cliente do projeto: define quais locais aparecem primeiro no seletor.
-  useEffect(() => {
-    supabase.from('projects').select('client_id, clients(name)').eq('id', projectId).maybeSingle()
-      .then(({ data }) => {
-        const d = data as any;
-        setCliente({ id: d?.client_id ?? null, nome: (Array.isArray(d?.clients) ? d.clients[0]?.name : d?.clients?.name) ?? null });
-      });
-  }, [projectId]);
-
-  // Catálogo de quem pode ser escalado: equipe do projeto em destaque,
-  // depois todos os fornecedores e o time Lumos.
-  useEffect(() => {
-    (async () => {
-      const [pm, forn, users] = await Promise.all([
-        supabase.from('project_members').select('user_id, freela_id, funcao').eq('project_id', projectId),
-        supabase.from('fornecedores').select('id, nome').order('nome'),
-        supabase.from('app_users').select('id, full_name').eq('status', 'ativo').order('full_name'),
-      ]);
-      const funcaoDe = new Map<string, string | null>();
-      const doProjeto = new Set<string>();
-      for (const m of (pm.data as any[]) || []) {
-        const k = m.user_id ? `user:${m.user_id}` : `freela:${m.freela_id}`;
-        doProjeto.add(k);
-        funcaoDe.set(k, m.funcao || null);
-      }
-      const pessoas: PessoaCatalogo[] = [
-        ...(((forn.data as any[]) || []).map(f => ({
-          tipo: 'freela' as const, id: f.id, nome: f.nome,
-          funcao: funcaoDe.get(`freela:${f.id}`) || null, doProjeto: doProjeto.has(`freela:${f.id}`),
-        }))),
-        ...(((users.data as any[]) || []).map(u => ({
-          tipo: 'user' as const, id: u.id, nome: u.full_name,
-          funcao: funcaoDe.get(`user:${u.id}`) || null, doProjeto: doProjeto.has(`user:${u.id}`),
-        }))),
-      ];
-      setCatalogo(pessoas);
-    })();
-  }, [projectId]);
 
   const escalar = async (d: Diaria, p: PessoaCatalogo) => {
     const { error } = await supabase.from('diaria_members').insert({
@@ -197,68 +147,6 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
     });
   }, [diarias]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const salvar = async () => {
-    if (!editando?.nome?.trim()) { toast.error('Dê um nome pra diária.'); return; }
-    setSalvando(true);
-    if (horarioInvalido(editando.hora_inicio, editando.hora_fim)) { setSalvando(false); toast.error('Início e fim não podem ser iguais. Se termina de madrugada, ponha o horário do dia seguinte (ex.: 20:00 → 04:00).'); return; }
-    const payload = {
-      project_id: projectId,
-      nome: editando.nome.trim(),
-      data: editando.data || null,
-      hora_inicio: editando.hora_inicio || null,
-      hora_fim: editando.hora_fim || null,
-      // com início e fim, a duração sai da conta; senão vale o que digitaram
-      duracao_horas: duracaoDaDiaria(editando.hora_inicio, editando.hora_fim) ?? (Number(editando.duracao_horas) || 10),
-      local: editando.local?.trim() || null,
-      local_id: editando.local?.trim() ? (editando.local_id || null) : null,
-      descricao: editando.descricao?.trim() || null,
-    };
-    let diariaId = editando.id || null;
-    // Se a migration dos horários ainda não rodou, salva sem eles em vez de quebrar.
-    const gravar = async (pl: Record<string, unknown>) => editando.id
-      ? { r: await supabase.from('project_diarias').update(pl).eq('id', editando.id), id: editando.id }
-      : (() => null)() ?? { r: await supabase.from('project_diarias').insert([{ ...pl, created_by: profile?.id || null }]).select('id').single(), id: null };
-    let res = await gravar(payload);
-    let err = (res.r as any).error;
-    if (err && /hora_inicio|hora_fim/.test(String(err.message))) {
-      const { hora_inicio: _a, hora_fim: _b, ...semHoras } = payload as any;
-      res = await gravar(semHoras);
-      err = (res.r as any).error;
-      if (!err) toast.error('Diária salva sem horário: falta rodar a migração dos horários no banco.');
-    }
-    // Se a migration dos locais ainda não rodou, salva sem a ligação em vez de quebrar.
-    if (err && /local_id/.test(String(err.message))) {
-      const { local_id: _c, ...semLocalId } = payload as any;
-      res = await gravar(semLocalId);
-      err = (res.r as any).error;
-    }
-    if (err) { setSalvando(false); toast.error('Não foi possível salvar a diária.'); return; }
-    diariaId = editando.id || (res.r as any).data?.id || null;
-    setSalvando(false);
-    setEditando(null);
-    setClima({});
-    load();
-    // Diária no calendário da produção: melhor esforço, sem travar o fluxo.
-    if (diariaId && payload.data) {
-      supabase.functions.invoke('calendar-diaria', { body: { action: 'upsert', diaria_id: diariaId } })
-        .then(({ data: r, error }) => {
-          if (error || (r as any)?.error) toast.error('Diária salva, mas o Google Calendar não aceitou. Confere a conexão do calendário.');
-          else if ((r as any)?.event_id) { toast.success('Diária no Google Calendar ✓'); load(); }
-        });
-    }
-  };
-
-  const excluir = async () => {
-    if (!editando?.id) return;
-    if (!confirm(`Excluir a diária "${editando.nome}"?`)) return;
-    const eventId = (editando as Diaria).google_event_id;
-    const { error } = await supabase.from('project_diarias').delete().eq('id', editando.id);
-    if (error) { toast.error('Não foi possível excluir.'); return; }
-    if (eventId) void supabase.functions.invoke('calendar-diaria', { body: { action: 'delete', event_id: eventId } });
-    setEditando(null);
-    load();
-  };
-
   // Diárias no formato do calendário. Cor pelo estado: chuva (âmbar), já feita (verde), a fazer (amarelo).
   const eventos = useMemo<EventoCal[]>(() => {
     const agoraIso = hojeLocalISO();
@@ -279,18 +167,13 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
         duracaoPadraoMin: Math.round((Number(d.duracao_horas) || 10) * 60),
         cor: chuva ? '#f59e0b' : passada ? '#16a34a' : '#EFC700',
         Icon: CalendarDays,
-        subtitulo: d.local,
+        subtitulo: [d.local, nomes.length ? `${nomes.length} na equipe` : 'sem equipe'].filter(Boolean).join(' · '),
         detalhes,
         selo: chuva ? `Chuva ${p!.chanceChuva}%` : passada ? 'Feita' : null,
         passado: passada,
       };
     });
   }, [diarias, clima, equipes, locaisPorId]);
-
-  const duplicar = () => {
-    if (!editando) return;
-    setEditando({ ...editando, id: undefined, nome: `${editando.nome} (cópia)` });
-  };
 
   if (loading) return <EsqueletoItens n={4} />;
 
@@ -335,7 +218,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
           </button>
         )}
         {canManage && (
-          <button type="button" onClick={() => setEditando({ duracao_horas: 10 })}
+          <button type="button" onClick={() => setAberta({ id: null })}
             className="btn-primary h-9 px-4 text-xs font-black flex items-center gap-1.5 flex-shrink-0">
             <Plus className="w-3.5 h-3.5" /> Nova diária
           </button>
@@ -374,11 +257,11 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
             eventos={eventos} gran={gran} cursor={cursor}
             diaFechado={diaFechado}
             onEscolherDia={d => { setCursor(d); setGran('dia'); }}
-            onAbrir={e => { const d = diarias.find(x => x.id === e.id); if (d && canManage) setEditando(d); }}
-            onNovoNoDia={canManage ? (iso, hora) => setEditando({ duracao_horas: 10, data: iso, ...(hora ? { hora_inicio: hora } : {}) }) : undefined}
+            onAbrir={e => setAberta({ id: e.id })}
+            onNovoNoDia={canManage ? (iso, hora) => setAberta({ id: null, inicial: { data: iso, ...(hora ? { hora_inicio: hora } : {}) } }) : undefined}
           />
           <p className="text-[10.5px] text-lumos-text-secondary">
-            {canManage ? 'Clique num dia (ou num horário, na Semana e no Dia) para criar uma diária; clique numa diária para editar.' : 'Passe o mouse numa diária para ver os detalhes.'}
+            {canManage ? 'Clique num dia (ou num horário, na Semana e no Dia) para criar uma diária; clique numa diária para ver, editar e escalar a equipe.' : 'Clique numa diária para ver os detalhes e a equipe.'}
             {' '}Verde: já feita · âmbar: chuva na previsão · listrado: agenda fechada.
           </p>
         </div>
@@ -406,7 +289,7 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
               <div key={d.id} className={clsx('card p-4 relative group border-l-4',
                 chuva ? 'border-l-amber-500' : passada ? 'border-l-green-600' : 'border-l-lumos-yellow/70')}>
                 {canManage && (
-                  <button type="button" onClick={() => setEditando(d)}
+                  <button type="button" onClick={() => setAberta({ id: d.id })}
                     className="absolute top-3 right-3 p-1.5 rounded text-lumos-text-secondary hover:text-lumos-yellow opacity-0 group-hover:opacity-100 transition-opacity" title="Editar">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
@@ -503,73 +386,25 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
         </div>
       )}
 
-      {/* Criar / editar */}
-      {editando && (
-        <Modal isOpen onClose={() => setEditando(null)} title={editando.id ? 'Editar diária' : 'Nova diária'} maxWidth="max-w-md">
-          <div className="space-y-3">
-            <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Nome</label>
-              <input autoFocus className="input-lumos w-full h-10 mt-1 text-sm" placeholder='Ex.: "Diária 1, Praia"'
-                value={editando.nome || ''} onChange={e => setEditando(s => ({ ...s, nome: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Data prevista</label>
-                <input type="date" className="input-lumos w-full h-10 mt-1 text-sm"
-                  value={editando.data || ''} onChange={e => setEditando(s => ({ ...s, data: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Início</label>
-                  <input type="time" className="input-lumos w-full h-10 mt-1 text-sm"
-                    value={editando.hora_inicio || ''} onChange={e => setEditando(s => ({ ...s, hora_inicio: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Fim</label>
-                  <input type="time" className="input-lumos w-full h-10 mt-1 text-sm"
-                    value={editando.hora_fim || ''} onChange={e => setEditando(s => ({ ...s, hora_fim: e.target.value }))} />
-                </div>
-              </div>
-            </div>
-            <p className="text-[10px] text-lumos-text-secondary -mt-1">Com horário, o evento entra no Google Calendar como compromisso com hora; sem, vira evento de dia inteiro. Se termina de madrugada, ponha o fim do dia seguinte (ex.: 20:00 → 04:00).</p>
-            <SeletorDeLocal
-              clientId={cliente.id}
-              clienteNome={cliente.nome}
-              texto={editando.local || ''}
-              localId={editando.local_id || null}
-              onChange={(texto, localId) => setEditando(s => ({ ...s, local: texto, local_id: localId }))}
-            />
-            <div>
-              <label className="text-[10px] font-black text-lumos-text-secondary uppercase tracking-widest">Descrição</label>
-              <textarea rows={2} className="input-lumos w-full mt-1 text-sm resize-y" placeholder="O que se grava nessa diária"
-                value={editando.descricao || ''} onChange={e => setEditando(s => ({ ...s, descricao: e.target.value }))} />
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              {editando.id && (
-                <>
-                  <button type="button" onClick={excluir} className="text-[11px] font-bold text-red-400 border border-red-500/40 rounded-lumos px-3 h-9 hover:bg-red-500/10 flex items-center gap-1.5">
-                    <Trash2 className="w-3.5 h-3.5" /> Excluir
-                  </button>
-                  <button type="button" onClick={duplicar} className="text-[11px] font-bold text-lumos-text-secondary border border-lumos-border rounded-lumos px-3 h-9 hover:text-lumos-text-primary flex items-center gap-1.5">
-                    <Copy className="w-3.5 h-3.5" /> Duplicar
-                  </button>
-                </>
-              )}
-              <button type="button" onClick={() => setEditando(null)} className="ml-auto text-[11px] font-bold text-lumos-text-secondary px-2">Cancelar</button>
-              <button type="button" onClick={salvar} disabled={salvando}
-                className="btn-primary h-9 px-5 text-xs font-black disabled:opacity-60 flex items-center gap-1.5">
-                {salvando && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar
-              </button>
-            </div>
-          </div>
-        </Modal>
+      {/* Painel da diária: dados + equipe (criar, ver, editar) */}
+      {aberta && (
+        <DiariaModal
+          key={aberta.id || 'nova'}
+          projectId={projectId}
+          diariaId={aberta.id}
+          inicial={aberta.inicial}
+          canManage={canManage}
+          onClose={() => setAberta(null)}
+          onMudou={() => { setClima({}); load(); }}
+        />
       )}
 
       {escalando && (
         <EscalarModal
+          projectId={projectId}
           diaria={escalando}
           catalogo={catalogo}
-          jaEscalados={new Set((equipes[escalando.id] || []).map(m => m.freela ? `freela:${m.freela.id}` : `user:${m.user?.id}`))}
+          jaEscalados={new Set((equipes[escalando.id] || []).map(chaveDoMembro))}
           onEscalar={p => escalar(escalando, p)}
           onClose={() => setEscalando(null)}
         />
@@ -590,62 +425,19 @@ export default function ProjectDiarias({ projectId, canManage }: Props) {
   );
 }
 
-// ── Modal de escalar: busca em todo mundo, equipe do projeto em destaque ───
-function EscalarModal({ diaria, catalogo, jaEscalados, onEscalar, onClose }: {
+// ── Modal de escalar (botão dos cards): busca em todo mundo, equipe do projeto em destaque ───
+function EscalarModal({ projectId, diaria, catalogo, jaEscalados, onEscalar, onClose }: {
+  projectId: string;
   diaria: Diaria;
   catalogo: PessoaCatalogo[];
   jaEscalados: Set<string>;
   onEscalar: (p: PessoaCatalogo) => void;
   onClose: () => void;
 }) {
-  const [busca, setBusca] = useState('');
-  const q = busca.trim().toLowerCase();
-  const disponiveis = catalogo.filter(p => !jaEscalados.has(`${p.tipo}:${p.id}`) && (!q || p.nome.toLowerCase().includes(q)));
-  const grupos: { titulo: string; itens: PessoaCatalogo[] }[] = [
-    { titulo: 'Equipe do projeto', itens: disponiveis.filter(p => p.doProjeto) },
-    { titulo: 'Fornecedores', itens: disponiveis.filter(p => !p.doProjeto && p.tipo === 'freela') },
-    { titulo: 'Time Lumos', itens: disponiveis.filter(p => !p.doProjeto && p.tipo === 'user') },
-  ].filter(g => g.itens.length > 0);
-
+  const conflitos = useConflitosDoDia(diaria.data, diaria.id, projectId);
   return (
     <Modal isOpen onClose={onClose} title={`Escalar em "${diaria.nome}"`} maxWidth="max-w-md">
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-lumos-text-secondary pointer-events-none" />
-          <input autoFocus value={busca} onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar pessoa ou fornecedor…" className="input-lumos pl-9 w-full h-10 text-sm" />
-        </div>
-        <p className="text-[10.5px] text-lumos-text-secondary">
-          Fornecedor escalado em diária com data já agenda a cobrança de nota sozinho.
-        </p>
-        <div className="border border-lumos-border rounded-lumos max-h-72 overflow-y-auto custom-scrollbar divide-y divide-lumos-border/40">
-          {grupos.length === 0 && (
-            <p className="text-xs text-lumos-text-secondary italic p-4 text-center">Ninguém encontrado.</p>
-          )}
-          {grupos.map(g => (
-            <div key={g.titulo}>
-              <p className="text-[9px] font-black uppercase tracking-widest text-lumos-text-secondary bg-lumos-bg/60 px-3 py-1.5 sticky top-0">{g.titulo}</p>
-              {g.itens.map(pessoa => (
-                <button key={`${pessoa.tipo}:${pessoa.id}`} type="button"
-                  onClick={() => { onEscalar(pessoa); onClose(); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-lumos-text-primary/5 transition-colors">
-                  <span className={clsx('w-7 h-7 rounded-full text-[10px] font-black flex items-center justify-center flex-shrink-0',
-                    pessoa.tipo === 'freela' ? 'bg-lumos-yellow/15 text-lumos-yellow' : 'bg-lumos-text-secondary/15 text-lumos-text-secondary')}>
-                    {pessoa.nome.trim().split(/\s+/).slice(0, 2).map(x => inicial(x).toUpperCase()).join('')}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="text-xs font-bold text-lumos-text-primary block truncate">{pessoa.nome}</span>
-                    <span className="text-[10px] text-lumos-text-secondary block truncate">
-                      {pessoa.tipo === 'freela' ? 'Fornecedor' : 'Time Lumos'}{pessoa.funcao ? ` · ${pessoa.funcao}` : ''}
-                    </span>
-                  </span>
-                  <UserPlus className="w-3.5 h-3.5 text-lumos-text-secondary flex-shrink-0" />
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+      <ListaDeEscalaveis catalogo={catalogo} jaEscalados={jaEscalados} conflitos={conflitos} onEscolher={p => { onEscalar(p); onClose(); }} />
     </Modal>
   );
 }
