@@ -30,6 +30,7 @@ import { geocode, previsaoParaDiaria, type PrevisaoDia, type MotivoSemPrevisao }
 import { notify, getUserIdsWithPermission } from '@/lib/notifications/notify';
 import { NOTIFICATION_EVENTS } from '@/lib/notifications/events';
 import type { AtividadePlano, MembroEquipe, Talento } from '@/types/ordemDoDia';
+import FichaDiferenteDaEscala from '@/components/producao/FichaDiferenteDaEscala';
 
 /**
  * ORDEM DO DIA 2.0 — a call sheet completa, no formato do benchmark:
@@ -68,6 +69,8 @@ interface OD {
    *  texto livre (regras, objetos, figurino) são internos e ficam aqui. */
   nota_cliente: string;
   project_id: string | null;
+  /** Diária de onde a ordem nasceu (ordens antigas não têm). */
+  diaria_id?: string | null;
 }
 
 type Aba = 'cronograma' | 'locacoes' | 'roteiros' | 'equipe' | 'elenco' | 'objetos' | 'figurino' | 'equipamentos' | 'obs';
@@ -1286,6 +1289,11 @@ export default function OrdemDoDiaDetalhe() {
       )}
 
       {/* ═════════ ABA CRONOGRAMA (o cockpit) ═════════ */}
+      {canManage && od.diaria_id && (
+        <FichaDiferenteDaEscala key={od.id} ordemId={od.id} diariaId={od.diaria_id} ficha={od.equipe}
+          onAplicar={equipe => editarLista('equipe', equipe)} />
+      )}
+
       {aba === 'cronograma' && (<>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Data */}
