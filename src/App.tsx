@@ -10,6 +10,7 @@ import ProducaoLayout from '@/pages/ProducaoLayout';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PermissionGuard } from '@/components/auth/PermissionGuard';
 import { LayoutProvider } from '@/context/LayoutContext';
+import { guardarDestinoDoLogin } from '@/lib/linkDaTarefa';
 import NewProjectCelebration from '@/components/common/NewProjectCelebration';
 import BarraDeCarregamento from '@/components/ui/BarraDeCarregamento';
 import { useBarraDeCarregamento } from '@/lib/progressoDeCarregamento';
@@ -58,6 +59,7 @@ const FinanceiroRelatorios = lazy(() => import('@/pages/FinanceiroRelatorios'));
 
 // Produção
 const ProducaoOverview = lazy(() => import('@/pages/ProducaoOverview'));
+const AbrirTarefa = lazy(() => import('@/pages/AbrirTarefa'));
 const ProducaoDashboard = lazy(() => import('@/pages/ProducaoDashboard'));
 const ProducaoBoard = lazy(() => import('@/pages/ProducaoBoard'));
 const ProducaoSchedule = lazy(() => import('@/pages/ProducaoSchedule'));
@@ -190,7 +192,11 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
     );
   }
   
-  if (!user) return <Navigate to="/login" />;
+  if (!user) {
+    // Link de tarefa aberto sem login: depois de entrar, a pessoa volta para ele.
+    guardarDestinoDoLogin(location.pathname);
+    return <Navigate to="/login" />;
+  }
 
   // VALIDAÇÃO DE PERFIL LUMOS — durante o portão (perfil ainda pode chegar),
   // mostra o loader em vez de piscar o "Acesso Pendente".
@@ -440,6 +446,8 @@ function AppContent() {
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Link próprio de uma tarefa (só para o time logado). */}
+          <Route path="/tarefa/:taskId" element={<AuthWrapper><AbrirTarefa /></AuthWrapper>} />
           <Route path="/aprovar/:token" element={<AprovacaoPublica />} />
           <Route path="/cadastro-fornecedor" element={<CadastroFornecedorPublico />} />
           <Route path="/definir-senha" element={<DefinirSenha />} />

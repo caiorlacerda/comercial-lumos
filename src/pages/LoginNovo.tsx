@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { consumirDestinoDoLogin } from '@/lib/linkDaTarefa';
 import { carregarFontesDeck } from '@/lib/fontesDeck';
 import SenhaInput from '@/components/common/SenhaInput';
 import { lerManterConectado, definirManterConectado } from '@/lib/sessao';
@@ -61,7 +62,7 @@ export default function Login() {
     } else {
       definirManterConectado(manter);
       try { localStorage.setItem('lumos_last_activity', Date.now().toString()); } catch { /* ignora */ }
-      navigate('/');
+      navigate(consumirDestinoDoLogin());
     }
   };
 
@@ -207,7 +208,7 @@ export default function Login() {
                       password: import.meta.env.VITE_TEST_PASSWORD as string,
                     });
                     if (error) setError('Robô de testes: ' + error.message);
-                    else navigate('/');
+                    else navigate(consumirDestinoDoLogin());
                   }}
                   className="mt-3 h-10 w-full rounded-full border border-dashed border-[#efc700]/50 text-xs uppercase tracking-[2px] text-[#efc700] hover:bg-[#efc700]/10"
                   style={{ fontFamily: MONO }}
